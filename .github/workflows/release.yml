@@ -59,8 +59,8 @@ jobs:
         with:
           name: linux-artifacts
           path: |
-            web-app/release/Messaging Explorer-*.AppImage
-            web-app/release/messaging-explorer_*_amd64.deb
+            web-app/release/*.AppImage
+            web-app/release/*.deb
             web-app/release/latest-linux.yml
           if-no-files-found: error
 
@@ -102,8 +102,7 @@ jobs:
         with:
           name: windows-artifacts
           path: |
-            web-app/release/Messaging Explorer Setup *.exe
-            web-app/release/Messaging Explorer *.exe
+            web-app/release/*.exe
             web-app/release/latest.yml
           if-no-files-found: error
 
@@ -145,8 +144,8 @@ jobs:
         with:
           name: mac-artifacts
           path: |
-            web-app/release/Messaging Explorer-*.dmg
-            web-app/release/Messaging Explorer-*.zip
+            web-app/release/*.dmg
+            web-app/release/*.zip
             web-app/release/latest-mac.yml
           if-no-files-found: error
 
