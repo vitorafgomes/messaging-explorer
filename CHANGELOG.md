@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.0] - 2026-04-30
+
+First public release of Messaging Explorer as an open-source project.
+
+### Added
+- Multi-broker support: Azure Service Bus and RabbitMQ
+- Browse and manage queues, topics, subscriptions, exchanges
+- Send, peek and resubmit messages, including dead-letter handling
+- RabbitMQ pattern detection (Work Queue, Pub/Sub, Routing, Topics, RPC, Headers)
+- Cross-platform desktop builds for Windows, macOS, Linux
+- Public landing page with auto-updating downloads (GitHub Pages)
+- MIT license
+
+---
+
+_Earlier history below was kept for reference and pre-dates the public release._
+
 ## [1.1.0] - 2026-02-03
 
 ### Added
