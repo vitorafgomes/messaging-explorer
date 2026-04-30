@@ -84,8 +84,8 @@
     "wait-on": "^9.0.3"
   },
   "build": {
-    "appId": "com.messageexplorer.app",
-    "productName": "Message Explorer",
+    "appId": "com.messagingexplorer.app",
+    "productName": "Messaging Explorer",
     "directories": {
       "output": "release"
     },
@@ -115,7 +115,7 @@
       "requestedExecutionLevel": "asInvoker"
     },
     "portable": {
-      "unpackDirName": "MessageExplorer"
+      "unpackDirName": "MessagingExplorer"
     },
     "mac": {
       "target": [
@@ -135,8 +135,10 @@
       "maintainer": "Vitor Gomes <vitorafgomes@users.noreply.github.com>"
     },
     "publish": {
-      "provider": "generic",
-      "url": "https://pub-16fe32908690425485ba74f3a16942f0.r2.dev"
+      "provider": "github",
+      "owner": "vitorafgomes",
+      "repo": "messaging-explorer",
+      "releaseType": "release"
     }
   }
 }

@@ -61,9 +61,9 @@ if (!gotTheLock) {
   const { dialog } = require('electron');
   dialog.showMessageBoxSync({
     type: 'warning',
-    title: 'Message Explorer',
+    title: 'Messaging Explorer',
     message: 'Application Already Running',
-    detail: 'Message Explorer is already running. Please check your system tray or taskbar.',
+    detail: 'Messaging Explorer is already running. Please check your system tray or taskbar.',
     buttons: ['OK']
   });
   app.quit();
@@ -80,9 +80,9 @@ if (!gotTheLock) {
         const { dialog } = require('electron');
         dialog.showMessageBox(mainWindow, {
           type: 'info',
-          title: 'Message Explorer',
+          title: 'Messaging Explorer',
           message: 'Application Already Running',
-          detail: 'Message Explorer is already running in this window.',
+          detail: 'Messaging Explorer is already running in this window.',
           buttons: ['OK']
         });
       }
@@ -163,13 +163,13 @@ function createMenu() {
       label: 'Help',
       submenu: [
         {
-          label: 'About Message Explorer',
+          label: 'About Messaging Explorer',
           click: () => {
             const { dialog } = require('electron');
             dialog.showMessageBox(mainWindow, {
               type: 'info',
               title: 'About',
-              message: 'Message Explorer',
+              message: 'Messaging Explorer',
               detail: `Version ${app.getVersion()}\n\nA universal multi-platform messaging management tool.\n\nBuilt with Angular + Electron + .NET`
             });
           }
@@ -319,7 +319,7 @@ function createTray() {
   }
 
   tray = new Tray(trayIcon);
-  tray.setToolTip('Message Explorer');
+  tray.setToolTip('Messaging Explorer');
 
   // Initialize menu with connections
   updateTrayMenu();
@@ -628,7 +628,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js')
     },
     icon: path.join(getAssetsPath(), 'icon.png'),
-    title: 'Message Explorer',
+    title: 'Messaging Explorer',
     backgroundColor: '#4A90E2'
   };
 
@@ -652,7 +652,7 @@ function createWindow() {
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': [
-          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' http://localhost:* https://messaging-explorer-bug-reporter.vitorafgomes.workers.dev; img-src 'self' data:;"
+          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' http://localhost:*; img-src 'self' data:;"
         ]
       }
     });

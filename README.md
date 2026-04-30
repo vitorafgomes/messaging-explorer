@@ -32,7 +32,6 @@ messaging-explorer/
 ├── web-app/                         # Angular frontend + Electron
 │   ├── src/                         # Angular source code
 │   └── electron/                    # Electron main process
-└── bug-reporter-worker/             # Optional Cloudflare Worker for bug reports
 ```
 
 ## Development

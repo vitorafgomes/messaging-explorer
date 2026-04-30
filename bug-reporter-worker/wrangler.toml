@@ -1,7 +1,0 @@
-name = "messaging-explorer-bug-reporter"
-main = "src/index.ts"
-compatibility_date = "2024-01-01"
-
-[vars]
-GITHUB_REPO = "vitorafgomes/messaging-explorer"
-ALLOWED_ORIGINS = "file://,http://localhost:4200,http://localhost:5197,app://"

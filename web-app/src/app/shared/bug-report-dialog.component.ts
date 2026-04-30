@@ -7,9 +7,6 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { HttpClient } from '@angular/common/http';
-import { firstValueFrom } from 'rxjs';
 
 export interface BugReportDialogData {
   type: 'bug' | 'feature';
@@ -18,9 +15,9 @@ export interface BugReportDialogData {
   errors: string[];
 }
 
-type DialogState = 'form' | 'sending' | 'success' | 'error';
+type DialogState = 'form' | 'success' | 'error';
 
-const BUG_REPORTER_URL = 'https://messaging-explorer-bug-reporter.vitorafgomes.workers.dev/api/report';
+const GITHUB_ISSUES_NEW_URL = 'https://github.com/vitorafgomes/messaging-explorer/issues/new';
 
 @Component({
   selector: 'app-bug-report-dialog',
@@ -34,7 +31,6 @@ const BUG_REPORTER_URL = 'https://messaging-explorer-bug-reporter.vitorafgomes.w
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
-    MatProgressSpinnerModule,
   ],
   template: `
     @switch (state()) {
@@ -90,21 +86,14 @@ const BUG_REPORTER_URL = 'https://messaging-explorer-bug-reporter.vitorafgomes.w
         </mat-dialog-actions>
       }
 
-      @case ('sending') {
-        <mat-dialog-content class="center-content">
-          <mat-spinner diameter="48"></mat-spinner>
-          <p>Submitting to GitHub...</p>
-        </mat-dialog-content>
-      }
-
       @case ('success') {
         <mat-dialog-content class="center-content">
           <mat-icon class="success-icon">check_circle</mat-icon>
-          <h3>Issue Created!</h3>
-          <p>Issue #{{ issueNumber() }} has been created.</p>
+          <h3>Opening GitHub</h3>
+          <p>A GitHub Issues page has been opened with your details pre-filled. Review and submit it there.</p>
           <a [href]="issueUrl()" target="_blank" class="issue-link">
             <mat-icon>open_in_new</mat-icon>
-            View on GitHub
+            Open on GitHub
           </a>
         </mat-dialog-content>
         <mat-dialog-actions align="end">
@@ -227,10 +216,7 @@ const BUG_REPORTER_URL = 'https://messaging-explorer-bug-reporter.vitorafgomes.w
 export class BugReportDialogComponent {
   data = inject<BugReportDialogData>(MAT_DIALOG_DATA);
   private dialogRef = inject(MatDialogRef<BugReportDialogComponent>);
-  private http = inject(HttpClient);
-
   state = signal<DialogState>('form');
-  issueNumber = signal(0);
   issueUrl = signal('');
   errorMessage = signal('');
 
@@ -239,31 +225,38 @@ export class BugReportDialogComponent {
   reporter = '';
 
   async submit() {
-    this.state.set('sending');
+    const labels = this.data.type === 'bug' ? 'bug' : 'enhancement';
 
-    const payload = {
-      type: this.data.type,
+    const bodyParts = [
+      this.description.trim(),
+      '',
+      '---',
+      `**Version:** ${this.data.version}`,
+      `**Platform:** ${this.data.platform}`,
+    ];
+
+    if (this.reporter.trim()) {
+      bodyParts.push(`**Reporter:** ${this.reporter.trim()}`);
+    }
+
+    if (this.data.errors?.length) {
+      bodyParts.push('', '**Errors:**', '```', ...this.data.errors, '```');
+    }
+
+    const params = new URLSearchParams({
       title: this.title.trim(),
-      description: this.description.trim(),
-      version: this.data.version,
-      platform: this.data.platform,
-      errors: this.data.errors,
-      reporter: this.reporter.trim() || undefined,
-    };
+      body: bodyParts.join('\n'),
+      labels,
+    });
+
+    const url = `${GITHUB_ISSUES_NEW_URL}?${params.toString()}`;
 
     try {
-      const response = await firstValueFrom(
-        this.http.post<{ success: boolean; issueNumber: number; issueUrl: string }>(
-          BUG_REPORTER_URL,
-          payload
-        )
-      );
-
-      this.issueNumber.set(response.issueNumber);
-      this.issueUrl.set(response.issueUrl);
+      window.open(url, '_blank', 'noopener,noreferrer');
+      this.issueUrl.set(url);
       this.state.set('success');
     } catch (err: any) {
-      this.errorMessage.set(err?.error?.error || err?.message || 'Unknown error');
+      this.errorMessage.set(err?.message || 'Failed to open GitHub Issues');
       this.state.set('error');
     }
   }

@@ -1,4 +1,4 @@
-# Message Explorer
+# Messaging Explorer
 
 > **Universal messaging platform explorer and management tool**
 
@@ -46,8 +46,8 @@ Currently supported and planned messaging platforms:
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/vitorafgomes/MessageExplorer.git
-   cd MessageExplorer/web-app
+   git clone https://github.com/vitorafgomes/messaging-explorer.git
+   cd messaging-explorer/web-app
    ```
 
 2. **Install dependencies**
@@ -381,8 +381,8 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## Support
 
 - 📧 Email: vitorafgomes@users.noreply.github.com
-- 🐛 Issues: [GitHub Issues](https://github.com/vitorafgomes/MessageExplorer/issues)
-- 📖 Documentation: [Wiki](https://github.com/vitorafgomes/MessageExplorer/wiki)
+- 🐛 Issues: [GitHub Issues](https://github.com/vitorafgomes/messaging-explorer/issues)
+- 📖 Documentation: [Wiki](https://github.com/vitorafgomes/messaging-explorer/wiki)
 
 ## Acknowledgments
 
@@ -394,4 +394,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ---
 
-**Made with ❤️ by the Message Explorer team**
+**Made with ❤️ by the Messaging Explorer team**

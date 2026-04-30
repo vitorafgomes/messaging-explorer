@@ -1,0 +1,68 @@
+# Continuous integration — build and test on push to main and on pull requests.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # .NET — build and run unit tests
+  # ---------------------------------------------------------------------------
+  dotnet:
+    name: .NET build & test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore ServiceBusExplorer.slnx
+
+      - name: Build
+        run: dotnet build ServiceBusExplorer.slnx --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test ServiceBusExplorer.slnx --configuration Release --no-build --verbosity normal
+
+  # ---------------------------------------------------------------------------
+  # Angular / web app — install, lint, build
+  # ---------------------------------------------------------------------------
+  web:
+    name: Web build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: web-app/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web-app
+        run: npm ci
+
+      - name: Build
+        working-directory: web-app
+        run: npm run build

@@ -16,7 +16,7 @@ The following platforms are planned for integration:
 
 - **Format**: SVG preferred for scalability
 - **Size**: Optimize for 64x64px to 128x128px display
-- **Style**: Match the modern, minimalist theme of Message Explorer
+- **Style**: Match the modern, minimalist theme of Messaging Explorer
 - **Colors**: Use official brand colors when possible
 - **Licensing**: Ensure all logos are properly licensed for use
 
