@@ -4,6 +4,8 @@
 
 A cross-platform desktop and web application for managing and exploring messages across multiple messaging platforms (Azure Service Bus, RabbitMQ, and more). Built with Angular, Electron, and .NET.
 
+**Website & downloads:** https://vitorafgomes.github.io/messaging-explorer/
+
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
 ## Features
