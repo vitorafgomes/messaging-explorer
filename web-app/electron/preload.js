@@ -8,6 +8,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Get API secret for authenticated requests
   getApiSecret: () => ipcRenderer.invoke('get-api-secret'),
 
+  // Get the dynamically-allocated API port from the Electron main process
+  getApiPort: () => ipcRenderer.invoke('get-api-port'),
+
   // Listen for navigation commands from menu
   onNavigate: (callback) => {
     ipcRenderer.on('navigate', (event, route) => callback(route));

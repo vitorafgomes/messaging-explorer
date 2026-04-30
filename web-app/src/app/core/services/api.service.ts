@@ -9,10 +9,29 @@ import { environment } from '../../../environments/environment';
 export class ApiService {
   private baseUrl = environment.apiUrl;
   private apiSecret: string | null = null;
-  private secretReady: Promise<void>;
+  private ready: Promise<void>;
 
   constructor(private http: HttpClient) {
-    this.secretReady = this.initializeApiSecret();
+    this.ready = this.initialize();
+  }
+
+  private async initialize(): Promise<void> {
+    await Promise.all([this.initializeApiPort(), this.initializeApiSecret()]);
+  }
+
+  private async initializeApiPort(): Promise<void> {
+    const electronAPI = typeof window !== 'undefined' ? (window as any).electronAPI : null;
+    if (!electronAPI?.getApiPort) {
+      return;
+    }
+    try {
+      const port = await electronAPI.getApiPort();
+      if (typeof port === 'number' && port > 0) {
+        this.baseUrl = `http://localhost:${port}/api`;
+      }
+    } catch (e) {
+      console.warn('[API SERVICE] Failed to get API port from Electron:', e);
+    }
   }
 
   private async initializeApiSecret(): Promise<void> {
@@ -32,29 +51,37 @@ export class ApiService {
     return {};
   }
 
-  private waitForSecret<T>(request: () => Observable<T>): Observable<T> {
-    return from(this.secretReady).pipe(switchMap(() => request()));
+  private waitForReady<T>(request: () => Observable<T>): Observable<T> {
+    return from(this.ready).pipe(switchMap(() => request()));
   }
 
   get<T>(endpoint: string): Observable<T> {
     const separator = endpoint.includes('?') ? '&' : '?';
     const cacheBuster = `_t=${Date.now()}`;
-    const url = `${this.baseUrl}/${endpoint}${separator}${cacheBuster}`;
-    return this.waitForSecret(() => this.http.get<T>(url, this.getHeaders()));
+    return this.waitForReady(() => {
+      const url = `${this.baseUrl}/${endpoint}${separator}${cacheBuster}`;
+      return this.http.get<T>(url, this.getHeaders());
+    });
   }
 
   post<T>(endpoint: string, data: any): Observable<T> {
-    const url = `${this.baseUrl}/${endpoint}`;
-    return this.waitForSecret(() => this.http.post<T>(url, data, this.getHeaders()));
+    return this.waitForReady(() => {
+      const url = `${this.baseUrl}/${endpoint}`;
+      return this.http.post<T>(url, data, this.getHeaders());
+    });
   }
 
   put<T>(endpoint: string, data: any): Observable<T> {
-    const url = `${this.baseUrl}/${endpoint}`;
-    return this.waitForSecret(() => this.http.put<T>(url, data, this.getHeaders()));
+    return this.waitForReady(() => {
+      const url = `${this.baseUrl}/${endpoint}`;
+      return this.http.put<T>(url, data, this.getHeaders());
+    });
   }
 
   delete<T>(endpoint: string): Observable<T> {
-    const url = `${this.baseUrl}/${endpoint}`;
-    return this.waitForSecret(() => this.http.delete<T>(url, this.getHeaders()));
+    return this.waitForReady(() => {
+      const url = `${this.baseUrl}/${endpoint}`;
+      return this.http.delete<T>(url, this.getHeaders());
+    });
   }
 }

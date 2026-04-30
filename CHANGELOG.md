@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.1] - 2026-04-30
+
+### Fixed
+- Angular API service now resolves the backend URL via the dynamically-assigned
+  port reported by Electron (`window.electronAPI.getApiPort()`) instead of a
+  hardcoded value. This fixes connection failures in packaged builds where
+  the API listens on a port chosen at startup, not the framework default.
+- Removed the framework-default port `5000` from `environment.prod.ts`; the
+  fallback now matches the configured port in `config.json` (`5917`).
+
+### Added
+- IPC handler `get-api-port` in the Electron main process and a corresponding
+  `getApiPort` method on `window.electronAPI`.
+
 ## [1.0.0] - 2026-04-30
 
 First public release of Messaging Explorer as an open-source project.

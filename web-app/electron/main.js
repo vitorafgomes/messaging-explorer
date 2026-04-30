@@ -925,6 +925,8 @@ ipcMain.handle('get-app-version', () => {
 
 ipcMain.handle('get-api-secret', () => API_SECRET);
 
+ipcMain.handle('get-api-port', () => apiPort);
+
 // === Auto Updater ===
 autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = true;
