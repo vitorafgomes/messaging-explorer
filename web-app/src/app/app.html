@@ -1,0 +1,136 @@
+<mat-toolbar color="primary" class="app-toolbar">
+  @if (!isElectron) {
+    <button mat-icon-button (click)="toggleSidebar()" matTooltip="Toggle sidebar">
+      <mat-icon>menu</mat-icon>
+    </button>
+  }
+
+  <span class="brand">Message Explorer</span>
+
+  @if (appVersion()) {
+    <span class="version-badge" [matMenuTriggerFor]="channelMenu" matTooltip="Click to change update channel" style="cursor: pointer;">
+      v{{ appVersion() }}
+      @if (updateChannel() === 'beta') {
+        <span class="channel-tag beta">BETA</span>
+      }
+    </span>
+    <mat-menu #channelMenu="matMenu">
+      <button mat-menu-item (click)="switchChannel('latest')" [disabled]="updateChannel() === 'latest'">
+        <mat-icon>verified</mat-icon>
+        <span>Stable channel</span>
+      </button>
+      <button mat-menu-item (click)="switchChannel('beta')" [disabled]="updateChannel() === 'beta'">
+        <mat-icon>science</mat-icon>
+        <span>Beta channel</span>
+      </button>
+    </mat-menu>
+  }
+
+  @if (connectionStatus$ | async; as status) {
+    @if (status.connected) {
+      <span class="connection-badge connected">
+        <mat-icon class="status-icon">check_circle</mat-icon>
+        {{ status.namespace }}
+      </span>
+    } @else {
+      <span class="connection-badge disconnected">
+        <mat-icon class="status-icon">cancel</mat-icon>
+        Disconnected
+      </span>
+    }
+  }
+
+  <span class="spacer"></span>
+
+  <!-- Update Status -->
+  @switch (updateStatus()) {
+    @case ('available') {
+      <button mat-stroked-button class="update-btn" (click)="downloadUpdate()" matTooltip="Download v{{ updateVersion() }}">
+        <mat-icon>download</mat-icon>
+        Update v{{ updateVersion() }}
+      </button>
+    }
+    @case ('downloading') {
+      <span class="update-progress">
+        <mat-icon>downloading</mat-icon>
+        {{ downloadPercent() }}%
+      </span>
+    }
+    @case ('downloaded') {
+      <button mat-flat-button color="accent" class="update-btn" (click)="installUpdate()" matTooltip="Restart to install v{{ updateVersion() }}">
+        <mat-icon>restart_alt</mat-icon>
+        Restart to Update
+      </button>
+    }
+    @case ('error') {
+      <button mat-icon-button (click)="checkForUpdates()" matTooltip="Update check failed. Click to retry.">
+        <mat-icon color="warn">error_outline</mat-icon>
+      </button>
+    }
+  }
+
+  <!-- Notifications -->
+  <button mat-icon-button [matMenuTriggerFor]="notifMenu" matTooltip="Notifications"
+    [matBadge]="dlqService.alertCount()" [matBadgeHidden]="!dlqService.hasAlerts()" matBadgeColor="warn" matBadgeSize="small">
+    <mat-icon>notifications</mat-icon>
+  </button>
+  <mat-menu #notifMenu="matMenu" class="notification-menu">
+    @if (dlqService.hasAlerts()) {
+      @for (alert of dlqService.alerts(); track alert.subscriptionName) {
+        <button mat-menu-item (click)="onNotificationClick(alert)">
+          <div class="notif-item">
+            <small class="notif-topic">{{ alert.topicName }}</small>
+            <div class="notif-sub">{{ alert.subscriptionName }}</div>
+          </div>
+          <span class="notif-count">{{ alert.deadLetterMessageCount }}</span>
+        </button>
+      }
+    } @else {
+      <div class="notif-empty">No dead letter messages</div>
+    }
+  </mat-menu>
+
+  <!-- Help Menu -->
+  <button mat-icon-button [matMenuTriggerFor]="helpMenu" matTooltip="Help">
+    <mat-icon>help_outline</mat-icon>
+  </button>
+  <mat-menu #helpMenu="matMenu">
+    <button mat-menu-item (click)="openBugReport('bug')">
+      <mat-icon color="warn">bug_report</mat-icon>
+      <span>Report Bug</span>
+    </button>
+    <button mat-menu-item (click)="openBugReport('feature')">
+      <mat-icon>lightbulb</mat-icon>
+      <span>Suggest Feature</span>
+    </button>
+  </mat-menu>
+
+  <!-- Theme Toggle -->
+  <button mat-icon-button (click)="themeService.toggle()" [matTooltip]="themeService.themeLabel()">
+    <mat-icon>{{ themeService.themeIcon() }}</mat-icon>
+  </button>
+</mat-toolbar>
+
+<!-- Download progress bar -->
+@if (updateStatus() === 'downloading') {
+  <mat-progress-bar mode="determinate" [value]="downloadPercent()" class="update-progress-bar"></mat-progress-bar>
+}
+
+<mat-sidenav-container class="app-container" [hasBackdrop]="false">
+  @if (!isElectron) {
+    <mat-sidenav [opened]="sidebarOpen()" mode="side" class="app-sidenav">
+      <mat-nav-list>
+        @for (item of navItems; track item.route) {
+          <a mat-list-item [routerLink]="item.route" routerLinkActive="active-link">
+            <mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
+            <span matListItemTitle>{{ item.label }}</span>
+          </a>
+        }
+      </mat-nav-list>
+    </mat-sidenav>
+  }
+
+  <mat-sidenav-content class="app-content">
+    <router-outlet></router-outlet>
+  </mat-sidenav-content>
+</mat-sidenav-container>

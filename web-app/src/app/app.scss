@@ -1,0 +1,154 @@
+.app-toolbar {
+  flex-shrink: 0;
+  z-index: 1030;
+  gap: 8px;
+}
+
+.brand {
+  font-weight: 600;
+  font-size: 1rem;
+  margin-right: 4px;
+}
+
+.version-badge {
+  font-size: 0.65rem;
+  opacity: 0.6;
+  font-weight: 400;
+  margin-right: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+
+  &:hover {
+    opacity: 0.9;
+  }
+}
+
+.channel-tag {
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  line-height: 1.2;
+
+  &.beta {
+    background-color: rgba(255, 152, 0, 0.25);
+    color: #ff9800;
+  }
+}
+
+.update-btn {
+  font-size: 0.8rem;
+  height: 32px;
+  line-height: 32px;
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    margin-right: 4px;
+  }
+}
+
+.update-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
+.update-progress-bar {
+  position: absolute;
+  top: 48px;
+  left: 0;
+  right: 0;
+  z-index: 1031;
+  height: 3px;
+}
+
+.connection-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-weight: 500;
+
+  .status-icon {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+  }
+
+  &.connected {
+    background-color: rgba(76, 175, 80, 0.15);
+    color: #4caf50;
+  }
+
+  &.disconnected {
+    background-color: rgba(255, 152, 0, 0.15);
+    color: #ff9800;
+  }
+}
+
+.spacer {
+  flex: 1;
+}
+
+.app-container {
+  flex: 1;
+  min-height: 0;
+}
+
+.app-sidenav {
+  width: 220px;
+}
+
+.active-link {
+  --mat-list-active-indicator-shape: 4px;
+  font-weight: 500;
+}
+
+.app-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.notification-menu {
+  min-width: 280px;
+}
+
+.notif-item {
+  display: flex;
+  flex-direction: column;
+  margin-right: 12px;
+}
+
+.notif-topic {
+  opacity: 0.6;
+  font-size: 0.75rem;
+}
+
+.notif-sub {
+  font-weight: 500;
+}
+
+.notif-count {
+  background: var(--mat-sys-error);
+  color: var(--mat-sys-on-error);
+  border-radius: 12px;
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.notif-empty {
+  padding: 16px;
+  text-align: center;
+  opacity: 0.6;
+  font-size: 0.875rem;
+}

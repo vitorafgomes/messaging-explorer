@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Loading...</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      outline: none;
+      border: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      -webkit-app-region: no-drag;
+    }
+
+    .splash-container {
+      background: linear-gradient(135deg, #4A90E2 0%, #5B7FDB 50%, #7B68EE 100%);
+      border-radius: 50%;
+      width: 400px;
+      height: 400px;
+      padding: 60px 40px;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      animation: fadeIn 0.5s ease-out;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: scale(0.9);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    .logo {
+      width: 70px;
+      height: 70px;
+      margin-bottom: 20px;
+      animation: fadeInScale 0.6s ease-out, pulse 2s ease-in-out 1s infinite;
+    }
+
+    .logo svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    @keyframes fadeInScale {
+      from {
+        opacity: 0;
+        transform: scale(0.7) translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        transform: scale(1);
+      }
+      50% {
+        transform: scale(1.05);
+      }
+    }
+
+    h1 {
+      color: white;
+      font-size: 22px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      letter-spacing: -0.5px;
+      animation: fadeInUp 0.6s ease-out 0.3s backwards;
+    }
+
+    .subtitle {
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 12px;
+      margin-bottom: 24px;
+      animation: fadeInUp 0.6s ease-out 0.6s backwards;
+    }
+
+    .loader {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .loader span {
+      width: 8px;
+      height: 8px;
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 50%;
+      animation: bounce 1.4s ease-in-out infinite;
+    }
+
+    .loader span:nth-child(1) {
+      animation-delay: 0s;
+    }
+
+    .loader span:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+
+    .loader span:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+
+    @keyframes bounce {
+      0%, 80%, 100% {
+        transform: translateY(0);
+      }
+      40% {
+        transform: translateY(-12px);
+      }
+    }
+
+    .version {
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 10px;
+      margin-top: 20px;
+      animation: fadeIn 0.6s ease-out 0.9s backwards;
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="splash-container">
+    <div class="logo">
+      <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- Message layers icon - Multi-platform messaging -->
+        <!-- Mensagem/camada traseira -->
+        <rect x="15" y="38" width="70" height="40" rx="12" fill="white" opacity="0.25"/>
+
+        <!-- Mensagem/camada do meio -->
+        <rect x="10" y="33" width="70" height="40" rx="12" fill="white" opacity="0.5"/>
+
+        <!-- Mensagem/camada frontal (principal) -->
+        <rect x="5" y="28" width="70" height="40" rx="12" fill="white"/>
+
+        <!-- Envelope icon on front message - rounded -->
+        <path d="M 18 40 Q 40 54 62 40" stroke="#4A90E2" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <line x1="18" y1="40" x2="18" y2="56" stroke="#4A90E2" stroke-width="2.2" stroke-linecap="round"/>
+        <line x1="62" y1="40" x2="62" y2="56" stroke="#4A90E2" stroke-width="2.2" stroke-linecap="round"/>
+        <path d="M 18 56 Q 40 60 62 56" stroke="#4A90E2" stroke-width="2" stroke-linecap="round" fill="none"/>
+
+        <!-- Flow lines (input) - left side -->
+        <path d="M80 43 L88 43" stroke="white" stroke-width="3" stroke-linecap="round"/>
+        <path d="M80 48 L88 48" stroke="white" stroke-width="2.5" stroke-linecap="round" opacity="0.7"/>
+        <path d="M80 53 L88 53" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+
+        <!-- Flow lines (output) - right side -->
+        <path d="M12 43 L4 43" stroke="white" stroke-width="3" stroke-linecap="round"/>
+        <path d="M12 48 L4 48" stroke="white" stroke-width="2.5" stroke-linecap="round" opacity="0.7"/>
+        <path d="M12 53 L4 53" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+
+        <!-- Connection points -->
+        <circle cx="88" cy="43" r="2.5" fill="white"/>
+        <circle cx="4" cy="43" r="2.5" fill="white"/>
+      </svg>
+    </div>
+    <h1>Message Explorer</h1>
+    <p class="subtitle">Multi-Platform Messaging Tool</p>
+    <div class="loader">
+      <span></span>
+      <span></span>
+      <span></span>
+    </div>
+    <p class="version" id="version-text">v1.0.0</p>
+  </div>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const version = params.get('version');
+    if (version) {
+      document.getElementById('version-text').textContent = 'v' + version;
+    }
+  </script>
+</body>
+</html>

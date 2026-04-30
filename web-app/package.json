@@ -1,0 +1,142 @@
+{
+  "name": "messaging-explorer",
+  "version": "3.0.0",
+  "description": "Universal messaging platform explorer and management tool",
+  "homepage": "https://github.com/vitorafgomes/messaging-explorer",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vitorafgomes/messaging-explorer.git"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "Vitor Gomes",
+    "email": "vitorafgomes@users.noreply.github.com"
+  },
+  "main": "electron/main.js",
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve",
+    "start:all": "concurrently \"npm run start:api\" \"npm run start\"",
+    "start:api": "cd ../src/ServiceBusExplorer.Api && dotnet run",
+    "build": "ng build",
+    "build:api": "cd ../src/ServiceBusExplorer.Api && dotnet publish -c Release",
+    "build:all": "npm run build:api && npm run build",
+    "watch": "ng build --watch --configuration development",
+    "test": "ng test",
+    "electron:dev": "concurrently \"npm run start\" \"wait-on http://localhost:4297 && NODE_ENV=development electron .\"",
+    "electron:build": "npm run build:all && electron-builder",
+    "electron:build:win": "npm run build:all && electron-builder --win",
+    "electron:build:mac": "npm run build:all && electron-builder --mac",
+    "electron:build:linux": "npm run build:all && electron-builder --linux"
+  },
+  "prettier": {
+    "printWidth": 100,
+    "singleQuote": true,
+    "overrides": [
+      {
+        "files": "*.html",
+        "options": {
+          "parser": "angular"
+        }
+      }
+    ]
+  },
+  "private": true,
+  "packageManager": "npm@11.6.2",
+  "dependencies": {
+    "@angular/animations": "^21.2.8",
+    "@angular/cdk": "^21.0.5",
+    "@angular/common": "^21.2.8",
+    "@angular/compiler": "^21.2.8",
+    "@angular/core": "^21.2.8",
+    "@angular/forms": "^21.2.8",
+    "@angular/localize": "^21.2.8",
+    "@angular/material": "^21.0.5",
+    "@angular/platform-browser": "^21.2.8",
+    "@angular/router": "^21.2.8",
+    "@fortawesome/fontawesome-free": "^7.2.0",
+    "@ng-bootstrap/ng-bootstrap": "^20.0.0",
+    "@popperjs/core": "^2.11.8",
+    "@types/prismjs": "^1.26.5",
+    "apexcharts": "^5.3.6",
+    "bootstrap": "^5.3.7",
+    "diff": "^8.0.4",
+    "electron-store": "^8.2.0",
+    "electron-updater": "^6.8.3",
+    "exceljs": "^4.4.0",
+    "ng-apexcharts": "^2.0.4",
+    "prismjs": "^1.30.0",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0"
+  },
+  "devDependencies": {
+    "@angular/build": "^21.2.7",
+    "@angular/cli": "^21.2.7",
+    "@angular/compiler-cli": "^21.2.8",
+    "@types/diff": "^7.0.2",
+    "concurrently": "^9.2.1",
+    "electron": "^41.2.0",
+    "electron-builder": "^26.7.0",
+    "jsdom": "^27.1.0",
+    "sharp": "^0.34.5",
+    "typescript": "~5.9.2",
+    "vitest": "^4.0.8",
+    "wait-on": "^9.0.3"
+  },
+  "build": {
+    "appId": "com.messageexplorer.app",
+    "productName": "Message Explorer",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/web-app/**/*",
+      "electron/**/*",
+      "src/assets/**/*"
+    ],
+    "asarUnpack": [
+      "src/assets/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../src/ServiceBusExplorer.Api/bin/Release/net10.0/publish",
+        "to": "api",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "src/assets/icon.ico",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "portable": {
+      "unpackDirName": "MessageExplorer"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "src/assets/icon.icns",
+      "category": "public.app-category.developer-tools"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "src/assets/icon.png",
+      "category": "Development",
+      "maintainer": "Vitor Gomes <vitorafgomes@users.noreply.github.com>"
+    },
+    "publish": {
+      "provider": "generic",
+      "url": "https://pub-16fe32908690425485ba74f3a16942f0.r2.dev"
+    }
+  }
+}

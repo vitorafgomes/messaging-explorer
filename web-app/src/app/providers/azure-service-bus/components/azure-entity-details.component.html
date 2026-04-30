@@ -1,0 +1,480 @@
+<div class="azure-entity-details">
+  <!-- Queue Details -->
+  @if (isQueue()) {
+    @let queue = asQueue();
+    <div class="entity-header entity-header-queue">
+      <div class="entity-icon-wrapper">
+        <i class="fa fa-inbox entity-icon queue-icon"></i>
+      </div>
+      <div class="entity-title">
+        <h2>{{ queue.name }}</h2>
+        <span class="badge bg-success-subtle text-success border border-success-subtle">Azure Queue</span>
+      </div>
+    </div>
+
+    <div class="entity-actions">
+      <button class="btn btn-primary" (click)="handleSendMessage()">
+        <i class="fa fa-paper-plane me-2"></i>Send Message
+      </button>
+      <button class="btn btn-secondary" (click)="handleViewMessages(0)">
+        <i class="fa fa-eye me-2"></i>View Messages
+      </button>
+      <button class="btn btn-danger" (click)="handlePurgeMessages()" [disabled]="queue.activeMessageCount === 0">
+        <i class="fa fa-trash me-2"></i>Purge
+      </button>
+      <button class="btn btn-outline-secondary" (click)="handleRefresh()">
+        <i class="fa-solid fa-arrows-rotate me-2"></i>Refresh
+      </button>
+    </div>
+
+    <hr class="my-3">
+
+    <div class="entity-stats">
+      <div class="stat-card stat-card-queue clickable" (click)="handleViewMessages(0)">
+        <span class="stat-value">{{ queue.activeMessageCount }}</span>
+        <span class="stat-label">Active Messages</span>
+      </div>
+      <div class="stat-card stat-card-queue clickable" [class.warning]="queue.deadLetterMessageCount > 0" (click)="handleViewMessages(1)">
+        <span class="stat-value">{{ queue.deadLetterMessageCount }}</span>
+        <span class="stat-label">Dead Letter</span>
+      </div>
+      <div class="stat-card stat-card-queue">
+        <span class="stat-value">{{ queue.scheduledMessageCount }}</span>
+        <span class="stat-label">Scheduled</span>
+      </div>
+      <div class="stat-card stat-card-queue">
+        <span class="stat-value">{{ formatSize(queue.sizeInBytes) }}</span>
+        <span class="stat-label">Size</span>
+      </div>
+    </div>
+
+    <hr class="my-3">
+
+    <div class="entity-properties">
+      <h3>Azure Service Bus Properties</h3>
+      <div class="property-grid">
+        <div class="property">
+          <span class="property-label">Max Delivery Count</span>
+          <span class="property-value">{{ queue.maxDeliveryCount }}</span>
+        </div>
+        <div class="property">
+          <span class="property-label">Lock Duration</span>
+          @let lockDuration = parseDuration(queue.lockDuration);
+          <span class="property-value">
+            {{ lockDuration.days }}d {{ lockDuration.hours }}h {{ lockDuration.minutes }}m {{ lockDuration.seconds }}s
+          </span>
+        </div>
+        <div class="property">
+          <span class="property-label">Message TTL</span>
+          @if (queue.defaultMessageTimeToLive && queue.defaultMessageTimeToLive !== 'Max Value') {
+            @let ttl = parseDuration(queue.defaultMessageTimeToLive);
+            <span class="property-value">
+              {{ ttl.days }}d {{ ttl.hours }}h {{ ttl.minutes }}m {{ ttl.seconds }}s
+            </span>
+          } @else {
+            <span class="property-value">Max Value</span>
+          }
+        </div>
+        <div class="property">
+          <span class="property-label">Max Size</span>
+          <span class="property-value">{{ queue.maxSizeInMegabytes }} MB</span>
+        </div>
+        <div class="property">
+          <span class="property-label">Requires Session</span>
+          <span class="property-value azure-feature" [class.enabled]="queue.requiresSession">
+            {{ queue.requiresSession ? 'Yes' : 'No' }}
+          </span>
+        </div>
+        <div class="property">
+          <span class="property-label">Dead Lettering On Expiration</span>
+          <span class="property-value azure-feature" [class.enabled]="queue.deadLetteringOnMessageExpiration">
+            {{ queue.deadLetteringOnMessageExpiration ? 'Enabled' : 'Disabled' }}
+          </span>
+        </div>
+        <div class="property">
+          <span class="property-label">Partitioning</span>
+          <span class="property-value azure-feature" [class.enabled]="queue.enablePartitioning">
+            {{ queue.enablePartitioning ? 'Enabled' : 'Disabled' }}
+          </span>
+        </div>
+        <div class="property">
+          <span class="property-label">Status</span>
+          <span class="property-value">{{ queue.status }}</span>
+        </div>
+      </div>
+    </div>
+
+    <hr class="my-3">
+
+    <div class="entity-metadata">
+      <h4>Metadata</h4>
+      <div class="property-grid">
+        <div class="property">
+          <span class="property-label">Created At</span>
+          <span class="property-value">{{ formatDate(queue.createdAt) }}</span>
+        </div>
+        <div class="property">
+          <span class="property-label">Updated At</span>
+          <span class="property-value">{{ formatDate(queue.updatedAt) }}</span>
+        </div>
+        <div class="property">
+          <span class="property-label">Accessed At</span>
+          <span class="property-value">{{ formatDate(queue.accessedAt) }}</span>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Topic Details -->
+  @else if (isTopic()) {
+    @let topic = asTopic();
+    <div class="entity-header entity-header-topic">
+      <div class="entity-icon-wrapper">
+        <i class="fa-solid fa-tower-broadcast entity-icon topic-icon"></i>
+      </div>
+      <div class="entity-title">
+        <h2>{{ topic.name }}</h2>
+        <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Azure Topic</span>
+      </div>
+    </div>
+
+    <div class="entity-actions">
+      <button class="btn btn-primary" (click)="handleSendMessage()">
+        <i class="fa fa-paper-plane me-2"></i>Send Message
+      </button>
+      <button class="btn btn-outline-secondary" (click)="handleRefresh()">
+        <i class="fa-solid fa-arrows-rotate me-2"></i>Refresh
+      </button>
+      <button class="btn btn-danger" (click)="handleDelete()">
+        <i class="fa fa-trash me-2"></i>Delete
+      </button>
+    </div>
+
+    <hr class="my-3">
+
+    <div class="entity-stats">
+      <div class="stat-card stat-card-topic">
+        <span class="stat-value">{{ topic.subscriptionCount }}</span>
+        <span class="stat-label">Subscriptions</span>
+      </div>
+      <div class="stat-card stat-card-topic">
+        <span class="stat-value">{{ topic.scheduledMessageCount }}</span>
+        <span class="stat-label">Scheduled</span>
+      </div>
+      <div class="stat-card stat-card-topic">
+        <span class="stat-value">{{ formatSize(topic.sizeInBytes) }}</span>
+        <span class="stat-label">Size</span>
+      </div>
+      <div class="stat-card stat-card-topic">
+        <span class="stat-value">{{ topic.maxSizeInMegabytes }} MB</span>
+        <span class="stat-label">Max Size</span>
+      </div>
+    </div>
+
+    <hr class="my-3">
+
+    <div class="entity-properties">
+      <h3>Azure Service Bus Properties</h3>
+      <div class="property-grid">
+        <div class="property">
+          <span class="property-label">Message TTL</span>
+          @if (topic.defaultMessageTimeToLive && topic.defaultMessageTimeToLive !== 'Max Value') {
+            @let ttl = parseDuration(topic.defaultMessageTimeToLive);
+            <span class="property-value">
+              {{ ttl.days }}d {{ ttl.hours }}h {{ ttl.minutes }}m {{ ttl.seconds }}s
+            </span>
+          } @else {
+            <span class="property-value">Max Value</span>
+          }
+        </div>
+        <div class="property">
+          <span class="property-label">Auto Delete On Idle</span>
+          @if (topic.autoDeleteOnIdle && topic.autoDeleteOnIdle !== 'Max Value') {
+            @let idle = parseDuration(topic.autoDeleteOnIdle);
+            <span class="property-value">
+              {{ idle.days }}d {{ idle.hours }}h {{ idle.minutes }}m {{ idle.seconds }}s
+            </span>
+          } @else {
+            <span class="property-value">Max Value</span>
+          }
+        </div>
+        <div class="property">
+          <span class="property-label">Duplicate Detection Window</span>
+          @if (topic.duplicateDetectionHistoryTimeWindow) {
+            @let detection = parseDuration(topic.duplicateDetectionHistoryTimeWindow);
+            <span class="property-value">
+              {{ detection.days }}d {{ detection.hours }}h {{ detection.minutes }}m {{ detection.seconds }}s
+            </span>
+          } @else {
+            <span class="property-value">Not Configured</span>
+          }
+        </div>
+        <div class="property">
+          <span class="property-label">Batched Operations</span>
+          <span class="property-value azure-feature" [class.enabled]="topic.enableBatchedOperations">
+            {{ topic.enableBatchedOperations ? 'Enabled' : 'Disabled' }}
+          </span>
+        </div>
+        <div class="property">
+          <span class="property-label">Partitioning</span>
+          <span class="property-value azure-feature" [class.enabled]="topic.enablePartitioning">
+            {{ topic.enablePartitioning ? 'Enabled' : 'Disabled' }}
+          </span>
+        </div>
+        <div class="property">
+          <span class="property-label">Support Ordering</span>
+          <span class="property-value azure-feature" [class.enabled]="topic.supportOrdering">
+            {{ topic.supportOrdering ? 'Enabled' : 'Disabled' }}
+          </span>
+        </div>
+        <div class="property">
+          <span class="property-label">Express</span>
+          <span class="property-value azure-feature" [class.enabled]="topic.enableExpress">
+            {{ topic.enableExpress ? 'Enabled' : 'Disabled' }}
+          </span>
+        </div>
+        <div class="property">
+          <span class="property-label">Duplicate Detection</span>
+          <span class="property-value azure-feature" [class.enabled]="topic.requiresDuplicateDetection">
+            {{ topic.requiresDuplicateDetection ? 'Required' : 'Not Required' }}
+          </span>
+        </div>
+        <div class="property">
+          <span class="property-label">Status</span>
+          <span class="property-value">{{ topic.status }}</span>
+        </div>
+      </div>
+    </div>
+
+    <hr class="my-3">
+
+    <div class="entity-metadata">
+      <h4>Metadata</h4>
+      <div class="property-grid">
+        <div class="property">
+          <span class="property-label">Created At</span>
+          <span class="property-value">{{ formatDate(topic.createdAt) }}</span>
+        </div>
+        <div class="property">
+          <span class="property-label">Updated At</span>
+          <span class="property-value">{{ formatDate(topic.updatedAt) }}</span>
+        </div>
+        <div class="property">
+          <span class="property-label">Accessed At</span>
+          <span class="property-value">{{ formatDate(topic.accessedAt) }}</span>
+        </div>
+        @if (topic.userMetadata) {
+          <div class="property">
+            <span class="property-label">User Metadata</span>
+            <span class="property-value">{{ topic.userMetadata }}</span>
+          </div>
+        }
+      </div>
+    </div>
+
+    @if (topic.subscriptions && topic.subscriptions.length > 0) {
+      <hr class="my-3">
+      <div class="subscriptions-section">
+        <h4>Subscriptions ({{ topic.subscriptions.length }})</h4>
+        <div class="subscriptions-list">
+          @for (sub of topic.subscriptions; track sub.name) {
+            <div class="subscription-card clickable" (click)="navigateToSubscription(topic.name, sub.name)">
+              <div class="subscription-header">
+                <h5>{{ sub.name }}</h5>
+                <span class="badge bg-info-subtle text-info">{{ sub.status }}</span>
+              </div>
+              <div class="subscription-stats">
+                <span class="stat-item">Active: {{ sub.activeMessageCount }}</span>
+                <span class="stat-item" [class.warning]="sub.deadLetterMessageCount > 0">
+                  Dead Letter: {{ sub.deadLetterMessageCount }}
+                </span>
+                @if (sub.requiresSession) {
+                  <span class="stat-item azure-feature enabled">Session-enabled</span>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    }
+  }
+
+  <!-- Subscription Details -->
+  @else if (isSubscription()) {
+    @let subscription = asSubscription();
+    <div class="entity-header entity-header-subscription">
+      <div class="entity-icon-wrapper">
+        <i class="fa-solid fa-bell entity-icon subscription-icon"></i>
+      </div>
+      <div class="entity-title">
+        <h2>{{ subscription.name }}</h2>
+        <span class="badge bg-info-subtle text-info border border-info-subtle">Azure Subscription</span>
+        <small class="text-muted">Topic: {{ subscription.topicName }}</small>
+      </div>
+    </div>
+
+    <div class="entity-actions">
+      <button class="btn btn-secondary" (click)="handleViewMessages(0)">
+        <i class="fa fa-eye me-2"></i>View Messages
+      </button>
+      <button class="btn btn-outline-secondary" (click)="handleRefresh()">
+        <i class="fa-solid fa-arrows-rotate me-2"></i>Refresh
+      </button>
+      <button class="btn btn-danger" (click)="handleDelete()">
+        <i class="fa fa-trash me-2"></i>Delete
+      </button>
+    </div>
+
+    <hr class="my-3">
+
+    <div class="entity-stats">
+      <div class="stat-card stat-card-subscription clickable" (click)="handleViewMessages(0)">
+        <span class="stat-value">{{ subscription.activeMessageCount }}</span>
+        <span class="stat-label">Active Messages</span>
+      </div>
+      <div class="stat-card stat-card-subscription clickable" [class.warning]="subscription.deadLetterMessageCount > 0" (click)="handleViewMessages(1)">
+        <span class="stat-value">{{ subscription.deadLetterMessageCount }}</span>
+        <span class="stat-label">Dead Letter</span>
+      </div>
+      <div class="stat-card stat-card-subscription">
+        <span class="stat-value">{{ subscription.scheduledMessageCount }}</span>
+        <span class="stat-label">Scheduled</span>
+      </div>
+      <div class="stat-card stat-card-subscription">
+        <span class="stat-value">{{ subscription.rules?.length || 0 }}</span>
+        <span class="stat-label">Rules</span>
+      </div>
+    </div>
+
+    <hr class="my-3">
+
+    <div class="entity-properties">
+      <h3>Azure Service Bus Properties</h3>
+      <div class="property-grid">
+        <div class="property">
+          <span class="property-label">Max Delivery Count</span>
+          <span class="property-value">{{ subscription.maxDeliveryCount }}</span>
+        </div>
+        <div class="property">
+          <span class="property-label">Lock Duration</span>
+          @let lockDuration = parseDuration(subscription.lockDuration);
+          <span class="property-value">
+            {{ lockDuration.days }}d {{ lockDuration.hours }}h {{ lockDuration.minutes }}m {{ lockDuration.seconds }}s
+          </span>
+        </div>
+        <div class="property">
+          <span class="property-label">Message TTL</span>
+          @if (subscription.defaultMessageTimeToLive && subscription.defaultMessageTimeToLive !== 'Max Value') {
+            @let ttl = parseDuration(subscription.defaultMessageTimeToLive);
+            <span class="property-value">
+              {{ ttl.days }}d {{ ttl.hours }}h {{ ttl.minutes }}m {{ ttl.seconds }}s
+            </span>
+          } @else {
+            <span class="property-value">Max Value</span>
+          }
+        </div>
+        <div class="property">
+          <span class="property-label">Requires Session</span>
+          <span class="property-value azure-feature" [class.enabled]="subscription.requiresSession">
+            {{ subscription.requiresSession ? 'Yes' : 'No' }}
+          </span>
+        </div>
+        <div class="property">
+          <span class="property-label">Dead Lettering On Expiration</span>
+          <span class="property-value azure-feature" [class.enabled]="subscription.deadLetteringOnMessageExpiration">
+            {{ subscription.deadLetteringOnMessageExpiration ? 'Enabled' : 'Disabled' }}
+          </span>
+        </div>
+        <div class="property">
+          <span class="property-label">Dead Lettering On Filter Exceptions</span>
+          <span class="property-value azure-feature" [class.enabled]="subscription.deadLetteringOnFilterEvaluationExceptions">
+            {{ subscription.deadLetteringOnFilterEvaluationExceptions ? 'Enabled' : 'Disabled' }}
+          </span>
+        </div>
+        <div class="property">
+          <span class="property-label">Batched Operations</span>
+          <span class="property-value azure-feature" [class.enabled]="subscription.enableBatchedOperations">
+            {{ subscription.enableBatchedOperations ? 'Enabled' : 'Disabled' }}
+          </span>
+        </div>
+        <div class="property">
+          <span class="property-label">Status</span>
+          <span class="property-value">{{ subscription.status }}</span>
+        </div>
+        @if (subscription.forwardTo) {
+          <div class="property">
+            <span class="property-label">Forward To</span>
+            <span class="property-value">{{ subscription.forwardTo }}</span>
+          </div>
+        }
+        @if (subscription.forwardDeadLetteredMessagesTo) {
+          <div class="property">
+            <span class="property-label">Forward Dead Letters To</span>
+            <span class="property-value">{{ subscription.forwardDeadLetteredMessagesTo }}</span>
+          </div>
+        }
+      </div>
+    </div>
+
+    <hr class="my-3">
+
+    <div class="entity-metadata">
+      <h4>Metadata</h4>
+      <div class="property-grid">
+        <div class="property">
+          <span class="property-label">Created At</span>
+          <span class="property-value">{{ formatDate(subscription.createdAt) }}</span>
+        </div>
+        <div class="property">
+          <span class="property-label">Updated At</span>
+          <span class="property-value">{{ formatDate(subscription.updatedAt) }}</span>
+        </div>
+        <div class="property">
+          <span class="property-label">Accessed At</span>
+          <span class="property-value">{{ formatDate(subscription.accessedAt) }}</span>
+        </div>
+        @if (subscription.userMetadata) {
+          <div class="property">
+            <span class="property-label">User Metadata</span>
+            <span class="property-value">{{ subscription.userMetadata }}</span>
+          </div>
+        }
+      </div>
+    </div>
+
+    @if (subscription.rules && subscription.rules.length > 0) {
+      <hr class="my-3">
+      <div class="rules-section">
+        <h4>Subscription Rules ({{ subscription.rules.length }})</h4>
+        <div class="rules-list">
+          @for (rule of subscription.rules; track rule.name) {
+            <div class="rule-card">
+              <div class="rule-header">
+                <h5>{{ rule.name }}</h5>
+                <span class="badge bg-secondary">{{ rule.filterType }}</span>
+              </div>
+              @if (rule.filterExpression) {
+                <div class="rule-detail">
+                  <strong>Filter:</strong> <code>{{ rule.filterExpression }}</code>
+                </div>
+              }
+              @if (rule.actionExpression) {
+                <div class="rule-detail">
+                  <strong>Action:</strong> <code>{{ rule.actionExpression }}</code>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      </div>
+    }
+  }
+
+  @else {
+    <div class="empty-state">
+      <i class="fa fa-exclamation-circle fa-3x mb-3 text-warning"></i>
+      <h3>Unsupported Entity Type</h3>
+      <p>This entity type is not supported by the Azure Service Bus provider.</p>
+    </div>
+  }
+</div>

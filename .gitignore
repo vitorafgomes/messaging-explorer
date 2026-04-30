@@ -1,0 +1,83 @@
+# .NET
+bin/
+obj/
+*.user
+*.userosscache
+*.suo
+*.userprefs
+*.sln.docstates
+.vs/
+*.nupkg
+*.snupkg
+
+# Node.js / Angular
+node_modules/
+dist/
+.angular/
+.npm/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.local
+.env.*.local
+*.local
+
+# Build outputs
+out/
+build/
+publish/
+web-app/release/
+
+# Tool-generated files
+.auto-claude-security.json
+web-app/.auto-claude-security.json
+
+# Test coverage
+coverage/
+
+# Logs
+logs/
+*.log
+
+# Temp files
+*.tmp
+*.temp
+
+# Auto-claude internal files
+.auto-claude/.env
+.auto-claude/.gitignore_checked
+.auto-claude/file-timelines/
+.auto-claude/file_evolution.json
+.auto-claude/ideation/
+.auto-claude/insights/
+.auto-claude/project_index.json
+.auto-claude/roadmap/
+.auto-claude/specs/
+web-app/.auto-claude/
+
+# Worktrees
+.worktrees/
+
+# Claude settings
+.claude_settings.json
+
+# Auto Claude data directory
+.auto-claude/
+
+# ServiceBus Explorer configuration (contains sensitive connection strings)
+.servicebus/
+*.servicebus.json

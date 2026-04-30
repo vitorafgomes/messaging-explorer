@@ -1,0 +1,425 @@
+.azure-entity-details {
+  padding: 20px;
+  background: var(--bs-body-bg);
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+
+  // Entity Header
+  .entity-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+
+    &.entity-header-queue {
+      background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+    }
+
+    &.entity-header-topic {
+      background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+    }
+
+    &.entity-header-subscription {
+      background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+    }
+
+    .entity-icon-wrapper {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.8);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+
+      .entity-icon {
+        font-size: 32px;
+
+        &.queue-icon {
+          color: #4caf50;
+        }
+
+        &.topic-icon {
+          color: #ff9800;
+        }
+
+        &.subscription-icon {
+          color: #2196f3;
+        }
+      }
+    }
+
+    .entity-title {
+      flex: 1;
+
+      h2 {
+        margin: 0 0 8px 0;
+        font-size: 28px;
+        font-weight: 600;
+        color: var(--bs-body-color);
+      }
+
+      small {
+        display: block;
+        margin-top: 4px;
+        font-size: 14px;
+      }
+
+      .badge {
+        font-size: 12px;
+        padding: 4px 12px;
+        font-weight: 500;
+      }
+    }
+  }
+
+  // Actions
+  .entity-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+
+    .btn {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 14px;
+      padding: 8px 16px;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+
+      i {
+        font-size: 16px;
+      }
+
+      &:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+      }
+
+      &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+    }
+  }
+
+  // Stats
+  .entity-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 16px;
+    margin: 16px 0;
+
+    .stat-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      border-radius: 8px;
+      background: var(--bs-secondary-bg);
+      border: 1px solid var(--bs-border-color);
+      transition: all 0.3s ease;
+
+      &.clickable {
+        cursor: pointer;
+
+        &:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+      }
+
+      &.warning {
+        background: #fff3cd;
+        border-color: #ffc107;
+
+        .stat-value {
+          color: #856404;
+        }
+      }
+
+      &.stat-card-queue {
+        border-left: 4px solid #4caf50;
+      }
+
+      &.stat-card-topic {
+        border-left: 4px solid #ff9800;
+      }
+
+      &.stat-card-subscription {
+        border-left: 4px solid #2196f3;
+      }
+
+      .stat-value {
+        font-size: 32px;
+        font-weight: 700;
+        color: var(--bs-body-color);
+        margin-bottom: 8px;
+      }
+
+      .stat-label {
+        font-size: 14px;
+        color: var(--bs-secondary-color);
+        text-align: center;
+      }
+    }
+  }
+
+  // Properties
+  .entity-properties {
+    margin: 24px 0;
+
+    h3, h4 {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--bs-body-color);
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--bs-border-color);
+    }
+
+    .property-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 16px;
+    }
+
+    .property {
+      display: flex;
+      flex-direction: column;
+      padding: 12px;
+      background: var(--bs-secondary-bg);
+      border-radius: 6px;
+      border-left: 3px solid #2196f3;
+
+      .property-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--bs-secondary-color);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 4px;
+      }
+
+      .property-value {
+        font-size: 16px;
+        color: var(--bs-body-color);
+        font-weight: 500;
+
+        &.azure-feature {
+          display: inline-block;
+          padding: 4px 12px;
+          border-radius: 4px;
+          background: var(--bs-tertiary-bg);
+          color: var(--bs-secondary-color);
+          font-size: 14px;
+
+          &.enabled {
+            background: #c8e6c9;
+            color: #2e7d32;
+          }
+        }
+
+        code {
+          background: #263238;
+          color: #aed581;
+          padding: 2px 6px;
+          border-radius: 4px;
+          font-size: 14px;
+        }
+      }
+    }
+  }
+
+  // Metadata
+  .entity-metadata {
+    margin: 24px 0;
+
+    h4 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--bs-body-color);
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--bs-border-color);
+    }
+  }
+
+  // Subscriptions Section
+  .subscriptions-section {
+    margin: 24px 0;
+
+    h4 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--bs-body-color);
+      margin-bottom: 16px;
+    }
+
+    .subscriptions-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 16px;
+    }
+
+    .subscription-card {
+      padding: 16px;
+      border: 1px solid var(--bs-border-color);
+      border-radius: 8px;
+      background: var(--bs-body-bg);
+      transition: all 0.3s ease;
+
+      &.clickable {
+        cursor: pointer;
+      }
+
+      &:hover {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        transform: translateY(-2px);
+      }
+
+      .subscription-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+
+        h5 {
+          margin: 0;
+          font-size: 16px;
+          font-weight: 600;
+          color: var(--bs-body-color);
+        }
+
+        .badge {
+          font-size: 11px;
+          padding: 3px 8px;
+        }
+      }
+
+      .subscription-stats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        font-size: 13px;
+
+        .stat-item {
+          padding: 4px 8px;
+          background: var(--bs-secondary-bg);
+          border-radius: 4px;
+          color: var(--bs-secondary-color);
+
+          &.warning {
+            background: #fff3cd;
+            color: #856404;
+          }
+
+          &.azure-feature.enabled {
+            background: #c8e6c9;
+            color: #2e7d32;
+          }
+        }
+      }
+    }
+  }
+
+  // Rules Section
+  .rules-section {
+    margin: 24px 0;
+
+    h4 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--bs-body-color);
+      margin-bottom: 16px;
+    }
+
+    .rules-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .rule-card {
+      padding: 16px;
+      border: 1px solid var(--bs-border-color);
+      border-radius: 8px;
+      background: var(--bs-secondary-bg);
+
+      .rule-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+
+        h5 {
+          margin: 0;
+          font-size: 16px;
+          font-weight: 600;
+          color: var(--bs-body-color);
+        }
+
+        .badge {
+          font-size: 11px;
+          padding: 3px 8px;
+        }
+      }
+
+      .rule-detail {
+        margin-top: 8px;
+        font-size: 14px;
+        color: var(--bs-secondary-color);
+
+        strong {
+          color: var(--bs-body-color);
+          margin-right: 8px;
+        }
+
+        code {
+          background: #263238;
+          color: #aed581;
+          padding: 2px 6px;
+          border-radius: 4px;
+          font-size: 13px;
+        }
+      }
+    }
+  }
+
+  // Empty State
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 24px;
+    text-align: center;
+
+    i {
+      margin-bottom: 16px;
+    }
+
+    h3 {
+      margin: 0 0 8px 0;
+      font-size: 24px;
+      color: var(--bs-secondary-color);
+    }
+
+    p {
+      margin: 0;
+      font-size: 16px;
+      color: var(--bs-tertiary-color);
+    }
+  }
+
+  // Dividers
+  hr {
+    border: none;
+    border-top: 1px solid var(--bs-border-color);
+    margin: 24px 0;
+  }
+}

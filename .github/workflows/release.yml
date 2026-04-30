@@ -1,0 +1,440 @@
+# Release pipeline for Message Explorer
+# Triggers on version tags (v*) and produces:
+#   - Linux: AppImage + deb
+#   - Windows: NSIS installer + portable exe
+#   - GitHub Release with all artifacts attached
+#   - Cloudflare Worker deployment (bug-reporter)
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+# Prevent concurrent releases for the same tag
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Linux build — AppImage + deb
+  # ---------------------------------------------------------------------------
+  build-linux:
+    name: Build Linux
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: web-app/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web-app
+        run: npm ci
+
+      - name: Build Linux packages
+        working-directory: web-app
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: npm run electron:build:linux
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-artifacts
+          path: |
+            web-app/release/Message Explorer-*.AppImage
+            web-app/release/message-explorer_*_amd64.deb
+            web-app/release/latest-linux.yml
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Windows build — NSIS installer + portable
+  # ---------------------------------------------------------------------------
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: web-app/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web-app
+        run: npm ci
+
+      - name: Build Windows packages
+        working-directory: web-app
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: npm run electron:build:win
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-artifacts
+          path: |
+            web-app/release/Message Explorer Setup *.exe
+            web-app/release/Message Explorer *.exe
+            web-app/release/latest.yml
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # macOS build — dmg + zip (unsigned)
+  # ---------------------------------------------------------------------------
+  build-mac:
+    name: Build macOS
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: web-app/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web-app
+        run: npm ci
+
+      - name: Build macOS packages
+        working-directory: web-app
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: npm run electron:build:mac
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-artifacts
+          path: |
+            web-app/release/Message Explorer-*.dmg
+            web-app/release/Message Explorer-*.zip
+            web-app/release/latest-mac.yml
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Create GitHub Release and attach all platform artifacts
+  # ---------------------------------------------------------------------------
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [build-linux, build-windows, build-mac]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-artifacts
+          path: artifacts/linux
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-artifacts
+          path: artifacts/windows
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: mac-artifacts
+          path: artifacts/mac
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-beta') }}
+          files: |
+            artifacts/linux/*
+            artifacts/windows/*
+            artifacts/mac/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # Update GitHub Pages landing page with new version
+  # ---------------------------------------------------------------------------
+  update-landing:
+    name: Update Landing Page
+    if: ${{ !contains(github.ref_name, '-beta') }}
+    runs-on: ubuntu-latest
+    needs: release
+
+    steps:
+      - name: Checkout gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+
+      - name: Update version in landing page
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          OLD_VERSION=$(grep -oP 'v\d+\.\d+\.\d+' index.html | head -1 | sed 's/^v//')
+          if [ -z "$OLD_VERSION" ]; then OLD_VERSION="2.0.0"; fi
+
+          echo "Updating landing page: $OLD_VERSION → $VERSION"
+
+          # Replace version references (escape dots to prevent regex wildcard matching)
+          OLD_ESCAPED=$(echo "$OLD_VERSION" | sed 's/\./\\./g')
+          sed -i "s/${OLD_ESCAPED}/${VERSION}/g" index.html
+
+          echo "Done. Replacements made:"
+          grep -c "$VERSION" index.html
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          VERSION="${GITHUB_REF_NAME#v}"
+          git add index.html
+          git diff --cached --quiet || git commit -m "chore: update landing page to v${VERSION}"
+          git push
+
+  # ---------------------------------------------------------------------------
+  # Upload artifacts to Cloudflare R2 (CDN for downloads)
+  # ---------------------------------------------------------------------------
+  upload-r2:
+    name: Upload to Cloudflare R2
+    runs-on: ubuntu-latest
+    needs: release
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Upload to R2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          npm install -g wrangler
+          VERSION="${GITHUB_REF_NAME#v}"
+
+          # Detect beta vs stable release from tag name
+          if [[ "${GITHUB_REF_NAME}" == *-beta* ]]; then
+            CHANNEL="beta"
+            echo "Detected BETA release: ${GITHUB_REF_NAME}"
+          else
+            CHANNEL="latest"
+            echo "Detected STABLE release: ${GITHUB_REF_NAME}"
+          fi
+
+          # Ensure PyYAML is available for beta manifest URL rewriting
+          python3 -c "import yaml" 2>/dev/null || pip3 install --quiet pyyaml
+
+          # ---------------------------------------------------------------
+          # Upload all artifacts to $VERSION/ subfolder (versioned archive)
+          # Root uploads are handled separately per channel below.
+          # ---------------------------------------------------------------
+          for file in artifacts/linux-artifacts/* artifacts/windows-artifacts/* artifacts/mac-artifacts/*; do
+            if [ -f "$file" ]; then
+              filename=$(basename "$file")
+              echo "Uploading $filename to explorer-releases/$VERSION/$filename"
+              npx wrangler r2 object put "explorer-releases/$VERSION/$filename" --file="$file" --remote
+            fi
+          done
+
+          # ---------------------------------------------------------------
+          # Root uploads — channel-specific
+          # ---------------------------------------------------------------
+          if [ "$CHANNEL" = "latest" ]; then
+            # STABLE: upload manifests AND binaries to root (auto-updater + landing page)
+            for file in artifacts/linux-artifacts/* artifacts/windows-artifacts/* artifacts/mac-artifacts/*; do
+              if [ -f "$file" ]; then
+                filename=$(basename "$file")
+
+                # Manifests → root as-is (URLs are relative to root, binaries are at root)
+                if [[ "$filename" == latest*.yml ]]; then
+                  echo "Uploading $filename to root (stable manifest)"
+                  npx wrangler r2 object put "explorer-releases/$filename" --file="$file" --remote
+                fi
+
+                # Binaries + blockmaps → root (needed for auto-update delta + landing page)
+                case "$filename" in
+                  *.AppImage|*.exe|*.deb|*.dmg|*.zip|*.blockmap)
+                    echo "Uploading $filename to root (stable current)"
+                    npx wrangler r2 object put "explorer-releases/$filename" --file="$file" --remote
+                    ;;
+                esac
+              fi
+            done
+          else
+            # BETA: upload ONLY manifests to root, with URL rewriting.
+            # Binaries/blockmaps stay in $VERSION/ subfolder (no root pollution).
+            # The beta*.yml at root has URLs rewritten to point to $VERSION/binary
+            # so electron-updater downloads from the subfolder.
+            for file in artifacts/linux-artifacts/* artifacts/windows-artifacts/* artifacts/mac-artifacts/*; do
+              if [ -f "$file" ]; then
+                filename=$(basename "$file")
+
+                if [[ "$filename" == latest*.yml ]]; then
+                  betaname="${filename/latest/beta}"
+                  cp "$file" "/tmp/$betaname"
+
+                  # Rewrite URLs in manifest to include $VERSION/ prefix
+                  python3 - <<PYEOF
+          import yaml
+          manifest_path = "/tmp/$betaname"
+          version_prefix = "$VERSION/"
+          with open(manifest_path) as f:
+              data = yaml.safe_load(f)
+          for entry in data.get('files', []):
+              if 'url' in entry and not entry['url'].startswith(version_prefix):
+                  entry['url'] = version_prefix + entry['url']
+          if 'path' in data and not data['path'].startswith(version_prefix):
+              data['path'] = version_prefix + data['path']
+          with open(manifest_path, 'w') as f:
+              yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+          print(f"Rewrote URLs in {manifest_path} with prefix {version_prefix}")
+          PYEOF
+
+                  echo "Uploading rewritten $betaname to root (beta channel)"
+                  npx wrangler r2 object put "explorer-releases/$betaname" --file="/tmp/$betaname" --remote
+                fi
+              fi
+            done
+            echo "Beta channel: binaries and blockmaps kept in $VERSION/ subfolder only"
+          fi
+
+          # ---------------------------------------------------------------
+          # Stable-only: clean up stale binaries at root
+          # Tracks current root binaries via .active-versions.txt sentinel
+          # ---------------------------------------------------------------
+          if [ "$CHANNEL" = "latest" ]; then
+            echo "=== Cleaning up stale stable binaries from root ==="
+
+            # Fetch previous sentinel (empty on first run)
+            PREV_VERSIONS=$(npx wrangler r2 object get "explorer-releases/.active-versions.txt" --remote --pipe 2>/dev/null || echo "")
+
+            # Build new sentinel listing the binaries just uploaded to root
+            > /tmp/new-active-versions.txt
+            for file in artifacts/linux-artifacts/* artifacts/windows-artifacts/* artifacts/mac-artifacts/*; do
+              if [ -f "$file" ]; then
+                filename=$(basename "$file")
+                case "$filename" in
+                  *.AppImage|*.exe|*.deb|*.dmg|*.zip|*.blockmap)
+                    echo "$filename" >> /tmp/new-active-versions.txt
+                    ;;
+                esac
+              fi
+            done
+
+            # Upload new sentinel BEFORE deleting old files (atomic-ish)
+            npx wrangler r2 object put "explorer-releases/.active-versions.txt" --file="/tmp/new-active-versions.txt" --remote
+
+            # Delete any file listed in the previous sentinel that is NOT in the new sentinel
+            if [ -n "$PREV_VERSIONS" ]; then
+              DELETED_COUNT=0
+              while IFS= read -r old; do
+                if [ -n "$old" ] && ! grep -qxF "$old" /tmp/new-active-versions.txt; then
+                  echo "Deleting stale root binary: $old"
+                  npx wrangler r2 object delete "explorer-releases/$old" --remote 2>/dev/null && DELETED_COUNT=$((DELETED_COUNT + 1)) || echo "  (delete failed — object may not exist)"
+                fi
+              done <<< "$PREV_VERSIONS"
+              echo "Cleanup complete: $DELETED_COUNT stale files removed"
+            else
+              echo "No previous sentinel found — first run or fresh bucket, skipping cleanup"
+            fi
+          fi
+
+          # ---------------------------------------------------------------
+          # Channel-specific JSON manifest at root (for landing page / API)
+          # ---------------------------------------------------------------
+          MANIFEST_NAME="${CHANNEL}.json"
+          cat > /tmp/${MANIFEST_NAME} << MANIFEST
+          {
+            "version": "$VERSION",
+            "tag": "${GITHUB_REF_NAME}",
+            "channel": "$CHANNEL",
+            "date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "files": {
+              "linux-appimage": "$VERSION/$(ls -1 artifacts/linux-artifacts/*.AppImage 2>/dev/null | head -1 | xargs basename 2>/dev/null)",
+              "linux-deb": "$VERSION/$(ls -1 artifacts/linux-artifacts/*.deb 2>/dev/null | head -1 | xargs basename 2>/dev/null)",
+              "windows-installer": "$VERSION/$(ls -1 artifacts/windows-artifacts/*Setup*.exe 2>/dev/null | head -1 | xargs basename 2>/dev/null)",
+              "windows-portable": "$VERSION/$(ls -1 artifacts/windows-artifacts/*.exe 2>/dev/null | grep -v Setup | head -1 | xargs basename 2>/dev/null)",
+              "mac-dmg": "$VERSION/$(ls -1 artifacts/mac-artifacts/*.dmg 2>/dev/null | head -1 | xargs basename 2>/dev/null)",
+              "mac-zip": "$VERSION/$(ls -1 artifacts/mac-artifacts/*.zip 2>/dev/null | head -1 | xargs basename 2>/dev/null)"
+            }
+          }
+          MANIFEST
+          npx wrangler r2 object put "explorer-releases/${MANIFEST_NAME}" --file="/tmp/${MANIFEST_NAME}" --content-type="application/json" --remote
+          echo "All artifacts uploaded to R2 (channel: $CHANNEL)"
+
+  # ---------------------------------------------------------------------------
+  # Deploy Cloudflare Worker (bug-reporter)
+  # ---------------------------------------------------------------------------
+  deploy-worker:
+    name: Deploy Cloudflare Worker
+    runs-on: ubuntu-latest
+    needs: release
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: bug-reporter-worker/package-lock.json
+
+      - name: Install dependencies
+        working-directory: bug-reporter-worker
+        run: npm ci
+
+      - name: Deploy to Cloudflare
+        working-directory: bug-reporter-worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: npx wrangler deploy

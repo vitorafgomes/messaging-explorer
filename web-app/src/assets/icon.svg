@@ -1,0 +1,85 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Gradient definitions -->
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4A90E2;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#5B7FDB;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7B68EE;stop-opacity:1" />
+    </linearGradient>
+
+    <linearGradient id="messageGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#F0F0F0;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background with rounded corners -->
+  <rect width="512" height="512" rx="96" fill="url(#bgGradient)"/>
+
+  <!-- Message layers icon - centered and scaled, more rounded -->
+  <!-- Mensagem/camada traseira -->
+  <rect x="96" y="206" width="340" height="200" rx="60" fill="white" opacity="0.25"/>
+
+  <!-- Mensagem/camada do meio -->
+  <rect x="76" y="186" width="340" height="200" rx="60" fill="white" opacity="0.5"/>
+
+  <!-- Mensagem/camada frontal (principal) -->
+  <rect x="56" y="166" width="340" height="200" rx="60" fill="url(#messageGradient)"/>
+
+  <!-- Envelope icon on front message - smooth curves -->
+  <path d="M 110 216 Q 226 290 342 216"
+        stroke="#4A90E2"
+        stroke-width="14"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        fill="none"/>
+  <line x1="110" y1="216" x2="110" y2="316"
+        stroke="#4A90E2"
+        stroke-width="12"
+        stroke-linecap="round"/>
+  <line x1="342" y1="216" x2="342" y2="316"
+        stroke="#4A90E2"
+        stroke-width="12"
+        stroke-linecap="round"/>
+  <path d="M 110 316 Q 226 336 342 316"
+        stroke="#4A90E2"
+        stroke-width="10"
+        stroke-linecap="round"
+        fill="none"/>
+
+  <!-- Flow lines (input) - right side -->
+  <path d="M 416 240 L 480 240"
+        stroke="white"
+        stroke-width="16"
+        stroke-linecap="round"/>
+  <path d="M 416 270 L 480 270"
+        stroke="white"
+        stroke-width="14"
+        stroke-linecap="round"
+        opacity="0.7"/>
+  <path d="M 416 300 L 480 300"
+        stroke="white"
+        stroke-width="12"
+        stroke-linecap="round"
+        opacity="0.5"/>
+
+  <!-- Flow lines (output) - left side -->
+  <path d="M 96 240 L 32 240"
+        stroke="white"
+        stroke-width="16"
+        stroke-linecap="round"/>
+  <path d="M 96 270 L 32 270"
+        stroke="white"
+        stroke-width="14"
+        stroke-linecap="round"
+        opacity="0.7"/>
+  <path d="M 96 300 L 32 300"
+        stroke="white"
+        stroke-width="12"
+        stroke-linecap="round"
+        opacity="0.5"/>
+
+  <!-- Connection points -->
+  <circle cx="480" cy="240" r="12" fill="white"/>
+  <circle cx="32" cy="240" r="12" fill="white"/>
+</svg>

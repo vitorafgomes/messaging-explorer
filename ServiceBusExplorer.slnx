@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ServiceBusExplorer.Api/ServiceBusExplorer.Api.csproj" />
+    <Project Path="src/ServiceBusExplorer.Core/ServiceBusExplorer.Core.csproj" />
+  </Folder>
+</Solution>

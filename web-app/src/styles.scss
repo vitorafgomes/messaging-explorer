@@ -1,0 +1,83 @@
+@use '@angular/material' as mat;
+
+// === Bootstrap (temporary — removed in Phase 9) ===
+@import 'bootstrap/scss/bootstrap';
+
+// === Bootstrap tab-pane fix (no Bootstrap JS loaded) ===
+.tab-pane.active {
+  display: block;
+}
+
+// === Material Theme ===
+// Applied AFTER Bootstrap so Material wins the cascade on body/html
+html {
+  height: 100%;
+
+  @include mat.theme((
+    color: (
+      theme-type: light,
+      primary: mat.$azure-palette,
+      tertiary: mat.$blue-palette,
+    ),
+    typography: Roboto,
+    density: -1,
+  ));
+
+  &.dark-theme {
+    @include mat.theme((
+      color: (
+        theme-type: dark,
+        primary: mat.$azure-palette,
+        tertiary: mat.$blue-palette,
+      ),
+      typography: Roboto,
+      density: -1,
+    ));
+  }
+}
+
+// Override Bootstrap's body styles with Material values
+body {
+  color-scheme: light;
+  background-color: var(--mat-sys-surface) !important;
+  color: var(--mat-sys-on-surface) !important;
+  font: var(--mat-sys-body-medium) !important;
+  font-family: Roboto, 'Helvetica Neue', sans-serif !important;
+  margin: 0;
+  height: 100%;
+}
+
+html.dark-theme body {
+  color-scheme: dark;
+}
+
+// === App Root Layout ===
+app-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+}
+
+// === Flexbox layout for nested components ===
+app-entities-container,
+mat-sidenav-container,
+mat-sidenav-content,
+app-entities-tree,
+app-entity-details {
+  display: flex !important;
+  flex: 1 !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+}
+
+// === Material Dialog Overrides ===
+.mat-mdc-dialog-container,
+.cdk-overlay-pane .mat-mdc-dialog-container {
+  border-radius: 8px !important;
+  overflow: hidden;
+}
+
+.mat-mdc-dialog-surface {
+  border-radius: 8px !important;
+}

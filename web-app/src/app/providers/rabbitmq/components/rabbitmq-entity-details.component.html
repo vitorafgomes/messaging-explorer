@@ -1,0 +1,378 @@
+<div class="rabbitmq-entity-details">
+  <!-- Queue Details -->
+  @if (isQueue()) {
+    @let queue = asQueue();
+    <div class="entity-header entity-header-queue">
+      <div class="entity-icon-wrapper">
+        <i class="fa fa-inbox entity-icon queue-icon"></i>
+      </div>
+      <div class="entity-title">
+        <h2>{{ queue.name }}</h2>
+        <span class="badge bg-success-subtle text-success border border-success-subtle">RabbitMQ Queue</span>
+        @if (queue.virtualHost) {
+          <small class="text-muted">vHost: {{ queue.virtualHost }}</small>
+        }
+      </div>
+    </div>
+
+    <div class="entity-actions">
+      <button class="btn btn-primary" (click)="handleSendMessage()">
+        <i class="fa fa-paper-plane me-2"></i>Send Message
+      </button>
+      <button class="btn btn-secondary" (click)="handleViewMessages(0)">
+        <i class="fa fa-eye me-2"></i>View Messages
+      </button>
+      <button class="btn btn-danger" (click)="handlePurgeMessages()" [disabled]="(queue.totalMessages || queue.activeMessageCount) === 0">
+        <i class="fa fa-trash me-2"></i>Purge
+      </button>
+      <button class="btn btn-outline-secondary" (click)="handleRefresh()">
+        <i class="fa-solid fa-arrows-rotate me-2"></i>Refresh
+      </button>
+    </div>
+
+    <hr class="my-3">
+
+    <div class="entity-stats">
+      <div class="stat-card stat-card-queue clickable" (click)="handleViewMessages(0)">
+        <span class="stat-value">{{ queue.totalMessages !== undefined ? queue.totalMessages : queue.activeMessageCount }}</span>
+        <span class="stat-label">Total Messages</span>
+      </div>
+      @if (queue.messagesReady !== undefined) {
+        <div class="stat-card stat-card-queue">
+          <span class="stat-value">{{ queue.messagesReady }}</span>
+          <span class="stat-label">Ready</span>
+        </div>
+      }
+      @if (queue.messagesUnacknowledged !== undefined) {
+        <div class="stat-card stat-card-queue">
+          <span class="stat-value">{{ queue.messagesUnacknowledged }}</span>
+          <span class="stat-label">Unacknowledged</span>
+        </div>
+      }
+      @if (queue.consumerCount !== undefined) {
+        <div class="stat-card stat-card-queue">
+          <span class="stat-value">{{ queue.consumerCount }}</span>
+          <span class="stat-label">Consumers</span>
+        </div>
+      }
+    </div>
+
+    <hr class="my-3">
+
+    <div class="entity-properties">
+      <h3>RabbitMQ Properties</h3>
+      <div class="property-grid">
+        @if (queue.queueType !== undefined) {
+          <div class="property">
+            <span class="property-label">Queue Type</span>
+            <span class="property-value">{{ getQueueTypeDisplay(queue.queueType) }}</span>
+          </div>
+        }
+        @if (queue.durable !== undefined) {
+          <div class="property">
+            <span class="property-label">Durable</span>
+            <span class="property-value rabbitmq-feature" [class.enabled]="queue.durable">
+              {{ queue.durable ? 'Yes' : 'No' }}
+            </span>
+          </div>
+        }
+        @if (queue.autoDelete !== undefined) {
+          <div class="property">
+            <span class="property-label">Auto Delete</span>
+            <span class="property-value rabbitmq-feature" [class.enabled]="queue.autoDelete">
+              {{ queue.autoDelete ? 'Yes' : 'No' }}
+            </span>
+          </div>
+        }
+        @if (queue.exclusive !== undefined) {
+          <div class="property">
+            <span class="property-label">Exclusive</span>
+            <span class="property-value rabbitmq-feature" [class.enabled]="queue.exclusive">
+              {{ queue.exclusive ? 'Yes' : 'No' }}
+            </span>
+          </div>
+        }
+        @if (queue.messageTtlMilliseconds !== undefined) {
+          <div class="property">
+            <span class="property-label">Message TTL</span>
+            <span class="property-value">{{ formatTTL(queue.messageTtlMilliseconds) }}</span>
+          </div>
+        }
+        @if (queue.maxLength !== undefined) {
+          <div class="property">
+            <span class="property-label">Max Length</span>
+            <span class="property-value">{{ queue.maxLength }} messages</span>
+          </div>
+        }
+        @if (queue.maxLengthBytes !== undefined) {
+          <div class="property">
+            <span class="property-label">Max Length Bytes</span>
+            <span class="property-value">{{ formatSize(queue.maxLengthBytes) }}</span>
+          </div>
+        }
+        @if (queue.overflowBehavior) {
+          <div class="property">
+            <span class="property-label">Overflow Behavior</span>
+            <span class="property-value">{{ formatOverflowBehavior(queue.overflowBehavior) }}</span>
+          </div>
+        }
+        @if (queue.deadLetterExchange) {
+          <div class="property">
+            <span class="property-label">Dead Letter Exchange</span>
+            <span class="property-value">{{ queue.deadLetterExchange }}</span>
+          </div>
+        }
+        @if (queue.deadLetterRoutingKey) {
+          <div class="property">
+            <span class="property-label">DLX Routing Key</span>
+            <span class="property-value">{{ queue.deadLetterRoutingKey }}</span>
+          </div>
+        }
+        @if (queue.node) {
+          <div class="property">
+            <span class="property-label">Node</span>
+            <span class="property-value">{{ queue.node }}</span>
+          </div>
+        }
+        @if (queue.state) {
+          <div class="property">
+            <span class="property-label">State</span>
+            <span class="property-value">{{ queue.state }}</span>
+          </div>
+        }
+        @if (queue.messageRateDeliver !== undefined) {
+          <div class="property">
+            <span class="property-label">Deliver Rate</span>
+            <span class="property-value">{{ queue.messageRateDeliver.toFixed(2) }} msg/s</span>
+          </div>
+        }
+        @if (queue.messageRatePublish !== undefined) {
+          <div class="property">
+            <span class="property-label">Publish Rate</span>
+            <span class="property-value">{{ queue.messageRatePublish.toFixed(2) }} msg/s</span>
+          </div>
+        }
+      </div>
+    </div>
+
+    @if (queue.arguments && objectKeys(queue.arguments).length > 0) {
+      <hr class="my-3">
+      <div class="entity-arguments">
+        <h4>Arguments</h4>
+        <div class="property-grid">
+          @for (arg of objectKeys(queue.arguments); track arg) {
+            <div class="property">
+              <span class="property-label">{{ arg }}</span>
+              <span class="property-value">{{ queue.arguments![arg] }}</span>
+            </div>
+          }
+        </div>
+      </div>
+    }
+
+    <hr class="my-3">
+
+    <div class="entity-metadata">
+      <h4>Metadata</h4>
+      <div class="property-grid">
+        <div class="property">
+          <span class="property-label">Created At</span>
+          <span class="property-value">{{ formatDate(queue.createdAt) }}</span>
+        </div>
+        <div class="property">
+          <span class="property-label">Updated At</span>
+          <span class="property-value">{{ formatDate(queue.updatedAt) }}</span>
+        </div>
+        @if (queue.accessedAt) {
+          <div class="property">
+            <span class="property-label">Accessed At</span>
+            <span class="property-value">{{ formatDate(queue.accessedAt) }}</span>
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  <!-- Exchange Details -->
+  @else if (isExchange()) {
+    @let exchange = asExchange();
+    <div class="entity-header entity-header-exchange">
+      <div class="entity-icon-wrapper">
+        <i class="fa fa-exchange entity-icon exchange-icon"></i>
+      </div>
+      <div class="entity-title">
+        <h2>{{ exchange.name }}</h2>
+        <span class="badge bg-warning-subtle text-warning border border-warning-subtle">RabbitMQ Exchange</span>
+        @if (exchange.virtualHost) {
+          <small class="text-muted">vHost: {{ exchange.virtualHost }}</small>
+        }
+      </div>
+    </div>
+
+    <div class="entity-actions">
+      <button class="btn btn-primary" (click)="handleSendMessage()">
+        <i class="fa fa-paper-plane me-2"></i>Send Message
+      </button>
+      <button class="btn btn-outline-secondary" (click)="handleRefresh()">
+        <i class="fa-solid fa-arrows-rotate me-2"></i>Refresh
+      </button>
+      <button class="btn btn-danger" (click)="handleDelete()">
+        <i class="fa fa-trash me-2"></i>Delete
+      </button>
+    </div>
+
+    <hr class="my-3">
+
+    <div class="entity-stats">
+      @if (exchange.boundQueueCount !== undefined) {
+        <div class="stat-card stat-card-exchange">
+          <span class="stat-value">{{ exchange.boundQueueCount }}</span>
+          <span class="stat-label">Bound Queues</span>
+        </div>
+      }
+      @if (exchange.bindings !== undefined) {
+        <div class="stat-card stat-card-exchange">
+          <span class="stat-value">{{ exchange.bindings.length }}</span>
+          <span class="stat-label">Bindings</span>
+        </div>
+      }
+      @if (exchange.messageRateIn !== undefined) {
+        <div class="stat-card stat-card-exchange">
+          <span class="stat-value">{{ exchange.messageRateIn.toFixed(2) }}</span>
+          <span class="stat-label">Rate In (msg/s)</span>
+        </div>
+      }
+      @if (exchange.messageRateOut !== undefined) {
+        <div class="stat-card stat-card-exchange">
+          <span class="stat-value">{{ exchange.messageRateOut.toFixed(2) }}</span>
+          <span class="stat-label">Rate Out (msg/s)</span>
+        </div>
+      }
+    </div>
+
+    <hr class="my-3">
+
+    <div class="entity-properties">
+      <h3>RabbitMQ Properties</h3>
+      <div class="property-grid">
+        @if (exchange.exchangeType !== undefined) {
+          <div class="property">
+            <span class="property-label">Exchange Type</span>
+            <span class="property-value exchange-type">{{ getExchangeTypeDisplay(exchange.exchangeType) }}</span>
+          </div>
+        }
+        @if (exchange.durable !== undefined) {
+          <div class="property">
+            <span class="property-label">Durable</span>
+            <span class="property-value rabbitmq-feature" [class.enabled]="exchange.durable">
+              {{ exchange.durable ? 'Yes' : 'No' }}
+            </span>
+          </div>
+        }
+        @if (exchange.autoDelete !== undefined) {
+          <div class="property">
+            <span class="property-label">Auto Delete</span>
+            <span class="property-value rabbitmq-feature" [class.enabled]="exchange.autoDelete">
+              {{ exchange.autoDelete ? 'Yes' : 'No' }}
+            </span>
+          </div>
+        }
+        @if (exchange.internal !== undefined) {
+          <div class="property">
+            <span class="property-label">Internal</span>
+            <span class="property-value rabbitmq-feature" [class.enabled]="exchange.internal">
+              {{ exchange.internal ? 'Yes' : 'No' }}
+            </span>
+          </div>
+        }
+        @if (exchange.alternateExchange) {
+          <div class="property">
+            <span class="property-label">Alternate Exchange</span>
+            <span class="property-value">{{ exchange.alternateExchange }}</span>
+          </div>
+        }
+      </div>
+    </div>
+
+    @if (exchange.arguments && objectKeys(exchange.arguments).length > 0) {
+      <hr class="my-3">
+      <div class="entity-arguments">
+        <h4>Arguments</h4>
+        <div class="property-grid">
+          @for (arg of objectKeys(exchange.arguments); track arg) {
+            <div class="property">
+              <span class="property-label">{{ arg }}</span>
+              <span class="property-value">{{ exchange.arguments![arg] }}</span>
+            </div>
+          }
+        </div>
+      </div>
+    }
+
+    <hr class="my-3">
+
+    <div class="entity-metadata">
+      <h4>Metadata</h4>
+      <div class="property-grid">
+        <div class="property">
+          <span class="property-label">Created At</span>
+          <span class="property-value">{{ formatDate(exchange.createdAt) }}</span>
+        </div>
+        <div class="property">
+          <span class="property-label">Updated At</span>
+          <span class="property-value">{{ formatDate(exchange.updatedAt) }}</span>
+        </div>
+        @if (exchange.accessedAt) {
+          <div class="property">
+            <span class="property-label">Accessed At</span>
+            <span class="property-value">{{ formatDate(exchange.accessedAt) }}</span>
+          </div>
+        }
+        @if (exchange.userMetadata) {
+          <div class="property">
+            <span class="property-label">User Metadata</span>
+            <span class="property-value">{{ exchange.userMetadata }}</span>
+          </div>
+        }
+      </div>
+    </div>
+
+    @if (exchange.bindings && exchange.bindings.length > 0) {
+      <hr class="my-3">
+      <div class="bindings-section">
+        <h4>Bindings ({{ exchange.bindings.length }})</h4>
+        <div class="bindings-list">
+          @for (binding of exchange.bindings; track binding.propertiesKey || binding.destination) {
+            <div class="binding-card">
+              <div class="binding-header">
+                <h5>{{ binding.destination }}</h5>
+                <span class="badge bg-info-subtle text-info">{{ binding.destinationType }}</span>
+              </div>
+              <div class="binding-details">
+                <div class="binding-detail">
+                  <strong>Routing Key:</strong> <code>{{ binding.routingKey || '(empty)' }}</code>
+                </div>
+                @if (binding.arguments && objectKeys(binding.arguments).length > 0) {
+                  <div class="binding-detail">
+                    <strong>Arguments:</strong>
+                    @for (arg of objectKeys(binding.arguments); track arg) {
+                      <span class="badge bg-secondary me-1">{{ arg }}: {{ binding.arguments![arg] }}</span>
+                    }
+                  </div>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    }
+  }
+
+  @else {
+    <div class="empty-state">
+      <i class="fa fa-exclamation-circle fa-3x mb-3 text-warning"></i>
+      <h3>Unsupported Entity Type</h3>
+      <p>This entity type is not supported by the RabbitMQ provider.</p>
+    </div>
+  }
+</div>
