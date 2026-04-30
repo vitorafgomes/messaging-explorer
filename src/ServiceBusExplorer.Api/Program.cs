@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.HostFiltering;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -52,6 +53,10 @@ builder.Services.AddControllers()
         // Convert to camelCase for HTTP responses (frontend)
         // Files stay in PascalCase (C# standard)
         options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+        // Accept and emit enum values as strings (e.g. "AzureServiceBus", "ConnectionString")
+        // so the Angular client doesn't need to know the underlying numeric values.
+        // Without this, model binding for enum properties on incoming JSON returns 400.
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
     });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApi();

@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.2] - 2026-04-30
+
+### Fixed
+- API now accepts string enum values for `ProviderType`, `AuthType` etc. The
+  Angular client sends `"AzureServiceBus"` / `"ConnectionString"`, but the
+  default System.Text.Json deserializer only accepts integers, so requests
+  to `POST /api/connections/test` and similar endpoints failed with
+  `400 Bad Request` before reaching the controller.
+- Added `JsonStringEnumConverter` to the global JSON options.
+
 ## [1.0.1] - 2026-04-30
 
 ### Fixed
