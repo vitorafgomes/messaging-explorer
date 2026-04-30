@@ -1,0 +1,4 @@
+theme: null
+plugins: []
+include:
+  - icon.svg

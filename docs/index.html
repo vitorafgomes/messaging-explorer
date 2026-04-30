@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Messaging Explorer — Universal messaging platform explorer</title>
+  <meta name="description" content="Free, open-source desktop and web app to explore and manage messages across Azure Service Bus, RabbitMQ, and more. Cross-platform: Windows, macOS, Linux." />
+  <meta property="og:title" content="Messaging Explorer" />
+  <meta property="og:description" content="Free, open-source universal messaging platform explorer." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://vitorafgomes.github.io/messaging-explorer/" />
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <a href="#" class="brand">
+      <img src="icon.svg" alt="" width="28" height="28" />
+      <span>Messaging Explorer</span>
+    </a>
+    <nav class="nav">
+      <a href="#features">Features</a>
+      <a href="#download">Download</a>
+      <a href="https://github.com/vitorafgomes/messaging-explorer" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="hero-inner">
+        <h1>Explore your messaging platforms <span class="hero-accent">in one place</span></h1>
+        <p class="hero-subtitle">
+          A free and open-source desktop and web application to manage queues, topics, exchanges and messages across Azure Service Bus, RabbitMQ, and more.
+        </p>
+        <div class="hero-cta">
+          <a href="#download" class="btn btn-primary">Download for free</a>
+          <a href="https://github.com/vitorafgomes/messaging-explorer" class="btn btn-ghost" target="_blank" rel="noopener">View on GitHub</a>
+        </div>
+        <p class="hero-meta">
+          <span data-version-label>Latest version: <span data-latest-version>—</span></span>
+          <span class="dot">•</span>
+          <span>MIT licensed</span>
+          <span class="dot">•</span>
+          <span>Cross-platform</span>
+        </p>
+      </div>
+    </section>
+
+    <section id="features" class="features">
+      <h2>What it does</h2>
+      <div class="feature-grid">
+        <article class="feature">
+          <h3>Multi-broker support</h3>
+          <p>Connect to Azure Service Bus and RabbitMQ from a single interface. More providers coming.</p>
+        </article>
+        <article class="feature">
+          <h3>Browse and manage</h3>
+          <p>View queues, topics, subscriptions and exchanges. Send, peek and resubmit messages with ease.</p>
+        </article>
+        <article class="feature">
+          <h3>Dead-letter handling</h3>
+          <p>Real-time notifications for dead-letter messages with click-to-navigate and resubmit support.</p>
+        </article>
+        <article class="feature">
+          <h3>Pattern detection</h3>
+          <p>Automatic detection of RabbitMQ messaging patterns: Work Queue, Pub/Sub, Routing, Topics, RPC, Headers.</p>
+        </article>
+        <article class="feature">
+          <h3>Cross-platform</h3>
+          <p>Native desktop apps for Windows, macOS and Linux. Plus a web mode for browser access.</p>
+        </article>
+        <article class="feature">
+          <h3>Free and open source</h3>
+          <p>MIT licensed. No accounts, no telemetry, no subscription. Use it, fork it, ship it.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="download" class="download">
+      <h2>Download</h2>
+      <p class="download-version">
+        <span data-latest-version-label>Latest release:</span>
+        <strong data-latest-version>—</strong>
+        <span data-latest-date class="release-date"></span>
+      </p>
+
+      <div class="platform-grid">
+        <div class="platform" data-platform="windows">
+          <div class="platform-header">
+            <h3>Windows</h3>
+            <span class="platform-icon" aria-hidden="true">⊞</span>
+          </div>
+          <div class="platform-downloads" data-downloads="windows">
+            <p class="loading">Loading downloads…</p>
+          </div>
+        </div>
+
+        <div class="platform" data-platform="macos">
+          <div class="platform-header">
+            <h3>macOS</h3>
+            <span class="platform-icon" aria-hidden="true">⌘</span>
+          </div>
+          <div class="platform-downloads" data-downloads="macos">
+            <p class="loading">Loading downloads…</p>
+          </div>
+        </div>
+
+        <div class="platform" data-platform="linux">
+          <div class="platform-header">
+            <h3>Linux</h3>
+            <span class="platform-icon" aria-hidden="true">🐧</span>
+          </div>
+          <div class="platform-downloads" data-downloads="linux">
+            <p class="loading">Loading downloads…</p>
+          </div>
+        </div>
+      </div>
+
+      <p class="download-fallback">
+        Trouble downloading? Browse all releases and assets on
+        <a href="https://github.com/vitorafgomes/messaging-explorer/releases" target="_blank" rel="noopener">GitHub Releases</a>.
+      </p>
+    </section>
+
+    <section class="cta-bottom">
+      <h2>Built for developers, by developers</h2>
+      <p>Source code, issue tracking and discussions on GitHub.</p>
+      <a href="https://github.com/vitorafgomes/messaging-explorer" class="btn btn-primary" target="_blank" rel="noopener">Open the repository</a>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>
+      &copy; <span id="year"></span> Vitor Gomes. Released under the
+      <a href="https://github.com/vitorafgomes/messaging-explorer/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>.
+    </p>
+    <p>
+      <a href="https://github.com/vitorafgomes/messaging-explorer" target="_blank" rel="noopener">GitHub</a>
+      <span class="dot">•</span>
+      <a href="https://github.com/vitorafgomes/messaging-explorer/issues" target="_blank" rel="noopener">Issues</a>
+      <span class="dot">•</span>
+      <a href="https://github.com/vitorafgomes/messaging-explorer/releases" target="_blank" rel="noopener">All releases</a>
+    </p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
