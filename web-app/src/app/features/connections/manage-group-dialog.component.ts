@@ -523,8 +523,10 @@ export class ManageGroupDialogComponent {
         this.cancelEditClient();
         this.saving.set(false);
       },
-      error: () => {
-        this.snackBar.open('Failed to save client', 'Close', { duration: 3000 });
+      error: (err) => {
+        const detail = err?.error?.message || err?.message || err?.statusText || 'unknown error';
+        this.snackBar.open(`Failed to save client: ${detail}`, 'Close', { duration: 6000 });
+        console.error('[saveClient] error', err);
         this.saving.set(false);
       }
     });
