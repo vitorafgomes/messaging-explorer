@@ -115,7 +115,11 @@
       "icon": "src/assets/icon.ico",
       "requestedExecutionLevel": "asInvoker"
     },
+    "nsis": {
+      "artifactName": "Messaging-Explorer-Setup-${version}-${arch}.${ext}"
+    },
     "portable": {
+      "artifactName": "Messaging-Explorer-Portable-${version}-${arch}.${ext}",
       "unpackDirName": "MessagingExplorer"
     },
     "mac": {
