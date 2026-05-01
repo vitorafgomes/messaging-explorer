@@ -1007,16 +1007,24 @@ ipcMain.handle('get-update-channel', () => {
   return store.get('updateChannel', 'latest');
 });
 
-// Check for updates 5 seconds after app is ready (non-blocking)
-app.whenReady().then(() => {
-  if (!isDev) {
-    setTimeout(() => {
-      autoUpdater.checkForUpdates().catch(err => {
-        console.log('[Updater] Auto-check failed (offline?):', err.message);
-      });
-    }, 5000);
-  }
-});
+// Check for updates shortly after launch and then on a fixed interval so
+// long-running sessions (the app is often left open all day) still pick up
+// new releases without requiring a restart.
+const UPDATE_CHECK_INITIAL_DELAY_MS = 5_000;
+const UPDATE_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
+
+function scheduleUpdateChecks() {
+  if (isDev) return;
+  const runCheck = () => {
+    autoUpdater.checkForUpdates().catch(err => {
+      console.log('[Updater] Auto-check failed (offline?):', err.message);
+    });
+  };
+  setTimeout(runCheck, UPDATE_CHECK_INITIAL_DELAY_MS);
+  setInterval(runCheck, UPDATE_CHECK_INTERVAL_MS);
+}
+
+app.whenReady().then(scheduleUpdateChecks);
 
 // Handle active connection updates from renderer
 ipcMain.on('set-active-connection', (event, connectionId) => {
