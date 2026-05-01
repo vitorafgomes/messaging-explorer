@@ -24,10 +24,10 @@
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "electron:dev": "concurrently \"npm run start\" \"wait-on http://localhost:4297 && NODE_ENV=development electron .\"",
-    "electron:build": "npm run build:all && electron-builder",
-    "electron:build:win": "npm run build:all && electron-builder --win",
-    "electron:build:mac": "npm run build:all && electron-builder --mac",
-    "electron:build:linux": "npm run build:all && electron-builder --linux"
+    "electron:build": "npm run build:all && electron-builder --publish never",
+    "electron:build:win": "npm run build:all && electron-builder --win --publish never",
+    "electron:build:mac": "npm run build:all && electron-builder --mac --publish never",
+    "electron:build:linux": "npm run build:all && electron-builder --linux --publish never"
   },
   "prettier": {
     "printWidth": 100,
@@ -86,6 +86,7 @@
   "build": {
     "appId": "com.messagingexplorer.app",
     "productName": "Messaging Explorer",
+    "artifactName": "Messaging-Explorer-${version}-${arch}.${ext}",
     "directories": {
       "output": "release"
     },
@@ -114,7 +115,11 @@
       "icon": "src/assets/icon.ico",
       "requestedExecutionLevel": "asInvoker"
     },
+    "nsis": {
+      "artifactName": "Messaging-Explorer-Setup-${version}-${arch}.${ext}"
+    },
     "portable": {
+      "artifactName": "Messaging-Explorer-Portable-${version}-${arch}.${ext}",
       "unpackDirName": "MessagingExplorer"
     },
     "mac": {
