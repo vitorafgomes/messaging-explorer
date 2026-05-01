@@ -280,6 +280,21 @@ section h2 {
   color: var(--text);
 }
 
+.status-pill {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: rgba(127, 127, 127, 0.15);
+  border: 1px solid rgba(127, 127, 127, 0.3);
+  border-radius: 999px;
+  vertical-align: middle;
+}
+
 .feature p {
   margin: 0;
   color: var(--text-muted);
