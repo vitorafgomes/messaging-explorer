@@ -637,7 +637,7 @@ public class RabbitMQProvider : IMessagingProvider
     }
 
     /// <inheritdoc />
-    public async Task<BatchOperationResult> DeleteMessagesAsync(string entityName, long[] sequenceNumbers, bool isDeadLetter = false, string? subscriptionName = null)
+    public async Task<BatchOperationResult> DeleteMessagesAsync(string entityName, long[] sequenceNumbers, bool isDeadLetter = false, string? subscriptionName = null, bool all = false, CancellationToken cancellationToken = default)
     {
         EnsureConnected();
 
@@ -647,9 +647,23 @@ public class RabbitMQProvider : IMessagingProvider
             queueName = $"{queueName}.dlq";
         }
 
+        var result = new BatchOperationResult();
+
+        // Fast path: delete everything maps to a queue purge.
+        if (all)
+        {
+            var purged = _channel!.QueuePurge(queueName);
+            result.SuccessCount = checked((int)purged);
+            return result;
+        }
+
+        if (sequenceNumbers == null || sequenceNumbers.Length == 0)
+        {
+            return result;
+        }
+
         var targetIndices = new HashSet<long>(sequenceNumbers);
         var maxIndex = sequenceNumbers.Max();
-        var result = new BatchOperationResult();
 
         // Consume up to maxIndex messages from the queue
         var messages = (await _managementClient!.GetMessagesAsync(queueName, (int)maxIndex, "ack_requeue_false", "auto")).ToList();
@@ -690,16 +704,22 @@ public class RabbitMQProvider : IMessagingProvider
     }
 
     /// <inheritdoc />
-    public async Task<BatchOperationResult> ResubmitDeadLetterMessagesAsync(string entityName, long[] sequenceNumbers, string? subscriptionName = null)
+    public async Task<BatchOperationResult> ResubmitDeadLetterMessagesAsync(string entityName, long[] sequenceNumbers, string? subscriptionName = null, CancellationToken cancellationToken = default)
     {
         EnsureConnected();
+
+        var result = new BatchOperationResult();
+
+        if (sequenceNumbers == null || sequenceNumbers.Length == 0)
+        {
+            return result;
+        }
 
         var queueName = subscriptionName ?? entityName;
         var dlqName = $"{queueName}.dlq";
 
         var targetIndices = new HashSet<long>(sequenceNumbers);
         var maxIndex = sequenceNumbers.Max();
-        var result = new BatchOperationResult();
 
         // Consume up to maxIndex messages from the DLQ
         var messages = (await _managementClient!.GetMessagesAsync(dlqName, (int)maxIndex, "ack_requeue_false", "auto")).ToList();
@@ -804,7 +824,7 @@ public class RabbitMQProvider : IMessagingProvider
     }
 
     /// <inheritdoc />
-    public Task PurgeMessagesAsync(string entityName, bool isDeadLetter = false, string? subscriptionName = null)
+    public Task PurgeMessagesAsync(string entityName, bool isDeadLetter = false, string? subscriptionName = null, CancellationToken cancellationToken = default)
     {
         EnsureConnected();
 

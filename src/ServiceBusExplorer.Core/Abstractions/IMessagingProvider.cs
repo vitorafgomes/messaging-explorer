@@ -247,17 +247,23 @@ public interface IMessagingProvider : IAsyncDisposable
     /// <param name="entityName">The name of the queue or topic.</param>
     /// <param name="isDeadLetter">Whether to purge the dead letter queue instead.</param>
     /// <param name="subscriptionName">The subscription name if purging a topic subscription.</param>
-    Task PurgeMessagesAsync(string entityName, bool isDeadLetter = false, string? subscriptionName = null);
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    Task PurgeMessagesAsync(string entityName, bool isDeadLetter = false, string? subscriptionName = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Deletes multiple messages by their sequence numbers.
     /// </summary>
     /// <param name="entityName">The name of the queue or topic.</param>
-    /// <param name="sequenceNumbers">Array of sequence numbers to delete.</param>
+    /// <param name="sequenceNumbers">Array of sequence numbers to delete. Ignored when <paramref name="all"/> is true.</param>
     /// <param name="isDeadLetter">Whether to delete from the dead letter queue.</param>
     /// <param name="subscriptionName">The subscription name if deleting from a topic subscription.</param>
+    /// <param name="all">
+    /// When true, deletes every message in the target entity using a fast drain path
+    /// instead of scanning for individual sequence numbers.
+    /// </param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>Result containing success count and failure details.</returns>
-    Task<BatchOperationResult> DeleteMessagesAsync(string entityName, long[] sequenceNumbers, bool isDeadLetter = false, string? subscriptionName = null);
+    Task<BatchOperationResult> DeleteMessagesAsync(string entityName, long[] sequenceNumbers, bool isDeadLetter = false, string? subscriptionName = null, bool all = false, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Resubmits multiple dead-lettered messages back to the original queue or topic.
@@ -265,8 +271,9 @@ public interface IMessagingProvider : IAsyncDisposable
     /// <param name="entityName">The name of the queue or topic.</param>
     /// <param name="sequenceNumbers">Array of sequence numbers to resubmit.</param>
     /// <param name="subscriptionName">The subscription name if resubmitting from a topic subscription.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>Result containing success count and failure details.</returns>
-    Task<BatchOperationResult> ResubmitDeadLetterMessagesAsync(string entityName, long[] sequenceNumbers, string? subscriptionName = null);
+    Task<BatchOperationResult> ResubmitDeadLetterMessagesAsync(string entityName, long[] sequenceNumbers, string? subscriptionName = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Moves multiple messages from one queue or subscription to another queue.
