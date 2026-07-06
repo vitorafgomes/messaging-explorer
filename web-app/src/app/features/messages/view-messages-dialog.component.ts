@@ -1734,8 +1734,8 @@ export class ViewMessagesDialogComponent implements OnInit {
    */
   private executeDeleteOperation(tabType: 'active' | 'deadletter', isDeadLetter: boolean): void {
     this.deleting.set(true);
-    const sequenceNumbers = this.bulkOperationsService.getSelectedSequenceNumbers(tabType);
-    const totalCount = sequenceNumbers.length;
+    const selectedSequenceNumbers = this.bulkOperationsService.getSelectedSequenceNumbers(tabType);
+    const totalCount = selectedSequenceNumbers.length;
 
     // Defensive check: ensure we have messages to delete
     if (totalCount === 0) {
@@ -1743,6 +1743,12 @@ export class ViewMessagesDialogComponent implements OnInit {
       this.deleting.set(false);
       return;
     }
+
+    // When the selection covers the whole tab with no active filter, ask the
+    // backend to drain the entity server-side. In that mode sequenceNumbers are
+    // ignored, so send an empty array.
+    const drainAll = this.shouldDrainEntireTab(tabType, totalCount);
+    const sequenceNumbers = drainAll ? [] : selectedSequenceNumbers;
 
     // Open progress dialog
     const progressDialogRef = this.dialog.open(BulkOperationProgressDialogComponent, {
@@ -1757,8 +1763,8 @@ export class ViewMessagesDialogComponent implements OnInit {
     });
 
     const observable = this.data.entityType === 'queue'
-      ? this.queueService.deleteMessages(this.data.entityName, sequenceNumbers, isDeadLetter)
-      : this.topicService.deleteMessages(this.data.topicName!, this.data.entityName, sequenceNumbers, isDeadLetter);
+      ? this.queueService.deleteMessages(this.data.entityName, sequenceNumbers, isDeadLetter, drainAll)
+      : this.topicService.deleteMessages(this.data.topicName!, this.data.entityName, sequenceNumbers, isDeadLetter, drainAll);
 
     observable.pipe(
       finalize(() => this.deleting.set(false)),
@@ -1820,10 +1826,44 @@ export class ViewMessagesDialogComponent implements OnInit {
       },
       error: (err) => {
         console.error('Failed to delete messages:', err);
+        // Close the progress dialog instead of leaving it fake-completed, and
+        // surface a retry hint so the user knows the operation can be reattempted.
         progressDialogRef.close();
-        this.snackBar.open('Failed to delete messages', 'Close', { duration: 3000 });
+        this.snackBar.open('Failed to delete messages. Please try again.', 'Close', { duration: 5000 });
       }
     });
+  }
+
+  /**
+   * Determines whether a bulk delete should drain the entire tab server-side.
+   * Returns true only when select-all is active for the tab, no filter is
+   * applied, and the selection count matches the entity's message count for
+   * that tab. In every other case the caller sends the explicit selection.
+   * @param tabType - The current tab type ('active' or 'deadletter')
+   * @param selectedCount - Number of currently selected messages in the tab
+   */
+  private shouldDrainEntireTab(tabType: 'active' | 'deadletter', selectedCount: number): boolean {
+    if (!this.bulkOperationsService.isAllSelected(tabType)) {
+      return false;
+    }
+    if (this.hasActiveFilter(tabType)) {
+      return false;
+    }
+    const entityCount = tabType === 'deadletter'
+      ? this.deadLetterMessageCount()
+      : this.activeMessageCount();
+    return entityCount !== undefined && selectedCount === entityCount;
+  }
+
+  /**
+   * Reports whether a text or advanced filter is currently applied to a tab.
+   * @param tabType - The current tab type ('active' or 'deadletter')
+   */
+  private hasActiveFilter(tabType: 'active' | 'deadletter'): boolean {
+    if (tabType === 'deadletter') {
+      return this.dlFilterText.trim() !== '' || this.dlAdvancedFilterState.conditions.length > 0;
+    }
+    return this.activeFilterText.trim() !== '' || this.activeAdvancedFilterState.conditions.length > 0;
   }
 
   /**

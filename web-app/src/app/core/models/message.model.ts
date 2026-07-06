@@ -39,6 +39,12 @@ export interface SendMessageRequest {
 
 export interface DeleteBatchRequest {
   sequenceNumbers: number[];
+  /**
+   * When true, the backend drains the entire entity server-side and ignores
+   * sequenceNumbers. Only set when the selection covers the whole tab with no
+   * active filter.
+   */
+  all?: boolean;
 }
 
 export interface ResubmitBatchRequest {

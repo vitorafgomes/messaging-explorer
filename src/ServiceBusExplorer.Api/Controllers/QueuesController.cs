@@ -204,7 +204,7 @@ public class QueuesController : ControllerBase
 
         try
         {
-            var result = await provider.ResubmitDeadLetterMessagesAsync(name, request.SequenceNumbers);
+            var result = await provider.ResubmitDeadLetterMessagesAsync(name, request.SequenceNumbers, cancellationToken: HttpContext.RequestAborted);
             return Ok(result);
         }
         catch (Exception ex)
@@ -223,7 +223,7 @@ public class QueuesController : ControllerBase
 
         try
         {
-            await provider.PurgeMessagesAsync(name);
+            await provider.PurgeMessagesAsync(name, cancellationToken: HttpContext.RequestAborted);
             return Ok(new { success = true });
         }
         catch (Exception ex)
@@ -242,7 +242,7 @@ public class QueuesController : ControllerBase
 
         try
         {
-            await provider.PurgeMessagesAsync(name, isDeadLetter: true);
+            await provider.PurgeMessagesAsync(name, isDeadLetter: true, cancellationToken: HttpContext.RequestAborted);
             return Ok(new { success = true });
         }
         catch (Exception ex)
@@ -261,7 +261,7 @@ public class QueuesController : ControllerBase
 
         try
         {
-            var result = await provider.DeleteMessagesAsync(name, request.SequenceNumbers);
+            var result = await provider.DeleteMessagesAsync(name, request.SequenceNumbers, all: request.All, cancellationToken: HttpContext.RequestAborted);
             return Ok(result);
         }
         catch (Exception ex)
@@ -280,7 +280,7 @@ public class QueuesController : ControllerBase
 
         try
         {
-            var result = await provider.DeleteMessagesAsync(name, request.SequenceNumbers, isDeadLetter: true);
+            var result = await provider.DeleteMessagesAsync(name, request.SequenceNumbers, isDeadLetter: true, all: request.All, cancellationToken: HttpContext.RequestAborted);
             return Ok(result);
         }
         catch (Exception ex)

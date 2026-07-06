@@ -15,6 +15,8 @@ export default defineConfig({
       'src/app/features/messages/send-message-dialog.component.spec.ts',
       'src/app/core/services/message-import.service.spec.ts',
       'src/app/features/messages/message-diff-dialog.component.spec.ts',
+      'src/app/core/services/queue.service.spec.ts',
+      'src/app/core/services/topic.service.spec.ts',
     ],
   },
 });

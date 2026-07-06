@@ -241,7 +241,7 @@ public class TopicsController : ControllerBase
 
         try
         {
-            var result = await provider.ResubmitDeadLetterMessagesAsync(topicName, request.SequenceNumbers, subscriptionName);
+            var result = await provider.ResubmitDeadLetterMessagesAsync(topicName, request.SequenceNumbers, subscriptionName, cancellationToken: HttpContext.RequestAborted);
             return Ok(result);
         }
         catch (Exception ex)
@@ -260,7 +260,7 @@ public class TopicsController : ControllerBase
 
         try
         {
-            await provider.PurgeMessagesAsync(topicName, subscriptionName: subscriptionName);
+            await provider.PurgeMessagesAsync(topicName, subscriptionName: subscriptionName, cancellationToken: HttpContext.RequestAborted);
             return Ok(new { success = true });
         }
         catch (Exception ex)
@@ -279,7 +279,7 @@ public class TopicsController : ControllerBase
 
         try
         {
-            await provider.PurgeMessagesAsync(topicName, isDeadLetter: true, subscriptionName: subscriptionName);
+            await provider.PurgeMessagesAsync(topicName, isDeadLetter: true, subscriptionName: subscriptionName, cancellationToken: HttpContext.RequestAborted);
             return Ok(new { success = true });
         }
         catch (Exception ex)
@@ -298,7 +298,7 @@ public class TopicsController : ControllerBase
 
         try
         {
-            var result = await provider.DeleteMessagesAsync(topicName, request.SequenceNumbers, subscriptionName: subscriptionName);
+            var result = await provider.DeleteMessagesAsync(topicName, request.SequenceNumbers, subscriptionName: subscriptionName, all: request.All, cancellationToken: HttpContext.RequestAborted);
             return Ok(result);
         }
         catch (Exception ex)
@@ -317,7 +317,7 @@ public class TopicsController : ControllerBase
 
         try
         {
-            var result = await provider.DeleteMessagesAsync(topicName, request.SequenceNumbers, isDeadLetter: true, subscriptionName: subscriptionName);
+            var result = await provider.DeleteMessagesAsync(topicName, request.SequenceNumbers, isDeadLetter: true, subscriptionName: subscriptionName, all: request.All, cancellationToken: HttpContext.RequestAborted);
             return Ok(result);
         }
         catch (Exception ex)

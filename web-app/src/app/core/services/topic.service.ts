@@ -195,10 +195,11 @@ export class TopicService {
    * @param subscriptionName - The subscription/binding name
    * @param sequenceNumbers - Array of sequence numbers to delete
    * @param isDeadLetter - Whether to delete from dead letter queue (default: false)
+   * @param all - When true, the backend drains the whole tab server-side and ignores sequenceNumbers (default: false)
    * @returns Observable with batch operation result containing success/failure counts and details
    */
-  deleteMessages(topicName: string, subscriptionName: string, sequenceNumbers: number[], isDeadLetter: boolean = false): Observable<BatchOperationResult> {
-    const request: DeleteBatchRequest = { sequenceNumbers };
+  deleteMessages(topicName: string, subscriptionName: string, sequenceNumbers: number[], isDeadLetter: boolean = false, all: boolean = false): Observable<BatchOperationResult> {
+    const request: DeleteBatchRequest = { sequenceNumbers, all };
     const path = isDeadLetter ? 'deadletter' : 'messages';
     return this.api.post<BatchOperationResult>(`topics/${topicName}/subscriptions/${subscriptionName}/${path}/delete-batch`, request);
   }
