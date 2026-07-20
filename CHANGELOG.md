@@ -10,10 +10,13 @@ All notable changes to this project will be documented in this file.
 > relaunch of the same codebase.
 
 ### Fixed
-- DLQ bulk delete and resubmit no longer lose or duplicate messages. The Azure
-  provider now processes moves in per-batch cycles (receive → send → complete
-  within the same cycle), so a message's PeekLock can no longer expire while
-  the rest of the selection is being scanned — the root cause of duplicates.
+- DLQ bulk delete and resubmit no longer lose messages, and unintended
+  duplication is greatly reduced. The Azure provider now processes moves in
+  per-batch cycles (receive → send → complete within the same cycle), so a
+  message's PeekLock can no longer expire while the rest of the selection is
+  being scanned — the root cause of duplicates. Operations remain
+  at-least-once: in rare failure windows a message can still be delivered
+  twice, and such cases are now reported explicitly (see below).
 - If a move completes the send but fails to remove the message from the source,
   the message is reported as a possible duplicate instead of being silently
   resent.
