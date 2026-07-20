@@ -299,7 +299,7 @@ public class QueuesController : ControllerBase
 
         try
         {
-            var result = await provider.MoveMessagesAsync(name, request.TargetQueueName, request.SequenceNumbers);
+            var result = await provider.MoveMessagesAsync(name, request.TargetQueueName, request.SequenceNumbers, cancellationToken: HttpContext.RequestAborted);
             return Ok(result);
         }
         catch (Exception ex)
@@ -318,7 +318,7 @@ public class QueuesController : ControllerBase
 
         try
         {
-            var result = await provider.MoveMessagesAsync(name, request.TargetQueueName, request.SequenceNumbers, isDeadLetter: true);
+            var result = await provider.MoveMessagesAsync(name, request.TargetQueueName, request.SequenceNumbers, isDeadLetter: true, cancellationToken: HttpContext.RequestAborted);
             return Ok(result);
         }
         catch (Exception ex)

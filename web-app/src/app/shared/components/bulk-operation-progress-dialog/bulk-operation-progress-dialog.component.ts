@@ -1,6 +1,8 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, OnDestroy, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { Subject } from 'rxjs';
 
 export interface BulkOperationProgressDialogData {
   operation: 'delete' | 'resubmit' | 'move' | 'export';
@@ -23,7 +25,8 @@ export interface ProgressUpdate {
   standalone: true,
   imports: [
     CommonModule,
-    MatDialogModule
+    MatDialogModule,
+    MatProgressBarModule
   ],
   host: {
     '[class.dark-mode-dialog]': 'isDarkMode()'
@@ -44,32 +47,42 @@ export interface ProgressUpdate {
       </div>
 
       <!-- Progress Section -->
+      <!--
+        The backend processes each batch as a single request without streaming
+        per-message progress, so a determinate percentage would be dishonest.
+        Show an indeterminate indicator while the request is in flight instead.
+      -->
       <div class="progress-section mb-4">
-        <div class="progress-stats mb-2">
-          <span class="progress-label">Progress:</span>
-          <span class="progress-count">
-            <strong>{{ progress().processed }}</strong> of <strong>{{ progress().total }}</strong> messages
-          </span>
-          <span class="progress-percentage">{{ getProgressPercentage() }}%</span>
-        </div>
-
-        <div class="progress" style="height: 24px;">
-          <div
-            class="progress-bar progress-bar-striped progress-bar-animated"
-            [class.bg-success]="isComplete() && progress().failureCount === 0"
-            [class.bg-warning]="isComplete() && progress().failureCount > 0 && progress().successCount > 0"
-            [class.bg-danger]="isComplete() && progress().successCount === 0"
-            role="progressbar"
-            [style.width.%]="getProgressPercentage()"
-            [attr.aria-valuenow]="progress().processed"
-            [attr.aria-valuemin]="0"
-            [attr.aria-valuemax]="progress().total">
+        @if (!isComplete() && !cancelled()) {
+          <div class="progress-stats mb-2">
+            <span class="progress-label">
+              <i class="fa fa-spinner fa-spin me-2"></i>
+              Processing {{ progress().total }} {{ progress().total === 1 ? 'message' : 'messages' }}...
+            </span>
           </div>
-        </div>
+          <mat-progress-bar mode="indeterminate" color="primary"></mat-progress-bar>
+        } @else {
+          <div class="progress-stats mb-2">
+            <span class="progress-label">
+              <strong>{{ progress().processed }}</strong> of <strong>{{ progress().total }}</strong> messages processed
+            </span>
+          </div>
+          <div class="progress" style="height: 8px;">
+            <div
+              class="progress-bar"
+              [class.bg-success]="isComplete() && progress().failureCount === 0"
+              [class.bg-warning]="isComplete() && progress().failureCount > 0 && progress().successCount > 0"
+              [class.bg-danger]="isComplete() && progress().successCount === 0"
+              [class.bg-secondary]="cancelled()"
+              role="progressbar"
+              style="width: 100%;">
+            </div>
+          </div>
+        }
       </div>
 
       <!-- Success/Failure Counts -->
-      @if (progress().processed > 0) {
+      @if (progress().processed > 0 && !cancelled()) {
         <div class="result-stats">
           <div class="stat-item success">
             <i class="fa fa-check-circle me-2"></i>
@@ -86,7 +99,10 @@ export interface ProgressUpdate {
 
       <!-- Status Message -->
       <div class="status-message mt-3" [class.text-light]="isDarkMode()">
-        @if (!isComplete()) {
+        @if (cancelled()) {
+          <i class="fa fa-ban text-secondary me-2"></i>
+          <span class="text-secondary">Operation cancelled</span>
+        } @else if (!isComplete()) {
           <i class="fa fa-spinner fa-spin me-2"></i>
           <span>{{ getStatusMessage() }}</span>
         } @else if (progress().failureCount === 0) {
@@ -103,10 +119,11 @@ export interface ProgressUpdate {
 
       <!-- Cancellation Info -->
       @if (cancelled()) {
-        <div class="alert alert-warning mt-3 mb-0" role="alert">
+        <div class="alert alert-secondary mt-3 mb-0" role="alert">
           <i class="fa fa-info-circle me-2"></i>
-          <strong>Cancelled:</strong> The operation was cancelled by the user.
-          {{ progress().successCount }} {{ progress().successCount === 1 ? 'message was' : 'messages were' }} processed before cancellation.
+          <strong>Cancelled:</strong> The request was aborted. Any messages already
+          processed by the server before the abort may still have been affected.
+          Refresh the list to see the current state.
         </div>
       }
     </div>
@@ -250,7 +267,7 @@ export interface ProgressUpdate {
     }
   `]
 })
-export class BulkOperationProgressDialogComponent {
+export class BulkOperationProgressDialogComponent implements OnDestroy {
   data = inject<BulkOperationProgressDialogData>(MAT_DIALOG_DATA);
   private dialogRef = inject(MatDialogRef<BulkOperationProgressDialogComponent>);
 
@@ -263,9 +280,21 @@ export class BulkOperationProgressDialogComponent {
 
   cancelled = signal(false);
 
+  /**
+   * Emits when the user requests cancellation. The parent component wires this
+   * into takeUntil() on the in-flight HTTP subscription so unsubscribing aborts
+   * the XHR, which in turn signals RequestAborted on the server and stops the
+   * batch for real.
+   */
+  readonly cancelRequested$ = new Subject<void>();
+
   constructor() {
     // Prevent dialog from being dismissed by clicking outside or pressing ESC
     this.dialogRef.disableClose = true;
+  }
+
+  ngOnDestroy(): void {
+    this.cancelRequested$.complete();
   }
 
   isDarkMode(): boolean {
@@ -344,11 +373,15 @@ export class BulkOperationProgressDialogComponent {
   }
 
   /**
-   * Cancels the operation
-   * The parent component should handle the actual cancellation logic
+   * Requests cancellation of the operation. This does not close the dialog; it
+   * emits so the parent can abort the HTTP request and then leaves the dialog in
+   * a neutral "cancelled" state with a Close button for the user to dismiss.
    */
   cancel(): void {
+    if (this.cancelled()) {
+      return;
+    }
     this.cancelled.set(true);
-    this.dialogRef.close({ cancelled: true, progress: this.progress() });
+    this.cancelRequested$.next();
   }
 }

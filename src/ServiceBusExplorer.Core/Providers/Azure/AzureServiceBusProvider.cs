@@ -968,6 +968,7 @@ public class AzureServiceBusProvider : IMessagingProvider
     private static readonly TimeSpan ScanReceiveWait = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan ScanSafetyTimeout = TimeSpan.FromMinutes(2);
     private const string NotFoundError = "Not found within scan window";
+    private const string MoveDuplicateError = "Message was moved to the target but could not be removed from the source and may be duplicated: {0}";
 
     /// <inheritdoc />
     public async Task<BatchOperationResult> DeleteMessagesAsync(string entityName, long[] sequenceNumbers, bool isDeadLetter = false, string? subscriptionName = null, bool all = false, CancellationToken cancellationToken = default)
@@ -1421,7 +1422,7 @@ public class AzureServiceBusProvider : IMessagingProvider
     }
 
     /// <inheritdoc />
-    public async Task<BatchOperationResult> MoveMessagesAsync(string sourceEntityName, string targetQueueName, long[] sequenceNumbers, bool isDeadLetter = false, string? subscriptionName = null)
+    public async Task<BatchOperationResult> MoveMessagesAsync(string sourceEntityName, string targetQueueName, long[] sequenceNumbers, bool isDeadLetter = false, string? subscriptionName = null, CancellationToken cancellationToken = default)
     {
         EnsureConnected();
 
@@ -1443,89 +1444,168 @@ public class AzureServiceBusProvider : IMessagingProvider
 
         await using var receiver = _client!.CreateReceiver(sourcePath, new ServiceBusReceiverOptions
         {
-            ReceiveMode = ServiceBusReceiveMode.PeekLock
+            ReceiveMode = ServiceBusReceiveMode.PeekLock,
+            PrefetchCount = ScanPrefetchCount
         });
         await using var sender = _client!.CreateSender(targetQueueName);
 
-        // Convert to HashSet for faster lookups
-        var targetSequenceNumbers = new HashSet<long>(sequenceNumbers);
-        var processedSequenceNumbers = new HashSet<long>();
+        return await MoveCoreAsync(receiver, sender, sequenceNumbers, cancellationToken);
+    }
 
-        // Process messages in batches
-        const int batchSize = 100;
-        const int maxAttempts = 10;
-        var attemptCount = 0;
+    /// <summary>
+    /// Moves messages to the target queue in per-batch cycles: each cycle receives a batch,
+    /// sends its targets to the destination, then completes them immediately. Because a
+    /// message is completed within the same cycle it was received, its PeekLock never ages
+    /// out across the whole selection, which is what previously caused duplicates.
+    /// Ordering is send-before-complete (at-least-once): if the complete fails after a
+    /// successful send, the message is reported as a possible duplicate and never resent.
+    /// </summary>
+    internal static async Task<BatchOperationResult> MoveCoreAsync(
+        ServiceBusReceiver receiver,
+        ServiceBusSender sender,
+        long[] sequenceNumbers,
+        CancellationToken cancellationToken)
+    {
+        var result = new BatchOperationResult();
+        var targets = new HashSet<long>(sequenceNumbers);
+        var located = new HashSet<long>();
+        var maxTargetSeq = sequenceNumbers.Max();
 
-        while (processedSequenceNumbers.Count < targetSequenceNumbers.Count && attemptCount < maxAttempts)
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(ScanSafetyTimeout);
+        var token = timeoutCts.Token;
+
+        var seen = new HashSet<long>();
+        long maxSeenSeq = long.MinValue;
+        var consecutiveEmpty = 0;
+        var noProgressRounds = 0;
+
+        try
         {
-            attemptCount++;
-
-            var messages = await receiver.ReceiveMessagesAsync(batchSize, TimeSpan.FromSeconds(5));
-
-            if (messages.Count == 0)
+            while (located.Count < targets.Count)
             {
-                break;
-            }
+                token.ThrowIfCancellationRequested();
 
-            foreach (var message in messages)
-            {
-                if (targetSequenceNumbers.Contains(message.SequenceNumber))
+                var messages = await receiver.ReceiveMessagesAsync(ScanReceiveBatchSize, ScanReceiveWait, token);
+                if (messages.Count == 0)
                 {
-                    try
-                    {
-                        // Create new message keeping all original properties
-                        var newMessage = new ServiceBusMessage(message);
+                    if (++consecutiveEmpty >= NotFoundInScanWindow)
+                        break;
+                    continue;
+                }
+                consecutiveEmpty = 0;
 
-                        // Send to the target queue
-                        await sender.SendMessageAsync(newMessage);
+                var cycleTargets = new List<ServiceBusReceivedMessage>();
+                var toAbandon = new List<ServiceBusReceivedMessage>();
+                var newSequenceNumbers = 0;
 
-                        // Remove from source queue
-                        await receiver.CompleteMessageAsync(message);
+                foreach (var message in messages)
+                {
+                    if (seen.Add(message.SequenceNumber))
+                        newSequenceNumbers++;
+                    if (message.SequenceNumber > maxSeenSeq)
+                        maxSeenSeq = message.SequenceNumber;
 
-                        processedSequenceNumbers.Add(message.SequenceNumber);
-                        result.SuccessCount++;
-                    }
-                    catch (Exception ex)
-                    {
-                        result.FailureCount++;
-                        result.Failures.Add(new BatchOperationFailure
-                        {
-                            SequenceNumber = message.SequenceNumber,
-                            Error = ex.Message
-                        });
+                    if (targets.Contains(message.SequenceNumber) && !located.Contains(message.SequenceNumber))
+                        cycleTargets.Add(message);
+                    else
+                        toAbandon.Add(message);
+                }
 
-                        // Abandon the message back to source queue if move failed
-                        try
-                        {
-                            await receiver.AbandonMessageAsync(message);
-                        }
-                        catch
-                        {
-                            // Ignore abandon errors - message will eventually be unlocked
-                        }
-                    }
+                if (cycleTargets.Count > 0)
+                {
+                    // Send first (at-least-once), then complete immediately in the same cycle.
+                    await SendResubmitBatchAsync(sender, cycleTargets, token);
+                    await CompleteMovedAsync(receiver, cycleTargets, located, result, token);
+                }
+
+                if (toAbandon.Count > 0)
+                    await Task.WhenAll(toAbandon.Select(m => receiver.AbandonMessageAsync(m, cancellationToken: token)));
+
+                if (maxSeenSeq >= maxTargetSeq && cycleTargets.Count == 0)
+                    break;
+
+                if (newSequenceNumbers == 0 && cycleTargets.Count == 0)
+                {
+                    if (++noProgressRounds >= NotFoundInScanWindow)
+                        break;
                 }
                 else
                 {
-                    // Not one of our target messages, abandon it back to the source queue
-                    await receiver.AbandonMessageAsync(message);
+                    noProgressRounds = 0;
                 }
             }
         }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            // Safety timeout elapsed; fall through and report whatever is still missing.
+        }
+        catch (ServiceBusException)
+        {
+            // Transient broker failure mid-scan: stop and return partial results rather
+            // than surfacing an unhandled error. Already-moved targets keep their outcome;
+            // the rest are reported as not found below.
+        }
 
-        // Check for messages that were not found
-        var notFoundSequenceNumbers = targetSequenceNumbers.Except(processedSequenceNumbers);
-        foreach (var sequenceNumber in notFoundSequenceNumbers)
+        foreach (var sequenceNumber in targets.Except(located))
         {
             result.FailureCount++;
             result.Failures.Add(new BatchOperationFailure
             {
                 SequenceNumber = sequenceNumber,
-                Error = $"Message not found in {(isDeadLetter ? "dead letter queue" : "queue")}"
+                Error = NotFoundError
             });
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Completes messages already sent to the target queue. A complete failure means the
+    /// message was moved but could not be removed from the source, so it is reported as a
+    /// possible duplicate — it is never resent.
+    /// </summary>
+    private static async Task CompleteMovedAsync(
+        ServiceBusReceiver receiver,
+        List<ServiceBusReceivedMessage> messages,
+        HashSet<long> located,
+        BatchOperationResult result,
+        CancellationToken cancellationToken)
+    {
+        for (var i = 0; i < messages.Count; i += CompleteChunkSize)
+        {
+            var chunk = messages.Skip(i).Take(CompleteChunkSize).ToList();
+            var tasks = chunk.Select(async message =>
+            {
+                try
+                {
+                    await receiver.CompleteMessageAsync(message, cancellationToken);
+                    return (message.SequenceNumber, Success: true, Error: (string?)null);
+                }
+                catch (Exception ex)
+                {
+                    return (message.SequenceNumber, Success: false, Error: ex.Message);
+                }
+            });
+
+            foreach (var r in await Task.WhenAll(tasks))
+            {
+                located.Add(r.SequenceNumber);
+                if (r.Success)
+                {
+                    result.SuccessCount++;
+                }
+                else
+                {
+                    result.FailureCount++;
+                    result.Failures.Add(new BatchOperationFailure
+                    {
+                        SequenceNumber = r.SequenceNumber,
+                        Error = string.Format(MoveDuplicateError, r.Error)
+                    });
+                }
+            }
+        }
     }
 
     private static ServiceBusMessage CreateServiceBusMessage(SendMessageRequest request)

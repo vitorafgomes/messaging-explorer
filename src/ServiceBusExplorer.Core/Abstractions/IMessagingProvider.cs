@@ -283,8 +283,9 @@ public interface IMessagingProvider : IAsyncDisposable
     /// <param name="sequenceNumbers">Array of sequence numbers to move.</param>
     /// <param name="isDeadLetter">Whether to move from the dead letter queue.</param>
     /// <param name="subscriptionName">The subscription name if moving from a topic subscription.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>Result containing success count and failure details.</returns>
-    Task<BatchOperationResult> MoveMessagesAsync(string sourceEntityName, string targetQueueName, long[] sequenceNumbers, bool isDeadLetter = false, string? subscriptionName = null);
+    Task<BatchOperationResult> MoveMessagesAsync(string sourceEntityName, string targetQueueName, long[] sequenceNumbers, bool isDeadLetter = false, string? subscriptionName = null, CancellationToken cancellationToken = default);
 
     #endregion
 
