@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.3.0] - 2026-07-20
+
+> Version jump from 1.0.2: this release resumes the original Message Explorer
+> version line (last published as v2.2.0) so the open-source relaunch does not
+> appear to be a downgrade. The 1.0.x tags in this repository correspond to the
+> relaunch of the same codebase.
+
+### Fixed
+- DLQ bulk delete and resubmit no longer lose or duplicate messages. The Azure
+  provider now processes moves in per-batch cycles (receive → send → complete
+  within the same cycle), so a message's PeekLock can no longer expire while
+  the rest of the selection is being scanned — the root cause of duplicates.
+- If a move completes the send but fails to remove the message from the source,
+  the message is reported as a possible duplicate instead of being silently
+  resent.
+
+### Added
+- Bulk operations (delete, resubmit, move) accept a `CancellationToken`
+  end-to-end; aborting the HTTP request stops the batch on the server.
+- Bulk operation progress dialog supports cancellation from the UI; no success
+  callbacks run after the user aborts.
+- Scan safety timeout and prefetch tuning for large DLQ scans.
+
 ## [1.0.2] - 2026-04-30
 
 ### Fixed
