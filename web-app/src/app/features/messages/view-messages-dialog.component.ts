@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { Subject, finalize } from 'rxjs';
-import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
+import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { QueueService, TopicService, ConnectionService, MessageSearchService, AdvancedMessageFilterService, BulkOperationsService, MessageExportService } from '../../core/services';
@@ -12,7 +12,7 @@ import { MessageInfo, AdvancedFilterState, FilterLogic } from '../../core/models
 import { HighlightPipe } from '../../shared/pipes';
 import { AdvancedFilterPanelComponent } from '../../shared/components/advanced-filter-panel/advanced-filter-panel.component';
 import { BulkActionsToolbarComponent, BulkActionEvent } from '../../shared/components/bulk-actions-toolbar/bulk-actions-toolbar.component';
-import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog.component';
 import { MoveMessagesDialogComponent, MoveMessagesDialogData } from './move-messages-dialog.component';
 import { ExportMessagesDialogComponent, ExportMessagesDialogData, ExportOptions } from './export-messages-dialog.component';
 import { BulkOperationProgressDialogComponent, BulkOperationProgressDialogData } from '../../shared/components/bulk-operation-progress-dialog/bulk-operation-progress-dialog.component';
@@ -1297,13 +1297,28 @@ export class ViewMessagesDialogComponent implements OnInit {
       ? this.queueService.resubmitDeadLetterMessages(this.data.entityName, sequenceNumbers)
       : this.topicService.resubmitDeadLetterMessages(this.data.topicName!, this.data.entityName, sequenceNumbers);
 
+    const progressComponent = progressDialogRef.componentInstance;
+
+    // Track cancellation so no success callback runs after the user aborts.
+    // Unsubscribing via takeUntil also aborts the XHR, which stops the batch on
+    // the server through RequestAborted.
+    let cancelled = false;
+    progressComponent.cancelRequested$.pipe(
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe(() => {
+      cancelled = true;
+    });
+
     observable.pipe(
       finalize(() => this.resubmitting.set(false)),
+      takeUntil(progressComponent.cancelRequested$),
       takeUntilDestroyed(this.destroyRef)
     ).subscribe({
       next: (result) => {
+        if (cancelled) {
+          return;
+        }
         // Update progress to complete
-        const progressComponent = progressDialogRef.componentInstance;
         progressComponent.updateProgress({
           processed: selectedCount,
           total: selectedCount,
@@ -1313,6 +1328,9 @@ export class ViewMessagesDialogComponent implements OnInit {
 
         // Close progress dialog after a brief delay to show completion
         setTimeout(() => {
+          if (cancelled) {
+            return;
+          }
           progressDialogRef.close();
 
           // Show results dialog
@@ -1707,15 +1725,34 @@ export class ViewMessagesDialogComponent implements OnInit {
     const messageType = isDeadLetter ? 'dead letter messages' : 'messages';
     const entityName = this.data.entityName;
 
+    // A drain-all delete tells the backend to purge the whole tab server-side at
+    // execution time, so it affects every message present then, including any
+    // that arrive after this dialog opened, not just the ones currently loaded.
+    // That case warrants a stronger, explicit confirmation.
+    const drainAll = this.shouldDrainEntireTab(tabType, selectedCount);
+    const entityLabel = this.data.entityType === 'queue' ? 'queue' : 'subscription';
+
+    const confirmData: ConfirmDialogData = drainAll
+      ? {
+          title: 'Delete ALL Messages',
+          message: `This will permanently delete ALL ${messageType} currently in ${this.data.entityType} "${entityName}" at the moment of execution — including any messages that arrive after this dialog was opened, not just the ${selectedCount} currently loaded. This action is irreversible.`,
+          confirmText: 'Delete all',
+          confirmColor: 'warn',
+          icon: 'delete_forever',
+          requireAcknowledgement: true,
+          acknowledgementText: `I understand this drains the entire ${entityLabel}`
+        }
+      : {
+          title: 'Delete Messages',
+          message: `Are you sure you want to delete ${selectedCount} ${messageType} from ${this.data.entityType} "${entityName}"? This action cannot be undone.`,
+          confirmText: 'Delete',
+          confirmColor: 'warn',
+          icon: 'delete'
+        };
+
     // Open confirmation dialog
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
-      data: {
-        title: 'Delete Messages',
-        message: `Are you sure you want to delete ${selectedCount} ${messageType} from ${this.data.entityType} "${entityName}"? This action cannot be undone.`,
-        confirmText: 'Delete',
-        confirmColor: 'warn',
-        icon: 'delete'
-      }
+      data: confirmData
     });
 
     dialogRef.afterClosed().pipe(
@@ -1766,13 +1803,28 @@ export class ViewMessagesDialogComponent implements OnInit {
       ? this.queueService.deleteMessages(this.data.entityName, sequenceNumbers, isDeadLetter, drainAll)
       : this.topicService.deleteMessages(this.data.topicName!, this.data.entityName, sequenceNumbers, isDeadLetter, drainAll);
 
+    const progressComponent = progressDialogRef.componentInstance;
+
+    // Track cancellation so no success callback runs after the user aborts.
+    // Unsubscribing via takeUntil also aborts the XHR, which stops the batch on
+    // the server through RequestAborted.
+    let cancelled = false;
+    progressComponent.cancelRequested$.pipe(
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe(() => {
+      cancelled = true;
+    });
+
     observable.pipe(
       finalize(() => this.deleting.set(false)),
+      takeUntil(progressComponent.cancelRequested$),
       takeUntilDestroyed(this.destroyRef)
     ).subscribe({
       next: (result) => {
+        if (cancelled) {
+          return;
+        }
         // Update progress to complete
-        const progressComponent = progressDialogRef.componentInstance;
         progressComponent.updateProgress({
           processed: totalCount,
           total: totalCount,
@@ -1782,6 +1834,9 @@ export class ViewMessagesDialogComponent implements OnInit {
 
         // Close progress dialog after a brief delay to show completion
         setTimeout(() => {
+          if (cancelled) {
+            return;
+          }
           progressDialogRef.close();
 
           // Show results dialog
@@ -1954,13 +2009,28 @@ export class ViewMessagesDialogComponent implements OnInit {
       disableClose: true
     });
 
+    const progressComponent = progressDialogRef.componentInstance;
+
+    // Track cancellation so no success callback runs after the user aborts.
+    // Unsubscribing via takeUntil also aborts the XHR, which stops the batch on
+    // the server through RequestAborted.
+    let cancelled = false;
+    progressComponent.cancelRequested$.pipe(
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe(() => {
+      cancelled = true;
+    });
+
     this.queueService.moveMessages(this.data.entityName, targetQueueName, sequenceNumbers, isDeadLetter).pipe(
       finalize(() => this.moving.set(false)),
+      takeUntil(progressComponent.cancelRequested$),
       takeUntilDestroyed(this.destroyRef)
     ).subscribe({
       next: (result) => {
+        if (cancelled) {
+          return;
+        }
         // Update progress to complete
-        const progressComponent = progressDialogRef.componentInstance;
         progressComponent.updateProgress({
           processed: totalCount,
           total: totalCount,
@@ -1970,6 +2040,9 @@ export class ViewMessagesDialogComponent implements OnInit {
 
         // Close progress dialog after a brief delay to show completion
         setTimeout(() => {
+          if (cancelled) {
+            return;
+          }
           progressDialogRef.close();
 
           // Show results dialog

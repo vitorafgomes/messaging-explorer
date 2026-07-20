@@ -336,7 +336,7 @@ public class TopicsController : ControllerBase
 
         try
         {
-            var result = await provider.MoveMessagesAsync(topicName, request.TargetQueueName, request.SequenceNumbers, subscriptionName: subscriptionName);
+            var result = await provider.MoveMessagesAsync(topicName, request.TargetQueueName, request.SequenceNumbers, subscriptionName: subscriptionName, cancellationToken: HttpContext.RequestAborted);
             return Ok(result);
         }
         catch (Exception ex)
@@ -355,7 +355,7 @@ public class TopicsController : ControllerBase
 
         try
         {
-            var result = await provider.MoveMessagesAsync(topicName, request.TargetQueueName, request.SequenceNumbers, isDeadLetter: true, subscriptionName: subscriptionName);
+            var result = await provider.MoveMessagesAsync(topicName, request.TargetQueueName, request.SequenceNumbers, isDeadLetter: true, subscriptionName: subscriptionName, cancellationToken: HttpContext.RequestAborted);
             return Ok(result);
         }
         catch (Exception ex)
