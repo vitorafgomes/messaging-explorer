@@ -22,10 +22,40 @@ permissions:
 
 jobs:
   # ---------------------------------------------------------------------------
+  # Gate - nothing is packaged unless CI passes on this commit and the tag
+  # matches the version in web-app/package.json
+  # ---------------------------------------------------------------------------
+  verify:
+    name: CI on the tagged commit
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  verify-version:
+    name: Tag matches package version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compare tag and package.json
+        shell: bash
+        run: |
+          version=$(node -p "require('./web-app/package.json').version")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match web-app/package.json version $version (expected v$version)."
+            exit 1
+          fi
+          echo "Tag $GITHUB_REF_NAME matches package version $version."
+
+  # ---------------------------------------------------------------------------
   # Linux build — AppImage + deb
   # ---------------------------------------------------------------------------
   build-linux:
     name: Build Linux
+    needs: [verify, verify-version]
     runs-on: ubuntu-latest
 
     steps:
@@ -67,6 +97,7 @@ jobs:
   # ---------------------------------------------------------------------------
   build-windows:
     name: Build Windows
+    needs: [verify, verify-version]
     runs-on: windows-latest
 
     steps:
@@ -107,6 +138,7 @@ jobs:
   # ---------------------------------------------------------------------------
   build-mac:
     name: Build macOS
+    needs: [verify, verify-version]
     runs-on: macos-latest
 
     steps:
