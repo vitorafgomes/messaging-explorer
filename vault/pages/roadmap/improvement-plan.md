@@ -126,7 +126,7 @@ Each becomes an ADR under `pages/decisions/` when taken.
 - Rules A, F, G, H and I as derived at the founding: confirm or amend ([[pages/decisions/0001-in-repo-vault-and-agent-harness]]).
 - RabbitMQ bulk operations: make safe, or turn off (Phase 2).
 - Self-contained API and the larger installers it brings (Phase 3).
-- Code signing and notarization, and their cost (Phase 3).
+- Code signing on macOS was decided on 2026-04-09: unsigned until demand justifies the membership ([[pages/history/product]]). Windows signing is still open (Phase 3).
 - Secrets at rest: OS keychain or Electron `safeStorage`, or stay in plain text and say so (not scheduled).
 - The provider registry: wire or remove (Phase 6).
 

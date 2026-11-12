@@ -27,7 +27,9 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 > branch `fix/dlq-bulk-operations` with the owner's uncommitted changes. Every `path:line` citation
 > resolves (`scripts/check-vault-refs.sh`); the service pages and the project map were written by
 > three survey agents and their citations were spot-checked, not all re-read, so a line that exists
-> may still describe its claim loosely. The owner's private notes were not migrated. The folders
+> may still describe its claim loosely. On 2026-11-12 the owner allowed his private notes to be
+> migrated: the product history, the Azure authentication decision and the feature backlog came
+> from them, rewritten in English and checked against the code; audits, sessions and plans stayed private. The folders
 > `history/`, `incidents/`, `runbooks/`, `flows/` and `domain/` are empty until first use.
 >
 > The survey found real defects. They are recorded, not fixed: "Known gaps" on each service page,
@@ -35,7 +37,7 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 
 ## Overview
 
-- [[pages/overview/vision|Vision]] *(stub)* - What the tool is for and who uses it.
+- [[pages/overview/vision|Vision]] - What the tool is for, who uses it and where it is going.
 
 ## Architecture
 
@@ -65,11 +67,17 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 
 ## Decisions
 
+- [[pages/decisions/0003-azure-authentication-strategy|ADR 0003 - Azure authentication strategy]] *(accepted 2026-04-19)* - Identity before keys: five supported credentials, two rejected, and resource discovery, which is the part not built.
 - [[pages/decisions/0002-integration-tests-against-brokers-in-docker|ADR 0002 - Integration tests against brokers in Docker]] *(accepted)* - A third test project that starts RabbitMQ and the Azure Service Bus emulator in containers; a test never talks to a broker it did not start.
 - [[pages/decisions/0001-in-repo-vault-and-agent-harness|ADR 0001 - In-repo vault and agent harness]] *(accepted)* - Why the documentation and the harness live in the repo, and where the ten rules came from.
 
+## History
+
+- [[pages/history/product|Product history]] - The private version line to 3.0.0, the public relaunch as 1.0.0, why 2.3.0 followed, and the decisions on the way that still hold.
+
 ## Roadmap
 
+- [[pages/roadmap/product-backlog|Product backlog]] - The features the owner asked for that are not built yet, checked against the code.
 - [[pages/roadmap/ui-material-migration|UI: finish the move to Angular Material]] - End-to-end tests with screenshots first, then the queue panel at the subscription's level, safer destructive actions, Material screen by screen, and Bootstrap removed.
 - [[pages/roadmap/tests-of-everything|Tests of everything]] - Four phases: the providers against real brokers in Docker, every controller, the web app where it acts on messages, the packaged app.
 - [[pages/roadmap/code-audit-2026-11|Code audit, November 2026]] - The line-by-line bug hunt of the back end and the front end: findings by area and severity, improvements, and where to start.

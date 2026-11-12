@@ -79,4 +79,4 @@ Read on 2026-11-12 from the workflow and the package configuration; the inferred
 ## Owner decisions pending
 
 - **2026-11-12 - Rules A, F, G, H and I were derived at the founding** from the code and the 2.3.0 changelog ([[pages/decisions/0001-in-repo-vault-and-agent-harness]]). Confirm or amend.
-- **2026-11-12 - Which technical notes from the private Obsidian folder should be migrated here**, starting with the Azure authentication decision of 2026-04-19; nothing was copied.
+- **2026-11-12 - The owner's notes were migrated** in part: product history, the Azure authentication decision and the feature backlog. Left private on purpose: security audits, session logs and plans.
