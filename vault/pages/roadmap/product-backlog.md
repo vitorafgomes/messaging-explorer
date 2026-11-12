@@ -42,19 +42,27 @@ The owner asked what the reference tool for Azure Service Bus has that this prod
 - **2026-11-12 - Export and import the definitions of a namespace** (queues, topics, subscriptions, rules), to recreate them elsewhere. Item 4.
 - **2026-11-12 - Counts of every entity on one screen**, sortable, filterable, with the dead-letter threshold the user sets. Item 5.
 - **2026-11-12 - Browse sessions**: the messages of one session, the state editor, sessions on queues. Item 6, which starts with a defect: listing sessions locks each one.
-- **2026-11-12 - Scheduled and deferred messages**: list, cancel a scheduled one, mark a deferred one. Item 7.
-- **2026-11-12 - Transfer dead-letter queue** reachable from the messages dialog. Item 8.
+- **2026-11-12 - Scheduled and deferred messages**: list, cancel a scheduled one, mark a deferred one. Item 7. Built on 2026-11-12: the state of each message, a filter of the loaded ones and the cancel on queues. Left: a listing from the broker, topics, and deferral itself.
+- **2026-11-12 - Transfer dead-letter queue** reachable from the messages dialog. Item 8. Built on 2026-11-12.
 - **2026-11-12 - Send many messages** with a count, a cap and a split by batch size. Item 9.
 - **2026-11-12 - Live view of arriving messages**, by polling a peek, never a receiver. Item 10; last.
 - **2026-11-12 - Sort the message list, copy the body, filter the tree by name, dates on the queue panel.** Item 11.
 - **2026-11-12 - Sovereign clouds** as a fixed list on the connection. Item 12; only on request.
+
+**The automatic resubmit, at the size of a real backlog.** The owner's remark of 2026-11-12: "we have 700 thousand messages in dead-letter, we click and process all of them automatically". What exists: the continuous resubmit runs inside its dialog, so closing the dialog stops the run; it stops on the first failure or possible duplicate, because the failed message stays at the head of the dead-letter queue and each cycle peeks the head ([[pages/services/web-app]]); it shows no elapsed time, rate or estimate. Wanted, none of it built:
+
+- **2026-11-12 - Continue past a failure** without ever resending a possible duplicate ([[pages/invariants/bulk-operations-are-at-least-once]]), and report every failure at the end.
+- **2026-11-12 - A run that belongs to the app,** not to the dialog: it survives closing the dialog, with pause and stop.
+- **2026-11-12 - An estimate** of the time left, from the measured rate, with the elapsed time and the rate shown.
+- **2026-11-12 - A filter before starting:** dead-letter reason, enqueued time.
+- **2026-11-12 - A final report that can be saved.**
 
 ## Smaller, unordered
 
 - 2026-04-08 - Connection profiles by environment with a colour label. The toolbar badge on the UI prototype is the first piece ([[pages/conventions/ui]]).
 - 2026-04-08 - Secrets encrypted at rest. Needs the owner's choice between the OS keychain and Electron's safe storage ([[pages/roadmap/improvement-plan]]).
 - 2026-07-06 - RabbitMQ: the real dead-letter exchange instead of the `<queue>.dlq` convention; metrics from the management statistics.
-- 2026-07-06 - Azure: list and cancel scheduled messages; deferred messages.
+- 2026-07-06 - Azure: list and cancel scheduled messages; deferred messages. Cancel on queues built on 2026-11-12 ([[pages/roadmap/azure-service-bus-administration]], item 7).
 - 2026-07-06 - A health endpoint that probes the broker; paging for large queues.
 - 2026-04-08 - Syntax highlighting of JSON and XML bodies; saved filter presets.
 - 2026-04-08 - A command-line mode for scripts (peek, send, purge).
