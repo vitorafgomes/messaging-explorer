@@ -49,7 +49,7 @@ Connection strings and passwords for production brokers pass through this tool. 
 - `src/ServiceBusExplorer.Core/Services/FileWorkspaceManager.cs:382` - `SaveConnectionAsync` returns the masked clone of what it stored, on update and on create, so the POST response carries no raw secret.
 - `src/ServiceBusExplorer.Core/Services/FileWorkspaceManager.cs:438` - an import for an id that is not stored clears a secret that arrives as the mask instead of storing the literal `***`.
 - `src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs:121` - the save action reads the raw connection to restore masked fields before it tests the connection.
-- `src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs:423` - an export with `includeSecrets=true` is the one response with raw secrets, and it logs a warning.
+- `src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs:424` - an export with `includeSecrets=true` is the one response with raw secrets, and it logs a warning.
 
 ## How it's verified
 
