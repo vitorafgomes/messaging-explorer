@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { BehaviorSubject, Observable, of } from 'rxjs';
 import { tap, catchError, map } from 'rxjs/operators';
 import { ApiService } from './api.service';
+import { apiPath } from './api-path';
 import { ProviderType, ProviderCapabilities, ProviderInfo, getProviderDisplayName } from '../models/provider.model';
 
 /**
@@ -109,7 +110,7 @@ export class ProviderService {
       return of(cache.get(providerType)!);
     }
 
-    return this.api.get<ProviderCapabilities>(`connections/providers/${providerType}/capabilities`).pipe(
+    return this.api.get<ProviderCapabilities>(apiPath`connections/providers/${providerType}/capabilities`).pipe(
       tap(capabilities => {
         // Update cache
         const updatedCache = new Map(this.capabilitiesCacheSubject.value);

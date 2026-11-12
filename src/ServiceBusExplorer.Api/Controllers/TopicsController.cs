@@ -4,7 +4,7 @@ using ServiceBusExplorer.Core.Models;
 
 namespace ServiceBusExplorer.Api.Controllers;
 
-[ApiController]
+[ApiController, RawTargetRouteValues]
 [Route("api/[controller]")]
 public class TopicsController : ControllerBase
 {

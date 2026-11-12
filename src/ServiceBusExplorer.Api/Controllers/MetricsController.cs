@@ -7,7 +7,7 @@ namespace ServiceBusExplorer.Api.Controllers;
 /// <summary>
 /// Controller for fetching Azure Monitor metrics for Service Bus entities.
 /// </summary>
-[ApiController]
+[ApiController, RawTargetRouteValues]
 [Route("api/[controller]")]
 public class MetricsController : ControllerBase
 {

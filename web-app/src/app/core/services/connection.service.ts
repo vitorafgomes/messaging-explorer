@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, BehaviorSubject } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import { ApiService } from './api.service';
+import { apiPath } from './api-path';
 import { ServiceBusConnection, ConnectionStatus, AzureAuthType } from '../models';
 import { ProviderType, ProviderInfo, ProviderCapabilities } from '../models/provider.model';
 
@@ -70,7 +71,7 @@ export class ConnectionService {
   }
 
   getConnection(id: string): Observable<ServiceBusConnection> {
-    return this.api.get<ServiceBusConnection>(`connections/${id}`);
+    return this.api.get<ServiceBusConnection>(apiPath`connections/${id}`);
   }
 
   saveConnection(connection: Partial<ServiceBusConnection>): Observable<ServiceBusConnection> {
@@ -137,7 +138,7 @@ export class ConnectionService {
   }
 
   connect(id: string): Observable<ConnectionStatus> {
-    return this.api.post<ConnectionStatus>(`connections/${id}/connect`, {}).pipe(
+    return this.api.post<ConnectionStatus>(apiPath`connections/${id}/connect`, {}).pipe(
       tap(status => this.connectionStatusSubject.next(status))
     );
   }
@@ -149,7 +150,7 @@ export class ConnectionService {
   }
 
   deleteConnection(id: string): Observable<void> {
-    return this.api.delete<void>(`connections/${id}`);
+    return this.api.delete<void>(apiPath`connections/${id}`);
   }
 
   refreshStatus(): void {
@@ -208,7 +209,7 @@ export class ConnectionService {
    * @param providerType - The provider type to get capabilities for
    */
   getProviderCapabilities(providerType: ProviderType): Observable<ProviderCapabilities> {
-    return this.api.get<ProviderCapabilities>(`connections/providers/${providerType}/capabilities`);
+    return this.api.get<ProviderCapabilities>(apiPath`connections/providers/${providerType}/capabilities`);
   }
 
   exportConfiguration(includeSecrets: boolean = false): Observable<any> {

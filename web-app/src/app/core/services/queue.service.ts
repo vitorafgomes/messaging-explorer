@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 import { ApiService } from './api.service';
+import { apiPath } from './api-path';
 import { QueueInfo, MessageInfo, SendMessageRequest, BatchOperationResult, DeleteBatchRequest, ResubmitBatchRequest, MoveBatchRequest } from '../models';
 
 /**
@@ -32,7 +33,7 @@ export class QueueService {
    * @returns Observable with queue information
    */
   getQueue(name: string): Observable<QueueInfo> {
-    return this.api.get<QueueInfo>(`queues/${name}`);
+    return this.api.get<QueueInfo>(apiPath`queues/${name}`);
   }
 
   /**
@@ -50,7 +51,7 @@ export class QueueService {
    * @returns Observable that completes when the queue is deleted
    */
   deleteQueue(name: string): Observable<void> {
-    return this.api.delete<void>(`queues/${name}`);
+    return this.api.delete<void>(apiPath`queues/${name}`);
   }
 
   /**
@@ -60,7 +61,7 @@ export class QueueService {
    * @returns Observable array of messages
    */
   peekMessages(queueName: string, count: number = 10): Observable<MessageInfo[]> {
-    return this.api.get<MessageInfo[]>(`queues/${queueName}/messages?count=${count}`);
+    return this.api.get<MessageInfo[]>(apiPath`queues/${queueName}/messages?count=${count}`);
   }
 
   /**
@@ -72,7 +73,7 @@ export class QueueService {
    * @returns Observable array of dead letter messages
    */
   peekDeadLetterMessages(queueName: string, count: number = 10): Observable<MessageInfo[]> {
-    return this.api.get<MessageInfo[]>(`queues/${queueName}/deadletter?count=${count}`);
+    return this.api.get<MessageInfo[]>(apiPath`queues/${queueName}/deadletter?count=${count}`);
   }
 
   /**
@@ -82,7 +83,7 @@ export class QueueService {
    * @returns Observable with success status
    */
   sendMessage(queueName: string, message: SendMessageRequest): Observable<{ success: boolean }> {
-    return this.api.post<{ success: boolean }>(`queues/${queueName}/messages`, message);
+    return this.api.post<{ success: boolean }>(apiPath`queues/${queueName}/messages`, message);
   }
 
   /**
@@ -92,7 +93,7 @@ export class QueueService {
    * @returns Observable with success status and count of sent messages
    */
   sendMessages(queueName: string, messages: SendMessageRequest[]): Observable<{ success: boolean; count: number }> {
-    return this.api.post<{ success: boolean; count: number }>(`queues/${queueName}/messages/batch`, messages);
+    return this.api.post<{ success: boolean; count: number }>(apiPath`queues/${queueName}/messages/batch`, messages);
   }
 
   /**
@@ -102,7 +103,7 @@ export class QueueService {
    * @returns Observable array of received messages
    */
   receiveMessages(queueName: string, count: number = 10): Observable<MessageInfo[]> {
-    return this.api.post<MessageInfo[]>(`queues/${queueName}/messages/receive?count=${count}`, {});
+    return this.api.post<MessageInfo[]>(apiPath`queues/${queueName}/messages/receive?count=${count}`, {});
   }
 
   /**
@@ -114,7 +115,7 @@ export class QueueService {
    * @returns Observable with success status
    */
   resubmitDeadLetterMessage(queueName: string, sequenceNumber: number): Observable<{ success: boolean }> {
-    const url = `queues/${queueName}/deadletter/${sequenceNumber}/resubmit`;
+    const url = apiPath`queues/${queueName}/deadletter/${sequenceNumber}/resubmit`;
     return this.api.post<{ success: boolean }>(url, {});
   }
 
@@ -128,7 +129,7 @@ export class QueueService {
    */
   resubmitDeadLetterMessages(queueName: string, sequenceNumbers: number[]): Observable<BatchOperationResult> {
     const request: ResubmitBatchRequest = { sequenceNumbers };
-    return this.api.post<BatchOperationResult>(`queues/${queueName}/deadletter/resubmit-batch`, request);
+    return this.api.post<BatchOperationResult>(apiPath`queues/${queueName}/deadletter/resubmit-batch`, request);
   }
 
   /**
@@ -142,7 +143,7 @@ export class QueueService {
   deleteMessages(queueName: string, sequenceNumbers: number[], isDeadLetter: boolean = false, all: boolean = false): Observable<BatchOperationResult> {
     const request: DeleteBatchRequest = { sequenceNumbers, all };
     const path = isDeadLetter ? 'deadletter' : 'messages';
-    return this.api.post<BatchOperationResult>(`queues/${queueName}/${path}/delete-batch`, request);
+    return this.api.post<BatchOperationResult>(apiPath`queues/${queueName}/${path}/delete-batch`, request);
   }
 
   /**
@@ -156,7 +157,7 @@ export class QueueService {
   moveMessages(sourceQueueName: string, targetQueueName: string, sequenceNumbers: number[], isDeadLetter: boolean = false): Observable<BatchOperationResult> {
     const request: MoveBatchRequest = { sequenceNumbers, targetQueueName };
     const path = isDeadLetter ? 'deadletter' : 'messages';
-    return this.api.post<BatchOperationResult>(`queues/${sourceQueueName}/${path}/move-batch`, request);
+    return this.api.post<BatchOperationResult>(apiPath`queues/${sourceQueueName}/${path}/move-batch`, request);
   }
 
   /**
@@ -167,16 +168,16 @@ export class QueueService {
    */
   purgeMessages(queueName: string, type: string = 'active'): Observable<{ success: boolean }> {
     if (type === 'deadletter') {
-      return this.api.delete<{ success: boolean }>(`queues/${queueName}/deadletter`);
+      return this.api.delete<{ success: boolean }>(apiPath`queues/${queueName}/deadletter`);
     } else if (type === 'all') {
       // For 'all', we need to purge both active and dead-letter messages
       // We'll purge active first, then dead-letter
-      return this.api.delete<{ success: boolean }>(`queues/${queueName}/messages`).pipe(
-        switchMap(() => this.api.delete<{ success: boolean }>(`queues/${queueName}/deadletter`))
+      return this.api.delete<{ success: boolean }>(apiPath`queues/${queueName}/messages`).pipe(
+        switchMap(() => this.api.delete<{ success: boolean }>(apiPath`queues/${queueName}/deadletter`))
       );
     }
     // Default: purge only active messages
-    return this.api.delete<{ success: boolean }>(`queues/${queueName}/messages`);
+    return this.api.delete<{ success: boolean }>(apiPath`queues/${queueName}/messages`);
   }
 
   /**
@@ -185,6 +186,6 @@ export class QueueService {
    * @returns Observable with success status
    */
   purgeDeadLetterMessages(queueName: string): Observable<{ success: boolean }> {
-    return this.api.delete<{ success: boolean }>(`queues/${queueName}/deadletter`);
+    return this.api.delete<{ success: boolean }>(apiPath`queues/${queueName}/deadletter`);
   }
 }

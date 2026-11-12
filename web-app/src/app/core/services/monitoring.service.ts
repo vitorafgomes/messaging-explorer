@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
+import { apiPath } from './api-path';
 import { MonitoringSnapshot } from '../models/monitoring.model';
 
 @Injectable({ providedIn: 'root' })
@@ -12,6 +13,6 @@ export class MonitoringService {
   }
 
   getHistory(count: number = 20): Observable<MonitoringSnapshot[]> {
-    return this.api.get<MonitoringSnapshot[]>(`monitoring/history?count=${count}`);
+    return this.api.get<MonitoringSnapshot[]>(apiPath`monitoring/history?count=${count}`);
   }
 }
