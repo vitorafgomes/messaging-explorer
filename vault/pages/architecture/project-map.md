@@ -1,0 +1,119 @@
+---
+title: "Project map"
+version: "1.0"
+date: 2026-11-12
+updated: 2026-11-12
+changes: "Founded from the code on 2026-11-12"
+page_type: longform
+status: active
+description: "Every project in ServiceBusExplorer.slnx plus the Angular app, the Electron shell and the docs site: kind, references, packages, covering tests and which tests to run when a project changes."
+source:
+  - ServiceBusExplorer.slnx
+  - src/ServiceBusExplorer.Core/ServiceBusExplorer.Core.csproj
+  - src/ServiceBusExplorer.Api/ServiceBusExplorer.Api.csproj
+  - src/ServiceBusExplorer.Core.Tests/ServiceBusExplorer.Core.Tests.csproj
+  - src/ServiceBusExplorer.Api.Tests/ServiceBusExplorer.Api.Tests.csproj
+  - web-app/package.json
+  - web-app/electron/main.js
+  - docs/
+  - .github/workflows/ci.yml
+reliability: high
+---
+
+# Project map
+
+> Four .NET projects in `ServiceBusExplorer.slnx` with a two-level graph (Api and both test projects point at Core, Api.Tests also at Api), plus three non-.NET parts that are not in the solution: the Angular app, the Electron shell and the GitHub Pages site.
+
+The solution file lists exactly four projects (lines 3 to 6 of `ServiceBusExplorer.slnx`), all `net10.0`. Derived from the `ProjectReference` and `PackageReference` items in each csproj and from `web-app/package.json` on the working tree of 2026-11-12. No `Directory.Build.props`, `global.json` or central package management file exists; versions live in each csproj.
+
+## .NET projects
+
+| Project | Kind | ProjectReference | Test project |
+|---|---|---|---|
+| [[pages/services/core]] | class library | none | `ServiceBusExplorer.Core.Tests` (direct) and, through the API, `ServiceBusExplorer.Api.Tests` |
+| [[pages/services/api]] | ASP.NET Core web app (`Microsoft.NET.Sdk.Web`) | Core (`src/ServiceBusExplorer.Api/ServiceBusExplorer.Api.csproj:15`) | `ServiceBusExplorer.Api.Tests` |
+| `ServiceBusExplorer.Core.Tests` | xUnit test project | Core (`src/ServiceBusExplorer.Core.Tests/ServiceBusExplorer.Core.Tests.csproj:26`) | is the tests |
+| `ServiceBusExplorer.Api.Tests` | xUnit test project, in-process host | Api, Core (`src/ServiceBusExplorer.Api.Tests/ServiceBusExplorer.Api.Tests.csproj:26`, `src/ServiceBusExplorer.Api.Tests/ServiceBusExplorer.Api.Tests.csproj:27`) | is the tests |
+
+Core grants its internals to `ServiceBusExplorer.Core.Tests` only (`src/ServiceBusExplorer.Core/ServiceBusExplorer.Core.csproj:10`), which is how the tests call `DeleteMessagesCoreAsync`, `ResubmitCoreAsync` and `MoveCoreAsync` directly. Api.Tests does not get Api internals; it uses `WebApplicationFactory` (`src/ServiceBusExplorer.Api.Tests/ApiFactory.cs`).
+
+```mermaid
+flowchart TD
+    CT[Core.Tests] --> Core
+    Api --> Core
+    AT[Api.Tests] --> Api
+    AT --> Core
+    WEB[web-app Angular] -. HTTP /api .-> Api
+    EL[web-app/electron] -- spawns or launches --> Api
+    EL --> WEB
+    DOCS[docs site]
+```
+
+Dotted and plain arrows from `web-app` and `electron` are run-time relationships, not build references; nothing in the .NET solution depends on them.
+
+## NuGet packages
+
+| Project | Package | Version |
+|---|---|---|
+| Core | `Azure.Identity` | 1.13.1 (`src/ServiceBusExplorer.Core/ServiceBusExplorer.Core.csproj:14`) |
+| Core | `Azure.Messaging.ServiceBus` | 7.20.1 (`src/ServiceBusExplorer.Core/ServiceBusExplorer.Core.csproj:15`) |
+| Core | `Azure.Monitor.Query` | 1.5.0 (`src/ServiceBusExplorer.Core/ServiceBusExplorer.Core.csproj:16`) |
+| Core | `Microsoft.Extensions.Caching.Memory` | 9.0.0 (`src/ServiceBusExplorer.Core/ServiceBusExplorer.Core.csproj:17`) |
+| Core | `Microsoft.Extensions.Logging.Abstractions` | 9.0.0 (`src/ServiceBusExplorer.Core/ServiceBusExplorer.Core.csproj:18`) |
+| Core | `RabbitMQ.Client` | 6.8.1 (`src/ServiceBusExplorer.Core/ServiceBusExplorer.Core.csproj:19`) |
+| Api | `Microsoft.AspNetCore.OpenApi` | 10.0.0 (`src/ServiceBusExplorer.Api/ServiceBusExplorer.Api.csproj:10`) |
+| Api | `Microsoft.OpenApi` | 2.7.5 (`src/ServiceBusExplorer.Api/ServiceBusExplorer.Api.csproj:11`) |
+| Core.Tests | `Moq` | 4.20.70 (`src/ServiceBusExplorer.Core.Tests/ServiceBusExplorer.Core.Tests.csproj:17`) |
+| Core.Tests | `xunit` / `xunit.runner.visualstudio` / `Microsoft.NET.Test.Sdk` / `coverlet.collector` | 2.6.2 / 2.5.4 / 17.8.0 / 6.0.0 (`src/ServiceBusExplorer.Core.Tests/ServiceBusExplorer.Core.Tests.csproj:18`, `src/ServiceBusExplorer.Core.Tests/ServiceBusExplorer.Core.Tests.csproj:19`, `src/ServiceBusExplorer.Core.Tests/ServiceBusExplorer.Core.Tests.csproj:16`, `src/ServiceBusExplorer.Core.Tests/ServiceBusExplorer.Core.Tests.csproj:12`) |
+| Api.Tests | `Microsoft.AspNetCore.Mvc.Testing` | 10.0.0 (`src/ServiceBusExplorer.Api.Tests/ServiceBusExplorer.Api.Tests.csproj:12`) |
+| Api.Tests | `xunit` / `xunit.runner.visualstudio` / `Microsoft.NET.Test.Sdk` / `coverlet.collector` | 2.6.2 / 2.5.4 / 17.8.0 / 6.0.0 (`src/ServiceBusExplorer.Api.Tests/ServiceBusExplorer.Api.Tests.csproj:14`, `src/ServiceBusExplorer.Api.Tests/ServiceBusExplorer.Api.Tests.csproj:15`, `src/ServiceBusExplorer.Api.Tests/ServiceBusExplorer.Api.Tests.csproj:13`, `src/ServiceBusExplorer.Api.Tests/ServiceBusExplorer.Api.Tests.csproj:19`) |
+
+The vendor SDKs (`Azure.*`, `RabbitMQ.Client`) are referenced by Core only; Api reaches them transitively. `ProviderVersion` in the two capability classes repeats the Azure and RabbitMQ package versions as strings (see Known gaps in [[pages/services/core]]).
+
+## What each test project covers
+
+- **Core.Tests** (`src/ServiceBusExplorer.Core.Tests/`): the Azure bulk cores against mocked receivers and senders, `AzureCredentialFactory`, `AzureServiceBusProvider` connect paths, `AzureMonitorMetricsService`, the RabbitMQ session stubs, `SessionInfo`, and since 2026-11-12 `FileWorkspaceManager` (`src/ServiceBusExplorer.Core.Tests/Services/FileWorkspaceManagerTests.cs:65`: the merge on save and import, the masked save return, an unreadable file, the atomic write). Not covered directly: `ProviderFactory`, `RabbitMQProvider` (beyond sessions), `RabbitMQManagementClient`, `RabbitMQPatternDetector`, `ServiceBusService`.
+- **Api.Tests** (`src/ServiceBusExplorer.Api.Tests/`): masking of connections on read, export and the save response (`ConnectionMaskingTests.cs`), API key middleware (`AuthMiddlewareTests.cs`), CORS (`CorsTests.cs`), the metrics controller with 503 when unconfigured (`MetricsControllerTests.cs`). `FileWorkspaceManager` also runs here, through `IConnectionManager` (`src/ServiceBusExplorer.Api.Tests/ApiFactory.cs:42`). The queue, topic, session, group and monitoring controllers have no test file.
+- **web-app**: 21 `*.spec.ts` files under `web-app/src`, run by the Angular `unit-test` builder (`web-app/angular.json:90`, `web-app/angular.json:91`) with Vitest (`web-app/package.json`, `vitest` ^4.0.8, script `test`). See [[pages/services/web-app]].
+
+## Non-.NET parts
+
+| Part | Path | Kind | Notes |
+|---|---|---|---|
+| Angular app | `web-app/` | Angular 21 SPA (`@angular/core` ^21.2.8), Material, ng-bootstrap, ApexCharts, ExcelJS, Prism; npm `packageManager` npm@11.6.2 | Feature folders `connections`, `entities`, `messages`, `monitoring`, `queues`, `topics` under `web-app/src/app/features`; per-provider UI under `web-app/src/app/providers/{azure-service-bus,rabbitmq,kafka}` through `provider-registry.service.ts`. A `kafka` folder exists in the UI, but Core has no Kafka provider (`src/ServiceBusExplorer.Core/Providers/ProviderType.cs:11`, `src/ServiceBusExplorer.Core/Providers/ProviderType.cs:16`) and the registry example for it is commented out (`web-app/src/app/providers/provider-registry.service.ts:77`). See [[pages/services/web-app]]. |
+| Electron shell | `web-app/electron/` (`main.js` 1094 lines, `shell-helpers.js` with its `node:test` file, `preload.js` 72, `splash.html`) | Electron ^41.2.0 main process; electron-builder ^26.7.0 | `package.json` `main` is `electron/main.js`. In development it runs `dotnet run` in `src/ServiceBusExplorer.Api` (`web-app/electron/main.js:774`, `web-app/electron/main.js:776`); packaged, it finds the published API under `resources/api` (`web-app/electron/main.js:739` to `web-app/electron/main.js:741`). Defaults: API port 5917, frontend port 4297 (`web-app/electron/main.js:48`). Packaging copies `src/ServiceBusExplorer.Api/bin/Release/net10.0/publish` into `api` (`web-app/package.json`, `build.extraResources`). See [[pages/services/electron-shell]]. |
+| Docs site | `docs/` | static GitHub Pages site: `index.html` (148), `styles.css` (414), `app.js` (180), `icon.svg`, `_config.yml` (`theme: null`, `plugins: []`, `docs/_config.yml:1`, `docs/_config.yml:2`) | No build step and no reference to or from any code project. `docs/ADDING_PROVIDERS.md` (695 lines) is the guide to adding a provider and is the one document here that tracks Core's provider seam. |
+
+`web-app/package.json` `homepage` points at the Pages site.
+
+## CI
+
+`.github/workflows/ci.yml` runs on pushes and pull requests to `main`. Job `dotnet` restores, builds and tests the whole solution in Release (`.github/workflows/ci.yml:59`, `.github/workflows/ci.yml:62`, `.github/workflows/ci.yml:65`), so all four projects always build together. Job `web` runs `npm ci` and `npm run build` in `web-app` (`.github/workflows/ci.yml:87`, `.github/workflows/ci.yml:99`) and, since 2026-11-12, `npm test -- --watch=false` between them (`.github/workflows/ci.yml:91`), so the 21 spec files are part of CI. `.github/workflows/release.yml` triggers on `v*` tags (`.github/workflows/release.yml:13`) and builds Electron installers for Linux, Windows and macOS (`.github/workflows/release.yml:83`, `.github/workflows/release.yml:125`, `.github/workflows/release.yml:166`).
+
+## Who references whom: what to run when X changes
+
+| Changed | Builds break in | Run these tests | Why |
+|---|---|---|---|
+| Core, `Abstractions/` or `Models/` | Api, Core.Tests, Api.Tests | `dotnet test ServiceBusExplorer.slnx`, and `web-app` specs if a DTO shape or JSON name changed | Every other .NET project references Core; the SPA consumes the serialised models |
+| Core, `Providers/Azure/` | Core.Tests (internals), Api | Core.Tests (`Providers/Azure/*`) first; Api.Tests for connection and metrics paths | Bulk cores are covered only by Core.Tests |
+| Core, `Providers/RabbitMQ/` | Api | Core.Tests has only session tests for it; add tests with the change, then the full solution | Bulk and management-client code has no coverage |
+| Core, `Services/FileWorkspaceManager.cs` | Api | Core.Tests `FileWorkspaceManagerTests` and Api.Tests `ConnectionMaskingTests` | Run both projects |
+| Core, `Services/*Metrics*` | Api | Core.Tests `Services/AzureMonitorMetricsServiceTests.cs` and Api.Tests `MetricsControllerTests.cs` | Both sides pin behaviour |
+| Core, `Providers/ProviderFactory.cs` or `ProviderType.cs` | Api | Full solution; also `web-app` provider registry if a value is added | No direct test; `ConnectionMaskingTests` touches `ProviderType` |
+| Api (controllers, `Program.cs`, middleware) | Api.Tests | Api.Tests; the SPA calls these routes, so check `web-app/src/app/core/services/api.service.ts` | Route and JSON changes cross the HTTP boundary with no generated client |
+| Core.Tests or Api.Tests only | that project | that project | Nothing references a test project |
+| `web-app/src` | nothing in .NET | `npm test` and `npm run build` in `web-app` | CI runs only the build |
+| `web-app/electron`, `web-app/package.json` `build` | nothing in .NET | `npm run electron:dev` by hand; no automated test | Process spawn and port logic is untested |
+| `docs/` | nothing | none | Static files |
+
+## To change here, read
+
+- [[pages/invariants/provider-boundaries]]
+- [[pages/conventions/testing]]
+- [[pages/conventions/tooling]]
+- [[pages/services/core]]
+- [[pages/services/api]]
+
+## Related
+
+[[pages/services/web-app]], [[pages/services/electron-shell]]

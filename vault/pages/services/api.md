@@ -1,0 +1,197 @@
+---
+title: "Api"
+version: "1.0"
+date: 2026-11-12
+updated: 2026-11-12
+changes: "clear-all resets workspace.json through the manager and recovers an unreadable file; two Known gaps closed; ClearAllTests added"
+page_type: service
+status: active
+description: "ASP.NET Core host that exposes the Core library to the desktop UI as a loopback-only, API-key-guarded REST API over one process-wide active broker connection."
+source:
+  - src/ServiceBusExplorer.Api/Program.cs
+  - src/ServiceBusExplorer.Api/Controllers/
+  - src/ServiceBusExplorer.Api/Monitoring/
+  - src/ServiceBusExplorer.Api/appsettings.json
+  - src/ServiceBusExplorer.Api.Tests/
+  - src/ServiceBusExplorer.Core/Services/FileWorkspaceManager.cs
+  - src/ServiceBusExplorer.Core/Services/UnconfiguredMetricsService.cs
+  - web-app/electron/main.js
+reliability: high
+---
+
+# Api
+
+> The local HTTP door of Messaging Explorer: one authenticated loopback REST surface that holds a single active broker connection and forwards every call to the Core provider.
+
+## To change here, read
+
+- [[pages/invariants/local-authenticated-api]]
+- [[pages/invariants/secrets-masked-at-the-api-boundary]]
+- [[pages/invariants/provider-boundaries]]
+- [[pages/invariants/bulk-operations-are-at-least-once]]
+- [[pages/invariants/a-guard-must-be-able-to-fire]]
+- [[pages/services/core]] (the provider contract every controller calls)
+- [[pages/services/web-app]] and [[pages/services/electron-shell]] (the only callers; Electron mints the secret)
+- [[pages/conventions/testing]]
+
+## Responsibility
+
+Owns the HTTP surface: startup configuration, the auth/CORS/host-filter pipeline, route shape, request clamping, error-to-status mapping, and the one slot that holds the active provider. Does not own broker behaviour, bulk-operation semantics or connection persistence; those live in [[pages/services/core]]. Does not serve the UI ([[pages/services/web-app]]) and does not start itself ([[pages/services/electron-shell]]). See [[pages/architecture/project-map]].
+
+## Public contract
+
+- **HTTP routes:** `api/{controller}` for `connections`, `connectiongroups`, `queues`, `topics`, `sessions`, `metrics`, `monitoring` (`[Route("api/[controller]")]`, for example `src/ServiceBusExplorer.Api/Controllers/QueuesController.cs:8`), plus unauthenticated `GET /health` (`src/ServiceBusExplorer.Api/Program.cs:181`) and, in Development only, the OpenAPI document (`src/ServiceBusExplorer.Api/Program.cs:168`).
+- **Auth:** every request except `OPTIONS` and `/health*` needs header `X-Api-Key` equal to `API_SECRET` ([[pages/invariants/local-authenticated-api]]).
+- **JSON:** camelCase, enums as strings in both directions (`src/ServiceBusExplorer.Api/Program.cs:55`, `:59`). The import/export files on disk stay PascalCase (`src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs:492`).
+- **Events:** none published or consumed. **Direct callers:** the Angular app in Electron (`X-Api-Key` set at `web-app/electron/main.js:346`).
+
+## Startup and composition
+
+Everything is in `src/ServiceBusExplorer.Api/Program.cs`, top-level statements, in this order:
+
+- **Ports** (`:223`): `EXPLORER_CONFIG_PATH` if the file exists and parses (`:226`), else walk up from `AppContext.BaseDirectory` for the first parsable `config.json` (`:234-241`), else defaults 5917 (API) and 4297 (frontend) with a warning (`:25-26`, `:244`). Only `apiPort` and `frontendPort` are read (`:258-261`); a parse failure logs the path and exception type, not the message (`:267`).
+- **Secret** (`:36-42`): `API_SECRET` must be at least 32 characters or the process logs Critical and calls `Environment.Exit(1)` before the host is built. Bytes cached once (`:45`).
+- **JSON** (`:50-60`), **OpenAPI** services (`:61-62`).
+- **CORS** policy `AllowAngular` (`:66-77`): origins `http://localhost:{frontendPort}`, `http://127.0.0.1:{frontendPort}` and the literal `null` (the origin a `file://` Electron page sends), any header, any method.
+- **Host filtering** (`:80-83`): `AllowedHosts = ["localhost", "127.0.0.1"]` set in code.
+- **Kestrel** (`:86-89`): `ListenLocalhost(apiPort)` only when `ASPNETCORE_URLS` is empty. When it is set the code binds nothing itself and the URLs win. Electron always sets it to `http://localhost:{apiPort}` (`web-app/electron/main.js:780`, `:848`), so under Electron the in-code loopback binding is not the one in effect; the bind address is whatever the shell passes.
+- **Data path** (`:92-101`): `SERVICEBUS_DATA_PATH`, else `%APPDATA%/ServiceBusExplorer` equivalent; created if missing.
+- **DI** (all singletons): `IConnectionManager` = `FileWorkspaceManager` (`:103`), `IConnectionGroupManager` = the same instance cast (`:107`), `IProviderFactory` (`:110`), `IServiceBusService` (`:117`, a legacy Azure-only service, see Known gaps), `MonitoringStore` (`:123`), hosted `MonitoringBackgroundService` (`:124`), `IMemoryCache` (`:139`).
+- **Metrics** (`:133-164`): `AzureMonitorOptions.IsConfigured` needs `SubscriptionId`, `ResourceGroup` and `Namespace` all non-blank (`src/ServiceBusExplorer.Core/Services/AzureMonitorOptions.cs:29`). If true, `AzureMonitorMetricsService` with `credential: null` (`:146-157`); otherwise `UnconfiguredMetricsService` (`:163`), which throws an `InvalidOperationException` whose text contains "not properly configured" (`src/ServiceBusExplorer.Core/Services/UnconfiguredMetricsService.cs:14`) and the controller turns into 503.
+- **Pipeline** (`:174-216`): host filtering, CORS, `MapGet("/health")`, the key middleware, authorization, `MapControllers`. There is no `UseExceptionHandler` and no HTTPS redirection (`:213-214`).
+
+```mermaid
+flowchart LR
+    R[Request] --> H[HostFiltering]
+    H --> C[CORS AllowAngular]
+    C --> K{X-Api-Key middleware}
+    K -- "OPTIONS or /health" --> N[next]
+    K -- "FixedTimeEquals fails" --> U[401 Unauthorized]
+    K -- ok --> N
+    N --> CT[Controller action]
+    CT --> G["ConnectionsController.GetCurrentProvider (static)"]
+    G --> P[IMessagingProvider in Core]
+```
+
+The key middleware (`:184-211`) skips `OPTIONS` (`:187`) and any path under `/health` (`:193`), then compares UTF-8 bytes of the header against the cached secret: length check first, then `CryptographicOperations.FixedTimeEquals` (`:202-203`). The length check is not constant time, which only reveals the secret's length. A missing header is treated as empty bytes (`:200`). Failure answers 401 `{message:"Unauthorized"}`.
+
+**Host filtering vs `"AllowedHosts": "*"`:** `src/ServiceBusExplorer.Api/appsettings.json:8` sets `"*"` while the code sets an explicit list (`src/ServiceBusExplorer.Api/Program.cs:82`). Which one the runtime ends up applying is decided inside the ASP.NET Core host defaults, not in this repo, and no test sends a foreign `Host` header. Open question; do not rely on host filtering as a control until a test pins it ([[pages/invariants/a-guard-must-be-able-to-fire]]).
+
+## Controllers
+
+All controllers are `[ApiController]`, transient, with `[Route("api/[controller]")]`.
+
+| Controller | Route groups | Provider source |
+|---|---|---|
+| `ConnectionsController` (`.../ConnectionsController.cs:11`) | saved-connection CRUD (`GET`, `GET {id}`, `POST`, `DELETE {id}`), `test`, lifecycle (`{id}/connect`, `disconnect`, `status`), `providers`, `providers/{type}/capabilities`, `export`, `import`, `export-full`, `import-full`, `DELETE clear-all` | Owns the slot |
+| `ConnectionGroupsController` (`.../ConnectionGroupsController.cs:9`) | group CRUD (client / environment tree) | none (uses `IConnectionGroupManager`) |
+| `QueuesController` (`.../QueuesController.cs:9`) | entity CRUD, peek (`messages`, `deadletter`), search (`messages/search`, `deadletter/search`), send (single and `messages/batch`), receive (`messages/receive`), DLQ resubmit (single and `resubmit-batch`), purge (`DELETE messages`, `DELETE deadletter`), `delete-batch`, `move-batch` (each for main and dead-letter) | `ConnectionsController.GetCurrentProvider()` |
+| `TopicsController` (`.../TopicsController.cs:9`) | topic CRUD, send to topic, subscription CRUD, then the same peek/search/receive/resubmit/purge/delete-batch/move-batch groups under `{topic}/subscriptions/{sub}/...` | same |
+| `SessionsController` (`.../SessionsController.cs:9`) | list sessions for a queue (`{entityName}`) or subscription, set session state (`PUT`) | same |
+| `MetricsController` (`.../MetricsController.cs:12`) | Azure Monitor series for `queues/{q}`, `topics/{t}`, `topics/{t}/subscriptions/{s}` | none (uses `IMetricsService`) |
+| `MonitoringController` (`.../MonitoringController.cs:8`) | `snapshot`, `history` | none (uses `MonitoringStore`) |
+
+Paths in the table abbreviate `src/ServiceBusExplorer.Api/Controllers/`.
+
+### How the active provider is obtained
+
+`QueuesController`, `TopicsController` and `SessionsController` take only a logger. Each declares a private static `GetProvider()` that returns `ConnectionsController.GetCurrentProvider()` (`src/ServiceBusExplorer.Api/Controllers/QueuesController.cs:22`, `src/ServiceBusExplorer.Api/Controllers/TopicsController.cs:22`, `src/ServiceBusExplorer.Api/Controllers/SessionsController.cs:22`). That is a public static read of `ConnectionsController._currentProvider`, a static field guarded by a lock for reads and swaps (`src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs:24-25`, `:50-53`, `:410`). `MonitoringBackgroundService` reads the same slot (`src/ServiceBusExplorer.Api/Monitoring/MonitoringBackgroundService.cs:39`).
+
+Consequences:
+
+- One active connection per process, shared by every client of the API. Connecting replaces it for everyone ([[pages/invariants/provider-boundaries]]).
+- With no connection, every provider-backed action returns 400 `{message:"No messaging provider connected..."}` (`src/ServiceBusExplorer.Api/Controllers/QueuesController.cs:27-30`), the same text duplicated in each of the three controllers.
+- The lock covers only the field. `SetCurrentProviderAsync` swaps under the lock, then disconnects and disposes the old provider outside it (`.../ConnectionsController.cs:59-80`). An action that already read the old reference at its start (for example `src/ServiceBusExplorer.Api/Controllers/QueuesController.cs:35`) keeps using it with no lease, so a concurrent `connect`, `disconnect` or `clear-all` can dispose the provider under a running call. No test covers it.
+- `Connect` creates and connects the new provider before the swap (`.../ConnectionsController.cs:240-243`); if creation throws, the previous provider stays active and the caller gets 500.
+- `GetStatus` falls back to the legacy `IServiceBusService` when no provider is set (`.../ConnectionsController.cs:326-332`).
+
+### Cancellation
+
+Only the bulk and destructive actions pass `HttpContext.RequestAborted` to the provider: purge, delete-batch, move-batch and resubmit-batch, for example `src/ServiceBusExplorer.Api/Controllers/QueuesController.cs:207`, `:226`, `:245`, `:264`, `:283`, `:302`, `:321` and `src/ServiceBusExplorer.Api/Controllers/TopicsController.cs:244`, `:263`, `:282`, `:301`, `:320`, `:339`, `:358`. A client abort therefore cancels the Core loop between batches ([[pages/invariants/bulk-operations-are-at-least-once]]: messages already moved or completed before the abort stay done). Not cancellable from the request: search, peek, receive (`src/ServiceBusExplorer.Api/Controllers/QueuesController.cs:175`), send, single resubmit (`:188`) and entity create/delete. `MetricsController` is the only one that model-binds a `CancellationToken` parameter (`src/ServiceBusExplorer.Api/Controllers/MetricsController.cs:34`).
+
+### Error mapping
+
+There is no shared filter or middleware; the pattern is per-action `try/catch (Exception)` that logs the exception and returns a constant body with status 500:
+
+- Queues/Topics/Sessions: `{success:false, error:"An internal error occurred."}` (`src/ServiceBusExplorer.Api/Controllers/QueuesController.cs:93`).
+- Connections/Groups: `{message:"An internal error occurred."}` (`src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs:96`).
+- Metrics: 503 `{message, configurationRequired:true}` when the exception text contains "not properly configured" (`src/ServiceBusExplorer.Api/Controllers/MetricsController.cs:47-54`), else 500 `{message:"Failed to fetch queue metrics."}` (`:58`).
+- Sessions map `NotSupportedException` to 400 (`src/ServiceBusExplorer.Api/Controllers/SessionsController.cs:81`); `SessionsController` and `Capabilities` clamp or reject inputs (`src/ServiceBusExplorer.Api/Controllers/SessionsController.cs:43-44`, `src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs:370-373`).
+- Counts are clamped to 1..1000 on peek/receive (`src/ServiceBusExplorer.Api/Controllers/QueuesController.cs:118-119`) and monitoring history to 1..120 (`src/ServiceBusExplorer.Api/Controllers/MonitoringController.cs:34-35`).
+- Exception: `ImportConfiguration` returns `ex.Message` of an `ArgumentException` to the client (`src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs:452-455`). `TestConnection` returns 200 with `success:false` rather than an error status (`:223`).
+- Actions with no try/catch fall through to the framework (`src/ServiceBusExplorer.Api/Controllers/QueuesController.cs:33-41`, `:143-177`, `src/ServiceBusExplorer.Api/Controllers/TopicsController.cs:79-90`, `:174-215`, all `GetX` reads and entity CRUD). What the client sees depends on the environment (Development vs not); not verified here.
+
+## Connections and secrets
+
+- **Masking:** list and get return masked copies (`***` for `ConnectionString`, `Password`, `ClientSecret`) from `FileWorkspaceManager` (`src/ServiceBusExplorer.Core/Services/FileWorkspaceManager.cs:271-295`, `:321`); raw secrets come only from `GetConnectionWithSecretAsync` (`:325`), which `Connect` and `SaveConnection` call (`src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs:121`, `:233`) ([[pages/invariants/secrets-masked-at-the-api-boundary]]).
+- **Save with placeholder:** if the body carries an `Id` that exists, `***` in `ConnectionString` or `Password` is replaced by the stored value (`.../ConnectionsController.cs:125-133`) before the equality check that decides a "metadata only" update. A metadata-only update skips the connection test (`:146`, `:155`). The manager keeps the stored value for any of the three secrets that still arrives as `***` (`src/ServiceBusExplorer.Core/Services/FileWorkspaceManager.cs:343`, `:348`, `:357`) and returns the masked clone of what it stored, which the action returns as the POST body (`src/ServiceBusExplorer.Core/Services/FileWorkspaceManager.cs:382`, `src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs:176`).
+- **Unreadable `workspace.json`:** every manager read throws `InvalidOperationException` ([[pages/services/core]]). Actions with a `try/catch` answer 500 `{message:"An internal error occurred."}`: list, save, connect, import (the exception is neither `ArgumentException` nor `JsonException`, so it is not a 400), `export-full` and `import-full` (`src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs:93`, `:178`, `:260`, `:463`, `:504`, `:563`). `clear-all` is the in-app recovery: it answers 200 with zero counts and leaves an empty workspace (pinned by `src/ServiceBusExplorer.Api.Tests/ClearAllTests.cs:13`). GET by id, `DELETE {id}` and `export` have no `try/catch` (`:100`, `:412`, `:419`) and fall through to the framework: the developer exception page under `Development` (the dev Electron run), an empty 500 otherwise.
+- **`export`:** `POST`, masked by default; `?includeSecrets=true` returns raw and sets `Content-Disposition: attachment` and logs the remote IP (`.../ConnectionsController.cs:419-429`). **`export-full`:** same flag, adds groups, indented PascalCase JSON (`:470-502`). **`import`:** string payload to the manager (`:432-468`). **`import-full`:** groups saved first, then connections, with no rollback if the second step fails (`:540-559`).
+- **`clear-all`** (`DELETE`, no confirmation parameter): disconnects the provider and the legacy service (`src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs:578-590`), then calls `IConnectionManager.ClearAllAsync` (`src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs:592`), which counts what is stored and writes an empty workspace under the manager's lock through the temp-file-and-move save ([[pages/services/core]]). The body is `{message, connectionsDeleted, groupsDeleted}`; an unreadable file reports zero for both and is still reset. A failed write answers the constant 500.
+- **`ConnectionMaskingTests.cs` pins** (`src/ServiceBusExplorer.Api.Tests/ConnectionMaskingTests.cs:23`): GET by id masks `connectionString` and `clientSecret` (`:81`); default export masks both and does not leak the sentinel (`:41`, `:103`); `includeSecrets=true` returns raw values and a content-disposition (`:61`, `:127`); GET by id and the default export mask `password` (`:150`, `:170`); a metadata-only `POST` answers with `***` for all three secrets (`:196`). It does not pin the list endpoint, `export-full`, any import through the API or `clear-all`; the import merge is pinned in Core (`src/ServiceBusExplorer.Core.Tests/Services/FileWorkspaceManagerTests.cs:78`, `:155`).
+
+## Monitoring
+
+`MonitoringBackgroundService` loops forever: collect, then `Task.Delay(30s)` (`src/ServiceBusExplorer.Api/Monitoring/MonitoringBackgroundService.cs:22-34`). A collection reads the current provider, clears the store when the provider reference changed (`:42-47`), returns if none or disconnected (`:49`), then calls `GetQueuesAsync`, `GetTopicsAsync` and `GetSubscriptionsAsync` per topic (`:52-70`) and adds one snapshot of counts (active, dead-letter, transfer, scheduled for queues). Exceptions are logged and the loop continues (`:28-31`). `MonitoringStore` is a `ConcurrentQueue` capped at 120 snapshots, about one hour at 30 s (`src/ServiceBusExplorer.Api/Monitoring/MonitoringStore.cs:7`, `:16-22`); `snapshot` returns the latest or an empty snapshot stamped now (`src/ServiceBusExplorer.Api/Controllers/MonitoringController.cs:17-29`).
+
+## Invariants
+
+- [[pages/invariants/local-authenticated-api]]: loopback only plus `X-Api-Key` on everything but `/health` and preflight (`src/ServiceBusExplorer.Api/Program.cs:184-211`; pinned by `src/ServiceBusExplorer.Api.Tests/AuthMiddlewareTests.cs:12`, `:20`, `:29`, `:38`).
+- [[pages/invariants/secrets-masked-at-the-api-boundary]]: only `includeSecrets` exports and internal `WithSecret` calls see raw secrets.
+- [[pages/invariants/provider-boundaries]]: controllers talk to `IMessagingProvider`, never to a broker SDK; the slot is process-wide.
+- [[pages/invariants/bulk-operations-are-at-least-once]]: the controllers only forward the request token; delivery semantics are in [[pages/services/core]].
+- [[pages/invariants/a-guard-must-be-able-to-fire]]: the host-filter and Kestrel-binding guards have no test that makes them fire (see Testing and Known gaps).
+
+## Hot spots
+
+- `src/ServiceBusExplorer.Api/Program.cs:184` - the auth middleware; hand-rolled, ordering relative to `MapGet("/health")` and CORS matters.
+- `src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs:24` - the static provider slot and `SetCurrentProviderAsync` (`:59`).
+- `src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs:111` - `SaveConnection` merge logic and the metadata-only shortcut.
+- `src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs:570` - `clear-all`.
+- `src/ServiceBusExplorer.Api/Controllers/QueuesController.cs:198` and `src/ServiceBusExplorer.Api/Controllers/TopicsController.cs:235` - batch DLQ resubmit entry points; queue and topic copies are hand-duplicated, so a change must be made twice.
+
+## Cache footprint
+
+`IMemoryCache` is registered here (`src/ServiceBusExplorer.Api/Program.cs:139`) and handed only to `AzureMonitorMetricsService` (`:154`); its keys belong to [[pages/services/core]]. The only other in-process state is the provider slot and the 120-entry `MonitoringStore`; both vanish on restart.
+
+## Cross-service dependencies
+
+- **Reads from:** [[pages/services/core]] (provider factory, providers, `FileWorkspaceManager`, metrics service).
+- **Written to by:** [[pages/services/web-app]] over HTTP; [[pages/services/electron-shell]] spawns the process and sets `API_SECRET`, `ASPNETCORE_URLS`.
+
+## Testing footprint
+
+`src/ServiceBusExplorer.Api.Tests/` has seven files, 18 facts.
+
+- `ApiFactory.cs` boots `WebApplicationFactory<Program>` with a fixed 32-character secret, a temp `SERVICEBUS_DATA_PATH` and `ASPNETCORE_URLS=http://127.0.0.1:0` in Development (`src/ServiceBusExplorer.Api.Tests/ApiFactory.cs:20-39`). Because `ASPNETCORE_URLS` is always set, the `ListenLocalhost` branch at `Program.cs:86` is never exercised.
+- `AuthMiddlewareTests.cs`: no key 401, wrong key 401, right key 200, `/health` public (`:12`, `:20`, `:29`, `:38`).
+- `CorsTests.cs`: preflight from a foreign origin gets no allow-origin header (`:12`), from `http://localhost:4297` it does (`:26`). The `null` origin and `127.0.0.1` are not tested.
+- `ConnectionMaskingTests.cs`: see Connections and secrets.
+- `ClearAllTests.cs`: with a corrupt `workspace.json` the list answers 500, `clear-all` answers 200 with zero counts and the list then answers an empty array (`src/ServiceBusExplorer.Api.Tests/ClearAllTests.cs:13`). Its fixture has its own data path, and the test leaves a valid empty workspace there.
+- `MetricsControllerTests.cs`: unconfigured section gives 503 with `configurationRequired` and no `error` field (`:83`); a throwing service gives 500 without leaking the exception text (`:109`).
+- `Usings.cs` sets `DisableTestParallelization` because tests share process-wide environment variables, which `ApiFactory` writes (`src/ServiceBusExplorer.Api.Tests/Usings.cs:3-4`, `src/ServiceBusExplorer.Api.Tests/ApiFactory.cs:27-30`).
+- **No test at all:** `QueuesController`, `TopicsController`, `SessionsController`, `ConnectionGroupsController`, `MonitoringController`, `MonitoringBackgroundService`/`MonitoringStore`, the `API_SECRET` fail-fast, host filtering, port resolution. Bulk endpoints are exercised only at Core level (`src/ServiceBusExplorer.Core.Tests/Providers/Azure/AzureServiceBusProviderBatchTests.cs`). See [[pages/conventions/testing]].
+
+## History
+
+This page states how the module works now; dated changes will live in `pages/history/api` when the history pages exist.
+
+## Known gaps
+
+- Static process-wide provider slot with no lease on in-flight calls: `src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs:24`, `:73-74`.
+- Exception message returned to the client: `src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs:455`.
+- Actions with no try/catch and no exception handler in the pipeline: `src/ServiceBusExplorer.Api/Controllers/QueuesController.cs:33`, `src/ServiceBusExplorer.Api/Controllers/TopicsController.cs:79`, `src/ServiceBusExplorer.Api/Program.cs:174`.
+- Two different 500 body shapes (`error` vs `message`): `src/ServiceBusExplorer.Api/Controllers/QueuesController.cs:93`, `src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs:96`.
+- 503 detection by substring of an exception message: `src/ServiceBusExplorer.Api/Controllers/MetricsController.cs:47`, `src/ServiceBusExplorer.Core/Services/UnconfiguredMetricsService.cs:14`.
+- Host-filter source of truth unresolved (`"*"` in config vs list in code): `src/ServiceBusExplorer.Api/appsettings.json:8`, `src/ServiceBusExplorer.Api/Program.cs:82`; no test.
+- CORS allows origin `null`, which any `file://` or sandboxed page also sends; the API key is the real control: `src/ServiceBusExplorer.Api/Program.cs:73`.
+- Metadata-only detection ignores `AuthType`, tenant, namespace and client secret, so changing only those skips the connection test: `src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs:136-144`.
+- `import-full` is not atomic (groups then connections): `src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs:541-559`.
+- Receive (destructive) and single resubmit ignore the request token: `src/ServiceBusExplorer.Api/Controllers/QueuesController.cs:175`, `:188`.
+- Monitoring polls every 30 s with one `GetSubscriptionsAsync` per topic whether or not anyone is looking, ignores the stopping token for broker calls, and keeps a reference to the last (possibly disposed) provider: `src/ServiceBusExplorer.Api/Monitoring/MonitoringBackgroundService.cs:10`, `:33`, `:52-70`.
+- Legacy `IServiceBusService` is still registered and consulted by `status`, `disconnect` and `clear-all`: `src/ServiceBusExplorer.Api/Program.cs:117`, `src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs:294`, `:326`.
+- Untested controllers listed under Testing footprint; the largest surface (queues, topics) has none.
+
+## Related
+
+[[pages/services/core]], [[pages/services/web-app]], [[pages/services/electron-shell]], [[pages/architecture/project-map]], [[pages/conventions/testing]], [[pages/conventions/tooling]].
