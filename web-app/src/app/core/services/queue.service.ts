@@ -3,7 +3,7 @@ import { Observable } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 import { ApiService } from './api.service';
 import { apiPath } from './api-path';
-import { QueueInfo, MessageInfo, SendMessageRequest, BatchOperationResult, DeleteBatchRequest, ResubmitBatchRequest, MoveBatchRequest } from '../models';
+import { QueueInfo, MessageInfo, SendMessageRequest, BatchOperationResult, DeleteBatchRequest, ResubmitBatchRequest, MoveBatchRequest, QueueCreateOptions, QueueUpdate } from '../models';
 
 /**
  * Service for managing queues and their messages.
@@ -39,10 +39,19 @@ export class QueueService {
   /**
    * Creates a new queue.
    * @param name - The name for the new queue
+   * @param options - Only the options the user set; omitted, the broker applies its defaults
    * @returns Observable that completes when the queue is created
    */
-  createQueue(name: string): Observable<void> {
-    return this.api.post<void>('queues', { name });
+  createQueue(name: string, options?: QueueCreateOptions): Observable<void> {
+    return this.api.post<void>('queues', options ? { name, options } : { name });
+  }
+
+  /**
+   * Changes the given properties of a queue; a property not in `changes` is left as it is.
+   * @returns Observable with the queue as the API reads it after the change
+   */
+  updateQueue(name: string, changes: QueueUpdate): Observable<QueueInfo> {
+    return this.api.patch<QueueInfo>(apiPath`queues/${name}`, changes);
   }
 
   /**

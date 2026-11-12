@@ -24,6 +24,8 @@ export interface ProviderCapabilities {
   supportsDeferral: boolean;
   supportsDuplicateDetection: boolean;
   supportsAutoForwarding: boolean;
+  /** Entities can be created with options, edited and enabled or disabled. An older API does not send it; only an explicit true enables it. */
+  supportsEntityUpdate?: boolean;
   supportedExchangeTypes: string[];
   maxMessageSizeInBytes: number;
   maxTimeToLive: string;

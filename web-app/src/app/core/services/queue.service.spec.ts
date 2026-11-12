@@ -9,6 +9,7 @@ describe('QueueService', () => {
   let apiPost: ReturnType<typeof vi.fn>;
   let apiGet: ReturnType<typeof vi.fn>;
   let apiDelete: ReturnType<typeof vi.fn>;
+  let apiPatch: ReturnType<typeof vi.fn>;
 
   const emptyResult: BatchOperationResult = {
     successCount: 0,
@@ -21,7 +22,8 @@ describe('QueueService', () => {
     apiPost = vi.fn().mockReturnValue(of(emptyResult));
     apiGet = vi.fn().mockReturnValue(of([]));
     apiDelete = vi.fn().mockReturnValue(of({ success: true }));
-    const apiServiceMock = { post: apiPost, get: apiGet, delete: apiDelete } as unknown as ApiService;
+    apiPatch = vi.fn().mockReturnValue(of({}));
+    const apiServiceMock = { post: apiPost, get: apiGet, delete: apiDelete, patch: apiPatch } as unknown as ApiService;
 
     TestBed.configureTestingModule({
       providers: [
@@ -115,6 +117,31 @@ describe('QueueService', () => {
         `queues/${segment}/messages`,
         `queues/${segment}/messages/batch`
       ]);
+    });
+  });
+
+  describe('create and update a queue', () => {
+    it('create with nothing set posts the name only, so the broker applies its defaults', () => {
+      service.createQueue('orders').subscribe();
+
+      expect(apiPost.mock.calls).toHaveLength(1);
+      expect(apiPost.mock.calls[0][0]).toBe('queues');
+      expect(apiPost.mock.calls[0][1]).toStrictEqual({ name: 'orders' });
+    });
+
+    it('create with options posts the name and exactly the options given to POST api/queues', () => {
+      service.createQueue('orders', { lockDuration: '00:00:30', enableBatchedOperations: false }).subscribe();
+
+      expect(apiPost.mock.calls[0][0]).toBe('queues');
+      expect(apiPost.mock.calls[0][1]).toStrictEqual({ name: 'orders', options: { lockDuration: '00:00:30', enableBatchedOperations: false } });
+    });
+
+    it('update sends a PATCH to api/queues/{name}, name encoded as one segment, with the changes as the body', () => {
+      service.updateQueue('a/b', { maxDeliveryCount: 10, forwardTo: '' }).subscribe();
+
+      expect(apiPatch.mock.calls).toHaveLength(1);
+      expect(apiPatch.mock.calls[0][0]).toBe('queues/a%2Fb');
+      expect(apiPatch.mock.calls[0][1]).toStrictEqual({ maxDeliveryCount: 10, forwardTo: '' });
     });
   });
 });
