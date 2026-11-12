@@ -78,10 +78,10 @@
     "@angular/compiler-cli": "^21.2.8",
     "@types/diff": "^7.0.2",
     "concurrently": "^9.2.1",
-    "electron": "^41.2.0",
+    "electron": "^42.11.16",
     "electron-builder": "^26.7.0",
     "jsdom": "^27.1.0",
-    "sharp": "^0.34.5",
+    "sharp": "^0.35.5",
     "typescript": "~5.9.2",
     "vitest": "^4.0.8",
     "wait-on": "^9.0.3"
