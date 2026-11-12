@@ -1,6 +1,9 @@
 ## [2026-11-12] integrate | Next version: Azure Event Hubs and Azure Event Grid, surveyed
 The owner decided the next version adds Event Hubs and Event Grid, presented with Service Bus as one Microsoft Azure family. [[pages/roadmap/azure-event-hubs-and-event-grid]] has the survey: one sign-in that discovers the three products, one provider per product behind a small shared contract (an ADR first), fourteen items with the current SDK members and their sources, and the testing gap: the Event Hubs data plane has an emulator, Event Grid and every management call have none. It also found that the metrics package the code uses is deprecated upstream.
 
+## [2026-11-12] integrate | RabbitMQ: the eight tutorial scenarios, surveyed, with a test plan
+The owner named the official tutorials as the ways RabbitMQ is used, queues one to six and streams one and two, and required tests for each. [[pages/roadmap/rabbitmq-messaging-scenarios]] says what each builds, what the app shows today and how to represent it, with 61 tests planned: 34 expected to pass, 16 pinning a defect, 11 arriving with their feature. Found on the way: the pattern badge never renders; a queue bound with several keys shows as several subscriptions of one name; opening messages on a stream or on another connection's exclusive queue closes the provider's connection. Streams are read by position without removing, the same model Event Hubs needs, so one decision covers both.
+
 ## [2026-11-12] integrate | Local brokers in Docker for trying the app by hand
 `dev/brokers/` starts RabbitMQ and the Azure Service Bus emulator with sample entities, on loopback. A small proxy puts the emulator's messaging and management ports behind one, so the app connects with a single connection string. Checked through the packaged API on both brokers. [[pages/runbooks/local-brokers]].
 ## [2026-11-12] integrate | The window keeps the native frame and shows no menu bar
