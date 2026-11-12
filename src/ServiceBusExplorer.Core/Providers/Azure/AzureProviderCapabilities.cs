@@ -70,9 +70,10 @@ public class AzureProviderCapabilities : IProviderCapabilities
 
     /// <inheritdoc />
     /// <remarks>
-    /// Azure Service Bus supports message deferral via the Defer operation.
+    /// The broker can defer a message, but nothing in this provider defers one or receives a deferred one; a
+    /// deferred message already in a queue is still listed with its state.
     /// </remarks>
-    public bool SupportsDeferral => true;
+    public bool SupportsDeferral => false;
 
     /// <inheritdoc />
     /// <remarks>
@@ -94,6 +95,9 @@ public class AzureProviderCapabilities : IProviderCapabilities
 
     /// <inheritdoc />
     public bool SupportsSubscriptionRules => true;
+
+    /// <inheritdoc />
+    public bool SupportsTransferDeadLetter => true;
 
     /// <inheritdoc />
     /// <remarks>

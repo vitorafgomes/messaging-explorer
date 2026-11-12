@@ -8,6 +8,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { QueueService, TopicService, ThemeService, MessageTemplateService } from '../../core/services';
 import { ProviderService } from '../../core/services/provider.service';
 import { SendMessageRequest, MessageTemplate } from '../../core/models';
+import { messageCallFailure } from './message-call-failure';
 
 export interface SendMessageDialogData {
   entityType: 'queue' | 'topic';
@@ -454,8 +455,8 @@ export class SendMessageDialogComponent {
         this.snackBar.open('Message sent successfully!', 'Close', { duration: 3000 });
         this.dialogRef.close(true);
       },
-      error: () => {
-        this.snackBar.open('Failed to send message', 'Close', { duration: 3000 });
+      error: (err) => {
+        this.snackBar.open(messageCallFailure(err, 'Failed to send message'), 'Close', { duration: 3000 });
       }
     });
   }

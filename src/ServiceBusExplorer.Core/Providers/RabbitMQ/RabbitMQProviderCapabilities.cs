@@ -96,6 +96,12 @@ public class RabbitMQProviderCapabilities : IProviderCapabilities
 
     /// <inheritdoc />
     /// <remarks>
+    /// RabbitMQ has no transfer dead-letter queue; the provider refuses it on every message operation.
+    /// </remarks>
+    public bool SupportsTransferDeadLetter => false;
+
+    /// <inheritdoc />
+    /// <remarks>
     /// A RabbitMQ binding has a routing key, not rules; the provider refuses every rule operation.
     /// </remarks>
     public bool SupportsSubscriptionRules => false;

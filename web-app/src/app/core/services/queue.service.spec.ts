@@ -63,6 +63,34 @@ describe('QueueService', () => {
     });
   });
 
+  describe('the transfer dead-letter queue of a queue is reached through its own routes', () => {
+    it('peek, delete and resubmit go to api/queues/{name}/transferdeadletter with the dead-letter bodies, the name as one segment', () => {
+      service.peekTransferDeadLetterMessages('a/b', 5).subscribe();
+      service.deleteTransferDeadLetterMessages('a/b', [1, 2]).subscribe();
+      service.resubmitTransferDeadLetterMessages('a/b', [3]).subscribe();
+
+      expect(apiGet.mock.calls).toEqual([['queues/a%2Fb/transferdeadletter?count=5']]);
+      expect(apiPost.mock.calls).toEqual([
+        ['queues/a%2Fb/transferdeadletter/delete-batch', { sequenceNumbers: [1, 2], all: false }],
+        ['queues/a%2Fb/transferdeadletter/resubmit-batch', { sequenceNumbers: [3] }]
+      ]);
+    });
+
+    it('a transfer dead-letter delete never asks the server to drain the whole queue', () => {
+      service.deleteTransferDeadLetterMessages('orders', [7]).subscribe();
+
+      expect(apiPost.mock.calls[0][1]).toStrictEqual({ sequenceNumbers: [7], all: false });
+    });
+  });
+
+  describe('cancel scheduled messages', () => {
+    it('posts exactly the given sequence numbers to api/queues/{name}/messages/cancel-scheduled', () => {
+      service.cancelScheduledMessages('billing/invoices', [12, 13]).subscribe();
+
+      expect(apiPost.mock.calls).toEqual([['queues/billing%2Finvoices/messages/cancel-scheduled', { sequenceNumbers: [12, 13] }]]);
+    });
+  });
+
   describe('names in the URL', () => {
     it('purging a queue named orders#1 purges that queue and never deletes the queue orders', () => {
       service.purgeMessages('orders#1').subscribe();

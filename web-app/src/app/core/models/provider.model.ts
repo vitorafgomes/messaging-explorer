@@ -28,6 +28,8 @@ export interface ProviderCapabilities {
   supportsEntityUpdate?: boolean;
   /** Subscription rules can be added, replaced and deleted. An older API does not send it; only an explicit true enables it. */
   supportsSubscriptionRules?: boolean;
+  /** The transfer dead-letter queue can be listed and cleaned up. An older API does not send it; only an explicit true enables it. */
+  supportsTransferDeadLetter?: boolean;
   supportedExchangeTypes: string[];
   maxMessageSizeInBytes: number;
   maxTimeToLive: string;

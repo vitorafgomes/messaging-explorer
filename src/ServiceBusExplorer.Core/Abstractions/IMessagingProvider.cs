@@ -245,23 +245,27 @@ public interface IMessagingProvider : IAsyncDisposable
     #region Message Operations
 
     /// <summary>
-    /// Searches messages by peeking in batches and filtering server-side.
+    /// Searches messages by peeking in batches and filtering server-side. The caller's token stops the scan between
+    /// two broker calls.
     /// </summary>
     Task<MessageSearchResult> SearchMessagesAsync(
         string entityName,
         MessageSearchRequest request,
-        bool isDeadLetter = false,
-        string? subscriptionName = null);
+        MessageSubQueue subQueue = MessageSubQueue.Active,
+        string? subscriptionName = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Peeks messages from a queue or subscription without removing them.
+    /// Peeks messages from a queue or subscription without removing them: up to <paramref name="count"/>, fewer only
+    /// when the sub-queue holds fewer.
     /// </summary>
     /// <param name="entityName">The name of the queue or topic.</param>
     /// <param name="count">The maximum number of messages to peek.</param>
-    /// <param name="isDeadLetter">Whether to peek from the dead letter queue.</param>
+    /// <param name="subQueue">The queue of the entity to peek.</param>
     /// <param name="subscriptionName">The subscription name if peeking from a topic subscription.</param>
+    /// <param name="cancellationToken">Token that stops the peek between two broker calls.</param>
     /// <returns>A collection of messages.</returns>
-    Task<IEnumerable<IMessage>> PeekMessagesAsync(string entityName, int count = 10, bool isDeadLetter = false, string? subscriptionName = null);
+    Task<IEnumerable<IMessage>> PeekMessagesAsync(string entityName, int count = 10, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Sends a message to a queue or topic.
@@ -306,17 +310,17 @@ public interface IMessagingProvider : IAsyncDisposable
     /// Purges all messages from a queue or subscription.
     /// </summary>
     /// <param name="entityName">The name of the queue or topic.</param>
-    /// <param name="isDeadLetter">Whether to purge the dead letter queue instead.</param>
+    /// <param name="subQueue">The queue of the entity to purge.</param>
     /// <param name="subscriptionName">The subscription name if purging a topic subscription.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
-    Task PurgeMessagesAsync(string entityName, bool isDeadLetter = false, string? subscriptionName = null, CancellationToken cancellationToken = default);
+    Task PurgeMessagesAsync(string entityName, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Deletes multiple messages by their sequence numbers.
     /// </summary>
     /// <param name="entityName">The name of the queue or topic.</param>
     /// <param name="sequenceNumbers">Array of sequence numbers to delete. Ignored when <paramref name="all"/> is true.</param>
-    /// <param name="isDeadLetter">Whether to delete from the dead letter queue.</param>
+    /// <param name="subQueue">The queue of the entity to delete from.</param>
     /// <param name="subscriptionName">The subscription name if deleting from a topic subscription.</param>
     /// <param name="all">
     /// When true, deletes every message in the target entity using a fast drain path
@@ -324,17 +328,18 @@ public interface IMessagingProvider : IAsyncDisposable
     /// </param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>Result containing success count and failure details.</returns>
-    Task<BatchOperationResult> DeleteMessagesAsync(string entityName, long[] sequenceNumbers, bool isDeadLetter = false, string? subscriptionName = null, bool all = false, CancellationToken cancellationToken = default);
+    Task<BatchOperationResult> DeleteMessagesAsync(string entityName, long[] sequenceNumbers, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, bool all = false, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Resubmits multiple dead-lettered messages back to the original queue or topic.
     /// </summary>
     /// <param name="entityName">The name of the queue or topic.</param>
     /// <param name="sequenceNumbers">Array of sequence numbers to resubmit.</param>
+    /// <param name="subQueue">The dead-letter queue to resubmit from; <see cref="MessageSubQueue.Active"/> is refused.</param>
     /// <param name="subscriptionName">The subscription name if resubmitting from a topic subscription.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>Result containing success count and failure details.</returns>
-    Task<BatchOperationResult> ResubmitDeadLetterMessagesAsync(string entityName, long[] sequenceNumbers, string? subscriptionName = null, CancellationToken cancellationToken = default);
+    Task<BatchOperationResult> ResubmitDeadLetterMessagesAsync(string entityName, long[] sequenceNumbers, MessageSubQueue subQueue = MessageSubQueue.DeadLetter, string? subscriptionName = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Moves multiple messages from one queue or subscription to another queue.
@@ -342,11 +347,24 @@ public interface IMessagingProvider : IAsyncDisposable
     /// <param name="sourceEntityName">The name of the source queue or topic.</param>
     /// <param name="targetQueueName">The name of the target queue.</param>
     /// <param name="sequenceNumbers">Array of sequence numbers to move.</param>
-    /// <param name="isDeadLetter">Whether to move from the dead letter queue.</param>
+    /// <param name="subQueue">The queue of the entity to move from.</param>
     /// <param name="subscriptionName">The subscription name if moving from a topic subscription.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>Result containing success count and failure details.</returns>
-    Task<BatchOperationResult> MoveMessagesAsync(string sourceEntityName, string targetQueueName, long[] sequenceNumbers, bool isDeadLetter = false, string? subscriptionName = null, CancellationToken cancellationToken = default);
+    Task<BatchOperationResult> MoveMessagesAsync(string sourceEntityName, string targetQueueName, long[] sequenceNumbers, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Cancels scheduled messages of a queue, deleting each before it is ever delivered. The sequence numbers are
+    /// checked before the broker is called: 1 to 500, each positive, none repeated, or
+    /// <see cref="InvalidEntityConfigurationException"/>. The result has one failure per sequence number that could not
+    /// be cancelled, for example one that is not a scheduled message; one such number does not fail the others. A
+    /// provider without scheduled messages throws <see cref="NotSupportedException"/> and declares it in
+    /// <see cref="IProviderCapabilities.SupportsScheduledMessages"/>.
+    /// </summary>
+    /// <param name="queueName">The name of the queue.</param>
+    /// <param name="sequenceNumbers">The sequence numbers of the scheduled messages.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    Task<BatchOperationResult> CancelScheduledMessagesAsync(string queueName, long[] sequenceNumbers, CancellationToken cancellationToken = default);
 
     #endregion
 
@@ -363,6 +381,17 @@ public interface IMessagingProvider : IAsyncDisposable
     Task SetSessionStateAsync(string entityName, string sessionId, string? state, string? subscriptionName = null);
 
     #endregion
+}
+
+/// <summary>
+/// The queue of a queue or subscription that a message operation reads: the entity itself, its dead-letter queue, or
+/// its transfer dead-letter queue, where the broker puts the messages it could not forward to another entity.
+/// </summary>
+public enum MessageSubQueue
+{
+    Active,
+    DeadLetter,
+    TransferDeadLetter
 }
 
 /// <summary>

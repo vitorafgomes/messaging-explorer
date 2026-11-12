@@ -24,6 +24,12 @@ public class AzureServiceBusProvider : IMessagingProvider
         _logger = logger ?? NullLogger<AzureServiceBusProvider>.Instance;
     }
 
+    /// <summary>A provider whose messaging client is given, for tests of the message operations.</summary>
+    internal AzureServiceBusProvider(ServiceBusClient client) : this()
+    {
+        _client = client;
+    }
+
     #region Provider Information
 
     /// <inheritdoc />
@@ -989,34 +995,89 @@ public class AzureServiceBusProvider : IMessagingProvider
 
     #region Message Operations
 
+    /// <summary>
+    /// The receiver on a queue or subscription, or on one of its dead-letter queues: the one place a
+    /// <see cref="MessageSubQueue"/> becomes the SDK's <see cref="SubQueue"/>, for every message operation.
+    /// </summary>
+    internal static ServiceBusReceiver CreateReceiver(
+        ServiceBusClient client,
+        string entityName,
+        string? subscriptionName,
+        MessageSubQueue subQueue,
+        ServiceBusReceiverOptions? options = null)
+    {
+        options ??= new ServiceBusReceiverOptions();
+        options.SubQueue = subQueue switch
+        {
+            MessageSubQueue.Active => SubQueue.None,
+            MessageSubQueue.DeadLetter => SubQueue.DeadLetter,
+            MessageSubQueue.TransferDeadLetter => SubQueue.TransferDeadLetter,
+            _ => throw new ArgumentOutOfRangeException(nameof(subQueue))
+        };
+        return client.CreateReceiver(EntityPathOf(entityName, subscriptionName), options);
+    }
+
+    private static string EntityPathOf(string entityName, string? subscriptionName) =>
+        subscriptionName != null ? $"{entityName}/subscriptions/{subscriptionName}" : entityName;
+
+    private const string EntityDisabledError = "The entity is disabled for this operation.";
+    private const string NotScheduledError = "This message is not scheduled any more.";
+    private const string CancelFailedError = "The broker did not cancel this message.";
+    private const int PeekBatchSize = 250;
+
+    private static bool IsEntityDisabled(ServiceBusException ex) => ex.Reason == ServiceBusFailureReason.MessagingEntityDisabled;
+
+    /// <summary>
+    /// Runs a single-message operation and answers the broker's refusal of a disabled entity as
+    /// <see cref="EntityDisabledException"/>; every other failure reaches the caller as it was.
+    /// </summary>
+    private static async Task<T> RefuseDisabledAsync<T>(Func<Task<T>> operation)
+    {
+        try
+        {
+            return await operation();
+        }
+        catch (ServiceBusException ex) when (IsEntityDisabled(ex))
+        {
+            throw new EntityDisabledException(ex);
+        }
+    }
+
+    private static Task RefuseDisabledAsync(Func<Task> operation) =>
+        RefuseDisabledAsync(async () =>
+        {
+            await operation();
+            return true;
+        });
+
     /// <inheritdoc />
     public async Task<MessageSearchResult> SearchMessagesAsync(
         string entityName,
         MessageSearchRequest request,
-        bool isDeadLetter = false,
-        string? subscriptionName = null)
+        MessageSubQueue subQueue = MessageSubQueue.Active,
+        string? subscriptionName = null,
+        CancellationToken cancellationToken = default)
     {
         EnsureConnected();
 
-        var entityPath = subscriptionName != null
-            ? $"{entityName}/subscriptions/{subscriptionName}"
-            : entityName;
+        await using var receiver = CreateReceiver(_client!, entityName, subscriptionName, subQueue,
+            new ServiceBusReceiverOptions { ReceiveMode = ServiceBusReceiveMode.PeekLock });
 
-        if (isDeadLetter)
-            entityPath += "/$deadletterqueue";
+        return await RefuseDisabledAsync(() => SearchCoreAsync(receiver, request, subQueue != MessageSubQueue.Active, cancellationToken));
+    }
 
+    internal static async Task<MessageSearchResult> SearchCoreAsync(ServiceBusReceiver receiver, MessageSearchRequest request, bool isDeadLetter, CancellationToken cancellationToken)
+    {
         var matches = new List<IMessage>();
         int totalPeeked = 0;
         long fromSequenceNumber = 0;
         int skipped = 0;
         const int batchSize = 100;
 
-        await using var receiver = _client!.CreateReceiver(entityPath,
-            new ServiceBusReceiverOptions { ReceiveMode = ServiceBusReceiveMode.PeekLock });
-
         while (matches.Count < request.Count)
         {
-            var batch = await receiver.PeekMessagesAsync(batchSize, fromSequenceNumber);
+            cancellationToken.ThrowIfCancellationRequested();
+            var batch = await receiver.PeekMessagesAsync(batchSize, fromSequenceNumber, cancellationToken);
             if (!batch.Any()) break;
 
             totalPeeked += batch.Count;
@@ -1092,65 +1153,43 @@ public class AzureServiceBusProvider : IMessagingProvider
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<IMessage>> PeekMessagesAsync(string entityName, int count = 10, bool isDeadLetter = false, string? subscriptionName = null)
+    public async Task<IEnumerable<IMessage>> PeekMessagesAsync(string entityName, int count = 10, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, CancellationToken cancellationToken = default)
     {
         EnsureConnected();
 
-        var entityPath = subscriptionName != null
-            ? $"{entityName}/subscriptions/{subscriptionName}"
-            : entityName;
+        await using var receiver = CreateReceiver(_client!, entityName, subscriptionName, subQueue);
+        var messages = await RefuseDisabledAsync(() => PeekCoreAsync(receiver, count, cancellationToken));
 
-        if (isDeadLetter)
-        {
-            entityPath = $"{entityPath}/$deadletterqueue";
-        }
+        return messages.Select(m => MapToMessageInfo(m, subQueue != MessageSubQueue.Active));
+    }
 
-        await using var receiver = _client!.CreateReceiver(entityPath);
-
-        // Azure Service Bus SDK limits PeekMessagesAsync to 250 messages per call
-        // If more messages are requested, we need to make multiple calls
-        const int maxMessagesPerPeek = 250;
+    /// <summary>
+    /// Peeks up to <paramref name="count"/> messages in batches of at most 250, the SDK's limit per call. A batch
+    /// shorter than asked is not the end: the broker returns one where a scheduled message or a dropped duplicate
+    /// sits between messages. The peek goes on from the last sequence number until a batch is empty or
+    /// <paramref name="count"/> is reached; every batch that is not empty brings it closer to <paramref name="count"/>,
+    /// so it makes at most <paramref name="count"/> plus one calls. The caller's token is checked before each call
+    /// and handed to the SDK, so an aborted request stops the peek.
+    /// </summary>
+    internal static async Task<List<ServiceBusReceivedMessage>> PeekCoreAsync(ServiceBusReceiver receiver, int count, CancellationToken cancellationToken)
+    {
         var allMessages = new List<ServiceBusReceivedMessage>();
-        var remainingCount = count;
         long? fromSequenceNumber = null;
 
-        while (remainingCount > 0)
+        while (allMessages.Count < count)
         {
-            var batchSize = Math.Min(remainingCount, maxMessagesPerPeek);
-            IReadOnlyList<ServiceBusReceivedMessage> messages;
-
-            if (fromSequenceNumber.HasValue)
-            {
-                messages = await receiver.PeekMessagesAsync(batchSize, fromSequenceNumber.Value);
-            }
-            else
-            {
-                messages = await receiver.PeekMessagesAsync(batchSize);
-            }
-
+            cancellationToken.ThrowIfCancellationRequested();
+            var messages = await receiver.PeekMessagesAsync(Math.Min(count - allMessages.Count, PeekBatchSize), fromSequenceNumber, cancellationToken);
             if (messages.Count == 0)
             {
-                // No more messages available
                 break;
             }
 
             allMessages.AddRange(messages);
-            remainingCount -= messages.Count;
-
-            // Set the sequence number for the next batch (start from the last message's sequence number + 1)
-            if (messages.Count > 0)
-            {
-                fromSequenceNumber = messages[messages.Count - 1].SequenceNumber + 1;
-            }
-
-            // If we got fewer messages than requested, there are no more messages
-            if (messages.Count < batchSize)
-            {
-                break;
-            }
+            fromSequenceNumber = messages[^1].SequenceNumber + 1;
         }
 
-        return allMessages.Select(m => MapToMessageInfo(m, isDeadLetter));
+        return allMessages;
     }
 
     /// <inheritdoc />
@@ -1160,7 +1199,7 @@ public class AzureServiceBusProvider : IMessagingProvider
         await using var sender = _client!.CreateSender(entityName);
 
         var message = CreateServiceBusMessage(request);
-        await sender.SendMessageAsync(message);
+        await RefuseDisabledAsync(() => sender.SendMessageAsync(message));
     }
 
     /// <inheritdoc />
@@ -1170,7 +1209,7 @@ public class AzureServiceBusProvider : IMessagingProvider
         await using var sender = _client!.CreateSender(entityName);
 
         var messages = requests.Select(CreateServiceBusMessage).ToList();
-        await sender.SendMessagesAsync(messages);
+        await RefuseDisabledAsync(() => sender.SendMessagesAsync(messages));
     }
 
     /// <inheritdoc />
@@ -1178,21 +1217,21 @@ public class AzureServiceBusProvider : IMessagingProvider
     {
         EnsureConnected();
 
-        var entityPath = subscriptionName != null
-            ? $"{entityName}/subscriptions/{subscriptionName}"
-            : entityName;
+        await using var receiver = CreateReceiver(_client!, entityName, subscriptionName, MessageSubQueue.Active);
 
-        await using var receiver = _client!.CreateReceiver(entityPath);
-        var messages = await receiver.ReceiveMessagesAsync(count, TimeSpan.FromSeconds(5));
-
-        var result = new List<MessageInfo>();
-        foreach (var message in messages)
+        return await RefuseDisabledAsync(async () =>
         {
-            result.Add(MapToMessageInfo(message, false));
-            await receiver.CompleteMessageAsync(message);
-        }
+            var messages = await receiver.ReceiveMessagesAsync(count, TimeSpan.FromSeconds(5));
 
-        return result;
+            var result = new List<MessageInfo>();
+            foreach (var message in messages)
+            {
+                result.Add(MapToMessageInfo(message, false));
+                await receiver.CompleteMessageAsync(message);
+            }
+
+            return (IEnumerable<IMessage>)result;
+        });
     }
 
     /// <inheritdoc />
@@ -1218,10 +1257,6 @@ public class AzureServiceBusProvider : IMessagingProvider
     {
         EnsureConnected();
 
-        var deadLetterPath = subscriptionName != null
-            ? $"{entityName}/subscriptions/{subscriptionName}/$deadletterqueue"
-            : $"{entityName}/$deadletterqueue";
-
         // For subscriptions, always send to the TOPIC (not to the subscription directly)
         // This means the message will pass through all subscription filters.
         var targetPath = entityName; // Always send to queue or topic
@@ -1229,7 +1264,7 @@ public class AzureServiceBusProvider : IMessagingProvider
         await using var sender = _client!.CreateSender(targetPath);
 
         // Phase 1: Peek directly at the target sequence number (O(1) - jumps straight to it)
-        await using var peekReceiver = _client!.CreateReceiver(deadLetterPath);
+        await using var peekReceiver = CreateReceiver(_client!, entityName, subscriptionName, MessageSubQueue.DeadLetter);
         var peekedMessages = await peekReceiver.PeekMessagesAsync(1, fromSequenceNumber: sequenceNumber);
 
         if (peekedMessages.Count == 0 || peekedMessages[0].SequenceNumber != sequenceNumber)
@@ -1239,12 +1274,12 @@ public class AzureServiceBusProvider : IMessagingProvider
 
         // Phase 2: Create and send the new message immediately from peeked content
         var newMessage = new ServiceBusMessage(peekedMessages[0]);
-        await sender.SendMessageAsync(newMessage);
+        await RefuseDisabledAsync(() => sender.SendMessageAsync(newMessage));
 
         // Phase 3: Try to complete (remove) the original from DLQ with a hard limit
         // Use ReceiveAndDelete mode so we don't need to abandon messages
         // We receive small batches and check each one
-        await using var receiver = _client!.CreateReceiver(deadLetterPath, new ServiceBusReceiverOptions
+        await using var receiver = CreateReceiver(_client!, entityName, subscriptionName, MessageSubQueue.DeadLetter, new ServiceBusReceiverOptions
         {
             ReceiveMode = ServiceBusReceiveMode.PeekLock,
             PrefetchCount = 50
@@ -1284,10 +1319,10 @@ public class AzureServiceBusProvider : IMessagingProvider
     }
 
     /// <inheritdoc />
-    public async Task PurgeMessagesAsync(string entityName, bool isDeadLetter = false, string? subscriptionName = null, CancellationToken cancellationToken = default)
+    public async Task PurgeMessagesAsync(string entityName, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, CancellationToken cancellationToken = default)
     {
         EnsureConnected();
-        await PurgeEntityAsync(entityName, isDeadLetter, subscriptionName, cancellationToken);
+        await RefuseDisabledAsync(() => PurgeEntityAsync(entityName, subQueue, subscriptionName, cancellationToken));
     }
 
     /// <summary>
@@ -1295,17 +1330,8 @@ public class AzureServiceBusProvider : IMessagingProvider
     /// <see cref="PurgeMessagesAsync"/> and the drain-all path of <see cref="DeleteMessagesAsync"/>.
     /// Returns the number of messages removed (0 when the count is unknown).
     /// </summary>
-    private async Task<long> PurgeEntityAsync(string entityName, bool isDeadLetter, string? subscriptionName, CancellationToken cancellationToken)
+    private async Task<long> PurgeEntityAsync(string entityName, MessageSubQueue subQueue, string? subscriptionName, CancellationToken cancellationToken)
     {
-        var entityPath = subscriptionName != null
-            ? $"{entityName}/subscriptions/{subscriptionName}"
-            : entityName;
-
-        if (isDeadLetter)
-        {
-            entityPath = $"{entityPath}/$deadletterqueue";
-        }
-
         // Check if the entity requires sessions
         var requiresSession = false;
         if (subscriptionName != null)
@@ -1321,20 +1347,20 @@ public class AzureServiceBusProvider : IMessagingProvider
 
         // Dead-letter sub-queues do not support session receivers even if the parent entity requires sessions.
         // Always use the non-session receiver for dead-letter queues.
-        if (requiresSession && !isDeadLetter)
+        if (requiresSession && subQueue == MessageSubQueue.Active)
         {
             // Server-side purge is a management operation and does not need a session lock.
-            await using var receiver = _client!.CreateReceiver(entityPath);
+            await using var receiver = CreateReceiver(_client!, entityName, subscriptionName, MessageSubQueue.Active);
             return await TryPurgeServerSideAsync(receiver, cancellationToken)
-                ?? await PurgeSessionEntityAsync(entityPath, cancellationToken);
+                ?? await PurgeSessionEntityAsync(EntityPathOf(entityName, subscriptionName), cancellationToken);
         }
 
-        return await PurgeNonSessionEntityAsync(entityPath, cancellationToken);
+        return await PurgeNonSessionEntityAsync(entityName, subQueue, subscriptionName, cancellationToken);
     }
 
-    private async Task<long> PurgeNonSessionEntityAsync(string entityPath, CancellationToken cancellationToken)
+    private async Task<long> PurgeNonSessionEntityAsync(string entityName, MessageSubQueue subQueue, string? subscriptionName, CancellationToken cancellationToken)
     {
-        await using var receiver = _client!.CreateReceiver(entityPath, new ServiceBusReceiverOptions
+        await using var receiver = CreateReceiver(_client!, entityName, subscriptionName, subQueue, new ServiceBusReceiverOptions
         {
             ReceiveMode = ServiceBusReceiveMode.ReceiveAndDelete,
             PrefetchCount = DrainPrefetchCount
@@ -1398,7 +1424,7 @@ public class AzureServiceBusProvider : IMessagingProvider
     private const string MoveDuplicateError = "Message was moved to the target but could not be removed from the source and may be duplicated: {0}";
 
     /// <inheritdoc />
-    public async Task<BatchOperationResult> DeleteMessagesAsync(string entityName, long[] sequenceNumbers, bool isDeadLetter = false, string? subscriptionName = null, bool all = false, CancellationToken cancellationToken = default)
+    public async Task<BatchOperationResult> DeleteMessagesAsync(string entityName, long[] sequenceNumbers, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, bool all = false, CancellationToken cancellationToken = default)
     {
         EnsureConnected();
 
@@ -1409,25 +1435,16 @@ public class AzureServiceBusProvider : IMessagingProvider
             return result;
         }
 
-        var entityPath = subscriptionName != null
-            ? $"{entityName}/subscriptions/{subscriptionName}"
-            : entityName;
-
-        if (isDeadLetter)
-        {
-            entityPath = $"{entityPath}/$deadletterqueue";
-        }
-
         // Fast path: delete everything. Session-aware, so a session-enabled active
         // queue does not blow up on a non-session receiver (the DLQ sub-queue never
         // requires sessions, which is why only the active side used to fail).
         if (all)
         {
-            result.SuccessCount = checked((int)await PurgeEntityAsync(entityName, isDeadLetter, subscriptionName, cancellationToken));
+            result.SuccessCount = checked((int)await RefuseDisabledAsync(() => PurgeEntityAsync(entityName, subQueue, subscriptionName, cancellationToken)));
             return result;
         }
 
-        await using var receiver = _client!.CreateReceiver(entityPath, new ServiceBusReceiverOptions
+        await using var receiver = CreateReceiver(_client!, entityName, subscriptionName, subQueue, new ServiceBusReceiverOptions
         {
             ReceiveMode = ServiceBusReceiveMode.PeekLock,
             PrefetchCount = ScanPrefetchCount
@@ -1524,6 +1541,7 @@ public class AzureServiceBusProvider : IMessagingProvider
         long maxSeenSeq = long.MinValue;
         var consecutiveEmpty = 0;
         var noProgressRounds = 0;
+        var missingError = NotFoundError;
 
         try
         {
@@ -1586,6 +1604,12 @@ public class AzureServiceBusProvider : IMessagingProvider
         {
             // Safety timeout elapsed; fall through and report whatever is still missing.
         }
+        catch (ServiceBusException ex) when (IsEntityDisabled(ex))
+        {
+            if (located.Count == 0)
+                throw new EntityDisabledException(ex);
+            missingError = EntityDisabledError;
+        }
         catch (ServiceBusException)
         {
             // Transient broker failure mid-scan: stop and return partial results rather
@@ -1599,7 +1623,7 @@ public class AzureServiceBusProvider : IMessagingProvider
             result.Failures.Add(new BatchOperationFailure
             {
                 SequenceNumber = sequenceNumber,
-                Error = NotFoundError
+                Error = missingError
             });
         }
 
@@ -1655,9 +1679,11 @@ public class AzureServiceBusProvider : IMessagingProvider
     }
 
     /// <inheritdoc />
-    public async Task<BatchOperationResult> ResubmitDeadLetterMessagesAsync(string entityName, long[] sequenceNumbers, string? subscriptionName = null, CancellationToken cancellationToken = default)
+    public async Task<BatchOperationResult> ResubmitDeadLetterMessagesAsync(string entityName, long[] sequenceNumbers, MessageSubQueue subQueue = MessageSubQueue.DeadLetter, string? subscriptionName = null, CancellationToken cancellationToken = default)
     {
         EnsureConnected();
+        if (subQueue == MessageSubQueue.Active)
+            throw new ArgumentOutOfRangeException(nameof(subQueue), "A resubmit reads a dead-letter queue.");
 
         var result = new BatchOperationResult();
 
@@ -1666,15 +1692,11 @@ public class AzureServiceBusProvider : IMessagingProvider
             return result;
         }
 
-        var deadLetterPath = subscriptionName != null
-            ? $"{entityName}/subscriptions/{subscriptionName}/$deadletterqueue"
-            : $"{entityName}/$deadletterqueue";
-
         // For subscriptions, always send to the TOPIC (not to the subscription directly)
         // This means the message will pass through all subscription filters.
         var targetPath = entityName; // Always send to queue or topic
 
-        await using var receiver = _client!.CreateReceiver(deadLetterPath, new ServiceBusReceiverOptions
+        await using var receiver = CreateReceiver(_client!, entityName, subscriptionName, subQueue, new ServiceBusReceiverOptions
         {
             ReceiveMode = ServiceBusReceiveMode.PeekLock,
             PrefetchCount = ScanPrefetchCount
@@ -1711,6 +1733,7 @@ public class AzureServiceBusProvider : IMessagingProvider
         long maxSeenSeq = long.MinValue;
         var consecutiveEmpty = 0;
         var noProgressRounds = 0;
+        var missingError = NotFoundError;
 
         try
         {
@@ -1772,6 +1795,12 @@ public class AzureServiceBusProvider : IMessagingProvider
         {
             // Safety timeout elapsed; fall through and report whatever is still missing.
         }
+        catch (ServiceBusException ex) when (IsEntityDisabled(ex))
+        {
+            if (located.Count == 0)
+                throw new EntityDisabledException(ex);
+            missingError = EntityDisabledError;
+        }
         catch (ServiceBusException)
         {
             // Transient broker failure mid-scan: stop and return partial results rather
@@ -1785,7 +1814,7 @@ public class AzureServiceBusProvider : IMessagingProvider
             result.Failures.Add(new BatchOperationFailure
             {
                 SequenceNumber = sequenceNumber,
-                Error = NotFoundError
+                Error = missingError
             });
         }
 
@@ -1884,7 +1913,7 @@ public class AzureServiceBusProvider : IMessagingProvider
     }
 
     /// <inheritdoc />
-    public async Task<BatchOperationResult> MoveMessagesAsync(string sourceEntityName, string targetQueueName, long[] sequenceNumbers, bool isDeadLetter = false, string? subscriptionName = null, CancellationToken cancellationToken = default)
+    public async Task<BatchOperationResult> MoveMessagesAsync(string sourceEntityName, string targetQueueName, long[] sequenceNumbers, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, CancellationToken cancellationToken = default)
     {
         EnsureConnected();
 
@@ -1895,16 +1924,7 @@ public class AzureServiceBusProvider : IMessagingProvider
             return result;
         }
 
-        // Construct the source path (queue/subscription, with optional dead letter)
-        var entityPath = subscriptionName != null
-            ? $"{sourceEntityName}/subscriptions/{subscriptionName}"
-            : sourceEntityName;
-
-        var sourcePath = isDeadLetter
-            ? $"{entityPath}/$deadletterqueue"
-            : entityPath;
-
-        await using var receiver = _client!.CreateReceiver(sourcePath, new ServiceBusReceiverOptions
+        await using var receiver = CreateReceiver(_client!, sourceEntityName, subscriptionName, subQueue, new ServiceBusReceiverOptions
         {
             ReceiveMode = ServiceBusReceiveMode.PeekLock,
             PrefetchCount = ScanPrefetchCount
@@ -1941,6 +1961,7 @@ public class AzureServiceBusProvider : IMessagingProvider
         long maxSeenSeq = long.MinValue;
         var consecutiveEmpty = 0;
         var noProgressRounds = 0;
+        var missingError = NotFoundError;
 
         try
         {
@@ -2002,6 +2023,12 @@ public class AzureServiceBusProvider : IMessagingProvider
         {
             // Safety timeout elapsed; fall through and report whatever is still missing.
         }
+        catch (ServiceBusException ex) when (IsEntityDisabled(ex))
+        {
+            if (located.Count == 0)
+                throw new EntityDisabledException(ex);
+            missingError = EntityDisabledError;
+        }
         catch (ServiceBusException)
         {
             // Transient broker failure mid-scan: stop and return partial results rather
@@ -2015,7 +2042,7 @@ public class AzureServiceBusProvider : IMessagingProvider
             result.Failures.Add(new BatchOperationFailure
             {
                 SequenceNumber = sequenceNumber,
-                Error = NotFoundError
+                Error = missingError
             });
         }
 
@@ -2068,6 +2095,102 @@ public class AzureServiceBusProvider : IMessagingProvider
                 }
             }
         }
+    }
+
+    /// <inheritdoc />
+    public async Task<BatchOperationResult> CancelScheduledMessagesAsync(string queueName, long[] sequenceNumbers, CancellationToken cancellationToken = default)
+    {
+        EnsureConnected();
+        ThrowIfInvalid(EntityConfigurationValidator.ValidateScheduledSequenceNumbers(sequenceNumbers));
+
+        await using var sender = _client!.CreateSender(queueName);
+        return await CancelScheduledCoreAsync(sender, queueName, _logger, sequenceNumbers, cancellationToken);
+    }
+
+    /// <summary>
+    /// Cancels the scheduled messages in one broker call. The broker refuses the whole call when one sequence number
+    /// is not a scheduled message, and cancels none; only then is each number cancelled on its own, so the result says
+    /// which ones were not scheduled. A number already cancelled is accepted again by the broker. A disabled entity
+    /// before anything was cancelled throws <see cref="EntityDisabledException"/>; found midway, it fails the numbers
+    /// not yet tried with the text of <see cref="EntityDisabledException"/> and retries nothing. A failed number carries
+    /// one of three fixed sentences; the causes are logged once per request, never one line per number. The caller's
+    /// token stops the operation.
+    /// </summary>
+    internal static async Task<BatchOperationResult> CancelScheduledCoreAsync(
+        ServiceBusSender sender, string queueName, ILogger logger, long[] sequenceNumbers, CancellationToken cancellationToken)
+    {
+        var causes = new List<Exception>();
+        var result = await CancelEachScheduledAsync(sender, sequenceNumbers, causes, cancellationToken);
+        if (result.FailureCount > 0)
+        {
+            logger.LogWarning(causes[0], "Cancel of scheduled messages on queue {QueueName} left {FailureCount} sequence numbers not cancelled; causes: {Causes}",
+                queueName, result.FailureCount, string.Join(", ", causes.Select(CauseOf).Distinct()));
+        }
+
+        return result;
+    }
+
+    private static async Task<BatchOperationResult> CancelEachScheduledAsync(
+        ServiceBusSender sender, long[] sequenceNumbers, List<Exception> causes, CancellationToken cancellationToken)
+    {
+        var result = new BatchOperationResult();
+        try
+        {
+            await sender.CancelScheduledMessagesAsync(sequenceNumbers, cancellationToken);
+            result.SuccessCount = sequenceNumbers.Length;
+            return result;
+        }
+        catch (ServiceBusException ex) when (IsEntityDisabled(ex))
+        {
+            throw new EntityDisabledException(ex);
+        }
+        catch (ServiceBusException ex) when (ex.Reason == ServiceBusFailureReason.MessageNotFound)
+        {
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            causes.Add(ex);
+            foreach (var sequenceNumber in sequenceNumbers)
+                AddFailure(result, sequenceNumber, CancelFailureText(ex));
+            return result;
+        }
+
+        for (var i = 0; i < sequenceNumbers.Length; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                await sender.CancelScheduledMessagesAsync(new[] { sequenceNumbers[i] }, cancellationToken);
+                result.SuccessCount++;
+            }
+            catch (ServiceBusException ex) when (IsEntityDisabled(ex))
+            {
+                if (result.SuccessCount + result.FailureCount == 0)
+                    throw new EntityDisabledException(ex);
+                causes.Add(ex);
+                foreach (var sequenceNumber in sequenceNumbers[i..])
+                    AddFailure(result, sequenceNumber, EntityDisabledError);
+                break;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                causes.Add(ex);
+                AddFailure(result, sequenceNumbers[i], CancelFailureText(ex));
+            }
+        }
+
+        return result;
+    }
+
+    private static string CancelFailureText(Exception ex) =>
+        ex is ServiceBusException { Reason: ServiceBusFailureReason.MessageNotFound } ? NotScheduledError : CancelFailedError;
+
+    private static string CauseOf(Exception ex) => ex is ServiceBusException sb ? sb.Reason.ToString() : ex.GetType().Name;
+
+    private static void AddFailure(BatchOperationResult result, long sequenceNumber, string error)
+    {
+        result.FailureCount++;
+        result.Failures.Add(new BatchOperationFailure { SequenceNumber = sequenceNumber, Error = error });
     }
 
     private static ServiceBusMessage CreateServiceBusMessage(SendMessageRequest request)

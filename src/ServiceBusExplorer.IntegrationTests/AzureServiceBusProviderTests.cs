@@ -49,7 +49,7 @@ public sealed class AzureServiceBusProviderTests(AzureServiceBusFixture fixture)
     }
 
     private async Task<long> DeadLetterSequenceOfAsync(string queue, string body) =>
-        (await _messaging.PeekMessagesAsync(queue, 10, isDeadLetter: true)).Single(m => m.Body == body).SequenceNumber!.Value;
+        (await _messaging.PeekMessagesAsync(queue, 10, subQueue: MessageSubQueue.DeadLetter)).Single(m => m.Body == body).SequenceNumber!.Value;
 
     [Fact]
     public async Task TestConnection_is_true_for_the_emulator_management_endpoint()
@@ -413,7 +413,7 @@ public sealed class AzureServiceBusProviderTests(AzureServiceBusFixture fixture)
             await receiver.DeadLetterMessageAsync(rejected, "rejected-by-test", "explicit");
         }
 
-        var deadLetters = (await _messaging.PeekMessagesAsync(queue, 10, isDeadLetter: true)).ToList();
+        var deadLetters = (await _messaging.PeekMessagesAsync(queue, 10, subQueue: MessageSubQueue.DeadLetter)).ToList();
 
         Assert.Equal(
             [("poison", "MaxDeliveryCountExceeded"), ("rejected", "rejected-by-test")],
@@ -429,7 +429,7 @@ public sealed class AzureServiceBusProviderTests(AzureServiceBusFixture fixture)
         await fixture.SendToDeadLetterAsync(queue, "m1", "m2", "m3");
         var target = await DeadLetterSequenceOfAsync(queue, "m2");
 
-        var result = await _messaging.DeleteMessagesAsync(queue, [target], isDeadLetter: true);
+        var result = await _messaging.DeleteMessagesAsync(queue, [target], subQueue: MessageSubQueue.DeadLetter);
 
         Assert.Equal((1, 0), (result.SuccessCount, result.FailureCount));
         Assert.Equal(["m1", "m3"], await fixture.DrainAsync(AzureServiceBusFixture.DeadLetterOf(queue)));
@@ -457,7 +457,7 @@ public sealed class AzureServiceBusProviderTests(AzureServiceBusFixture fixture)
         await fixture.SendToDeadLetterAsync(source, "m1", "m2");
         var selected = await DeadLetterSequenceOfAsync(source, "m2");
 
-        var result = await _messaging.MoveMessagesAsync(source, target, [selected], isDeadLetter: true);
+        var result = await _messaging.MoveMessagesAsync(source, target, [selected], subQueue: MessageSubQueue.DeadLetter);
 
         Assert.Equal((1, 0), (result.SuccessCount, result.FailureCount));
         Assert.Equal(["m2"], await fixture.DrainAsync(target));
@@ -475,11 +475,11 @@ public sealed class AzureServiceBusProviderTests(AzureServiceBusFixture fixture)
         await cancelled.CancelAsync();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            _messaging.DeleteMessagesAsync(source, [selected], isDeadLetter: true, cancellationToken: cancelled.Token));
+            _messaging.DeleteMessagesAsync(source, [selected], subQueue: MessageSubQueue.DeadLetter, cancellationToken: cancelled.Token));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             _messaging.ResubmitDeadLetterMessagesAsync(source, [selected], cancellationToken: cancelled.Token));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            _messaging.MoveMessagesAsync(source, target, [selected], isDeadLetter: true, cancellationToken: cancelled.Token));
+            _messaging.MoveMessagesAsync(source, target, [selected], subQueue: MessageSubQueue.DeadLetter, cancellationToken: cancelled.Token));
 
         Assert.Equal(["m1"], await fixture.DrainAsync(AzureServiceBusFixture.DeadLetterOf(source)));
         Assert.Empty(await fixture.DrainAsync(source));
@@ -631,5 +631,152 @@ public sealed class AzureServiceBusProviderTests(AzureServiceBusFixture fixture)
             (TimeSpan.FromMinutes(2), 10, "ReceiveDisabled", TimeSpan.FromMinutes(30), true),
             (edited.LockDuration, edited.MaxDeliveryCount, edited.Status, edited.DefaultMessageTimeToLive, edited.DeadLetteringOnMessageExpiration));
         Assert.True(string.IsNullOrEmpty(edited.ForwardTo), $"ForwardTo is still '{edited.ForwardTo}'");
+    }
+
+    /// <summary>Replaces the pinned defect where a peek stopped at the short batch a dropped duplicate leaves.</summary>
+    [Fact]
+    public async Task Peeking_10_messages_of_a_queue_that_holds_2_returns_both_across_the_gap_a_dropped_duplicate_leaves()
+    {
+        var queue = await CreateQueueAsync("short-peek", o =>
+        {
+            o.RequiresDuplicateDetection = true;
+            o.DuplicateDetectionHistoryTimeWindow = TimeSpan.FromMinutes(5);
+        });
+        await using (var sender = fixture.Client.CreateSender(queue))
+        {
+            await sender.SendMessageAsync(new ServiceBusMessage("one") { MessageId = "same" });
+            await sender.SendMessageAsync(new ServiceBusMessage("dropped") { MessageId = "same" });
+            await sender.SendMessageAsync(new ServiceBusMessage("three") { MessageId = "other" });
+        }
+
+        var peeked = (await _messaging.PeekMessagesAsync(queue, 10)).Select(m => m.Body).ToList();
+
+        Assert.Equal(["one", "three"], peeked);
+        Assert.Equal(["one", "three"], await fixture.DrainAsync(queue));
+    }
+
+    [Fact]
+    public async Task A_peek_lists_a_scheduled_message_behind_an_active_one_with_its_state()
+    {
+        var queue = await CreateQueueAsync("peek-scheduled");
+        await using (var sender = fixture.Client.CreateSender(queue))
+        {
+            await sender.SendMessageAsync(new ServiceBusMessage("first"));
+            await sender.ScheduleMessageAsync(new ServiceBusMessage("later"), DateTimeOffset.UtcNow.AddHours(1));
+            await sender.SendMessageAsync(new ServiceBusMessage("second"));
+        }
+
+        var peeked = (await _messaging.PeekMessagesAsync(queue, 10)).Select(m => (m.Body, m.State)).ToList();
+
+        Assert.Equal([("first", "Active"), ("later", "Scheduled"), ("second", "Active")], peeked);
+    }
+
+    [Fact]
+    public async Task The_transfer_dead_letter_queue_of_a_queue_without_one_answers_empty_and_is_not_its_dead_letter_queue()
+    {
+        var queue = await CreateQueueAsync("tdlq-queue");
+        await fixture.SendToDeadLetterAsync(queue, "dead");
+        await fixture.SendAsync(queue, "active");
+        var dead = await DeadLetterSequenceOfAsync(queue, "dead");
+
+        var outcome = await TransferDeadLetterOperationsAsync(queue, null, dead);
+
+        Assert.Equal((0, 0, 0, "Not found within scan window", 0, "Not found within scan window"), outcome);
+        Assert.Equal(["dead"], await fixture.DrainAsync(AzureServiceBusFixture.DeadLetterOf(queue)));
+        Assert.Equal(["active"], await fixture.DrainAsync(queue));
+    }
+
+    /// <summary>
+    /// Peeks, searches, deletes and resubmits the given sequence number on the transfer dead-letter queue and returns
+    /// the peeked count, the searched count, the messages scanned, and each batch's successes and single failure.
+    /// </summary>
+    private async Task<(int, int, int, string, int, string)> TransferDeadLetterOperationsAsync(string entity, string? subscription, long sequenceNumber)
+    {
+        const MessageSubQueue transfer = MessageSubQueue.TransferDeadLetter;
+        var peeked = await _messaging.PeekMessagesAsync(entity, 10, transfer, subscription);
+        var found = await _messaging.SearchMessagesAsync(entity, new MessageSearchRequest { Query = "dead" }, transfer, subscription);
+        var deleted = await _messaging.DeleteMessagesAsync(entity, [sequenceNumber], transfer, subscription);
+        var resubmitted = await _messaging.ResubmitDeadLetterMessagesAsync(entity, [sequenceNumber], transfer, subscription);
+        return (peeked.Count(), found.Messages.Count(), found.TotalPeeked,
+            Assert.Single(deleted.Failures).Error, resubmitted.SuccessCount, Assert.Single(resubmitted.Failures).Error);
+    }
+
+    private async Task<long[]> ScheduleAsync(string queue, params string[] bodies)
+    {
+        await using var sender = fixture.Client.CreateSender(queue);
+        var sequenceNumbers = new List<long>();
+        foreach (var body in bodies)
+        {
+            sequenceNumbers.Add(await sender.ScheduleMessageAsync(new ServiceBusMessage(body), DateTimeOffset.UtcNow.AddHours(1)));
+        }
+
+        return [.. sequenceNumbers];
+    }
+
+    private async Task SetStatusAsync(string queue, EntityStatus status)
+    {
+        var properties = (await fixture.Admin.GetQueueAsync(queue)).Value;
+        properties.Status = status;
+        await fixture.Admin.UpdateQueueAsync(properties);
+    }
+
+    private async Task<List<(string Body, string State)>> PeekBodiesAndStatesAsync(string queue) =>
+        (await _messaging.PeekMessagesAsync(queue, 10)).Select(m => (m.Body, m.State)).ToList();
+
+    [Fact]
+    public async Task Cancelling_two_scheduled_messages_deletes_both_before_they_are_delivered()
+    {
+        var queue = await CreateQueueAsync("cancel-two");
+        var scheduled = await ScheduleAsync(queue, "s1", "s2");
+        await fixture.SendAsync(queue, "active");
+
+        var result = await _messaging.CancelScheduledMessagesAsync(queue, scheduled);
+
+        Assert.Equal((2, 0), (result.SuccessCount, result.FailureCount));
+        Assert.Equal([("active", "Active")], await PeekBodiesAndStatesAsync(queue));
+    }
+
+    [Fact]
+    public async Task A_send_a_batch_send_and_a_cancel_on_a_send_disabled_queue_answer_the_neutral_exception_and_change_nothing()
+    {
+        var queue = await CreateQueueAsync("send-disabled");
+        var scheduled = await ScheduleAsync(queue, "later");
+        await SetStatusAsync(queue, EntityStatus.SendDisabled);
+
+        var errors = new Exception[]
+        {
+            await Assert.ThrowsAsync<EntityDisabledException>(() => _messaging.SendMessageAsync(queue, new SendMessageRequest { Body = "one" })),
+            await Assert.ThrowsAsync<EntityDisabledException>(() => _messaging.SendMessagesAsync(queue, [new SendMessageRequest { Body = "two" }])),
+            await Assert.ThrowsAsync<EntityDisabledException>(() => _messaging.CancelScheduledMessagesAsync(queue, scheduled))
+        };
+
+        Assert.All(errors, e => Assert.Equal("The entity is disabled for this operation.", e.Message));
+        Assert.Equal([("later", "Scheduled")], await PeekBodiesAndStatesAsync(queue));
+    }
+
+    [Fact]
+    public async Task A_receive_from_a_receive_disabled_queue_answers_the_neutral_exception_and_removes_nothing()
+    {
+        var queue = await CreateQueueAsync("receive-disabled");
+        await fixture.SendAsync(queue, "kept");
+        await SetStatusAsync(queue, EntityStatus.ReceiveDisabled);
+
+        await Assert.ThrowsAsync<EntityDisabledException>(() => _messaging.ReceiveMessagesAsync(queue));
+
+        Assert.Equal([("kept", "Active")], await PeekBodiesAndStatesAsync(queue));
+    }
+
+    [Fact]
+    public async Task A_resubmit_into_a_send_disabled_queue_answers_the_neutral_exception_and_the_message_stays_dead_lettered()
+    {
+        var queue = await CreateQueueAsync("resubmit-disabled");
+        await fixture.SendToDeadLetterAsync(queue, "dead");
+        var dead = await DeadLetterSequenceOfAsync(queue, "dead");
+        await SetStatusAsync(queue, EntityStatus.SendDisabled);
+
+        await Assert.ThrowsAsync<EntityDisabledException>(() => _messaging.ResubmitDeadLetterMessagesAsync(queue, [dead]));
+
+        Assert.Equal(["dead"], (await _messaging.PeekMessagesAsync(queue, 10, MessageSubQueue.DeadLetter)).Select(m => m.Body));
+        Assert.Empty(await _messaging.PeekMessagesAsync(queue, 10));
     }
 }

@@ -25,6 +25,7 @@ internal static class EntityConfigurationValidator
     private const int MaxSqlLength = 1024;
     private const int MaxCorrelationFieldLength = 128;
     private const int MaxPropertyNameLength = 128;
+    private const int MaxScheduledSequenceNumbers = 500;
     private const string DefaultRuleName = "$Default";
     private const NumberStyles DoubleStyles = NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint | NumberStyles.AllowExponent;
 
@@ -63,6 +64,25 @@ internal static class EntityConfigurationValidator
         if (options is null) return errors;
         CheckSettings(errors, options.DefaultMessageTimeToLive, null, null,
             options.DuplicateDetectionHistoryTimeWindow, options.MaxSizeInMegabytes, options.AutoDeleteOnIdle, options.UserMetadata);
+        return errors;
+    }
+
+    /// <summary>
+    /// The sequence numbers of a cancel of scheduled messages: 1 to 500 of them, each positive, none repeated.
+    /// </summary>
+    public static IReadOnlyList<string> ValidateScheduledSequenceNumbers(long[]? sequenceNumbers)
+    {
+        var errors = new List<string>();
+        if (sequenceNumbers is null || sequenceNumbers.Length is < 1 or > MaxScheduledSequenceNumbers)
+        {
+            errors.Add($"sequenceNumbers must hold 1 to {MaxScheduledSequenceNumbers} sequence numbers.");
+            return errors;
+        }
+
+        if (sequenceNumbers.Any(n => n <= 0))
+            errors.Add("sequenceNumbers must be positive whole numbers.");
+        if (sequenceNumbers.Distinct().Count() != sequenceNumbers.Length)
+            errors.Add("sequenceNumbers must not repeat a sequence number.");
         return errors;
     }
 

@@ -1,6 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { of } from 'rxjs';
+import { throwError } from 'rxjs';
+import { HttpErrorResponse } from '@angular/common/http';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { SendMessageDialogComponent, SendMessageDialogData } from './send-message-dialog.component';
@@ -211,6 +213,34 @@ describe('SendMessageDialogComponent', () => {
       const azure = createComponent({ activeTab: 1 }).fixture.nativeElement as HTMLElement;
       expect(labels(azure)).toContain('Scheduled Delivery');
       expect(azure.querySelector('[data-testid="scheduled-enqueue-time"]')).not.toBeNull();
+    });
+  });
+  describe('a send refused because the entity is disabled', () => {
+    it('a 409 shows the API message, the dialog stays open with its message, and nothing is resent', () => {
+      queueServiceMock.sendMessage.mockReturnValue(throwError(() =>
+        new HttpErrorResponse({ status: 409, error: { message: 'The entity is disabled for this operation.' } })));
+      const { fixture, component } = createComponent();
+      const open = vi.spyOn(fixture.debugElement.injector.get(MatSnackBar), 'open');
+      component.message.body = '{"id":1}';
+
+      component.send();
+
+      expect(open.mock.calls.at(-1)?.[0]).toBe('The entity is disabled for this operation.');
+      expect(dialogRefMock.close).not.toHaveBeenCalled();
+      expect(component.sending()).toBe(false);
+      expect(component.message.body).toBe('{"id":1}');
+      expect(queueServiceMock.sendMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('a 500 keeps the generic failure', () => {
+      queueServiceMock.sendMessage.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 500, error: { message: 'An internal error occurred.' } })));
+      const { fixture, component } = createComponent();
+      const open = vi.spyOn(fixture.debugElement.injector.get(MatSnackBar), 'open');
+      component.message.body = 'x';
+
+      component.send();
+
+      expect(open.mock.calls.at(-1)?.[0]).toBe('Failed to send message');
     });
   });
 });

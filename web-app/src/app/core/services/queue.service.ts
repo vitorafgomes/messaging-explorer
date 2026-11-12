@@ -3,7 +3,10 @@ import { Observable } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 import { ApiService } from './api.service';
 import { apiPath } from './api-path';
-import { QueueInfo, MessageInfo, SendMessageRequest, BatchOperationResult, DeleteBatchRequest, ResubmitBatchRequest, MoveBatchRequest, QueueCreateOptions, QueueUpdate } from '../models';
+import {
+  QueueInfo, MessageInfo, SendMessageRequest, BatchOperationResult, DeleteBatchRequest, ResubmitBatchRequest, MoveBatchRequest, QueueCreateOptions, QueueUpdate,
+  CancelScheduledRequest
+} from '../models';
 
 /**
  * Service for managing queues and their messages.
@@ -167,6 +170,29 @@ export class QueueService {
     const request: MoveBatchRequest = { sequenceNumbers, targetQueueName };
     const path = isDeadLetter ? 'deadletter' : 'messages';
     return this.api.post<BatchOperationResult>(apiPath`queues/${sourceQueueName}/${path}/move-batch`, request);
+  }
+
+  /** Peeks the transfer dead-letter queue: messages this queue could not forward to another entity. */
+  peekTransferDeadLetterMessages(queueName: string, count: number = 10): Observable<MessageInfo[]> {
+    return this.api.get<MessageInfo[]>(apiPath`queues/${queueName}/transferdeadletter?count=${count}`);
+  }
+
+  /** Deletes the given transfer dead-letter messages; never the whole queue, which has no purge. */
+  deleteTransferDeadLetterMessages(queueName: string, sequenceNumbers: number[]): Observable<BatchOperationResult> {
+    const request: DeleteBatchRequest = { sequenceNumbers, all: false };
+    return this.api.post<BatchOperationResult>(apiPath`queues/${queueName}/transferdeadletter/delete-batch`, request);
+  }
+
+  /** Resubmits the given transfer dead-letter messages to the queue itself. */
+  resubmitTransferDeadLetterMessages(queueName: string, sequenceNumbers: number[]): Observable<BatchOperationResult> {
+    const request: ResubmitBatchRequest = { sequenceNumbers };
+    return this.api.post<BatchOperationResult>(apiPath`queues/${queueName}/transferdeadletter/resubmit-batch`, request);
+  }
+
+  /** Cancels scheduled messages: each is deleted before it is ever delivered. At most 500 per request. */
+  cancelScheduledMessages(queueName: string, sequenceNumbers: number[]): Observable<BatchOperationResult> {
+    const request: CancelScheduledRequest = { sequenceNumbers };
+    return this.api.post<BatchOperationResult>(apiPath`queues/${queueName}/messages/cancel-scheduled`, request);
   }
 
   /**
