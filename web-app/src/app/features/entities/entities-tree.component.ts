@@ -679,7 +679,6 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
           this.loadTree();
         } else {
           this.treeData = [];
-          this.selectionService.clearSelection();
           this.notificationService.clear();
         }
       });

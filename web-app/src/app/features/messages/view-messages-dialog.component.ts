@@ -7,7 +7,7 @@ import { Subject, finalize } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { QueueService, TopicService, ConnectionService, MessageSearchService, AdvancedMessageFilterService, BulkOperationsService, MessageExportService } from '../../core/services';
+import { QueueService, TopicService, ConnectionService, MessageSearchService, AdvancedMessageFilterService, BulkOperationsService, MessageExportService, isPossibleDuplicate } from '../../core/services';
 import { MessageInfo, AdvancedFilterState, FilterLogic } from '../../core/models';
 import { HighlightPipe } from '../../shared/pipes';
 import { AdvancedFilterPanelComponent } from '../../shared/components/advanced-filter-panel/advanced-filter-panel.component';
@@ -366,6 +366,7 @@ export interface ViewMessagesDialogData {
     <!-- Bulk Actions Toolbar -->
     <app-bulk-actions-toolbar
       [selectedCount]="getSelectedCount()"
+      [detail]="getSelectionSummary()"
       [showResubmit]="selectedTabIndex === 1"
       [showCompare]="getSelectedCount() === 2"
       [disabled]="isBulkOperationInProgress()"
@@ -960,6 +961,7 @@ export class ViewMessagesDialogComponent implements OnInit {
   }
 
   applyActiveFilter() {
+    this.bulkOperationsService.clearSelection('active');
     let messages = this.activeMessages;
 
     // First apply quick search filter if present
@@ -1016,6 +1018,7 @@ export class ViewMessagesDialogComponent implements OnInit {
 
   // Dead Letter filter methods
   applyDLFilter() {
+    this.bulkOperationsService.clearSelection('deadletter');
     let messages = this.deadLetterMessages;
 
     // First apply quick search filter if present
@@ -1201,7 +1204,7 @@ export class ViewMessagesDialogComponent implements OnInit {
   }
 
   isAllActiveSelected(): boolean {
-    return this.bulkOperationsService.isAllSelected('active') && this.filteredActiveMessages.length > 0;
+    return this.bulkOperationsService.isAllSelected('active', this.filteredActiveMessages);
   }
 
   isActiveIndeterminate(): boolean {
@@ -1251,7 +1254,7 @@ export class ViewMessagesDialogComponent implements OnInit {
   }
 
   isAllDeadLetterSelected(): boolean {
-    return this.bulkOperationsService.isAllSelected('deadletter') && this.filteredDeadLetterMessages.length > 0;
+    return this.bulkOperationsService.isAllSelected('deadletter', this.filteredDeadLetterMessages);
   }
 
   isDeadLetterIndeterminate(): boolean {
@@ -1333,7 +1336,7 @@ export class ViewMessagesDialogComponent implements OnInit {
           }
           progressDialogRef.close();
 
-          // Show results dialog
+          const retryable = result.failures.filter(f => !isPossibleDuplicate(f)).map(f => f.sequenceNumber);
           const resultsDialogRef = this.dialog.open(BulkOperationResultsDialogComponent, {
             data: {
               operation: 'resubmit',
@@ -1341,7 +1344,7 @@ export class ViewMessagesDialogComponent implements OnInit {
               entityName: this.data.entityName,
               entityType: this.data.entityType,
               isDeadLetter: true,
-              allowRetry: result.failureCount > 0 // Allow retry if there are failures
+              allowRetry: retryable.length > 0
             } as BulkOperationResultsDialogData
           });
 
@@ -1369,11 +1372,9 @@ export class ViewMessagesDialogComponent implements OnInit {
             // Refresh the dead letter message list
             this.loadDeadLetterMessages();
 
-            // Handle retry if requested
-            if (resultsResponse?.retry && resultsResponse?.failedSequenceNumbers) {
-              // Retry failed messages
+            if (resultsResponse?.retry && retryable.length > 0) {
               setTimeout(() => {
-                this.resubmitSelected(resultsResponse.failedSequenceNumbers);
+                this.resubmitSelected(retryable);
               }, 500);
             }
           });
@@ -1667,6 +1668,20 @@ export class ViewMessagesDialogComponent implements OnInit {
   }
 
   /**
+   * The selection bar text after the count: how many messages are loaded in the current
+   * tab and how many the entity holds, so a selection never reads as more than it is.
+   */
+  getSelectionSummary(): string {
+    const deadLetter = this.selectedTabIndex === 1;
+    const loaded = deadLetter ? this.deadLetterMessages.length : this.activeMessages.length;
+    const total = deadLetter ? this.deadLetterMessageCount() : this.activeMessageCount();
+    const where = deadLetter ? 'dead-letter queue' : this.data.entityType;
+    return total === undefined
+      ? `selected of ${loaded} loaded`
+      : `selected of ${loaded} loaded, ${total.toLocaleString()} in the ${where}`;
+  }
+
+  /**
    * Checks if any bulk operation is currently in progress
    * @returns True if any operation is running
    */
@@ -1770,6 +1785,9 @@ export class ViewMessagesDialogComponent implements OnInit {
    * @param isDeadLetter - Whether deleting from dead letter queue
    */
   private executeDeleteOperation(tabType: 'active' | 'deadletter', isDeadLetter: boolean): void {
+    if (this.deleting()) {
+      return;
+    }
     this.deleting.set(true);
     const selectedSequenceNumbers = this.bulkOperationsService.getSelectedSequenceNumbers(tabType);
     const totalCount = selectedSequenceNumbers.length;
@@ -1890,15 +1908,18 @@ export class ViewMessagesDialogComponent implements OnInit {
   }
 
   /**
-   * Determines whether a bulk delete should drain the entire tab server-side.
-   * Returns true when select-all is active for the tab and no filter is applied.
-   * The dialog only loads a page of messages, so the confirmation explicitly
-   * warns that the whole entity is purged, not just the loaded ones.
-   * In every other case the caller sends the explicit selection.
+   * Determines whether a bulk delete should drain the entire tab server-side: only when
+   * the number of selected messages equals the entity's count for that tab and no search
+   * or filter is applied. A selected page, or the hits of a search, is sent as its
+   * sequence numbers.
    * @param tabType - The current tab type ('active' or 'deadletter')
    */
   private shouldDrainEntireTab(tabType: 'active' | 'deadletter'): boolean {
-    return this.bulkOperationsService.isAllSelected(tabType) && !this.hasActiveFilter(tabType);
+    const entityCount = tabType === 'active' ? this.activeMessageCount() : this.deadLetterMessageCount();
+    return entityCount !== undefined
+      && entityCount > 0
+      && this.bulkOperationsService.getSelectionCount(tabType) === entityCount
+      && !this.hasActiveFilter(tabType);
   }
 
   /**
@@ -2036,7 +2057,7 @@ export class ViewMessagesDialogComponent implements OnInit {
           }
           progressDialogRef.close();
 
-          // Show results dialog
+          const retryable = result.failures.filter(f => !isPossibleDuplicate(f)).map(f => f.sequenceNumber);
           const resultsDialogRef = this.dialog.open(BulkOperationResultsDialogComponent, {
             data: {
               operation: 'move',
@@ -2045,7 +2066,7 @@ export class ViewMessagesDialogComponent implements OnInit {
               entityType: this.data.entityType,
               isDeadLetter: isDeadLetter,
               targetQueue: targetQueueName,
-              allowRetry: result.failureCount > 0 // Allow retry if there are failures
+              allowRetry: retryable.length > 0
             } as BulkOperationResultsDialogData
           });
 
@@ -2078,11 +2099,9 @@ export class ViewMessagesDialogComponent implements OnInit {
               this.loadActiveMessages();
             }
 
-            // Handle retry if requested
-            if (resultsResponse?.retry && resultsResponse?.failedSequenceNumbers) {
-              // Retry failed messages
+            if (resultsResponse?.retry && retryable.length > 0) {
               setTimeout(() => {
-                this.executeMoveOperation(tabType, isDeadLetter, targetQueueName, resultsResponse.failedSequenceNumbers);
+                this.executeMoveOperation(tabType, isDeadLetter, targetQueueName, retryable);
               }, 500);
             }
           });
@@ -2273,8 +2292,7 @@ export class ViewMessagesDialogComponent implements OnInit {
       return;
     }
 
-    // Ignore shortcuts if an operation is in progress
-    if (this.isBulkOperationInProgress()) {
+    if (this.isBulkOperationInProgress() || this.dialog.openDialogs.some(ref => ref !== this.dialogRef)) {
       return;
     }
 

@@ -9,11 +9,11 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { delay } from 'rxjs/operators';
 import { EntitySelection, QueueInfo, TopicInfo, SubscriptionInfo, SubscriptionRuleInfo, TreeNode, SubscriptionNodeData, SessionInfo } from '../../core/models';
-import { EntitySelectionService, QueueService, TopicService, SessionService } from '../../core/services';
+import { EntitySelectionService, QueueService, TopicService, SessionService, ConnectionService } from '../../core/services';
 import { SendMessageDialogComponent } from '../messages/send-message-dialog.component';
 import { ImportMessagesDialogComponent } from '../messages/import-messages-dialog.component';
 import { ViewMessagesDialogComponent } from '../messages/view-messages-dialog.component';
-import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog.component';
 import { TransferMonitorComponent } from './transfer-monitor.component';
 import { ContinuousResubmitDialogComponent, ContinuousResubmitDialogData } from '../messages/continuous-resubmit-dialog.component';
 import { MetricsDashboardComponent } from './metrics-dashboard.component';
@@ -3021,6 +3021,7 @@ import type {
 })
 export class EntityDetailsComponent {
   private selectionService = inject(EntitySelectionService);
+  private connectionService = inject(ConnectionService);
   private queueService = inject(QueueService);
   private topicService = inject(TopicService);
   private sessionService = inject(SessionService);
@@ -3425,46 +3426,38 @@ export class EntityDetailsComponent {
     });
   }
 
+  /**
+   * Asks before a purge, naming the entity, its topic for a subscription, the connection
+   * target and the count: the live one when the panel has it, otherwise the one read
+   * when the entity was loaded.
+   */
   purgeMessages(type: string = 'active') {
     if (!this.selection) return;
 
-    const entityName = this.selection.node.name;
-    let messageCount = 0;
-    let messageType = '';
+    const name = this.selection.node.name;
+    const kind = this.selection.type === 'subscription' ? 'subscription' : 'queue';
+    const entity = this.queue ?? this.subscription;
+    const topicName = this.subscription?.topicName ?? (this.selection.node.data as SubscriptionNodeData | undefined)?.topicName;
+    const where = kind === 'subscription' ? `subscription "${name}" of topic "${topicName}"` : `queue "${name}"`;
+    const messageType = type === 'all' ? 'active and dead-letter' : type === 'deadletter' ? 'dead-letter' : 'active';
+    const live = type === 'all'
+      ? (this.liveActiveCount() !== null && this.liveDeadLetterCount() !== null)
+      : (type === 'deadletter' ? this.liveDeadLetterCount() : this.liveActiveCount()) !== null;
+    const active = this.liveActiveCount() ?? entity?.activeMessageCount ?? 0;
+    const deadLetter = this.liveDeadLetterCount() ?? entity?.deadLetterMessageCount ?? 0;
+    const count = type === 'all' ? active + deadLetter : type === 'deadletter' ? deadLetter : active;
+    const countText = live ? `${count.toLocaleString()} now` : `${count.toLocaleString()} when the ${kind} was loaded`;
 
-    if (this.selection.type === 'queue' && this.queue) {
-      if (type === 'active') {
-        messageCount = this.queue.activeMessageCount;
-        messageType = 'active';
-      } else if (type === 'deadletter') {
-        messageCount = this.queue.deadLetterMessageCount;
-        messageType = 'dead-letter';
-      } else if (type === 'all') {
-        messageCount = this.queue.activeMessageCount + this.queue.deadLetterMessageCount;
-        messageType = 'all';
-      }
-    } else if (this.selection.type === 'subscription' && this.subscription) {
-      if (type === 'active') {
-        messageCount = this.subscription.activeMessageCount;
-        messageType = 'active';
-      } else if (type === 'deadletter') {
-        messageCount = this.subscription.deadLetterMessageCount;
-        messageType = 'dead-letter';
-      } else if (type === 'all') {
-        messageCount = this.subscription.activeMessageCount + this.subscription.deadLetterMessageCount;
-        messageType = 'all';
-      }
-    }
-
-    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
-      data: {
-        title: 'Purge Messages',
-        message: `Are you sure you want to delete all ${messageCount} ${messageType} messages? This action cannot be undone.`,
-        confirmText: 'Purge',
-        confirmColor: 'warn',
-        icon: 'delete_sweep'
-      }
-    });
+    const confirmData: ConfirmDialogData = {
+      title: `Purge ${messageType} messages?`,
+      message: `This deletes every ${messageType} message in ${where} on ${this.connectionService.currentTarget}: ${countText}. It cannot be undone.`,
+      confirmText: `Purge ${count.toLocaleString()} messages`,
+      confirmColor: 'warn',
+      icon: 'delete_sweep',
+      requireAcknowledgement: true,
+      acknowledgementText: `I understand this deletes every ${messageType} message in ${name}`
+    };
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, { data: confirmData });
 
     dialogRef.afterClosed().pipe(
       takeUntilDestroyed(this.destroyRef)

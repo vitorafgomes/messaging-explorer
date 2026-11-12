@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { firstValueFrom } from 'rxjs';
-import { QueueService, TopicService } from '../../core/services';
+import { QueueService, TopicService, isPossibleDuplicate } from '../../core/services';
 import { BatchOperationResult } from '../../core/models';
 
 export interface ContinuousResubmitDialogData {
@@ -130,7 +130,7 @@ type DialogState = 'config' | 'running' | 'finished';
               <span class="text-warning">Stopped by user</span>
             } @else if (stoppedByError()) {
               <i class="fa fa-exclamation-circle text-danger me-2"></i>
-              <span class="text-danger">Stopped: entire batch failed</span>
+              <span class="text-danger">{{ statusMessage() }}</span>
             } @else {
               <i class="fa fa-check-circle text-success me-2"></i>
               <span class="text-success">Completed - Dead letter queue is empty</span>
@@ -420,9 +420,9 @@ export class ContinuousResubmitDialogComponent implements OnDestroy {
         failureCount: result.failureCount
       }]);
 
-      // 5. If entire batch failed, stop to avoid infinite loop
-      if (result.successCount === 0) {
-        this.statusMessage.set('Stopped: entire batch failed');
+      // 5. Stop on the first failure or possible duplicate
+      if (result.failureCount > 0) {
+        this.statusMessage.set(this.stopReason(batchNum, result));
         this.stoppedByError.set(true);
         break;
       }
@@ -433,6 +433,17 @@ export class ContinuousResubmitDialogComponent implements OnDestroy {
         break;
       }
     }
+  }
+
+  private stopReason(batchNum: number, result: BatchOperationResult): string {
+    const duplicates = result.failures.filter(f => isPossibleDuplicate(f)).map(f => f.sequenceNumber);
+    const failed = result.failures.filter(f => !isPossibleDuplicate(f)).map(f => f.sequenceNumber);
+    const named = [
+      failed.length > 0 ? `failed: ${failed.join(', ')}` : '',
+      duplicates.length > 0 ? `possible duplicate - do not retry: ${duplicates.join(', ')}` : ''
+    ].filter(part => part !== '').join('; ');
+    return `Stopped: batch #${batchNum} reported ${result.failureCount} failure(s); they are not resubmitted again`
+      + (named ? ` (${named})` : '');
   }
 
   private peekDeadLetterMessages(count: number): Promise<any[]> {

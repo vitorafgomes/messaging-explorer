@@ -2,6 +2,7 @@ import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
 import { BatchOperationResult } from '../../../core/models/message.model';
+import { isPossibleDuplicate } from '../../../core/services/bulk-operations.service';
 
 export interface BulkOperationResultsDialogData {
   operation: 'delete' | 'resubmit' | 'move' | 'export';
@@ -99,13 +100,13 @@ export interface BulkOperationResultsDialogData {
                 </div>
                 <div class="failure-error">
                   <i class="fa fa-exclamation-circle text-danger me-2"></i>
-                  <span>{{ failure.error }}</span>
+                  <span>{{ isPossibleDuplicate(failure) ? 'Possible duplicate - do not retry' : 'Failed' }}: {{ failure.error }}</span>
                 </div>
               </div>
             }
           </div>
 
-          @if (data.allowRetry && data.result.failureCount > 0) {
+          @if (data.allowRetry && getFailedSequenceNumbers().length > 0) {
             <div class="retry-info mt-3">
               <div class="alert alert-info mb-0" role="alert">
                 <i class="fa fa-info-circle me-2"></i>
@@ -118,10 +119,10 @@ export interface BulkOperationResultsDialogData {
     </div>
 
     <div class="modal-footer" [class.bg-dark]="isDarkMode()">
-      @if (data.allowRetry && data.result.failureCount > 0) {
+      @if (data.allowRetry && getFailedSequenceNumbers().length > 0) {
         <button class="btn btn-warning" [mat-dialog-close]="{ retry: true, failedSequenceNumbers: getFailedSequenceNumbers() }">
           <i class="fa-solid fa-arrows-rotate me-2"></i>
-          Retry Failed ({{ data.result.failureCount }})
+          Retry Failed ({{ getFailedSequenceNumbers().length }})
         </button>
       }
       <button class="btn btn-primary" [mat-dialog-close]="{ retry: false }">
@@ -394,7 +395,12 @@ export class BulkOperationResultsDialogComponent {
     }
   }
 
+  readonly isPossibleDuplicate = isPossibleDuplicate;
+
+  /**
+   * The failures a retry may resend: every failure except a possible duplicate.
+   */
   getFailedSequenceNumbers(): number[] {
-    return this.data.result.failures.map(f => f.sequenceNumber);
+    return this.data.result.failures.filter(f => !isPossibleDuplicate(f)).map(f => f.sequenceNumber);
   }
 }

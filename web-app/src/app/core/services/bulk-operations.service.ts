@@ -1,7 +1,16 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
-import { MessageInfo } from '../models';
+import { BatchOperationFailure, MessageInfo } from '../models';
+
+/**
+ * True when the failure is a message that was sent and could not be removed from its
+ * source: resending it would deliver a second copy, so it is never retried.
+ */
+export function isPossibleDuplicate(failure: BatchOperationFailure): boolean {
+  // ponytail: matches the text the Azure provider writes for a send whose complete failed; replace with a field once BatchOperationFailure carries one.
+  return /may be duplicated/i.test(failure.error);
+}
 
 /**
  * Tab type for bulk operations
@@ -15,7 +24,6 @@ export type TabType = 'active' | 'deadletter';
  */
 export interface TabSelectionState {
   selectedSequenceNumbers: Set<number>;
-  allSelected: boolean;
   indeterminate: boolean;
 }
 
@@ -45,12 +53,10 @@ export class BulkOperationsService {
   private stateSubject = new BehaviorSubject<BulkOperationsState>({
     active: {
       selectedSequenceNumbers: new Set<number>(),
-      allSelected: false,
       indeterminate: false
     },
     deadletter: {
       selectedSequenceNumbers: new Set<number>(),
-      allSelected: false,
       indeterminate: false
     }
   });
@@ -98,7 +104,6 @@ export class BulkOperationsService {
   private cloneTabState(state: TabSelectionState): TabSelectionState {
     return {
       selectedSequenceNumbers: new Set(state.selectedSequenceNumbers),
-      allSelected: state.allSelected,
       indeterminate: state.indeterminate
     };
   }
@@ -200,12 +205,10 @@ export class BulkOperationsService {
     this.stateSubject.next({
       active: {
         selectedSequenceNumbers: new Set<number>(),
-        allSelected: false,
         indeterminate: false
       },
       deadletter: {
         selectedSequenceNumbers: new Set<number>(),
-        allSelected: false,
         indeterminate: false
       }
     });
@@ -222,12 +225,14 @@ export class BulkOperationsService {
   }
 
   /**
-   * Checks if all messages are selected in a tab
+   * Checks whether every message of the list shown now is selected. Computed from the
+   * list on each call, so a selection made over a search never counts as all of the page.
    * @param tabType - The tab type (active or deadletter)
-   * @returns True if all messages are selected, false otherwise
+   * @param visibleMessages - The messages the tab shows now
    */
-  isAllSelected(tabType: TabType): boolean {
-    return this.stateSubject.value[tabType].allSelected;
+  isAllSelected(tabType: TabType, visibleMessages: MessageInfo[]): boolean {
+    const selected = this.stateSubject.value[tabType].selectedSequenceNumbers;
+    return visibleMessages.length > 0 && visibleMessages.every(msg => selected.has(msg.sequenceNumber));
   }
 
   /**
@@ -249,8 +254,6 @@ export class BulkOperationsService {
     const currentState = this.stateSubject.value;
     const selectedCount = selectedSequenceNumbers.size;
 
-    // Calculate allSelected and indeterminate states
-    const allSelected = totalMessages > 0 && selectedCount === totalMessages;
     const indeterminate = selectedCount > 0 && selectedCount < totalMessages;
 
     // Create new state with updated tab
@@ -258,7 +261,6 @@ export class BulkOperationsService {
       ...currentState,
       [tabType]: {
         selectedSequenceNumbers,
-        allSelected,
         indeterminate
       }
     };
