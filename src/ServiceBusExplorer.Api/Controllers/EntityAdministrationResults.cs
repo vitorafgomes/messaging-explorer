@@ -19,6 +19,8 @@ internal static class EntityAdministrationResults
 
     public static BadRequestObjectResult NotSupported() => new(new { message = UpdateNotSupported });
 
+    public static BadRequestObjectResult RulesNotSupported() => new(new { message = "This provider does not support subscription rules." });
+
     /// <summary>
     /// 409 when the entity exists, 404 when <paramref name="missingKind"/> does not, 400 with the exception's own
     /// message when the configuration was refused, 500 with the constant body for anything else.

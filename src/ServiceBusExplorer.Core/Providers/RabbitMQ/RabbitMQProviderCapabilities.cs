@@ -94,6 +94,12 @@ public class RabbitMQProviderCapabilities : IProviderCapabilities
     /// </remarks>
     public bool SupportsEntityUpdate => false;
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// A RabbitMQ binding has a routing key, not rules; the provider refuses every rule operation.
+    /// </remarks>
+    public bool SupportsSubscriptionRules => false;
+
     /// <summary>
     /// RabbitMQ supported exchange types.
     /// </summary>

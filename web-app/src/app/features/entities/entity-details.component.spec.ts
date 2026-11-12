@@ -245,6 +245,42 @@ describe('EntityDetailsComponent panels', () => {
     });
   });
 
+  describe('the Rules tab of a subscription shows the rules table, editable only when the API explicitly says supportsSubscriptionRules', () => {
+    const rules = [
+      { name: 'physical-goods', filterType: 'Sql', sqlExpression: 'total > 0', correlation: null, sqlAction: null },
+      { name: '$Default', filterType: 'True', sqlExpression: null, correlation: null, sqlAction: null }
+    ];
+    const rulesTab = (el: HTMLElement) => el.querySelector('#subscription-rules-tab app-subscription-rules')!;
+    const ruleRows = (el: HTMLElement) => Array.from(rulesTab(el).querySelectorAll('tr.rule-row')).map(r => text(r.querySelector('td')));
+
+    it('with the capability: the rules with their filter type, Add rule, and Edit and Delete per rule', () => {
+      const el = render(subscription({ rules }), { ...DEFAULT_AZURE_CAPABILITIES, supportsSubscriptionRules: true });
+
+      expect(ruleRows(el)).toStrictEqual(['physical-goods', '$Default']);
+      expect(Array.from(rulesTab(el).querySelectorAll('mat-chip')).map(text)).toStrictEqual(['SQL', 'True']);
+      expect(Array.from(rulesTab(el).querySelectorAll('button')).map(b => b.getAttribute('aria-label') ?? text(b))).toStrictEqual([
+        'addAdd rule', 'Edit rule physical-goods', 'Delete rule physical-goods', 'Edit rule $Default', 'Delete rule $Default'
+      ]);
+    });
+
+    it('on RabbitMQ, on an API that does not send the flag and with no answer yet: the same rules, read-only, no button', () => {
+      const { supportsSubscriptionRules: _, ...withoutFlag } = DEFAULT_AZURE_CAPABILITIES;
+      for (const capabilities of [DEFAULT_RABBITMQ_CAPABILITIES, withoutFlag as ProviderCapabilities, null]) {
+        const el = render(subscription({ rules }), capabilities);
+        expect(ruleRows(el)).toStrictEqual(['physical-goods', '$Default']);
+        expect(rulesTab(el).querySelectorAll('button').length, 'buttons in the rules tab').toBe(0);
+        TestBed.resetTestingModule();
+      }
+    });
+
+    it('the old rule cards are gone: the tab renders only the rules table', () => {
+      const el = render(subscription({ rules }));
+
+      expect(el.querySelector('#subscription-rules-tab .rule-card')).toBeNull();
+      expect(el.querySelector('#subscription-rules-tab')!.children.length).toBe(1);
+    });
+  });
+
   describe('the queue panel shows what the API returns', () => {
     it('the queue panel shows status, dates, forward targets, auto delete, duplicate detection and metadata', () => {
       const el = render(queue({

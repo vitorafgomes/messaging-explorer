@@ -1,0 +1,33 @@
+.kinds {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 8px 0 16px;
+}
+
+.mono {
+  font-family: ui-monospace, monospace;
+}
+
+.property {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+
+  mat-form-field {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .type {
+    flex: 0 0 9rem;
+  }
+
+  .remove {
+    margin-top: 8px;
+  }
+}
+
+.needs-one {
+  color: var(--mat-sys-error);
+}

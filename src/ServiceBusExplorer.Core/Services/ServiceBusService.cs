@@ -4,6 +4,7 @@ using Azure.Messaging.ServiceBus.Administration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using ServiceBusExplorer.Core.Models;
+using ServiceBusExplorer.Core.Providers.Azure;
 
 namespace ServiceBusExplorer.Core.Services;
 
@@ -288,7 +289,7 @@ public class ServiceBusService : IServiceBusService, IAsyncDisposable
             // Load subscription rules
             await foreach (var rule in _adminClient.GetRulesAsync(topicName, subscriptionName))
             {
-                subscriptionInfo.Rules.Add(MapToSubscriptionRuleInfo(rule));
+                subscriptionInfo.Rules.Add(AzureServiceBusProvider.MapToSubscriptionRuleInfo(rule));
             }
 
             return subscriptionInfo;
@@ -367,45 +368,6 @@ public class ServiceBusService : IServiceBusService, IAsyncDisposable
             ForwardTo = props.ForwardTo,
             ForwardDeadLetteredMessagesTo = props.ForwardDeadLetteredMessagesTo
         };
-    }
-
-    private static SubscriptionRuleInfo MapToSubscriptionRuleInfo(RuleProperties rule)
-    {
-        var ruleInfo = new SubscriptionRuleInfo
-        {
-            Name = rule.Name
-        };
-
-        // Map filter
-        if (rule.Filter is SqlRuleFilter sqlFilter)
-        {
-            ruleInfo.FilterType = "SqlFilter";
-            ruleInfo.FilterExpression = sqlFilter.SqlExpression;
-        }
-        else if (rule.Filter is CorrelationRuleFilter correlationFilter)
-        {
-            ruleInfo.FilterType = "CorrelationFilter";
-            ruleInfo.FilterExpression = $"CorrelationId: {correlationFilter.CorrelationId ?? "N/A"}";
-            ruleInfo.CorrelationProperties = correlationFilter.ApplicationProperties?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-        }
-        else if (rule.Filter is TrueRuleFilter)
-        {
-            ruleInfo.FilterType = "TrueFilter";
-            ruleInfo.FilterExpression = "1=1 (matches all messages)";
-        }
-        else if (rule.Filter is FalseRuleFilter)
-        {
-            ruleInfo.FilterType = "FalseFilter";
-            ruleInfo.FilterExpression = "1=0 (matches no messages)";
-        }
-
-        // Map action
-        if (rule.Action is SqlRuleAction sqlAction)
-        {
-            ruleInfo.ActionExpression = sqlAction.SqlExpression;
-        }
-
-        return ruleInfo;
     }
 
     #endregion

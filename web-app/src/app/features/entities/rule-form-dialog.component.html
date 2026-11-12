@@ -1,0 +1,139 @@
+<h2 mat-dialog-title>{{ creating ? 'Add rule' : readOnly ? 'Rule' : 'Edit rule' }}</h2>
+
+<mat-dialog-content>
+  <p class="context">
+    <mat-chip-set aria-label="Environment">
+      <mat-chip [disableRipple]="true">{{ context().environment }}</mat-chip>
+    </mat-chip-set>
+    <span>Subscription <b>{{ data.subscriptionName }}</b> in topic <b>{{ data.topicName }}</b> on {{ context().connection }}</span>
+  </p>
+
+  @if (readOnly) {
+    <p class="banner read-only-note">
+      <mat-icon aria-hidden="true">lock</mat-icon>
+      <span>This rule holds a property of a value type this app cannot edit, so it is shown read-only. Nothing here can be saved.</span>
+    </p>
+    <dl class="facts">
+      @for (fact of facts; track $index) {
+        <div class="fact"><dt>{{ fact.label }}</dt><dd>{{ fact.value }}</dd></div>
+      }
+    </dl>
+  } @else {
+    <form [formGroup]="form" (ngSubmit)="save()" id="rule-form">
+      @if (creating) {
+        <mat-form-field class="name">
+          <mat-label>Rule name</mat-label>
+          <input matInput formControlName="name" autocomplete="off" [errorStateMatcher]="matcher('name')">
+          <mat-hint>Letters, digits, dot, dash and underscore. 50 characters at most.</mat-hint>
+          <mat-error>{{ errors()['name'] }}</mat-error>
+        </mat-form-field>
+      } @else {
+        <dl class="facts">
+          <div class="fact name-fact"><dt>Rule name</dt><dd>{{ data.rule!.name }}</dd></div>
+        </dl>
+        <p class="note name-note">A rule cannot be renamed. Saving replaces it under the same name.</p>
+      }
+
+      <mat-button-toggle-group formControlName="filterType" aria-label="Filter type" class="kinds" [hideSingleSelectionIndicator]="true">
+        @for (k of kinds; track k.value) {
+          <mat-button-toggle [value]="k.value">{{ k.label }}</mat-button-toggle>
+        }
+      </mat-button-toggle-group>
+
+      @switch (draft().filterType) {
+        @case ('Sql') {
+          <mat-form-field class="wide">
+            <mat-label>SQL filter</mat-label>
+            <textarea matInput rows="3" class="mono" formControlName="sqlExpression" [errorStateMatcher]="matcher('sqlExpression')"></textarea>
+            <mat-hint>Checked by the broker on save. An invalid expression is refused and nothing changes.</mat-hint>
+            <mat-error>{{ errors()['sqlExpression'] }}</mat-error>
+          </mat-form-field>
+        }
+        @case ('Correlation') {
+          <p class="note">Every filled field must match. Empty fields are ignored.</p>
+          <div class="grid" formGroupName="correlation">
+            @for (f of systemFields; track f.key) {
+              <mat-form-field>
+                <mat-label>{{ f.label }}</mat-label>
+                <input matInput autocomplete="off" [formControlName]="f.key" [errorStateMatcher]="matcher('correlation.' + f.key)">
+                <mat-error>{{ errors()['correlation.' + f.key] }}</mat-error>
+              </mat-form-field>
+            }
+          </div>
+
+          <h3>Application properties</h3>
+          <div formArrayName="properties">
+            @for (p of properties.controls; track p; let i = $index) {
+              <div class="property" [formGroupName]="i">
+                <mat-form-field>
+                  <mat-label>Property name</mat-label>
+                  <input matInput class="mono" autocomplete="off" formControlName="name" [errorStateMatcher]="matcher('properties.' + i + '.name')">
+                  <mat-error>{{ errors()['properties.' + i + '.name'] }}</mat-error>
+                </mat-form-field>
+                <mat-form-field class="type">
+                  <mat-label>Type</mat-label>
+                  <mat-select formControlName="type">
+                    @for (t of propertyTypes; track t) {
+                      <mat-option [value]="t">{{ t }}</mat-option>
+                    }
+                  </mat-select>
+                </mat-form-field>
+                <mat-form-field>
+                  <mat-label>Value</mat-label>
+                  <input matInput class="mono" autocomplete="off" formControlName="value" [errorStateMatcher]="matcher('properties.' + i + '.value')">
+                  <mat-error>{{ errors()['properties.' + i + '.value'] }}</mat-error>
+                </mat-form-field>
+                <button mat-icon-button type="button" class="remove"
+                  [attr.aria-label]="'Remove property ' + (p.controls.name.value || i + 1)"
+                  [matTooltip]="'Remove property ' + (p.controls.name.value || i + 1)"
+                  (click)="removeProperty(i)">
+                  <mat-icon>close</mat-icon>
+                </button>
+              </div>
+            }
+          </div>
+          <button mat-button type="button" (click)="addProperty()"><mat-icon>add</mat-icon>Add property</button>
+
+          @if (errors()['correlation']) {
+            <p class="note needs-one" id="correlation-needs-one">{{ errors()['correlation'] }}</p>
+          }
+        }
+        @case ('True') {
+          <p class="note">Every message published to the topic matches this rule.</p>
+        }
+        @case ('False') {
+          <p class="note">No message matches this rule.</p>
+        }
+      }
+
+      <mat-form-field class="wide">
+        <mat-label>Action (optional)</mat-label>
+        <textarea matInput rows="2" class="mono" formControlName="sqlAction" [errorStateMatcher]="matcher('sqlAction')"></textarea>
+        <mat-error>{{ errors()['sqlAction'] }}</mat-error>
+      </mat-form-field>
+    </form>
+  }
+
+  @if (errorMessage()) {
+    <div class="error" role="alert">
+      <mat-icon aria-hidden="true">error</mat-icon>
+      <span class="grow">{{ errorMessage() }}</span>
+      @if (notFound()) {
+        <button mat-button type="button" (click)="refresh()">Refresh</button>
+      }
+    </div>
+  }
+
+  @if (saving()) {
+    <mat-progress-bar mode="indeterminate" aria-label="Saving"></mat-progress-bar>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  @if (readOnly) {
+    <button mat-flat-button mat-dialog-close type="button">Close</button>
+  } @else {
+    <button mat-button mat-dialog-close type="button">Cancel</button>
+    <button mat-flat-button type="submit" form="rule-form" [disabled]="!canSave()">{{ creating ? 'Add rule' : 'Save rule' }}</button>
+  }
+</mat-dialog-actions>

@@ -44,6 +44,7 @@ public class EntityNameRoutingTests
             if (named.TryGetValue("subscriptionName", out var sub) && sub is not null) parts.Add($"sub={sub}");
             if (named.TryGetValue("isDeadLetter", out var dl)) parts.Add($"dl={dl}");
             if (named.TryGetValue("sessionId", out var session)) parts.Add($"session={session}");
+            if (named.TryGetValue("ruleName", out var rule)) parts.Add($"rule={rule}");
             Calls.Add($"{m.Name}({string.Join(", ", parts)})");
 
             if (m.ReturnType == typeof(Task)) return Task.CompletedTask;
@@ -178,6 +179,28 @@ public class EntityNameRoutingTests
             $"GetTopicAsync({name})",
             $"UpdateSubscriptionAsync({name}, sub={name})",
             $"GetSubscriptionAsync({name}, sub={name})",
+        }, calls);
+    }
+
+    [Theory]
+    [InlineData("a/messages", "a%2Fmessages")]
+    [InlineData("orders#1", "orders%231")]
+    [InlineData("what?now", "what%3Fnow")]
+    [InlineData("a%2Fb", "a%252Fb")]
+    public async Task A_topic_subscription_and_rule_name_with_reserved_characters_reach_the_provider_unchanged_on_every_rule_route(string name, string segment)
+    {
+        var calls = await SendAsync(
+            ("GET", $"/api/topics/{segment}/subscriptions/{segment}/rules"),
+            ("POST", $"/api/topics/{segment}/subscriptions/{segment}/rules"),
+            ("PUT", $"/api/topics/{segment}/subscriptions/{segment}/rules/{segment}"),
+            ("DELETE", $"/api/topics/{segment}/subscriptions/{segment}/rules/{segment}"));
+
+        Assert.Equal(new[]
+        {
+            $"GetRulesAsync({name}, sub={name})",
+            $"CreateRuleAsync({name}, sub={name})",
+            $"UpdateRuleAsync({name}, sub={name}, rule={name})",
+            $"DeleteRuleAsync({name}, sub={name}, rule={name})",
         }, calls);
     }
 

@@ -1,4 +1,6 @@
+using System.Globalization;
 using ServiceBusExplorer.Core.Abstractions;
+using ServiceBusExplorer.Core.Models;
 
 namespace ServiceBusExplorer.Core.Providers.Azure;
 
@@ -20,6 +22,11 @@ internal static class EntityConfigurationValidator
     private const int MaxUserMetadataLength = 1024;
     private const int MaxEntityPathLength = 260;
     private const int MaxSubscriptionNameLength = 50;
+    private const int MaxSqlLength = 1024;
+    private const int MaxCorrelationFieldLength = 128;
+    private const int MaxPropertyNameLength = 128;
+    private const string DefaultRuleName = "$Default";
+    private const NumberStyles DoubleStyles = NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint | NumberStyles.AllowExponent;
 
     private const string EntityPathRule = "1 to 260 characters of letters, digits, '.', '-', '_' or '/', not starting or ending with '/'";
     private static readonly string[] QueueStatuses = ["Active", "Disabled", "SendDisabled", "ReceiveDisabled"];
@@ -99,6 +106,125 @@ internal static class EntityConfigurationValidator
         CheckStatus(errors, options.Status, SubscriptionStatuses);
         return errors;
     }
+
+    /// <summary>The name of a rule to add, replace or delete: 1 to 50 characters, or the reserved <c>$Default</c>.</summary>
+    public static IReadOnlyList<string> ValidateRuleName(string? name)
+    {
+        var errors = new List<string>();
+        CheckRuleName(errors, name);
+        return errors;
+    }
+
+    /// <summary>
+    /// A rule to add or to replace under <paramref name="name"/>: its name, its filter and its action. Blank text
+    /// counts as absent, as the broker treats it: a blank correlation field is not part of the filter and a blank
+    /// action is no action.
+    /// </summary>
+    public static IReadOnlyList<string> ValidateRule(string? name, SubscriptionRuleInfo rule)
+    {
+        var errors = new List<string>();
+        CheckRuleName(errors, name);
+
+        var hasExpression = !string.IsNullOrWhiteSpace(rule.SqlExpression);
+        if (rule.FilterType is not (RuleFilterType.Sql or RuleFilterType.Correlation or RuleFilterType.True or RuleFilterType.False))
+            errors.Add("filterType must be one of Sql, Correlation, True, False.");
+        else if (rule.FilterType == RuleFilterType.Sql)
+        {
+            if (!hasExpression || rule.SqlExpression!.Length > MaxSqlLength)
+                errors.Add($"sqlExpression is required for filterType Sql and must be 1 to {MaxSqlLength} characters.");
+        }
+        else if (hasExpression)
+            errors.Add("sqlExpression must be null unless filterType is Sql.");
+
+        if (rule.FilterType == RuleFilterType.Correlation)
+            CheckCorrelation(errors, rule.Correlation);
+        else if (rule.Correlation is not null)
+            errors.Add("correlation must be null unless filterType is Correlation.");
+
+        if (rule.SqlAction?.Length > MaxSqlLength)
+            errors.Add($"sqlAction must be at most {MaxSqlLength} characters.");
+        return errors;
+    }
+
+    /// <summary>
+    /// The value of a correlation property read as its declared type with the invariant culture: a string as is, an
+    /// Int64 as a whole number, a Double as a finite number with '.' as the decimal point, a Boolean as <c>true</c>
+    /// or <c>false</c> in any case. Null when it does not parse or the type cannot be written.
+    /// </summary>
+    public static object? ParsePropertyValue(RulePropertyType? type, string? text) => type switch
+    {
+        RulePropertyType.String => text,
+        RulePropertyType.Int64 when long.TryParse(text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var whole) => whole,
+        RulePropertyType.Double when double.TryParse(text, DoubleStyles, CultureInfo.InvariantCulture, out var number) && double.IsFinite(number) => number,
+        RulePropertyType.Boolean when string.Equals(text, "true", StringComparison.OrdinalIgnoreCase) => true,
+        RulePropertyType.Boolean when string.Equals(text, "false", StringComparison.OrdinalIgnoreCase) => false,
+        _ => null
+    };
+
+    private static void CheckRuleName(List<string> errors, string? name)
+    {
+        if (name == DefaultRuleName) return;
+        if (string.IsNullOrEmpty(name) || name.Length > MaxSubscriptionNameLength || !name.All(IsSubscriptionNameChar))
+            errors.Add($"name must be 1 to {MaxSubscriptionNameLength} characters of letters, digits, '.', '-' or '_', or {DefaultRuleName}.");
+    }
+
+    private static void CheckCorrelation(List<string> errors, CorrelationFilterInfo? correlation)
+    {
+        if (correlation is null)
+        {
+            errors.Add("correlation is required for filterType Correlation.");
+            return;
+        }
+
+        (string Field, string? Value)[] systemFields =
+        [
+            ("correlationId", correlation.CorrelationId), ("messageId", correlation.MessageId), ("to", correlation.To),
+            ("replyTo", correlation.ReplyTo), ("subject", correlation.Subject), ("sessionId", correlation.SessionId),
+            ("replyToSessionId", correlation.ReplyToSessionId), ("contentType", correlation.ContentType)
+        ];
+        foreach (var (field, value) in systemFields)
+        {
+            if (value?.Length > MaxCorrelationFieldLength)
+                errors.Add($"correlation.{field} must be at most {MaxCorrelationFieldLength} characters.");
+        }
+
+        var properties = correlation.ApplicationProperties ?? [];
+        for (var i = 0; i < properties.Count; i++)
+            CheckProperty(errors, $"correlation.applicationProperties[{i}]", properties[i], properties.Take(i));
+
+        if (properties.Count == 0 && systemFields.All(f => string.IsNullOrWhiteSpace(f.Value)))
+            errors.Add("correlation must set at least one field or one application property.");
+    }
+
+    private static void CheckProperty(List<string> errors, string field, RuleApplicationProperty property, IEnumerable<RuleApplicationProperty> before)
+    {
+        if (string.IsNullOrEmpty(property.Name) || property.Name.Length > MaxPropertyNameLength)
+            errors.Add($"{field}.name must be 1 to {MaxPropertyNameLength} characters.");
+        else if (before.Any(p => p.Name == property.Name))
+            errors.Add($"{field}.name must be unique in the list.");
+
+        switch (property.Type)
+        {
+            case null:
+                errors.Add($"{field}.type must be one of String, Int64, Double, Boolean.");
+                break;
+            case RulePropertyType.Other:
+                errors.Add($"{field}.type Other is read-only and cannot be written.");
+                break;
+            default:
+                if (ParsePropertyValue(property.Type, property.Value) is null)
+                    errors.Add($"{field}.value of '{property.Name}' must be {ValueRule(property.Type.Value)}.");
+                break;
+        }
+    }
+
+    private static string ValueRule(RulePropertyType type) => type switch
+    {
+        RulePropertyType.Int64 => "a whole number (Int64)",
+        RulePropertyType.Double => "a finite number with '.' as the decimal point (Double)",
+        RulePropertyType.Boolean => "true or false (Boolean)",
+        _ => "a string (String)"
+    };
 
     private static void CheckEntityPathName(List<string> errors, string? name)
     {

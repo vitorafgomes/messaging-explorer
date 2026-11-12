@@ -33,4 +33,16 @@ public sealed class InvalidEntityConfigurationException : Exception
         : base(string.Join(" ", violations))
     {
     }
+
+    private InvalidEntityConfigurationException(string fixedMessage, Exception innerException)
+        : base(fixedMessage, innerException)
+    {
+    }
+
+    /// <summary>
+    /// The broker refused a subscription rule, for example an expression that does not parse; the message is the
+    /// fixed "The broker refused this rule. Check the expression." and the broker's error is the inner exception.
+    /// </summary>
+    public static InvalidEntityConfigurationException RuleRefused(Exception innerException) =>
+        new("The broker refused this rule. Check the expression.", innerException);
 }

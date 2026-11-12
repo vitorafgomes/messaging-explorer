@@ -7,7 +7,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { delay } from 'rxjs/operators';
-import { EntitySelection, QueueInfo, TopicInfo, SubscriptionInfo, SubscriptionRuleInfo, TreeNode, SubscriptionNodeData, SessionInfo } from '../../core/models';
+import { EntitySelection, QueueInfo, TopicInfo, SubscriptionInfo, TreeNode, SubscriptionNodeData, SessionInfo } from '../../core/models';
 import { EntitySelectionService, QueueService, TopicService, SessionService, ConnectionService } from '../../core/services';
 import { SendMessageDialogComponent } from '../messages/send-message-dialog.component';
 import { ImportMessagesDialogComponent } from '../messages/import-messages-dialog.component';
@@ -19,6 +19,7 @@ import { ProviderService } from '../../core/services/provider.service';
 import { ProviderCapabilities } from '../../core/models/provider.model';
 import { MAX_TIMESPAN_DAYS, parseDuration } from './duration';
 import { EntityAdminActionsComponent } from './entity-admin-actions.component';
+import { SubscriptionRulesComponent } from './subscription-rules.component';
 
 const NOT_SET = 'Not set';
 
@@ -33,7 +34,8 @@ const NOT_SET = 'Not set';
     MatIconModule,
     MatTooltipModule,
     TransferMonitorComponent,
-    EntityAdminActionsComponent
+    EntityAdminActionsComponent,
+    SubscriptionRulesComponent
   ],
   template: `
     <div class="details-container">
@@ -498,67 +500,9 @@ const NOT_SET = 'Not set';
             </div>
 
             <!-- Subscription Rules Tab -->
-            <div class="rules-tab" [hidden]="activeSubscriptionTab() !== 'rules'" id="subscription-rules-tab">
-                @if (subscriptionEntity.rules && subscriptionEntity.rules.length > 0) {
-                  <div class="rules-container">
-                    @for (rule of subscriptionEntity.rules; track rule.name) {
-                      <div class="rule-card">
-                        <div class="rule-header">
-                          <i class="fa fa-filter rule-icon"></i>
-                          <div class="rule-title">
-                            <span class="rule-name">{{ rule.name }}</span>
-                          </div>
-                        </div>
-
-                        <div class="rule-content">
-                          @if (rule.filterExpression) {
-                            <div class="rule-section">
-                              <div class="section-label">
-                                <i class="fa fa-filter"></i>
-                                <span>Filter Expression</span>
-                              </div>
-                              <pre class="code-block">{{ rule.filterExpression }}</pre>
-                            </div>
-                          }
-
-                          @if (rule.actionExpression) {
-                            <div class="rule-section">
-                              <div class="section-label">
-                                <i class="fa fa-play"></i>
-                                <span>Action</span>
-                              </div>
-                              <pre class="code-block">{{ rule.actionExpression }}</pre>
-                            </div>
-                          }
-
-                          @if (rule.correlationProperties && Object.keys(rule.correlationProperties).length > 0) {
-                            <div class="rule-section">
-                              <div class="section-label">
-                                <i class="fa fa-cog"></i>
-                                <span>Correlation Properties</span>
-                              </div>
-                              <div class="properties-list">
-                                @for (prop of Object.entries(rule.correlationProperties); track prop[0]) {
-                                  <div class="property-item">
-                                    <span class="property-key">{{ prop[0] }}:</span>
-                                    <span class="property-value">{{ prop[1] }}</span>
-                                  </div>
-                                }
-                              </div>
-                            </div>
-                          }
-                        </div>
-                      </div>
-                    }
-                  </div>
-                } @else {
-                  <div class="empty-tab">
-                    <i class="fa fa-filter"></i>
-                    <p>No subscription rules found</p>
-                    <span class="hint">This subscription has no filter rules configured</span>
-                  </div>
-                }
-              </div>
+            <div [hidden]="activeSubscriptionTab() !== 'rules'" id="subscription-rules-tab">
+              <app-subscription-rules [subscription]="subscriptionEntity" />
+            </div>
 
             <!-- Sessions Tab (only visible when requiresSession is true and the broker supports sessions) -->
             @if (subscriptionEntity.requiresSession && supports('supportsSessions')) {
@@ -989,154 +933,6 @@ const NOT_SET = 'Not set';
 
     .tab-content {
       padding: 16px 0;
-    }
-
-    /* Subscription Rules Tab Styles */
-    .rules-tab {
-      padding: 8px !important;
-    }
-
-    .rules-container {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      padding: 0 16px;
-    }
-
-    .rule-card {
-      border: 1px solid var(--bs-border-color);
-      border-radius: 8px;
-      background: var(--bs-body-bg);
-      overflow: hidden;
-      transition: box-shadow 0.2s ease;
-
-      &:hover {
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      }
-    }
-
-    .rule-header {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 12px 16px;
-      background: var(--bs-secondary-bg);
-      border-bottom: 1px solid var(--bs-border-color);
-
-      .rule-icon {
-        color: #1976d2;
-        font-size: 24px;
-        width: 24px;
-        height: 24px;
-      }
-
-      .rule-title {
-        flex: 1;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-
-        .rule-name {
-          font-weight: 600;
-          font-size: 14px;
-          color: var(--bs-body-color);
-        }
-      }
-    }
-
-    .rule-content {
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .rule-section {
-      .section-label {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 8px;
-        color: var(--bs-secondary-color);
-        font-size: 12px;
-        font-weight: 600;
-        text-transform: uppercase;
-
-        mat-icon {
-          font-size: 16px;
-          width: 16px;
-          height: 16px;
-        }
-      }
-
-      .code-block {
-        margin: 0;
-        padding: 12px;
-        background: var(--bs-secondary-bg);
-        border: 1px solid var(--bs-border-color);
-        border-radius: 4px;
-        font-family: 'Consolas', 'Courier New', monospace;
-        font-size: 12px;
-        color: var(--bs-body-color);
-        white-space: pre-wrap;
-        word-break: break-word;
-        overflow-x: auto;
-      }
-
-      .properties-list {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        padding: 12px;
-        background: var(--bs-secondary-bg);
-        border: 1px solid var(--bs-border-color);
-        border-radius: 4px;
-
-        .property-item {
-          display: flex;
-          gap: 8px;
-          font-size: 12px;
-
-          .property-key {
-            font-weight: 600;
-            color: var(--bs-body-color);
-            font-family: 'Consolas', 'Courier New', monospace;
-          }
-
-          .property-value {
-            color: var(--bs-body-color);
-            font-family: 'Consolas', 'Courier New', monospace;
-          }
-        }
-      }
-    }
-
-    .empty-tab {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 48px;
-      color: var(--bs-secondary-color);
-      text-align: center;
-
-      mat-icon {
-        font-size: 48px;
-        width: 48px;
-        height: 48px;
-        margin-bottom: 16px;
-        color: var(--bs-tertiary-color);
-      }
-
-      p {
-        margin: 0 0 8px;
-        font-size: 16px;
-      }
-
-      .hint {
-        font-size: 12px;
-        color: var(--bs-tertiary-color);
-      }
     }
 
     /* Description Tab - ServiceBusExplorer-like Layout */
@@ -2360,9 +2156,6 @@ export class EntityDetailsComponent {
   private readonly providerService = inject(ProviderService);
 
   readonly notSet = NOT_SET;
-
-  // Make Object available in template
-  Object = Object;
 
   // Live subscription counts (updated by TransferMonitorComponent polling)
   liveActiveCount = signal<number | null>(null);

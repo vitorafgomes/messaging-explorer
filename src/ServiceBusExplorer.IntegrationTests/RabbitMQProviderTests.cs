@@ -111,7 +111,8 @@ public sealed class RabbitMQProviderTests(RabbitMqFixture fixture) : IAsyncLifet
 
         Assert.Equal(queue, subscription.Name);
         Assert.Equal(exchange, subscription.TopicName);
-        Assert.Equal("orders.*", Assert.Single(subscription.Rules).FilterExpression);
+        var rule = Assert.Single(subscription.Rules);
+        Assert.Equal((RuleFilterType.RoutingKey, "orders.*"), (rule.FilterType, rule.SqlExpression));
         Assert.True(await fixture.QueueExistsAsync(queue));
     }
 

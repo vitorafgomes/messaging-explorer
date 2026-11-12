@@ -202,24 +202,6 @@ public sealed class AzureServiceBusProviderDefectTests(AzureServiceBusFixture fi
         Assert.Contains(deepest, stillDeadLettered);
     }
 
-    /// <summary>Correct: a subscription with a filter that does not parse is not created, or keeps its default rule, and the error says why.</summary>
-    [Fact]
-    public async Task Defect_a_subscription_created_with_an_invalid_filter_is_left_with_no_rule_and_cannot_be_created_again()
-    {
-        var topic = Name(_topics, "bad-filter");
-        await _management.CreateTopicAsync(topic);
-        var options = new SubscriptionCreateOptions { FilterExpression = "this is (( not sql" };
-
-        var parse = await Assert.ThrowsAsync<ArgumentException>(() => _management.CreateSubscriptionAsync(topic, "filtered", options));
-        var left = await _management.GetSubscriptionAsync(topic, "filtered");
-        var retry = await Assert.ThrowsAsync<EntityAlreadyExistsException>(() => _management.CreateSubscriptionAsync(topic, "filtered", options));
-
-        Assert.Contains("error parsing the SQL expression", parse.Message);
-        Assert.NotNull(left);
-        Assert.Empty(left.Rules);
-        Assert.Equal("The entity already exists.", retry.Message);
-    }
-
     /// <summary>Correct: a send of many messages is split into batches that each fit, and every message is sent.</summary>
     [Fact]
     public async Task Defect_send_of_more_messages_than_fit_one_batch_fails_as_a_whole_and_sends_nothing()
@@ -287,23 +269,6 @@ public sealed class AzureServiceBusProviderDefectTests(AzureServiceBusFixture fi
         Assert.True(provider.IsConnected);
         var firstCall = await Assert.ThrowsAsync<AggregateException>(() => provider.GetQueuesAsync());
         Assert.StartsWith("Retry failed after 4 tries", firstCall.Message);
-    }
-
-    /// <summary>Correct: the default rule of a subscription is reported as a true filter.</summary>
-    [Fact]
-    public async Task Defect_the_default_rule_of_a_subscription_is_reported_as_a_sql_filter()
-    {
-        var topic = Name(_topics, "default-rule");
-        await _management.CreateTopicAsync(topic);
-        await _management.CreateSubscriptionAsync(topic, "all");
-
-        var subscription = await _management.GetSubscriptionAsync(topic, "all");
-        Assert.NotNull(subscription);
-        var rule = Assert.Single(subscription.Rules);
-        var stored = (await fixture.Admin.GetRuleAsync(topic, "all", "$Default")).Value;
-
-        Assert.IsType<TrueRuleFilter>(stored.Filter);
-        Assert.Equal(("$Default", "SqlFilter", "1=1"), (rule.Name, rule.FilterType, rule.FilterExpression));
     }
 
     /// <summary>Correct: a connection to an IP address endpoint is shown with the whole address.</summary>

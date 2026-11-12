@@ -468,7 +468,7 @@ public class RabbitMQProvider : IMessagingProvider
     public Task UpdateSubscriptionAsync(string topicName, string subscriptionName, SubscriptionUpdateOptions options, CancellationToken cancellationToken = default) =>
         Task.FromException(new NotSupportedException("RabbitMQ does not support updating entities."));
 
-    private static SubscriptionInfo MapBindingToSubscriptionInfo(string topicName, RabbitMQBindingInfo binding, RabbitMQQueueInfo? queue = null, RabbitMQQueueInfo? dlqQueue = null)
+    internal static SubscriptionInfo MapBindingToSubscriptionInfo(string topicName, RabbitMQBindingInfo binding, RabbitMQQueueInfo? queue = null, RabbitMQQueueInfo? dlqQueue = null)
     {
         return new SubscriptionInfo
         {
@@ -484,18 +484,38 @@ public class RabbitMQProvider : IMessagingProvider
             DefaultMessageTimeToLive = queue?.DefaultMessageTimeToLive ?? TimeSpan.MaxValue,
             LockDuration = queue?.LockDuration ?? TimeSpan.Zero,
             DeadLetteringOnMessageExpiration = queue?.DeadLetteringOnMessageExpiration ?? false,
-            // RabbitMQ binding uses routing key instead of filter expression
-            Rules = new List<SubscriptionRuleInfo>
-            {
-                new()
-                {
-                    Name = "RoutingKey",
-                    FilterType = "RoutingKey",
-                    FilterExpression = binding.RoutingKey
-                }
-            }
+            Rules = [RoutingKeyRule(binding.RoutingKey)]
         };
     }
+
+    /// <summary>
+    /// The routing key of a binding shown as a read-only rule: filter type <see cref="RuleFilterType.RoutingKey"/> with
+    /// the key in <see cref="SubscriptionRuleInfo.SqlExpression"/>. It is not a rule the provider can add or change.
+    /// </summary>
+    internal static SubscriptionRuleInfo RoutingKeyRule(string? routingKey) =>
+        new() { Name = "RoutingKey", FilterType = RuleFilterType.RoutingKey, SqlExpression = routingKey };
+
+    #endregion
+
+    #region Subscription Rules
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<SubscriptionRuleInfo>> GetRulesAsync(string topicName, string subscriptionName, CancellationToken cancellationToken = default) =>
+        Task.FromException<IReadOnlyList<SubscriptionRuleInfo>>(RulesNotSupported());
+
+    /// <inheritdoc />
+    public Task<SubscriptionRuleInfo> CreateRuleAsync(string topicName, string subscriptionName, SubscriptionRuleInfo rule, CancellationToken cancellationToken = default) =>
+        Task.FromException<SubscriptionRuleInfo>(RulesNotSupported());
+
+    /// <inheritdoc />
+    public Task<SubscriptionRuleInfo> UpdateRuleAsync(string topicName, string subscriptionName, string ruleName, SubscriptionRuleInfo rule, CancellationToken cancellationToken = default) =>
+        Task.FromException<SubscriptionRuleInfo>(RulesNotSupported());
+
+    /// <inheritdoc />
+    public Task DeleteRuleAsync(string topicName, string subscriptionName, string ruleName, CancellationToken cancellationToken = default) =>
+        Task.FromException(RulesNotSupported());
+
+    private static NotSupportedException RulesNotSupported() => new("RabbitMQ does not support subscription rules.");
 
     #endregion
 
