@@ -88,6 +88,12 @@ public class RabbitMQProviderCapabilities : IProviderCapabilities
     /// </remarks>
     public bool SupportsAutoForwarding => false;
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// RabbitMQ fixes queue and exchange arguments at declaration; the provider refuses updates.
+    /// </remarks>
+    public bool SupportsEntityUpdate => false;
+
     /// <summary>
     /// RabbitMQ supported exchange types.
     /// </summary>

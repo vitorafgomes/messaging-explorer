@@ -55,14 +55,53 @@ public class TopicsController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<ActionResult> CreateTopic([FromBody] CreateEntityRequest request)
+    public async Task<ActionResult> CreateTopic([FromBody] CreateTopicRequest request)
     {
         var provider = GetProvider();
         if (provider == null)
             return NoProviderConnected();
 
-        await provider.CreateTopicAsync(request.Name);
-        return CreatedAtAction(nameof(GetTopic), new { name = request.Name }, null);
+        if (string.IsNullOrWhiteSpace(request.Name))
+            return EntityAdministrationResults.NameRequired();
+
+        var options = request.Options?.ToOptions();
+
+        var name = request.Name;
+        try
+        {
+            if (options == null)
+                await provider.CreateTopicAsync(name);
+            else
+                await provider.CreateTopicAsync(name, options);
+            return CreatedAtAction(nameof(GetTopic), new { name }, null);
+        }
+        catch (Exception ex)
+        {
+            return EntityAdministrationResults.Failure(ex, _logger, "topic", name, "topic");
+        }
+    }
+
+    [HttpPatch("{name}")]
+    public async Task<ActionResult<ITopicEntity>> UpdateTopic(string name, [FromBody] TopicUpdateOptions options)
+    {
+        var provider = GetProvider();
+        if (provider == null)
+            return NoProviderConnected();
+
+        try
+        {
+            await provider.UpdateTopicAsync(name, options, HttpContext.RequestAborted);
+            var topic = await provider.GetTopicAsync(name);
+            return topic == null ? EntityAdministrationResults.NotFound("topic") : Ok(topic);
+        }
+        catch (NotSupportedException)
+        {
+            return EntityAdministrationResults.NotSupported();
+        }
+        catch (Exception ex)
+        {
+            return EntityAdministrationResults.Failure(ex, _logger, "topic", name, "topic");
+        }
     }
 
     [HttpDelete("{name}")]
@@ -114,14 +153,53 @@ public class TopicsController : ControllerBase
     }
 
     [HttpPost("{topicName}/subscriptions")]
-    public async Task<ActionResult> CreateSubscription(string topicName, [FromBody] CreateEntityRequest request)
+    public async Task<ActionResult> CreateSubscription(string topicName, [FromBody] CreateSubscriptionRequest request)
     {
         var provider = GetProvider();
         if (provider == null)
             return NoProviderConnected();
 
-        await provider.CreateSubscriptionAsync(topicName, request.Name);
-        return CreatedAtAction(nameof(GetSubscription), new { topicName, subscriptionName = request.Name }, null);
+        if (string.IsNullOrWhiteSpace(request.Name))
+            return EntityAdministrationResults.NameRequired();
+
+        var options = request.Options?.ToOptions();
+
+        var subscriptionName = request.Name;
+        try
+        {
+            if (options == null)
+                await provider.CreateSubscriptionAsync(topicName, subscriptionName);
+            else
+                await provider.CreateSubscriptionAsync(topicName, subscriptionName, options);
+            return CreatedAtAction(nameof(GetSubscription), new { topicName, subscriptionName }, null);
+        }
+        catch (Exception ex)
+        {
+            return EntityAdministrationResults.Failure(ex, _logger, "subscription", $"{topicName}/{subscriptionName}", "topic");
+        }
+    }
+
+    [HttpPatch("{topicName}/subscriptions/{subscriptionName}")]
+    public async Task<ActionResult<SubscriptionInfo>> UpdateSubscription(string topicName, string subscriptionName, [FromBody] SubscriptionUpdateOptions options)
+    {
+        var provider = GetProvider();
+        if (provider == null)
+            return NoProviderConnected();
+
+        try
+        {
+            await provider.UpdateSubscriptionAsync(topicName, subscriptionName, options, HttpContext.RequestAborted);
+            var subscription = await provider.GetSubscriptionAsync(topicName, subscriptionName);
+            return subscription == null ? EntityAdministrationResults.NotFound("subscription") : Ok(subscription);
+        }
+        catch (NotSupportedException)
+        {
+            return EntityAdministrationResults.NotSupported();
+        }
+        catch (Exception ex)
+        {
+            return EntityAdministrationResults.Failure(ex, _logger, "subscription", $"{topicName}/{subscriptionName}", "subscription");
+        }
     }
 
     [HttpDelete("{topicName}/subscriptions/{subscriptionName}")]
