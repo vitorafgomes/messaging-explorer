@@ -82,7 +82,7 @@ public class EntityNameRoutingTests
             foreach (var (method, path) in requests)
             {
                 using var request = new HttpRequestMessage(new HttpMethod(method), path);
-                if (method is "POST" or "PUT")
+                if (method is "POST" or "PUT" or "PATCH")
                     request.Content = JsonContent.Create(new { sequenceNumbers = new long[] { 1 }, state = "s" });
                 using var _ = await client.SendAsync(request);
             }
@@ -155,6 +155,29 @@ public class EntityNameRoutingTests
             "DeleteSubscriptionAsync(t/1, sub=s/2)",
             "PurgeMessagesAsync(t/1, sub=s/2, dl=False)",
             "ResubmitDeadLetterMessagesAsync(t/1, sub=s/2)",
+        }, calls);
+    }
+
+    [Theory]
+    [InlineData("a/messages", "a%2Fmessages")]
+    [InlineData("orders#1", "orders%231")]
+    [InlineData("my queue", "my%20queue")]
+    [InlineData("a%2Fb", "a%252Fb")]
+    public async Task A_name_with_reserved_characters_reaches_the_provider_unchanged_on_every_edit(string name, string segment)
+    {
+        var calls = await SendAsync(
+            ("PATCH", $"/api/queues/{segment}"),
+            ("PATCH", $"/api/topics/{segment}"),
+            ("PATCH", $"/api/topics/{segment}/subscriptions/{segment}"));
+
+        Assert.Equal(new[]
+        {
+            $"UpdateQueueAsync({name})",
+            $"GetQueueAsync({name})",
+            $"UpdateTopicAsync({name})",
+            $"GetTopicAsync({name})",
+            $"UpdateSubscriptionAsync({name}, sub={name})",
+            $"GetSubscriptionAsync({name}, sub={name})",
         }, calls);
     }
 

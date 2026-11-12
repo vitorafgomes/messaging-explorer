@@ -189,29 +189,133 @@ public class AzureServiceBusProvider : IMessagingProvider
     public async Task CreateQueueAsync(string queueName, QueueCreateOptions? options)
     {
         EnsureConnected();
+        await CreateQueueCoreAsync(_adminClient!, queueName, options);
+    }
 
-        if (options == null)
+    /// <summary>
+    /// Creates a queue with the broker's defaults when <paramref name="options"/> is null, otherwise with every
+    /// option that is set; failures the caller can act on arrive as the provider-neutral exceptions. The name and
+    /// options are checked against the Azure Service Bus rules first; a violation reaches no broker call.
+    /// </summary>
+    internal static async Task CreateQueueCoreAsync(ServiceBusAdministrationClient adminClient, string queueName, QueueCreateOptions? options)
+    {
+        ThrowIfInvalid(EntityConfigurationValidator.ValidateQueueCreate(queueName, options));
+
+        try
         {
-            await _adminClient!.CreateQueueAsync(queueName);
-            return;
+            if (options == null)
+            {
+                await adminClient.CreateQueueAsync(queueName);
+                return;
+            }
+
+            var queue = new CreateQueueOptions(queueName)
+            {
+                RequiresSession = options.RequiresSession,
+                EnablePartitioning = options.EnablePartitioning,
+                DeadLetteringOnMessageExpiration = options.DeadLetteringOnMessageExpiration,
+                RequiresDuplicateDetection = options.RequiresDuplicateDetection
+            };
+            if (options.DefaultMessageTimeToLive is { } ttl) queue.DefaultMessageTimeToLive = ttl;
+            if (options.LockDuration is { } lockDuration) queue.LockDuration = lockDuration;
+            if (options.MaxDeliveryCount is { } maxDeliveryCount) queue.MaxDeliveryCount = maxDeliveryCount;
+            if (options.DuplicateDetectionHistoryTimeWindow is { } window) queue.DuplicateDetectionHistoryTimeWindow = window;
+            if (options.MaxSizeInMegabytes is { } maxSize) queue.MaxSizeInMegabytes = maxSize;
+            if (options.AutoDeleteOnIdle is { } autoDelete) queue.AutoDeleteOnIdle = autoDelete;
+            if (options.EnableBatchedOperations is { } batched) queue.EnableBatchedOperations = batched;
+            if (!string.IsNullOrEmpty(options.ForwardTo)) queue.ForwardTo = options.ForwardTo;
+            if (!string.IsNullOrEmpty(options.ForwardDeadLetteredMessagesTo)) queue.ForwardDeadLetteredMessagesTo = options.ForwardDeadLetteredMessagesTo;
+            if (options.UserMetadata != null) queue.UserMetadata = options.UserMetadata;
+
+            await adminClient.CreateQueueAsync(queue);
         }
+        catch (Exception ex) when (ToProviderNeutral(ex) is { } neutral)
+        {
+            throw neutral;
+        }
+    }
 
-        var queueOptions = new CreateQueueOptions(queueName);
+    /// <inheritdoc />
+    public async Task UpdateQueueAsync(string queueName, QueueUpdateOptions options, CancellationToken cancellationToken = default)
+    {
+        EnsureConnected();
+        await UpdateQueueCoreAsync(_adminClient!, queueName, options, cancellationToken);
+    }
 
-        if (options.DefaultMessageTimeToLive.HasValue)
-            queueOptions.DefaultMessageTimeToLive = options.DefaultMessageTimeToLive.Value;
+    /// <summary>
+    /// Checks the options against the Azure Service Bus rules, then reads the queue's properties once, changes
+    /// only the options that are set and writes them back once.
+    /// The write is last-write-wins: the SDK sends it with <c>If-Match: *</c>.
+    /// </summary>
+    internal static async Task UpdateQueueCoreAsync(ServiceBusAdministrationClient adminClient, string queueName, QueueUpdateOptions options, CancellationToken cancellationToken)
+    {
+        ThrowIfInvalid(EntityConfigurationValidator.ValidateQueueUpdate(queueName, options));
 
-        if (options.LockDuration.HasValue)
-            queueOptions.LockDuration = options.LockDuration.Value;
+        try
+        {
+            QueueProperties queue = (await adminClient.GetQueueAsync(queueName, cancellationToken)).Value;
+            if (options.DefaultMessageTimeToLive is { } ttl) queue.DefaultMessageTimeToLive = ttl;
+            if (options.LockDuration is { } lockDuration) queue.LockDuration = lockDuration;
+            if (options.MaxDeliveryCount is { } maxDeliveryCount) queue.MaxDeliveryCount = maxDeliveryCount;
+            if (options.DeadLetteringOnMessageExpiration is { } deadLettering) queue.DeadLetteringOnMessageExpiration = deadLettering;
+            if (options.DuplicateDetectionHistoryTimeWindow is { } window) queue.DuplicateDetectionHistoryTimeWindow = window;
+            if (options.MaxSizeInMegabytes is { } maxSize) queue.MaxSizeInMegabytes = maxSize;
+            if (options.AutoDeleteOnIdle is { } autoDelete) queue.AutoDeleteOnIdle = autoDelete;
+            if (options.EnableBatchedOperations is { } batched) queue.EnableBatchedOperations = batched;
+            if (options.ForwardTo != null) queue.ForwardTo = NullIfEmpty(options.ForwardTo);
+            if (options.ForwardDeadLetteredMessagesTo != null) queue.ForwardDeadLetteredMessagesTo = NullIfEmpty(options.ForwardDeadLetteredMessagesTo);
+            if (options.UserMetadata != null) queue.UserMetadata = options.UserMetadata;
+            if (options.Status != null) queue.Status = ToEntityStatus(options.Status);
 
-        if (options.MaxDeliveryCount.HasValue)
-            queueOptions.MaxDeliveryCount = options.MaxDeliveryCount.Value;
+            await adminClient.UpdateQueueAsync(queue, cancellationToken);
+        }
+        catch (Exception ex) when (ToProviderNeutral(ex) is { } neutral)
+        {
+            throw neutral;
+        }
+    }
 
-        queueOptions.RequiresSession = options.RequiresSession;
-        queueOptions.EnablePartitioning = options.EnablePartitioning;
-        queueOptions.DeadLetteringOnMessageExpiration = options.DeadLetteringOnMessageExpiration;
+    /// <summary>
+    /// The SDK failures a caller can act on, as provider-neutral exceptions that carry the SDK exception only as
+    /// the inner exception; null for every other failure, which reaches the caller unchanged.
+    /// </summary>
+    private static Exception? ToProviderNeutral(Exception ex) => ex switch
+    {
+        ServiceBusException { Reason: ServiceBusFailureReason.MessagingEntityAlreadyExists } => new EntityAlreadyExistsException(ex),
+        ServiceBusException { Reason: ServiceBusFailureReason.MessagingEntityNotFound } => new EntityNotFoundException(ex),
+        ServiceBusException { Reason: ServiceBusFailureReason.QuotaExceeded } => new InvalidEntityConfigurationException(ex),
+        ArgumentException or InvalidOperationException => new InvalidEntityConfigurationException(ex),
+        _ => null
+    };
 
-        await _adminClient!.CreateQueueAsync(queueOptions);
+    private static EntityStatus ToEntityStatus(string status) => status switch
+    {
+        "Active" => EntityStatus.Active,
+        "Disabled" => EntityStatus.Disabled,
+        "SendDisabled" => EntityStatus.SendDisabled,
+        "ReceiveDisabled" => EntityStatus.ReceiveDisabled,
+        _ => throw new ArgumentException("Unknown entity status.", nameof(status))
+    };
+
+    private static void ThrowIfInvalid(IReadOnlyList<string> violations)
+    {
+        if (violations.Count > 0)
+            throw new InvalidEntityConfigurationException(violations);
+    }
+
+    private static string? NullIfEmpty(string value) => value.Length == 0 ? null : value;
+
+    /// <summary>
+    /// The entity path of a forward target as the broker returns it: the path of an absolute address without its
+    /// leading slash, URL-decoded; any other value as is; null or empty as null. The SDK writes a bare name as an
+    /// absolute address, so a read gives back the address, not the name that was set.
+    /// </summary>
+    internal static string? ToEntityPath(string? forwardTarget)
+    {
+        if (string.IsNullOrEmpty(forwardTarget)) return null;
+        if (forwardTarget.Contains("://") && Uri.TryCreate(forwardTarget, UriKind.Absolute, out var address))
+            return Uri.UnescapeDataString(address.AbsolutePath.StartsWith('/') ? address.AbsolutePath[1..] : address.AbsolutePath);
+        return forwardTarget;
     }
 
     /// <inheritdoc />
@@ -259,8 +363,8 @@ public class AzureServiceBusProvider : IMessagingProvider
             MaxSizeInMegabytes = props.MaxSizeInMegabytes,
             RequiresSession = props.RequiresSession,
             DeadLetteringOnMessageExpiration = props.DeadLetteringOnMessageExpiration,
-            ForwardTo = props.ForwardTo,
-            ForwardDeadLetteredMessagesTo = props.ForwardDeadLetteredMessagesTo,
+            ForwardTo = ToEntityPath(props.ForwardTo),
+            ForwardDeadLetteredMessagesTo = ToEntityPath(props.ForwardDeadLetteredMessagesTo),
             AutoDeleteOnIdle = props.AutoDeleteOnIdle,
             EnableBatchedOperations = props.EnableBatchedOperations,
             UserMetadata = props.UserMetadata,
@@ -329,22 +433,79 @@ public class AzureServiceBusProvider : IMessagingProvider
     public async Task CreateTopicAsync(string topicName, TopicCreateOptions? options)
     {
         EnsureConnected();
+        await CreateTopicCoreAsync(_adminClient!, topicName, options);
+    }
 
-        if (options == null)
+    /// <summary>
+    /// Creates a topic with the broker's defaults when <paramref name="options"/> is null, otherwise with every
+    /// option that is set; failures the caller can act on arrive as the provider-neutral exceptions.
+    /// </summary>
+    internal static async Task CreateTopicCoreAsync(ServiceBusAdministrationClient adminClient, string topicName, TopicCreateOptions? options)
+    {
+        ThrowIfInvalid(EntityConfigurationValidator.ValidateTopicCreate(topicName, options));
+
+        try
         {
-            await _adminClient!.CreateTopicAsync(topicName);
-            return;
+            if (options == null)
+            {
+                await adminClient.CreateTopicAsync(topicName);
+                return;
+            }
+
+            var topic = new CreateTopicOptions(topicName)
+            {
+                EnablePartitioning = options.EnablePartitioning,
+                RequiresDuplicateDetection = options.RequiresDuplicateDetection
+            };
+            if (options.DefaultMessageTimeToLive is { } ttl) topic.DefaultMessageTimeToLive = ttl;
+            if (options.DuplicateDetectionHistoryTimeWindow is { } window) topic.DuplicateDetectionHistoryTimeWindow = window;
+            if (options.MaxSizeInMegabytes is { } maxSize) topic.MaxSizeInMegabytes = maxSize;
+            if (options.AutoDeleteOnIdle is { } autoDelete) topic.AutoDeleteOnIdle = autoDelete;
+            if (options.EnableBatchedOperations is { } batched) topic.EnableBatchedOperations = batched;
+            if (options.SupportOrdering is { } ordering) topic.SupportOrdering = ordering;
+            if (options.UserMetadata != null) topic.UserMetadata = options.UserMetadata;
+
+            await adminClient.CreateTopicAsync(topic);
         }
+        catch (Exception ex) when (ToProviderNeutral(ex) is { } neutral)
+        {
+            throw neutral;
+        }
+    }
 
-        var topicOptions = new CreateTopicOptions(topicName);
+    /// <inheritdoc />
+    public async Task UpdateTopicAsync(string topicName, TopicUpdateOptions options, CancellationToken cancellationToken = default)
+    {
+        EnsureConnected();
+        await UpdateTopicCoreAsync(_adminClient!, topicName, options, cancellationToken);
+    }
 
-        if (options.DefaultMessageTimeToLive.HasValue)
-            topicOptions.DefaultMessageTimeToLive = options.DefaultMessageTimeToLive.Value;
+    /// <summary>
+    /// Reads the topic's properties once, changes only the options that are set and writes them back once.
+    /// The write is last-write-wins: the SDK sends it with <c>If-Match: *</c>.
+    /// </summary>
+    internal static async Task UpdateTopicCoreAsync(ServiceBusAdministrationClient adminClient, string topicName, TopicUpdateOptions options, CancellationToken cancellationToken)
+    {
+        ThrowIfInvalid(EntityConfigurationValidator.ValidateTopicUpdate(options));
 
-        topicOptions.EnablePartitioning = options.EnablePartitioning;
-        topicOptions.RequiresDuplicateDetection = options.RequiresDuplicateDetection;
+        try
+        {
+            TopicProperties topic = (await adminClient.GetTopicAsync(topicName, cancellationToken)).Value;
+            if (options.DefaultMessageTimeToLive is { } ttl) topic.DefaultMessageTimeToLive = ttl;
+            if (options.DuplicateDetectionHistoryTimeWindow is { } window) topic.DuplicateDetectionHistoryTimeWindow = window;
+            if (options.MaxSizeInMegabytes is { } maxSize) topic.MaxSizeInMegabytes = maxSize;
+            if (options.AutoDeleteOnIdle is { } autoDelete) topic.AutoDeleteOnIdle = autoDelete;
+            if (options.EnableBatchedOperations is { } batched) topic.EnableBatchedOperations = batched;
+            if (options.SupportOrdering is { } ordering) topic.SupportOrdering = ordering;
+            if (options.UserMetadata != null) topic.UserMetadata = options.UserMetadata;
+            if (options.Status != null) topic.Status = ToEntityStatus(options.Status);
 
-        await _adminClient!.CreateTopicAsync(topicOptions);
+            await adminClient.UpdateTopicAsync(topic, cancellationToken);
+        }
+        catch (Exception ex) when (ToProviderNeutral(ex) is { } neutral)
+        {
+            throw neutral;
+        }
     }
 
     /// <inheritdoc />
@@ -475,27 +636,12 @@ public class AzureServiceBusProvider : IMessagingProvider
     {
         EnsureConnected();
 
+        await CreateSubscriptionCoreAsync(_adminClient!, topicName, subscriptionName, options);
+
         if (options == null)
         {
-            await _adminClient!.CreateSubscriptionAsync(topicName, subscriptionName);
             return;
         }
-
-        var subscriptionOptions = new CreateSubscriptionOptions(topicName, subscriptionName);
-
-        if (options.DefaultMessageTimeToLive.HasValue)
-            subscriptionOptions.DefaultMessageTimeToLive = options.DefaultMessageTimeToLive.Value;
-
-        if (options.LockDuration.HasValue)
-            subscriptionOptions.LockDuration = options.LockDuration.Value;
-
-        if (options.MaxDeliveryCount.HasValue)
-            subscriptionOptions.MaxDeliveryCount = options.MaxDeliveryCount.Value;
-
-        subscriptionOptions.RequiresSession = options.RequiresSession;
-        subscriptionOptions.DeadLetteringOnMessageExpiration = options.DeadLetteringOnMessageExpiration;
-
-        await _adminClient!.CreateSubscriptionAsync(subscriptionOptions);
 
         // If a filter expression is provided, replace the default rule with a SQL filter
         if (!string.IsNullOrWhiteSpace(options.FilterExpression))
@@ -503,7 +649,7 @@ public class AzureServiceBusProvider : IMessagingProvider
             // Delete the default true filter rule
             try
             {
-                await _adminClient.DeleteRuleAsync(topicName, subscriptionName, "$Default");
+                await _adminClient!.DeleteRuleAsync(topicName, subscriptionName, "$Default");
             }
             catch (ServiceBusException)
             {
@@ -512,7 +658,7 @@ public class AzureServiceBusProvider : IMessagingProvider
 
             // Create the new filter rule
             var rule = new CreateRuleOptions("CustomFilter", new SqlRuleFilter(options.FilterExpression));
-            await _adminClient.CreateRuleAsync(topicName, subscriptionName, rule);
+            await _adminClient!.CreateRuleAsync(topicName, subscriptionName, rule);
         }
     }
 
@@ -521,6 +667,84 @@ public class AzureServiceBusProvider : IMessagingProvider
     {
         EnsureConnected();
         await _adminClient!.DeleteSubscriptionAsync(topicName, subscriptionName);
+    }
+
+    /// <summary>
+    /// Creates a subscription with the broker's defaults when <paramref name="options"/> is null, otherwise with
+    /// every option that is set; failures the caller can act on arrive as the provider-neutral exceptions. A
+    /// missing topic arrives as <see cref="EntityNotFoundException"/>. The filter expression is not read here.
+    /// </summary>
+    internal static async Task CreateSubscriptionCoreAsync(ServiceBusAdministrationClient adminClient, string topicName, string subscriptionName, SubscriptionCreateOptions? options)
+    {
+        ThrowIfInvalid(EntityConfigurationValidator.ValidateSubscriptionCreate(topicName, subscriptionName, options));
+
+        try
+        {
+            if (options == null)
+            {
+                await adminClient.CreateSubscriptionAsync(topicName, subscriptionName);
+                return;
+            }
+
+            var subscription = new CreateSubscriptionOptions(topicName, subscriptionName)
+            {
+                RequiresSession = options.RequiresSession,
+                DeadLetteringOnMessageExpiration = options.DeadLetteringOnMessageExpiration
+            };
+            if (options.DefaultMessageTimeToLive is { } ttl) subscription.DefaultMessageTimeToLive = ttl;
+            if (options.LockDuration is { } lockDuration) subscription.LockDuration = lockDuration;
+            if (options.MaxDeliveryCount is { } maxDeliveryCount) subscription.MaxDeliveryCount = maxDeliveryCount;
+            if (options.DeadLetteringOnFilterEvaluationExceptions is { } filterDeadLettering) subscription.EnableDeadLetteringOnFilterEvaluationExceptions = filterDeadLettering;
+            if (options.AutoDeleteOnIdle is { } autoDelete) subscription.AutoDeleteOnIdle = autoDelete;
+            if (options.EnableBatchedOperations is { } batched) subscription.EnableBatchedOperations = batched;
+            if (!string.IsNullOrEmpty(options.ForwardTo)) subscription.ForwardTo = options.ForwardTo;
+            if (!string.IsNullOrEmpty(options.ForwardDeadLetteredMessagesTo)) subscription.ForwardDeadLetteredMessagesTo = options.ForwardDeadLetteredMessagesTo;
+            if (options.UserMetadata != null) subscription.UserMetadata = options.UserMetadata;
+
+            await adminClient.CreateSubscriptionAsync(subscription);
+        }
+        catch (Exception ex) when (ToProviderNeutral(ex) is { } neutral)
+        {
+            throw neutral;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task UpdateSubscriptionAsync(string topicName, string subscriptionName, SubscriptionUpdateOptions options, CancellationToken cancellationToken = default)
+    {
+        EnsureConnected();
+        await UpdateSubscriptionCoreAsync(_adminClient!, topicName, subscriptionName, options, cancellationToken);
+    }
+
+    /// <summary>
+    /// Reads the subscription's properties once, changes only the options that are set and writes them back once.
+    /// The write is last-write-wins: the SDK sends it with <c>If-Match: *</c>.
+    /// </summary>
+    internal static async Task UpdateSubscriptionCoreAsync(ServiceBusAdministrationClient adminClient, string topicName, string subscriptionName, SubscriptionUpdateOptions options, CancellationToken cancellationToken)
+    {
+        ThrowIfInvalid(EntityConfigurationValidator.ValidateSubscriptionUpdate(topicName, options));
+
+        try
+        {
+            SubscriptionProperties subscription = (await adminClient.GetSubscriptionAsync(topicName, subscriptionName, cancellationToken)).Value;
+            if (options.DefaultMessageTimeToLive is { } ttl) subscription.DefaultMessageTimeToLive = ttl;
+            if (options.LockDuration is { } lockDuration) subscription.LockDuration = lockDuration;
+            if (options.MaxDeliveryCount is { } maxDeliveryCount) subscription.MaxDeliveryCount = maxDeliveryCount;
+            if (options.DeadLetteringOnMessageExpiration is { } deadLettering) subscription.DeadLetteringOnMessageExpiration = deadLettering;
+            if (options.DeadLetteringOnFilterEvaluationExceptions is { } filterDeadLettering) subscription.EnableDeadLetteringOnFilterEvaluationExceptions = filterDeadLettering;
+            if (options.AutoDeleteOnIdle is { } autoDelete) subscription.AutoDeleteOnIdle = autoDelete;
+            if (options.EnableBatchedOperations is { } batched) subscription.EnableBatchedOperations = batched;
+            if (options.ForwardTo != null) subscription.ForwardTo = NullIfEmpty(options.ForwardTo);
+            if (options.ForwardDeadLetteredMessagesTo != null) subscription.ForwardDeadLetteredMessagesTo = NullIfEmpty(options.ForwardDeadLetteredMessagesTo);
+            if (options.UserMetadata != null) subscription.UserMetadata = options.UserMetadata;
+            if (options.Status != null) subscription.Status = ToEntityStatus(options.Status);
+
+            await adminClient.UpdateSubscriptionAsync(subscription, cancellationToken);
+        }
+        catch (Exception ex) when (ToProviderNeutral(ex) is { } neutral)
+        {
+            throw neutral;
+        }
     }
 
     // Overload for listing subscriptions (runtime properties only)
@@ -546,7 +770,7 @@ public class AzureServiceBusProvider : IMessagingProvider
     }
 
     // Full mapping with configuration properties
-    private static SubscriptionInfo MapToSubscriptionInfo(SubscriptionProperties props, SubscriptionRuntimeProperties runtimeProps)
+    internal static SubscriptionInfo MapToSubscriptionInfo(SubscriptionProperties props, SubscriptionRuntimeProperties runtimeProps)
     {
         return new SubscriptionInfo
         {
@@ -576,8 +800,8 @@ public class AzureServiceBusProvider : IMessagingProvider
             EnableBatchedOperations = props.EnableBatchedOperations,
             Status = props.Status.ToString(),
             UserMetadata = props.UserMetadata,
-            ForwardTo = props.ForwardTo,
-            ForwardDeadLetteredMessagesTo = props.ForwardDeadLetteredMessagesTo
+            ForwardTo = ToEntityPath(props.ForwardTo),
+            ForwardDeadLetteredMessagesTo = ToEntityPath(props.ForwardDeadLetteredMessagesTo)
         };
     }
 

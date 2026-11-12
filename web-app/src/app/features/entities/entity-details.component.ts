@@ -17,10 +17,10 @@ import { TransferMonitorComponent } from './transfer-monitor.component';
 import { ContinuousResubmitDialogComponent, ContinuousResubmitDialogData } from '../messages/continuous-resubmit-dialog.component';
 import { ProviderService } from '../../core/services/provider.service';
 import { ProviderCapabilities } from '../../core/models/provider.model';
+import { MAX_TIMESPAN_DAYS, parseDuration } from './duration';
+import { EntityAdminActionsComponent } from './entity-admin-actions.component';
 
 const NOT_SET = 'Not set';
-/** Days in TimeSpan.MaxValue, which .NET uses for "never" on a TTL or an auto-delete. */
-const MAX_TIMESPAN_DAYS = 10675199;
 
 @Component({
   selector: 'app-entity-details',
@@ -32,7 +32,8 @@ const MAX_TIMESPAN_DAYS = 10675199;
     MatMenuModule,
     MatIconModule,
     MatTooltipModule,
-    TransferMonitorComponent
+    TransferMonitorComponent,
+    EntityAdminActionsComponent
   ],
   template: `
     <div class="details-container">
@@ -65,6 +66,7 @@ const MAX_TIMESPAN_DAYS = 10675199;
             <h2>{{ queueEntity.name }}</h2>
             <span class="badge bg-success-subtle text-success border border-success-subtle">Queue</span>
           </div>
+          <app-entity-admin-actions kind="queue" [entity]="queueEntity" />
         </div>
 
         <div class="entity-actions">
@@ -200,6 +202,7 @@ const MAX_TIMESPAN_DAYS = 10675199;
               <h2>{{ topicEntity.name }}</h2>
               <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Topic</span>
             </div>
+            <app-entity-admin-actions kind="topic" [entity]="topicEntity" />
           </div>
 
           <hr class="my-3">
@@ -270,6 +273,7 @@ const MAX_TIMESPAN_DAYS = 10675199;
             <h2>{{ subscriptionEntity?.name || state.selection.node.name }}</h2>
             <span class="badge bg-info-subtle text-info border border-info-subtle">Subscription</span>
           </div>
+          <app-entity-admin-actions kind="subscription" [entity]="subscriptionEntity" />
         </div>
 
         <hr class="my-3">
@@ -2394,65 +2398,6 @@ export class EntityDetailsComponent {
     return this.providerService.capabilities()?.[feature] !== false;
   }
 
-  /**
-   * Parse ISO 8601 duration string (TimeSpan from .NET) into components
-   * Format: P{days}DT{hours}H{minutes}M{seconds}.{milliseconds}S
-   * Example: "P10DT12H30M15.500S" = 10 days, 12 hours, 30 minutes, 15.5 seconds
-   */
-  private parseDuration(durationString: string): { days: number; hours: number; minutes: number; seconds: number; milliseconds: number } {
-    const result = { days: 0, hours: 0, minutes: 0, seconds: 0, milliseconds: 0 };
-
-    if (!durationString || durationString === '00:00:00') {
-      return result;
-    }
-
-    // Parse ISO 8601 duration: P[n]Y[n]M[n]DT[n]H[n]M[n]S or simple format DD.HH:MM:SS.FFF
-    const iso8601Match = durationString.match(/P(?:(\d+)D)?T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?/);
-    if (iso8601Match) {
-      result.days = parseInt(iso8601Match[1] || '0', 10);
-      result.hours = parseInt(iso8601Match[2] || '0', 10);
-      result.minutes = parseInt(iso8601Match[3] || '0', 10);
-      const seconds = parseFloat(iso8601Match[4] || '0');
-      result.seconds = Math.floor(seconds);
-      result.milliseconds = Math.round((seconds - result.seconds) * 1000);
-      return result;
-    }
-
-    // Fallback: Parse .NET TimeSpan format: DD.HH:MM:SS.FFF or HH:MM:SS.FFF
-    const parts = durationString.split('.');
-    if (parts.length >= 2) {
-      // Format: DD.HH:MM:SS or DD.HH:MM:SS.FFF
-      if (parts[0].includes(':')) {
-        // No days, format: HH:MM:SS or HH:MM:SS.FFF
-        const timeParts = parts[0].split(':');
-        result.hours = parseInt(timeParts[0] || '0', 10);
-        result.minutes = parseInt(timeParts[1] || '0', 10);
-        result.seconds = parseInt(timeParts[2] || '0', 10);
-        if (parts[1]) {
-          result.milliseconds = parseInt(parts[1].substring(0, 3).padEnd(3, '0'), 10);
-        }
-      } else {
-        // Has days: DD.HH:MM:SS
-        result.days = parseInt(parts[0], 10);
-        const timeParts = parts[1].split(':');
-        result.hours = parseInt(timeParts[0] || '0', 10);
-        result.minutes = parseInt(timeParts[1] || '0', 10);
-        result.seconds = parseInt(timeParts[2] || '0', 10);
-        if (parts[2]) {
-          result.milliseconds = parseInt(parts[2].substring(0, 3).padEnd(3, '0'), 10);
-        }
-      }
-    } else if (parts[0].includes(':')) {
-      // Simple format: HH:MM:SS
-      const timeParts = parts[0].split(':');
-      result.hours = parseInt(timeParts[0] || '0', 10);
-      result.minutes = parseInt(timeParts[1] || '0', 10);
-      result.seconds = parseInt(timeParts[2] || '0', 10);
-    }
-
-    return result;
-  }
-
   get selection(): EntitySelection | null {
     return this.selectionService.currentSelection;
   }
@@ -2494,7 +2439,7 @@ export class EntityDetailsComponent {
 
   formatDuration(durationString: string | null | undefined): string {
     if (!durationString) return NOT_SET;
-    const duration = this.parseDuration(durationString);
+    const duration = parseDuration(durationString);
     if (duration.days >= MAX_TIMESPAN_DAYS) return 'Never';
     const parts: string[] = [];
 

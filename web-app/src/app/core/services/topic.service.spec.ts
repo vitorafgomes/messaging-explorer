@@ -9,6 +9,7 @@ describe('TopicService', () => {
   let apiPost: ReturnType<typeof vi.fn>;
   let apiGet: ReturnType<typeof vi.fn>;
   let apiDelete: ReturnType<typeof vi.fn>;
+  let apiPatch: ReturnType<typeof vi.fn>;
 
   const emptyResult: BatchOperationResult = {
     successCount: 0,
@@ -21,7 +22,8 @@ describe('TopicService', () => {
     apiPost = vi.fn().mockReturnValue(of(emptyResult));
     apiGet = vi.fn().mockReturnValue(of([]));
     apiDelete = vi.fn().mockReturnValue(of({ success: true }));
-    const apiServiceMock = { post: apiPost, get: apiGet, delete: apiDelete } as unknown as ApiService;
+    apiPatch = vi.fn().mockReturnValue(of({}));
+    const apiServiceMock = { post: apiPost, get: apiGet, delete: apiDelete, patch: apiPatch } as unknown as ApiService;
 
     TestBed.configureTestingModule({
       providers: [
@@ -104,6 +106,44 @@ describe('TopicService', () => {
         'topics/orders%231/subscriptions/what%3Fnow/messages',
         'topics/50%25off/subscriptions/my%20sub'
       ]);
+    });
+  });
+
+  describe('create and update a topic and a subscription', () => {
+    it('create a topic with nothing set posts the name only to POST api/topics', () => {
+      service.createTopic('events').subscribe();
+
+      expect(apiPost.mock.calls[0][0]).toBe('topics');
+      expect(apiPost.mock.calls[0][1]).toStrictEqual({ name: 'events' });
+    });
+
+    it('create a topic with options posts the name and exactly the options given', () => {
+      service.createTopic('events', { supportOrdering: true }).subscribe();
+
+      expect(apiPost.mock.calls[0][1]).toStrictEqual({ name: 'events', options: { supportOrdering: true } });
+    });
+
+    it('update a topic sends a PATCH to api/topics/{name} with the changes as the body', () => {
+      service.updateTopic('t/1', { status: 'SendDisabled' }).subscribe();
+
+      expect(apiPatch.mock.calls[0][0]).toBe('topics/t%2F1');
+      expect(apiPatch.mock.calls[0][1]).toStrictEqual({ status: 'SendDisabled' });
+    });
+
+    it('create a subscription posts the name and options to POST api/topics/{topicName}/subscriptions', () => {
+      service.createSubscription('t/1', 'audit', { maxDeliveryCount: 5 }).subscribe();
+      service.createSubscription('t/1', 'plain').subscribe();
+
+      expect(apiPost.mock.calls.map(c => c[0])).toEqual(['topics/t%2F1/subscriptions', 'topics/t%2F1/subscriptions']);
+      expect(apiPost.mock.calls[0][1]).toStrictEqual({ name: 'audit', options: { maxDeliveryCount: 5 } });
+      expect(apiPost.mock.calls[1][1]).toStrictEqual({ name: 'plain' });
+    });
+
+    it('update a subscription sends a PATCH to api/topics/{topicName}/subscriptions/{subscriptionName}', () => {
+      service.updateSubscription('t/1', 's/2', { forwardDeadLetteredMessagesTo: '' }).subscribe();
+
+      expect(apiPatch.mock.calls[0][0]).toBe('topics/t%2F1/subscriptions/s%2F2');
+      expect(apiPatch.mock.calls[0][1]).toStrictEqual({ forwardDeadLetteredMessagesTo: '' });
     });
   });
 });

@@ -75,6 +75,46 @@ describe('ProviderService holds the capabilities of the connected provider', () 
     expect(service.capabilities()?.supportsDeadLetterQueue).toBe(true);
   });
 
+  describe('entity administration is offered only when the API explicitly says true', () => {
+    const azureConnected = { connected: true, namespace: 'ns.example.net', providerType: 'AzureServiceBus' } as unknown as ConnectionStatus;
+
+    it('an Azure API that answers supportsEntityUpdate: true enables it', () => {
+      capabilitiesResponse = () => of({ supportsEntityUpdate: true });
+
+      status$.next(azureConnected);
+
+      expect(service.capabilities()?.supportsEntityUpdate).toBe(true);
+    });
+
+    it('an older Azure API that does not send the flag leaves it off, although the Azure default is true', () => {
+      capabilitiesResponse = () => of({ supportsSessions: true });
+
+      status$.next(azureConnected);
+
+      expect(service.capabilities()?.supportsEntityUpdate, 'supportsEntityUpdate without the API saying so').toBe(false);
+      expect(service.capabilities()?.supportsScheduledMessages).toBe(true);
+    });
+
+    it('while the capabilities load, and when the call fails with a 500, it is off', () => {
+      const pending = new Subject<ProviderCapabilities>();
+      capabilitiesResponse = () => pending;
+      status$.next(azureConnected);
+      expect(service.capabilities()?.supportsEntityUpdate).toBe(false);
+
+      pending.error(new HttpErrorResponse({ status: 500, statusText: 'Internal Server Error' }));
+      expect(service.capabilities()?.supportsEntityUpdate).toBe(false);
+      expect(service.capabilities()?.supportsSessions).toBe(true);
+    });
+
+    it('RabbitMQ: off by default and when its API says false', () => {
+      capabilitiesResponse = () => of({ supportsEntityUpdate: false });
+
+      status$.next(rabbitConnected);
+
+      expect(service.capabilities()?.supportsEntityUpdate).toBe(false);
+    });
+  });
+
   it('on disconnect the state resets, and a late answer for the old connection does not bring it back', () => {
     const late = new Subject<ProviderCapabilities>();
     capabilitiesResponse = () => late;

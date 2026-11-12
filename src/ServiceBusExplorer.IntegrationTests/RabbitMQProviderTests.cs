@@ -180,4 +180,15 @@ public sealed class RabbitMQProviderTests(RabbitMqFixture fixture) : IAsyncLifet
 
         Assert.Equal(0u, fixture.MessageCount(queue));
     }
+
+    [Fact]
+    public async Task A_queue_named_with_a_space_is_created_and_listed_under_that_name()
+    {
+        var queue = Queue("with space");
+
+        await _provider.CreateQueueAsync(queue);
+        var listed = (await _provider.GetQueuesAsync()).Select(q => q.Name).ToList();
+
+        Assert.Contains(queue, listed);
+    }
 }

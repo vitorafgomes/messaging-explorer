@@ -217,6 +217,34 @@ describe('EntityDetailsComponent panels', () => {
     });
   });
 
+  describe('create, edit and status are not visible unless the capability is explicitly true', () => {
+    const { supportsEntityUpdate: _, ...WITHOUT_FLAG } = DEFAULT_AZURE_CAPABILITIES;
+    const ENABLED: ProviderCapabilities = { ...DEFAULT_AZURE_CAPABILITIES, supportsEntityUpdate: true };
+    const admin = (el: HTMLElement) => ({
+      status: text(el.querySelector('app-entity-admin-actions mat-chip .label')),
+      buttons: all(el, 'app-entity-admin-actions button').map(b => b.replace(/^(edit|toggle_on)\s*/, ''))
+    });
+
+    it('with the capability, the queue, topic and subscription panels show the status chip, Edit and Status', () => {
+      expect(admin(render(queue({ status: 'Active' }), ENABLED))).toStrictEqual({ status: 'Active', buttons: ['Edit', 'Status'] });
+      TestBed.resetTestingModule();
+      expect(admin(render(topic({ ...fullTopic, status: 'SendDisabled' }), ENABLED))).toStrictEqual({ status: 'Send disabled', buttons: ['Edit', 'Status'] });
+      TestBed.resetTestingModule();
+      expect(admin(render(subscription({ status: 'ReceiveDisabled' }), ENABLED))).toStrictEqual({ status: 'Receive disabled', buttons: ['Edit', 'Status'] });
+    });
+
+    it('on RabbitMQ, and on an API that does not send the flag, no panel shows a status chip, Edit or Status', () => {
+      for (const capabilities of [DEFAULT_RABBITMQ_CAPABILITIES, WITHOUT_FLAG as ProviderCapabilities, null]) {
+        for (const selection of [queue({ status: 'Active' }), topic(fullTopic), subscription({ status: 'Active' })]) {
+          const el = render(selection, capabilities);
+          expect(el.querySelectorAll('app-entity-admin-actions *').length, 'elements rendered by the administration actions').toBe(0);
+          expect(all(el, 'button').filter(b => /Edit|Status/.test(b))).toStrictEqual([]);
+          TestBed.resetTestingModule();
+        }
+      }
+    });
+  });
+
   describe('the queue panel shows what the API returns', () => {
     it('the queue panel shows status, dates, forward targets, auto delete, duplicate detection and metadata', () => {
       const el = render(queue({
