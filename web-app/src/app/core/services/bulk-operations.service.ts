@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
-import { BatchOperationFailure, MessageInfo } from '../models';
+import { BatchOperationFailure, MessageInfo, SubQueue } from '../models';
 
 /**
  * True when the failure is a message that was sent and could not be removed from its
@@ -13,10 +13,9 @@ export function isPossibleDuplicate(failure: BatchOperationFailure): boolean {
 }
 
 /**
- * Tab type for bulk operations
- * Represents either active messages or dead letter messages
+ * Tab type for bulk operations: the sub-queue a tab lists. Each has its own selection.
  */
-export type TabType = 'active' | 'deadletter';
+export type TabType = SubQueue;
 
 /**
  * Selection state for a specific tab
@@ -34,6 +33,12 @@ export interface TabSelectionState {
 export interface BulkOperationsState {
   active: TabSelectionState;
   deadletter: TabSelectionState;
+  transferdeadletter: TabSelectionState;
+}
+
+function emptyState(): BulkOperationsState {
+  const none = (): TabSelectionState => ({ selectedSequenceNumbers: new Set<number>(), indeterminate: false });
+  return { active: none(), deadletter: none(), transferdeadletter: none() };
 }
 
 /**
@@ -50,16 +55,7 @@ export interface BulkOperationsState {
   providedIn: 'root'
 })
 export class BulkOperationsService {
-  private stateSubject = new BehaviorSubject<BulkOperationsState>({
-    active: {
-      selectedSequenceNumbers: new Set<number>(),
-      indeterminate: false
-    },
-    deadletter: {
-      selectedSequenceNumbers: new Set<number>(),
-      indeterminate: false
-    }
-  });
+  private stateSubject = new BehaviorSubject<BulkOperationsState>(emptyState());
 
   /**
    * Observable for the complete bulk operations state
@@ -88,7 +84,8 @@ export class BulkOperationsService {
     const state = this.stateSubject.value;
     return {
       active: this.cloneTabState(state.active),
-      deadletter: this.cloneTabState(state.deadletter)
+      deadletter: this.cloneTabState(state.deadletter),
+      transferdeadletter: this.cloneTabState(state.transferdeadletter)
     };
   }
 
@@ -202,16 +199,7 @@ export class BulkOperationsService {
    * Clears all selections for all tabs
    */
   clearAllSelections(): void {
-    this.stateSubject.next({
-      active: {
-        selectedSequenceNumbers: new Set<number>(),
-        indeterminate: false
-      },
-      deadletter: {
-        selectedSequenceNumbers: new Set<number>(),
-        indeterminate: false
-      }
-    });
+    this.stateSubject.next(emptyState());
   }
 
   /**

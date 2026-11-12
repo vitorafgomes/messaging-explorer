@@ -30,7 +30,7 @@ export const DEFAULT_AZURE_CAPABILITIES: ProviderCapabilities = {
   supportsMessageFiltering: true,
   supportsMessageBatching: true,
   supportsTransactions: true,
-  supportsDeferral: true,
+  supportsDeferral: false,
   supportsDuplicateDetection: true,
   supportsAutoForwarding: true,
   supportsEntityUpdate: true,
@@ -75,11 +75,11 @@ const DISCONNECTED_STATE: ProviderSelectionState = {
 };
 
 /**
- * The built-in defaults standing in for an API answer: entity administration and the rules editor
- * need the API's own explicit true, because an older API that lacks the routes does not send the flag.
+ * The built-in defaults standing in for an API answer: entity administration, the rules editor and the
+ * transfer dead-letter queue need the API's own explicit true, because an older API that lacks the routes does not send the flag.
  */
 function unconfirmed(capabilities: ProviderCapabilities): ProviderCapabilities {
-  return { ...capabilities, supportsEntityUpdate: false, supportsSubscriptionRules: false };
+  return { ...capabilities, supportsEntityUpdate: false, supportsSubscriptionRules: false, supportsTransferDeadLetter: false };
 }
 
 /**
@@ -182,7 +182,8 @@ export class ProviderService {
         ...defaultCapabilities,
         ...capabilities,
         supportsEntityUpdate: capabilities.supportsEntityUpdate === true,
-        supportsSubscriptionRules: capabilities.supportsSubscriptionRules === true
+        supportsSubscriptionRules: capabilities.supportsSubscriptionRules === true,
+        supportsTransferDeadLetter: capabilities.supportsTransferDeadLetter === true
       })),
       tap(capabilities => {
         this.providerStateSubject.next({

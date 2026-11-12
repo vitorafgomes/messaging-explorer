@@ -36,6 +36,21 @@ describe('TopicService', () => {
     service = TestBed.inject(TopicService);
   });
 
+  describe('the transfer dead-letter queue of a subscription is reached through its own routes', () => {
+    it('peek, delete and resubmit go to .../subscriptions/{name}/transferdeadletter with the dead-letter bodies, each name as one segment', () => {
+      service.peekTransferDeadLetterMessages('sales/eu', 'a#1', 5).subscribe();
+      service.deleteTransferDeadLetterMessages('sales/eu', 'a#1', [1, 2]).subscribe();
+      service.resubmitTransferDeadLetterMessages('sales/eu', 'a#1', [3]).subscribe();
+
+      const base = 'topics/sales%2Feu/subscriptions/a%231/transferdeadletter';
+      expect(apiGet.mock.calls).toEqual([[`${base}?count=5`]]);
+      expect(apiPost.mock.calls).toEqual([
+        [`${base}/delete-batch`, { sequenceNumbers: [1, 2], all: false }],
+        [`${base}/resubmit-batch`, { sequenceNumbers: [3] }]
+      ]);
+    });
+  });
+
   describe('deleteMessages', () => {
     it('forwards the selected sequence numbers with all=false by default', () => {
       service.deleteMessages('sales', 'sub1', [1, 2, 3], true).subscribe();

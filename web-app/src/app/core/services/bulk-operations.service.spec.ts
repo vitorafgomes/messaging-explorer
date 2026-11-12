@@ -520,4 +520,18 @@ describe('BulkOperationsService', () => {
       expect(service.isSelected('active', 999)).toBe(false);
     });
   });
+  describe('the transfer dead-letter queue has its own selection', () => {
+    it('selecting there leaves the active and dead-letter selections untouched, and clearing all clears it too', () => {
+      service.selectMessage('active', 1, 5);
+      service.selectAll('transferdeadletter', createMockMessages(3, 100));
+
+      expect(service.getSelectedSequenceNumbers('transferdeadletter')).toEqual([100, 101, 102]);
+      expect(service.getSelectedSequenceNumbers('active')).toEqual([1]);
+      expect(service.getSelectedSequenceNumbers('deadletter')).toEqual([]);
+      expect(service.isSelected('deadletter', 100)).toBe(false);
+
+      service.clearAllSelections();
+      expect(service.getSelectionCount('transferdeadletter')).toBe(0);
+    });
+  });
 });

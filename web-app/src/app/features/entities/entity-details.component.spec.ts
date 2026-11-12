@@ -9,6 +9,7 @@ import { EntitySelection } from '../../core/models';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
 import { DEFAULT_AZURE_CAPABILITIES, DEFAULT_RABBITMQ_CAPABILITIES, ProviderService } from '../../core/services/provider.service';
 import { ProviderCapabilities } from '../../core/models/provider.model';
+import { ViewMessagesDialogComponent } from '../messages/view-messages-dialog.component';
 
 describe('EntityDetailsComponent purge confirmation', () => {
   let dialog: { open: ReturnType<typeof vi.fn> };
@@ -389,5 +390,145 @@ describe('EntityDetailsComponent panels', () => {
     it('a subscription date the API did not send is Not set', () => {
       expect(infoRow(render(subscription({})), 'Created At (UTC)')).toBe('Not set');
     });
+  });
+});
+
+describe('EntityDetailsComponent opens the messages dialog on the transfer dead-letter queue and on the scheduled messages', () => {
+  let open: ReturnType<typeof vi.fn>;
+  const selection: EntitySelection = {
+    type: 'queue',
+    node: { id: 'orders', name: 'orders', type: 'queue', icon: 'inbox', expandable: false, level: 1 },
+    entity: { name: 'orders', activeMessageCount: 120, deadLetterMessageCount: 7, scheduledMessageCount: 2, transferDeadLetterMessageCount: 4, sizeInBytes: 2048 } as never
+  };
+
+  function render(capabilities: ProviderCapabilities) {
+    TestBed.configureTestingModule({
+      imports: [EntityDetailsComponent],
+      providers: [
+        { provide: EntitySelectionService, useValue: { state$: of({ selection, loading: false, error: null }), currentSelection: selection, isLoading: false } },
+        { provide: ConnectionService, useValue: { currentTarget: 'prod.example.net' } },
+        { provide: QueueService, useValue: {} },
+        { provide: TopicService, useValue: {} },
+        { provide: SessionService, useValue: {} },
+        { provide: MatSnackBar, useValue: { open: vi.fn() } },
+        { provide: ProviderService, useValue: { capabilities: signal(capabilities) } }
+      ]
+    });
+    const fixture = TestBed.createComponent(EntityDetailsComponent);
+    open = vi.spyOn(fixture.debugElement.injector.get(MatDialog), 'open').mockReturnValue({} as never) as unknown as ReturnType<typeof vi.fn>;
+    fixture.detectChanges();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  const card = (el: HTMLElement, label: string) =>
+    Array.from(el.querySelectorAll<HTMLElement>('.stat-card')).find(c => c.querySelector('.stat-label')?.textContent?.trim() === label)!;
+  const openedWith = () => {
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(open.mock.calls[0][0]).toBe(ViewMessagesDialogComponent);
+    return open.mock.calls[0][1].data;
+  };
+
+  it('with the API saying supportsTransferDeadLetter, the Transfer Dead Letter card is a button that opens the dialog on that tab, by click or by Enter', () => {
+    const el = render({ ...DEFAULT_AZURE_CAPABILITIES, supportsTransferDeadLetter: true });
+    const transfer = card(el, 'Transfer Dead Letter');
+    expect(transfer.getAttribute('role')).toBe('button');
+    expect(transfer.getAttribute('tabindex')).toBe('0');
+    expect(transfer.getAttribute('aria-label')).toBe('View the 4 transfer dead-letter messages');
+
+    transfer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+
+    const data = openedWith();
+    expect(data.initialTab).toBe(2);
+    expect(data.transferDeadLetterMessageCount).toBe(4);
+    expect(data.entityName).toBe('orders');
+  });
+
+  it('without the flag, the Transfer Dead Letter card shows its count and opens nothing', () => {
+    const el = render(DEFAULT_AZURE_CAPABILITIES);
+    const transfer = card(el, 'Transfer Dead Letter');
+    expect(transfer.getAttribute('role')).toBeNull();
+
+    transfer.click();
+
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it('the Scheduled card opens the dialog on the Active tab filtered to the scheduled messages', () => {
+    const el = render(DEFAULT_AZURE_CAPABILITIES);
+    const scheduledCard = card(el, 'Scheduled');
+    expect(scheduledCard.getAttribute('aria-label')).toBe('View the 2 scheduled messages');
+
+    scheduledCard.click();
+
+    const data = openedWith();
+    expect(data.initialTab).toBe(0);
+    expect(data.initialStateFilter).toBe('Scheduled');
+  });
+});
+
+describe('EntityDetailsComponent: the subscription panel has a Transfer Dead Letter card like the queue panel', () => {
+  let open: ReturnType<typeof vi.fn>;
+  const subscription = (transferDeadLetterMessageCount: number): EntitySelection => ({
+    type: 'subscription',
+    node: { id: 'events/billing', name: 'billing', type: 'subscription', icon: 'mail', expandable: false, level: 2, data: { topicName: 'events' } as never },
+    entity: { topicName: 'events', name: 'billing', activeMessageCount: 5, deadLetterMessageCount: 3, transferDeadLetterMessageCount, rules: [] } as never
+  });
+
+  function render(selection: EntitySelection, capabilities: ProviderCapabilities) {
+    TestBed.configureTestingModule({
+      imports: [EntityDetailsComponent],
+      providers: [
+        { provide: EntitySelectionService, useValue: { state$: of({ selection, loading: false, error: null }), currentSelection: selection, isLoading: false } },
+        { provide: ConnectionService, useValue: { currentTarget: 'prod.example.net' } },
+        { provide: QueueService, useValue: {} },
+        { provide: TopicService, useValue: { getSubscription: () => NEVER } },
+        { provide: SessionService, useValue: {} },
+        { provide: MatSnackBar, useValue: { open: vi.fn() } },
+        { provide: ProviderService, useValue: { capabilities: signal(capabilities) } }
+      ]
+    });
+    const fixture = TestBed.createComponent(EntityDetailsComponent);
+    open = vi.spyOn(fixture.debugElement.injector.get(MatDialog), 'open').mockReturnValue({} as never) as unknown as ReturnType<typeof vi.fn>;
+    fixture.detectChanges();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  const card = (el: HTMLElement) => Array.from(el.querySelectorAll<HTMLElement>('.metric-card'))
+    .find(c => c.querySelector('.card-header')?.textContent?.trim() === 'Transfer Dead Letter');
+
+  it('with the API saying supportsTransferDeadLetter, the card shows the count and opens the dialog on the transfer tab, by click or by Enter', () => {
+    const el = render(subscription(4), { ...DEFAULT_AZURE_CAPABILITIES, supportsTransferDeadLetter: true });
+    const transfer = card(el)!;
+    expect(transfer.querySelector('.metric-value')?.textContent?.trim()).toBe('4');
+    expect(transfer.getAttribute('role')).toBe('button');
+    expect(transfer.getAttribute('tabindex')).toBe('0');
+    expect(transfer.getAttribute('aria-label')).toBe('View the 4 transfer dead-letter messages');
+
+    transfer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(open.mock.calls[0][0]).toBe(ViewMessagesDialogComponent);
+    const data = open.mock.calls[0][1].data;
+    expect(data.initialTab).toBe(2);
+    expect(data.transferDeadLetterMessageCount).toBe(4);
+    expect(data.entityType).toBe('subscription');
+    expect(data.topicName).toBe('events');
+  });
+
+  it('without the flag, the card shows its count and opens nothing', () => {
+    const el = render(subscription(4), DEFAULT_AZURE_CAPABILITIES);
+    const transfer = card(el)!;
+    expect(transfer.querySelector('.metric-value')?.textContent?.trim()).toBe('4');
+    expect(transfer.getAttribute('role')).toBeNull();
+
+    transfer.click();
+
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it('a zero count shows no card, even with the flag', () => {
+    const el = render(subscription(0), { ...DEFAULT_AZURE_CAPABILITIES, supportsTransferDeadLetter: true });
+
+    expect(card(el)).toBeUndefined();
   });
 });
