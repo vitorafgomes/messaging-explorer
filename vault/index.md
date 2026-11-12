@@ -30,7 +30,7 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 > may still describe its claim loosely. On 2026-11-12 the owner allowed his private notes to be
 > migrated: the product history, the Azure authentication decision and the feature backlog came
 > from them, rewritten in English and checked against the code; audits, sessions and plans stayed private. The folders
-> `history/`, `incidents/`, `runbooks/`, `flows/` and `domain/` are empty until first use.
+> `incidents/`, `flows/` and `domain/` are empty until first use.
 >
 > The survey found real defects. They are recorded, not fixed: "Known gaps" on each service page,
 > one list by risk in [[pages/roadmap/followups]].
@@ -77,6 +77,7 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 
 ## Roadmap
 
+- [[pages/runbooks/local-brokers|Local brokers in Docker]] - Start RabbitMQ and the Azure Service Bus emulator on this machine, the connection values for the app, the sample entities and the proxy that gives the emulator one endpoint.
 - [[pages/roadmap/product-backlog|Product backlog]] - The features the owner asked for that are not built yet, checked against the code.
 - [[pages/roadmap/azure-service-bus-administration|Azure Service Bus: administer the entity]] - What exists and what to build, per layer, for twelve capabilities: edit entities, rules, status, definitions export, counts, sessions, scheduled and deferred messages, transfer dead-letter, batch send.
 - [[pages/roadmap/ui-material-migration|UI: finish the move to Angular Material]] - End-to-end tests with screenshots first, then the queue panel at the subscription's level, safer destructive actions, Material screen by screen, and Bootstrap removed.

@@ -1,3 +1,5 @@
+## [2026-11-12] integrate | Local brokers in Docker for trying the app by hand
+`dev/brokers/` starts RabbitMQ and the Azure Service Bus emulator with sample entities, on loopback. A small proxy puts the emulator's messaging and management ports behind one, so the app connects with a single connection string. Checked through the packaged API on both brokers. [[pages/runbooks/local-brokers]].
 ## [2026-11-12] integrate | The window keeps the native frame and shows no menu bar
 The owner asked for the window pattern of his other desktop app: no File, Edit, View, Window or Help row. Boards `#mac` and `#win` of the prototype are redrawn: the native title bar on macOS, so the window buttons need no room in the page and the window drags by the title bar; no application menu on Windows and Linux; on macOS only the application, Edit and Window menus of the system bar, which copy and paste need. What the menu held moves into the app. [[pages/roadmap/ui-review-2026-11]] carries the changed fixes.
 
