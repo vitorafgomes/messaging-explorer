@@ -3,7 +3,7 @@ title: "Web App"
 version: "1.0"
 date: 2026-11-12
 updated: 2026-11-12
-changes: "2026-11-12: every value in an API path goes through apiPath, encoded once; a name of . or .. recorded as a gap. Founded from the code on 2026-11-12"
+changes: "2026-11-12: the entity selection is cleared on every connection status; delete drains an entity only when the selection equals its count; Retry Failed and continuous resubmit never resend a possible duplicate; the purge confirmation names entity, topic, connection and count; a shortcut does nothing under another dialog. Earlier on 2026-11-12: every value in an API path goes through apiPath, encoded once; a name of . or .. recorded as a gap. Founded from the code on 2026-11-12"
 page_type: service
 status: active
 description: "Angular 21 single-page UI that talks to the local .NET API through one ApiService, in a plain browser or inside the Electron shell."
@@ -19,6 +19,7 @@ source:
   - web-app/src/app/core/services/api.service.ts
   - web-app/src/app/core/services/api-path.ts
   - web-app/src/app/core/services/bulk-operations.service.ts
+  - web-app/src/app/core/services/entity-selection.service.ts
   - web-app/src/app/core/services/queue.service.ts
   - web-app/src/app/core/services/provider.service.ts
   - web-app/src/app/core/models/provider.model.ts
@@ -27,6 +28,9 @@ source:
   - web-app/src/app/features/entities/entities-container.component.ts
   - web-app/src/app/features/entities/provider-shell.component.ts
   - web-app/src/app/features/messages/view-messages-dialog.component.ts
+  - web-app/src/app/features/messages/continuous-resubmit-dialog.component.ts
+  - web-app/src/app/features/entities/entity-details.component.ts
+  - web-app/src/app/shared/components/bulk-operation-results-dialog/bulk-operation-results-dialog.component.ts
   - web-app/src/app/shared/pipes/highlight.pipe.ts
   - web-app/src/app/shared/components/bulk-operation-progress-dialog/bulk-operation-progress-dialog.component.ts
   - docs/ADDING_PROVIDERS.md
@@ -104,12 +108,20 @@ flowchart LR
 
 ### Bulk operations
 
-- `BulkOperationsService` is selection state only: two `BehaviorSubject` tab states (active, deadletter) keyed by sequence number (`web-app/src/app/core/services/bulk-operations.service.ts:45`). It does no batching, no progress and no HTTP.
-- The operations live in `ViewMessagesDialogComponent`: resubmit (`web-app/src/app/features/messages/view-messages-dialog.component.ts:1285`), delete (`web-app/src/app/features/messages/view-messages-dialog.component.ts:1791`), move (`web-app/src/app/features/messages/view-messages-dialog.component.ts:1991`). Each sends one request carrying all selected sequence numbers (`web-app/src/app/core/services/queue.service.ts:131`, `web-app/src/app/core/services/queue.service.ts:144`, `web-app/src/app/core/services/queue.service.ts:157`). The client does not chunk; batching is the server's job.
-- Delete on a whole tab sends `all: true` with an empty list and the server drains (`web-app/src/app/features/messages/view-messages-dialog.component.ts:1787`, `web-app/src/app/core/services/queue.service.ts:144`).
-- Progress is not incremental: `updateProgress` is called once, with the final result (`web-app/src/app/features/messages/view-messages-dialog.component.ts:1322`).
-- Cancel: the progress dialog emits `cancelRequested$` (`web-app/src/app/shared/components/bulk-operation-progress-dialog/bulk-operation-progress-dialog.component.ts:380`); the parent pipes the in-flight observable through `takeUntil`, which aborts the XHR (`web-app/src/app/features/messages/view-messages-dialog.component.ts:1306`, `web-app/src/app/features/messages/view-messages-dialog.component.ts:1314`). The API passes `HttpContext.RequestAborted` to the provider (`src/ServiceBusExplorer.Api/Controllers/QueuesController.cs:207`).
-- After an abort: the success handler is skipped, no results dialog opens, the entity message list and counters are not reloaded, and the progress dialog stays open in a "cancelled" state with a Close button (`web-app/src/app/features/messages/view-messages-dialog.component.ts:1318`, `web-app/src/app/shared/components/bulk-operation-progress-dialog/bulk-operation-progress-dialog.component.ts:124`). The dialog itself warns that messages already processed server-side may have been affected; delivery is at-least-once, see [[pages/invariants/bulk-operations-are-at-least-once]].
+- `BulkOperationsService` is selection state only: two `BehaviorSubject` tab states (active, deadletter) keyed by sequence number (`web-app/src/app/core/services/bulk-operations.service.ts:53`). It does no batching, no progress and no HTTP. "All selected" is not stored: `isAllSelected` takes the list the tab shows now and checks every row of it (`web-app/src/app/core/services/bulk-operations.service.ts:233`), so a selection made over a search never counts as the whole page.
+- The operations live in `ViewMessagesDialogComponent`: resubmit (`web-app/src/app/features/messages/view-messages-dialog.component.ts:1288`), delete (`web-app/src/app/features/messages/view-messages-dialog.component.ts:1809`), move (`web-app/src/app/features/messages/view-messages-dialog.component.ts:2012`). Each sends one request carrying all selected sequence numbers (`web-app/src/app/core/services/queue.service.ts:131`, `web-app/src/app/core/services/queue.service.ts:144`, `web-app/src/app/core/services/queue.service.ts:157`). The client does not chunk; batching is the server's job.
+- **"All" means the entity, not the page.** Delete sends `all: true` with an empty list, and the server drains, only when the number of selected messages equals the entity's count for that tab and no search or filter is active (`web-app/src/app/features/messages/view-messages-dialog.component.ts:1917`, `web-app/src/app/features/messages/view-messages-dialog.component.ts:1805`); the confirmation then asks for an acknowledgement. Selecting the 20 loaded messages of a queue of 50,000 sends those 20 sequence numbers. Every change of the quick search or of a filter clears the tab's selection (`web-app/src/app/features/messages/view-messages-dialog.component.ts:963`, `web-app/src/app/features/messages/view-messages-dialog.component.ts:1020`). The count compared is the one the dialog received when it opened, updated after each operation, not a fresh read. The selection bar says what a selection covers, as on prototype artboard 4: "3 selected of 20 loaded, 37 in the dead-letter queue" (`web-app/src/app/features/messages/view-messages-dialog.component.ts:1674`). Pinned by the "never deletes the whole entity" specs (`web-app/src/app/features/messages/view-messages-dialog.component.spec.ts:101`).
+- **A possible duplicate is never retried.** A failure whose text says the message "may be duplicated" (the two texts the Azure provider writes when a send succeeded and the complete failed) is a possible duplicate (`web-app/src/app/core/services/bulk-operations.service.ts:10`). The API has no field for it yet, so the match is on text, marked as a ceiling in the code. The retry list for resubmit and for move is built from the result without those entries (`web-app/src/app/features/messages/view-messages-dialog.component.ts:1339`, `web-app/src/app/features/messages/view-messages-dialog.component.ts:2060`), Retry is offered only when one remains, and the results dialog labels each entry "Possible duplicate - do not retry" or "Failed" (`web-app/src/app/shared/components/bulk-operation-results-dialog/bulk-operation-results-dialog.component.ts:103`).
+- **Continuous resubmit stops on the first failure.** Each cycle peeks the head of the dead-letter queue, where a failed or possibly duplicated message stays, so the loop stops on the first batch that reports any failure and says which sequence numbers failed and which may be duplicated (`web-app/src/app/features/messages/continuous-resubmit-dialog.component.ts:424`, `web-app/src/app/features/messages/continuous-resubmit-dialog.component.ts:438`). The dialog has no restart, so nothing that failed in a run is sent again by it.
+- **Guards against a stacked delete.** A keyboard shortcut does nothing while another dialog is open over the messages dialog (`web-app/src/app/features/messages/view-messages-dialog.component.ts:2295`), and a delete does not start while one is in flight (`web-app/src/app/features/messages/view-messages-dialog.component.ts:1788`).
+- Progress is not incremental: `updateProgress` is called once, with the final result (`web-app/src/app/features/messages/view-messages-dialog.component.ts:1325`).
+- Cancel: the progress dialog emits `cancelRequested$` (`web-app/src/app/shared/components/bulk-operation-progress-dialog/bulk-operation-progress-dialog.component.ts:380`); the parent pipes the in-flight observable through `takeUntil`, which aborts the XHR (`web-app/src/app/features/messages/view-messages-dialog.component.ts:1309`, `web-app/src/app/features/messages/view-messages-dialog.component.ts:1317`). The API passes `HttpContext.RequestAborted` to the provider (`src/ServiceBusExplorer.Api/Controllers/QueuesController.cs:207`).
+- After an abort: the success handler is skipped, no results dialog opens, the entity message list and counters are not reloaded, and the progress dialog stays open in a "cancelled" state with a Close button (`web-app/src/app/features/messages/view-messages-dialog.component.ts:1321`, `web-app/src/app/shared/components/bulk-operation-progress-dialog/bulk-operation-progress-dialog.component.ts:124`). The dialog itself warns that messages already processed server-side may have been affected; delivery is at-least-once, see [[pages/invariants/bulk-operations-are-at-least-once]].
+
+### Entity selection and the purge confirmation
+
+- `EntitySelectionService` clears the selection on every connection status after the one it starts with: a connect, a disconnect or the startup status (`web-app/src/app/core/services/entity-selection.service.ts:40`). Only those three emit, so an entity selected under one connection is never shown, with its Purge, Send and View, under another; the tree no longer clears it on its own. A new selection or a clear cancels the load still in flight (`web-app/src/app/core/services/entity-selection.service.ts:47`, `web-app/src/app/core/services/entity-selection.service.ts:82`), so a late response neither overwrites a newer selection nor brings back one from the previous connection. Pinned by `web-app/src/app/core/services/entity-selection.service.spec.ts:46`.
+- The purge confirmation names what it destroys, as on prototype artboard 3: the kind and name, the topic of a subscription, the connection target (namespace or host) and the count, the live one when the panel has it and otherwise the one read when the entity was loaded, said as such; it reuses the confirm dialog with its acknowledgement checkbox (`web-app/src/app/features/entities/entity-details.component.ts:3434`). Only a subscription has a live count today; a queue shows the count from selection.
 
 ### Highlight pipe
 
@@ -132,7 +144,7 @@ flowchart LR
 
 - `ProviderRegistryService` maps `ProviderType` to an entity-details component class, filled by lazy `import()` of the `azure-service-bus` and `rabbitmq` barrels (`web-app/src/app/providers/provider-registry.service.ts:57`, `web-app/src/app/providers/provider-registry.service.ts:67`).
 - `ProviderShellComponent` resolves the class and calls `createComponent` (`web-app/src/app/features/entities/provider-shell.component.ts:173`, `web-app/src/app/features/entities/provider-shell.component.ts:183`).
-- But the shell is not used: the `entities` route renders `<app-entity-details>` directly (`web-app/src/app/features/entities/entities-container.component.ts:20`), and a grep of `src/app` finds no `app-provider-shell` outside doc comments. The registry, shell and both provider components are therefore unreachable at runtime; the 3022-line `EntityDetailsComponent` handles both brokers. See [[pages/invariants/provider-boundaries]].
+- But the shell is not used: the `entities` route renders `<app-entity-details>` directly (`web-app/src/app/features/entities/entities-container.component.ts:20`), and a grep of `src/app` finds no `app-provider-shell` outside doc comments. The registry, shell and both provider components are therefore unreachable at runtime; the 3753-line `EntityDetailsComponent` handles both brokers. See [[pages/invariants/provider-boundaries]].
 - `kafka/` holds three empty folders (`.gitkeep`) and a barrel containing only a TODO comment (`web-app/src/app/providers/kafka/index.ts:4`). No Kafka component, no `ProviderType.Kafka` in the frontend enum (`web-app/src/app/core/models/provider.model.ts:5`), and none in the backend enum (`src/ServiceBusExplorer.Core/Providers/ProviderType.cs:6`): there is no backend provider.
 - `ProviderService` falls back to hard-coded default capabilities when the API call fails and lists only Azure and RabbitMQ (`web-app/src/app/core/services/provider.service.ts:219`).
 
@@ -149,20 +161,20 @@ Components: `advanced-filter-panel`, `bulk-actions-toolbar`, `bulk-operation-pro
 
 ## Tests
 
-- 22 `*.spec.ts` files exist under `web-app/src`.
-- `npm test` is `ng test` (`web-app/package.json:25`). `angular.json` sets the `@angular/build:unit-test` builder with no `runner` option (`web-app/angular.json:90`); the builder schema defaults `runner` to `vitest`, `runnerConfig` to `false` and `include` to `**/*.spec.ts` (`web-app/node_modules/@angular/build/src/builders/unit-test/schema.json:19`, `web-app/node_modules/@angular/build/src/builders/unit-test/schema.json:25`, `web-app/node_modules/@angular/build/src/builders/unit-test/schema.json:45`). Run on 2026-11-12, after the names-in-URLs fix, `npm test -- --watch=false` executes all 22 files: 540 tests pass and 8 are skipped (three `describe.skip` blocks for the refresh variants in `web-app/src/app/core/services/metrics.service.spec.ts:295`).
+- 27 `*.spec.ts` files exist under `web-app/src`.
+- `npm test` is `ng test` (`web-app/package.json:25`). `angular.json` sets the `@angular/build:unit-test` builder with no `runner` option (`web-app/angular.json:90`); the builder schema defaults `runner` to `vitest`, `runnerConfig` to `false` and `include` to `**/*.spec.ts` (`web-app/node_modules/@angular/build/src/builders/unit-test/schema.json:19`, `web-app/node_modules/@angular/build/src/builders/unit-test/schema.json:25`, `web-app/node_modules/@angular/build/src/builders/unit-test/schema.json:45`). Run on 2026-11-12, after the selection and bulk-safety fixes, `npm test -- --watch=false` executes all 27 files: 562 tests pass and 8 are skipped (three `describe.skip` blocks for the refresh variants in `web-app/src/app/core/services/metrics.service.spec.ts:314`).
 - Plain `npx vitest` is not a way to run these tests: without the Angular builder there is no compiler, so components with signal inputs or `templateUrl` fail. A `vitest.config.ts` that listed 11 files for that mode was removed on 2026-11-12; the builder never read it.
 - CI: the web job runs `npm ci`, the tests and `npm run build` (`.github/workflows/ci.yml:109`, `.github/workflows/ci.yml:115`, `.github/workflows/ci.yml:121`). No lint step; `web-app/package.json` has no `lint` script. See [[pages/conventions/testing]].
 
 ## Hot spots
 
-- `web-app/src/app/features/entities/entity-details.component.ts:3022` - 3760 lines, template inline; handles both brokers, purge, send, metrics.
-- `web-app/src/app/features/messages/view-messages-dialog.component.ts:782` - 2320 lines; three near-identical bulk flows (resubmit, delete, move).
+- `web-app/src/app/features/entities/entity-details.component.ts:3022` - 3753 lines, template inline; handles both brokers, purge, send, metrics.
+- `web-app/src/app/features/messages/view-messages-dialog.component.ts:783` - 2338 lines; three near-identical bulk flows (resubmit, delete, move).
 - `web-app/src/app/shared/components/message-body-editor/message-body-editor.component.ts:426` - 1239 lines.
 - `web-app/src/app/features/connections/connections.component.ts:396` - 881 lines.
 - `web-app/src/app/features/connections/add-connection-dialog.component.ts:451` - 800 lines.
 - `web-app/src/app/shared/components/advanced-filter-panel/advanced-filter-panel.component.ts:545` - 799 lines.
-- `web-app/src/app/features/entities/entities-tree.component.ts:653` - 791 lines.
+- `web-app/src/app/features/entities/entities-tree.component.ts:653` - 790 lines.
 - `web-app/src/app/features/monitoring/monitoring.component.ts:540` - 785 lines.
 
 ## Known gaps
@@ -171,9 +183,11 @@ Components: `advanced-filter-panel`, `bulk-actions-toolbar`, `bulk-operation-pro
 - `docs/ADDING_PROVIDERS.md:21` describes a flow the code does not run.
 - A 3537-line `web-app/src/app/features/entities/entity-details.component.ts.backup` is committed next to the live file.
 - No lint or format script exists for the web app, and CI runs none.
-- Eight tests are skipped: the refresh variants in `web-app/src/app/core/services/metrics.service.spec.ts:295`, with a TODO about timers under zoneless Angular.
-- Bulk progress is a single final update, not per batch: `web-app/src/app/features/messages/view-messages-dialog.component.ts:1322`.
-- After a cancel the message list and counters are not refreshed: `web-app/src/app/features/messages/view-messages-dialog.component.ts:1318`.
+- Eight tests are skipped: the refresh variants in `web-app/src/app/core/services/metrics.service.spec.ts:314`, with a TODO about timers under zoneless Angular.
+- Bulk progress is a single final update, not per batch: `web-app/src/app/features/messages/view-messages-dialog.component.ts:1325`.
+- After a cancel the message list and counters are not refreshed: `web-app/src/app/features/messages/view-messages-dialog.component.ts:1321`.
+- A possible duplicate is recognised by the provider's English text, not a field: a change of that text in the Azure provider would make Retry Failed resend duplicates again, and RabbitMQ writes no such text. Ceiling until `BatchOperationFailure` carries a flag: `web-app/src/app/core/services/bulk-operations.service.ts:10`.
+- The drain-all decision compares the selection with the count the messages dialog received when it opened, not a fresh read; if the entity grew past what was loaded, a selection equal to that stale count still drains everything present at execution, behind the acknowledgement: `web-app/src/app/features/messages/view-messages-dialog.component.ts:1917`.
 - If `getApiSecret()` fails the app silently sends unauthenticated requests: `web-app/src/app/core/services/api.service.ts:59`.
 - `ProviderShellComponent` silently renders nothing when no component is registered (TODO in code): `web-app/src/app/features/entities/provider-shell.component.ts:176`.
 - A name that is exactly `.` or `..` cannot be sent as a path segment: `encodeURIComponent` leaves dots alone and the browser's URL parser resolves `.`, `..` and their `%2E` forms as dot segments. Azure names cannot take that form; RabbitMQ names can, and deleting a subscription named `..` under topic `t` would become `DELETE /api/topics/t/` and delete the topic (read from the URL standard and the route table, not executed). `apiPath` does not refuse such a value today: `web-app/src/app/core/services/api-path.ts:7`.

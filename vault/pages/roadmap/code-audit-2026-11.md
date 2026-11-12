@@ -179,18 +179,16 @@ The key middleware (only `OPTIONS` and `/health` bypass it; `/healthz`, `//healt
 
 ### P1
 
-- **After switching connection, the entities screen still shows the previous connection's queue with Purge, Send and View enabled** (`web-app/src/app/features/entities/entities-tree.component.ts:670`, `web-app/src/app/core/services/entity-selection.service.ts:67`). The selection is cleared only on disconnect, and the actions go by name to the new connection. Production and staging often share queue names, and the confirmation names neither the entity nor the connection. Fix: clear the selection whenever a connect succeeds or the target changes.
 - **The JSON tree in `message-body-editor` allows script injection from a message body** (latent: nothing imports the component today). It builds HTML with `bypassSecurityTrustHtml` and puts the raw JSON key inside an attribute, with an escape that leaves quotes alone (`web-app/src/app/shared/components/message-body-editor/message-body-editor.component.ts:1027`). A key containing a quote adds an event handler. Script in the renderer can read the API secret and export the stored connections with their secrets. Fix: delete the component, or build the tree with DOM nodes, before anything uses it.
 
 ### P2
 
-- **The purge confirmation names nothing and counts from a stale snapshot** (`web-app/src/app/features/entities/entity-details.component.ts:3428`): no queue, subscription, topic or connection in the text, and the number is from when the entity was selected while the panel shows live counts. The queues and topics pages do name the entity.
 - **Test connection on a saved connection always fails** (`web-app/src/app/features/connections/add-connection-dialog.component.ts:689`): the dialog sends the masked values with no id and the API does not restore them. Confirms the API entry.
 - **Deleting a group hides its connections** (`web-app/src/app/features/connections/manage-group-dialog.component.ts:535`). Confirms the API entry from the UI side.
 - **A filter on "Enqueued Time" breaks the message dialog** (`web-app/src/app/core/services/advanced-message-filter.service.ts:170`): it calls a `Date` method on what is a string at runtime. The specs use real dates and miss it.
-- **Durations of days show as "1 minute"** (`web-app/src/app/features/entities/entity-details.component.ts:3285`): the parser does not handle the `d.hh:mm:ss` form the API emits, so a 14-day TTL and the maximum value both display the fallback. Another parser in the same file handles it.
-- **Sessions of the previous subscription are shown under the next one** (`web-app/src/app/features/entities/entity-details.component.ts:3511`): the list is not reset on selection change and is fetched only when empty.
-- **A failed load of an entity shows "Loading..." forever, or an empty panel**; the error is never rendered (`web-app/src/app/core/services/entity-selection.service.ts:50`).
+- **Durations of days show as "1 minute"** (`web-app/src/app/features/entities/entity-details.component.ts:3286`): the parser does not handle the `d.hh:mm:ss` form the API emits, so a 14-day TTL and the maximum value both display the fallback. Another parser in the same file handles it.
+- **Sessions of the previous subscription are shown under the next one** (`web-app/src/app/features/entities/entity-details.component.ts:3504`): the list is not reset on selection change and is fetched only when empty.
+- **A failed load of an entity shows "Loading..." forever, or an empty panel**; the error is never rendered (`web-app/src/app/core/services/entity-selection.service.ts:64`).
 - **Counts on the topics page may not repaint after a purge** (PLAUSIBLE, `web-app/src/app/features/topics/topics.component.ts:206`): the app is zoneless and the update mutates an object inside a signal.
 
 ### P3
@@ -198,7 +196,6 @@ The key middleware (only `OPTIONS` and `/health` bypass it; `/healthz`, `//healt
 - Listeners for the menu action and for F9 are added on every visit to the connections page and never removed (`web-app/src/app/features/connections/connections.component.ts:425`); after N visits the action runs N times.
 - After clear-all or after deleting the connected connection, the header still says connected (`web-app/src/app/features/connections/connections.component.ts:625`).
 - The tree loads twice on every visit and can show the previous connection's tree after a switch; a failed load reads as "No Entities Found" (`web-app/src/app/features/entities/entities-tree.component.ts:670`).
-- Clicking A then B can display A when A's response arrives last (`web-app/src/app/core/services/entity-selection.service.ts:44`).
 - The transfer monitor shows a growing backlog as a processing rate (`web-app/src/app/features/entities/transfer-monitor.component.ts:231`).
 - A regex that matches the empty string can freeze the detail view (`web-app/src/app/shared/pipes/highlight.pipe.ts:58`). The pipe itself is safe against injection.
 - A new filter row with no value blanks the list under AND (`web-app/src/app/core/services/advanced-message-filter.service.ts:92`); numbers and dates compare as text.
@@ -227,22 +224,18 @@ The highlight pipe (escape, then wrap, and a plain string so Angular still sanit
 
 ### P1
 
-- **"Retry Failed" resends messages that were already sent** (`web-app/src/app/features/messages/view-messages-dialog.component.ts:1373`, `web-app/src/app/features/messages/view-messages-dialog.component.ts:2082`). The retry list is every entry of `failures`, and that includes the "may be duplicated" entries, whose send succeeded and whose complete failed. A retry puts a second copy at the destination, and the dialog shows them as plain "Failed". Breach of [[pages/invariants/bulk-operations-are-at-least-once]] on the UI side. Fix: the API marks a possible duplicate with a field instead of English text; the dialog excludes those from the retry and says "possible duplicate, do not retry".
-- **Delete can drain the whole entity when the user selected a few messages** (`web-app/src/app/features/messages/view-messages-dialog.component.ts:1900`, `web-app/src/app/core/services/bulk-operations.service.ts:253`). The "all selected" flag is stored at click time and never recomputed, and it compares the selection with the visible list, not with the entity count. Search to 3 hits, Select All, clear the search, Delete: the request says `all: true`. With the default page of 20 on a queue of 50,000, Select All then Delete is also a full drain. The confirmation text does say so and asks for an acknowledgement, which is the only guard. Fix: drain only when the selection equals the entity count; recompute the flag; clear the selection when a filter changes.
-- **Continuous resubmit re-sends the same messages on every cycle** (`web-app/src/app/features/messages/continuous-resubmit-dialog.component.ts:360`). Each cycle takes the head of the dead-letter queue; a message that failed, or that was sent and not removed, is still at the head and goes out again. The loop stops only when a whole batch fails. Fix: remember failed and duplicate sequence numbers and stop on them.
 
 ### P2
 
 - **The provider type never matches** (`web-app/src/app/core/models/provider.model.ts:5`): the TypeScript enum is numeric and the API sends strings. Saved RabbitMQ connections show as "Unknown Provider", the exchange labels and totals are wrong, and editing a RabbitMQ connection renders no provider section (the last part PLAUSIBLE). Fix: string values in the enum.
 - **A CSV export can run formulas** (`web-app/src/app/core/services/message-export.service.ts:87`): cells are quoted and not neutralised, and the content comes from brokers. The XLSX path is not affected.
-- **The body pane changes large numbers** (`web-app/src/app/features/messages/view-messages-dialog.component.ts:1396`): parse and re-serialise rewrites integers above 2^53, and the diff dialog can show two different bodies as equal. Display only; resubmit uses the raw text.
+- **The body pane changes large numbers** (`web-app/src/app/features/messages/view-messages-dialog.component.ts:1397`): parse and re-serialise rewrites integers above 2^53, and the diff dialog can show two different bodies as equal. Display only; resubmit uses the raw text.
 - **A second send keeps the first one's properties and schedule** (`web-app/src/app/features/messages/send-message-dialog.component.ts:423`): after a failed send, clearing the schedule still sends the old value, so a message meant for now goes out scheduled.
 - **Edit and resubmit turns every property into text and keeps the original `MessageId`** (`web-app/src/app/features/messages/send-message-dialog.component.ts:325`): typed subscription filters break, and with duplicate detection the edited message can be dropped while the UI says sent.
 - **"Save as Template" uses `window.prompt`**, which Electron does not implement (PLAUSIBLE, `web-app/src/app/features/messages/send-message-dialog.component.ts:356`).
 - **Failed tree loads read as an empty tree**, and the dead-letter alerts are then cleared from partial data (`web-app/src/app/core/services/tree-data-builder.service.ts:24`).
-- **After an error in a bulk operation nothing reloads** (`web-app/src/app/features/messages/view-messages-dialog.component.ts:1382`): rows already removed on the server stay on screen with "Please try again".
-- **Keyboard shortcuts act through open dialogs** (`web-app/src/app/features/messages/view-messages-dialog.component.ts:2268`): Delete pressed while the confirmation is open stacks a second one, and confirming both sends two deletes.
-- **Zoneless repaint gaps** on Select All over 500 messages and on clearing a tab (PLAUSIBLE, `web-app/src/app/features/messages/view-messages-dialog.component.ts:1177`).
+- **After an error in a bulk operation nothing reloads** (`web-app/src/app/features/messages/view-messages-dialog.component.ts:1383`): rows already removed on the server stay on screen with "Please try again".
+- **Zoneless repaint gaps** on Select All over 500 messages and on clearing a tab (PLAUSIBLE, `web-app/src/app/features/messages/view-messages-dialog.component.ts:1180`).
 - **A property whose value is `0` or `false` renders empty, and a quick search then throws on non-text values** (`web-app/src/app/features/messages/view-messages-dialog.component.ts:344`).
 - **An import goes as one batch and reads the wrong error key** (PLAUSIBLE, `web-app/src/app/core/services/message-import.service.ts:166`), so a size failure shows "Unknown error".
 
@@ -269,13 +262,11 @@ The highlight pipe (escape, then wrap, and a plain string so Angular still sanit
 
 ## Where to start
 
-Counted across the five areas at the time of the audit: about 118 findings, 17 of them P1. Entries leave this page as their fixes land; the first to go, on 2026-11-12, were the unencoded names in URLs. The same few roots explain many of them, so the order is by root, not by count.
+Counted across the five areas at the time of the audit: about 118 findings, 17 of them P1. Entries leave this page as their fixes land; the first to go, on 2026-11-12, were the unencoded names in URLs. The same day: the selection that survived a connection switch, the purge confirmation that named nothing, a delete that could drain the whole entity, the retry and the continuous resubmit that re-sent possible duplicates, and shortcuts acting through open dialogs. Still open from those: the API has no field for a possible duplicate (the web app matches the text), a queue has no live count, an open messages dialog survives a connection switch, and the toolbar has no environment badge. The same few roots explain many of them, so the order is by root, not by count.
 
-1. **Which connection, which entity.** Clear the selection on every connect; name the entity and the connection in every destructive confirmation; show the environment in the header.
-2. **"All" means the entity, not the page.** Fix the stored flag and the retry of possible duplicates in the messages dialog; stop the continuous resubmit on a failure.
-3. **RabbitMQ.** Turn the bulk operations and the single resubmit off behind a capability flag, then fix peek, the listing that breaks on a TTL argument and the channel that dies on a missing dead-letter queue. Rebuild the bulk operations over AMQP afterwards.
-4. **Azure message safety.** Duplicate detection on the target, per-abandon and per-cycle cleanup, any exception becoming a partial result; extract the shared scan loop first.
-5. **Things that are simply broken.** Custom properties on send, queue details showing defaults, durations in days, the numeric provider enum, connect that does not connect, the enqueued-time filter.
-6. **Dead and mock code.** Delete `message-body-editor` (it carries a script-injection path), `metrics-dashboard`, the mock metrics fallback and the `.backup` file.
+1. **RabbitMQ.** Turn the bulk operations and the single resubmit off behind a capability flag, then fix peek, the listing that breaks on a TTL argument and the channel that dies on a missing dead-letter queue. Rebuild the bulk operations over AMQP afterwards.
+2. **Azure message safety.** Duplicate detection on the target, per-abandon and per-cycle cleanup, any exception becoming a partial result; extract the shared scan loop first.
+3. **Things that are simply broken.** Custom properties on send, queue details showing defaults, durations in days, the numeric provider enum, connect that does not connect, the enqueued-time filter.
+4. **Dead and mock code.** Delete `message-body-editor` (it carries a script-injection path), `metrics-dashboard`, the mock metrics fallback and the `.backup` file.
 
 Owner decisions this audit raised: a resubmit from a subscription's dead-letter queue reaching every subscription; selective delete and move on active entities, which cannot be made free of side effects; metrics tied to one configured namespace.

@@ -37,6 +37,8 @@ Each entry carries its date. This page is a tracker: `version` changes only when
 
 ## P2 - correctness and lifecycle
 
+- **2026-11-12 - A possible duplicate is recognised by the provider's English text**; the API needs a field on the batch failure so the web app stops matching words. [[pages/services/web-app]]
+- **2026-11-12 - The delete-all decision compares the selection with the count the messages dialog received when it opened**, and an open messages dialog survives a change of connection from the Electron menu. [[pages/services/web-app]]
 - **2026-11-12 - An entity named exactly `.` or `..` cannot be addressed**: the browser resolves it as a dot segment even when encoded, so deleting a subscription `..` under a topic would reach the topic's own route. Read from the URL standard and the route table, not run; RabbitMQ allows such names, Azure does not. [[pages/services/web-app]]
 - **2026-11-12 - One static provider slot for the whole API process**, swapped and disposed while calls may be in flight; the monitoring service keeps a reference to a provider that may be disposed. [[pages/services/api]]
 - **2026-11-12 - `import-full` is not atomic.** [[pages/services/api]]

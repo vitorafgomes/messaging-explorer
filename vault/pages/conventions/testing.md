@@ -33,7 +33,7 @@ reliability: high
 | Core | `dotnet test src/ServiceBusExplorer.Core.Tests` | 70 passed, 0 skipped |
 | Api | `dotnet test src/ServiceBusExplorer.Api.Tests` | 49 passed, 0 skipped |
 | Integration (Docker) | `dotnet test src/ServiceBusExplorer.IntegrationTests` | 59 passed, 0 skipped (27 RabbitMQ, 32 Azure Service Bus); 93 to 102 s wall with the images cached. The two collections run in parallel and the Azure one dominates: about 20 s to start SQL Server and the emulator, about 68 s of tests, of which 20 s is the deep dead-letter resubmit (350 messages arranged one by one) and 15 s three calls to a closed port that wait out the SDK retries |
-| Web | `npm test -- --watch=false` in `web-app/` | 22 files: 540 passed, 8 skipped |
+| Web | `npm test -- --watch=false` in `web-app/` | 27 files: 564 passed, 8 skipped |
 | Electron shell helpers | `npm run test:electron` in `web-app/` (`node --test`) | 10 passed, 0 skipped |
 | Build | `dotnet build ServiceBusExplorer.slnx` | 0 warnings, 0 errors |
 
@@ -87,7 +87,7 @@ The emulator is not the service: a result here proves the code path against the 
 
 Plain `npx vitest` is not a second way to run them. It has no Angular compiler, so a component with a signal `input()` or a `templateUrl` fails with errors such as NG0303, NG0950 and "Component is not resolved" on tests that are sound. The founding of this vault made that mistake and recorded 12 failures that did not exist; the `vitest.config.ts` that listed 11 files for that mode was removed the same day. A failure seen under plain vitest is not evidence of anything.
 
-**Skipped:** 8 tests in three `describe.skip` blocks, the refresh variants of the metrics service (`web-app/src/app/core/services/metrics.service.spec.ts:295`), with a TODO about timers under zoneless Angular. They are the only skips allowed; a new one fails the gate.
+**Skipped:** 8 tests in three `describe.skip` blocks, the refresh variants of the metrics service (`web-app/src/app/core/services/metrics.service.spec.ts:314`), with a TODO about timers under zoneless Angular. They are the only skips allowed; a new one fails the gate.
 
 ## What CI runs
 
