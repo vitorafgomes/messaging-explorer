@@ -124,15 +124,7 @@ public class RabbitMQExchangeInfo : ITopicEntity
                 TransferMessageCount = 0,
                 ScheduledMessageCount = 0,
                 TransferDeadLetterMessageCount = 0,
-                Rules = new List<SubscriptionRuleInfo>
-                {
-                    new()
-                    {
-                        Name = "RoutingKey",
-                        FilterType = "RoutingKey",
-                        FilterExpression = binding.RoutingKey
-                    }
-                }
+                Rules = [RabbitMQProvider.RoutingKeyRule(binding.RoutingKey)]
             }).ToList();
         }
     }

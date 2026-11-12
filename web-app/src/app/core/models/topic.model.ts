@@ -100,15 +100,49 @@ export interface SubscriptionInfo {
   providerType?: ProviderType;
 }
 
-/**
- * Subscription rule information for Azure Service Bus filtering.
- */
+/** The filter kinds of a subscription rule. */
+export type RuleFilterType = 'Sql' | 'Correlation' | 'True' | 'False';
+
+/** The value types of a correlation filter's application property the API can write. */
+export type RulePropertyType = 'String' | 'Int64' | 'Double' | 'Boolean';
+
+/** An application property of a correlation filter; `value` is always the text form. */
+export interface RuleApplicationProperty<T extends string = RulePropertyType | 'Other'> {
+  name: string;
+  /** `Other` is a stored type this app cannot write; a rule holding one is read-only. */
+  type: T;
+  value: string;
+}
+
+/** The correlation filter of a rule; a null system field is not part of the filter. */
+export interface CorrelationFilter<T extends string = RulePropertyType | 'Other'> {
+  correlationId: string | null;
+  messageId: string | null;
+  to: string | null;
+  replyTo: string | null;
+  subject: string | null;
+  sessionId: string | null;
+  replyToSessionId: string | null;
+  contentType: string | null;
+  applicationProperties: RuleApplicationProperty<T>[];
+}
+
+/** A subscription rule as the API reads it; `filterType` is kept open for a provider outside the four kinds. */
 export interface SubscriptionRuleInfo {
   name: string;
-  filterType: string;
-  filterExpression?: string;
-  actionExpression?: string;
-  correlationProperties?: Record<string, unknown>;
+  filterType: RuleFilterType | string;
+  sqlExpression?: string | null;
+  correlation?: CorrelationFilter | null;
+  sqlAction?: string | null;
+}
+
+/** The body of a rule add (`POST`) or replace (`PUT`): every field present, null where not set. */
+export interface SubscriptionRuleWrite {
+  name: string;
+  filterType: RuleFilterType;
+  sqlExpression: string | null;
+  correlation: CorrelationFilter<RulePropertyType> | null;
+  sqlAction: string | null;
 }
 
 /**

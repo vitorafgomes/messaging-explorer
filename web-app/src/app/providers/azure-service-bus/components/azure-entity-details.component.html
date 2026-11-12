@@ -453,14 +453,14 @@
                 <h5>{{ rule.name }}</h5>
                 <span class="badge bg-secondary">{{ rule.filterType }}</span>
               </div>
-              @if (rule.filterExpression) {
+              @if (rule.sqlExpression) {
                 <div class="rule-detail">
-                  <strong>Filter:</strong> <code>{{ rule.filterExpression }}</code>
+                  <strong>Filter:</strong> <code>{{ rule.sqlExpression }}</code>
                 </div>
               }
-              @if (rule.actionExpression) {
+              @if (rule.sqlAction) {
                 <div class="rule-detail">
-                  <strong>Action:</strong> <code>{{ rule.actionExpression }}</code>
+                  <strong>Action:</strong> <code>{{ rule.sqlAction }}</code>
                 </div>
               }
             </div>

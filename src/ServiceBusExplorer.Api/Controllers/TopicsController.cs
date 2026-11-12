@@ -213,6 +213,95 @@ public class TopicsController : ControllerBase
         return NoContent();
     }
 
+    [HttpGet("{topicName}/subscriptions/{subscriptionName}/rules")]
+    public async Task<ActionResult<IReadOnlyList<SubscriptionRuleInfo>>> GetRules(string topicName, string subscriptionName)
+    {
+        var provider = GetProvider();
+        if (provider == null)
+            return NoProviderConnected();
+
+        try
+        {
+            return Ok(await provider.GetRulesAsync(topicName, subscriptionName, HttpContext.RequestAborted));
+        }
+        catch (NotSupportedException)
+        {
+            return EntityAdministrationResults.RulesNotSupported();
+        }
+        catch (Exception ex)
+        {
+            return EntityAdministrationResults.Failure(ex, _logger, "rule", $"{topicName}/{subscriptionName}", "subscription");
+        }
+    }
+
+    [HttpPost("{topicName}/subscriptions/{subscriptionName}/rules")]
+    public async Task<ActionResult<SubscriptionRuleInfo>> CreateRule(string topicName, string subscriptionName, [FromBody] SubscriptionRuleRequest request)
+    {
+        var provider = GetProvider();
+        if (provider == null)
+            return NoProviderConnected();
+
+        try
+        {
+            var rule = await provider.CreateRuleAsync(topicName, subscriptionName, request.ToRule(), HttpContext.RequestAborted);
+            return CreatedAtAction(nameof(GetRules), new { topicName, subscriptionName }, rule);
+        }
+        catch (NotSupportedException)
+        {
+            return EntityAdministrationResults.RulesNotSupported();
+        }
+        catch (Exception ex)
+        {
+            return EntityAdministrationResults.Failure(ex, _logger, "rule", $"{topicName}/{subscriptionName}/{request.Name}", "subscription");
+        }
+    }
+
+    [HttpPut("{topicName}/subscriptions/{subscriptionName}/rules/{ruleName}")]
+    public async Task<ActionResult<SubscriptionRuleInfo>> UpdateRule(string topicName, string subscriptionName, string ruleName, [FromBody] SubscriptionRuleRequest request)
+    {
+        var provider = GetProvider();
+        if (provider == null)
+            return NoProviderConnected();
+
+        if (request.Name != null && request.Name != ruleName)
+            return BadRequest(new { message = "name must be absent or equal to the rule name in the path; a rule cannot be renamed." });
+
+        try
+        {
+            return Ok(await provider.UpdateRuleAsync(topicName, subscriptionName, ruleName, request.ToRule(), HttpContext.RequestAborted));
+        }
+        catch (NotSupportedException)
+        {
+            return EntityAdministrationResults.RulesNotSupported();
+        }
+        catch (Exception ex)
+        {
+            return EntityAdministrationResults.Failure(ex, _logger, "rule", $"{topicName}/{subscriptionName}/{ruleName}", "rule");
+        }
+    }
+
+    [HttpDelete("{topicName}/subscriptions/{subscriptionName}/rules/{ruleName}")]
+    public async Task<ActionResult> DeleteRule(string topicName, string subscriptionName, string ruleName)
+    {
+        var provider = GetProvider();
+        if (provider == null)
+            return NoProviderConnected();
+
+        try
+        {
+            await provider.DeleteRuleAsync(topicName, subscriptionName, ruleName, HttpContext.RequestAborted);
+            return NoContent();
+        }
+        catch (NotSupportedException)
+        {
+            return EntityAdministrationResults.RulesNotSupported();
+        }
+        catch (Exception ex)
+        {
+            return EntityAdministrationResults.Failure(ex, _logger, "rule", $"{topicName}/{subscriptionName}/{ruleName}", "rule");
+        }
+    }
+
     [HttpPost("{topicName}/subscriptions/{subscriptionName}/messages/search")]
     public async Task<ActionResult<MessageSearchResult>> SearchSubscriptionMessages(
         string topicName, string subscriptionName, [FromBody] MessageSearchRequest request)

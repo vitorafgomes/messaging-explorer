@@ -99,6 +99,13 @@ public interface IProviderCapabilities
     bool SupportsEntityUpdate { get; }
 
     /// <summary>
+    /// Indicates whether the provider can list, add, replace and delete the rules of a subscription.
+    /// For Azure Service Bus: true.
+    /// For RabbitMQ: false (a binding has a routing key, not rules).
+    /// </summary>
+    bool SupportsSubscriptionRules { get; }
+
+    /// <summary>
     /// Gets the supported exchange types for the provider.
     /// For Azure Service Bus: empty (not applicable).
     /// For RabbitMQ: ["direct", "fanout", "topic", "headers"].

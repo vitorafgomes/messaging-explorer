@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import { TopicService } from './topic.service';
 import { ApiService } from './api.service';
-import { BatchOperationResult } from '../models';
+import { BatchOperationResult, SubscriptionRuleWrite } from '../models';
 
 describe('TopicService', () => {
   let service: TopicService;
@@ -10,6 +10,7 @@ describe('TopicService', () => {
   let apiGet: ReturnType<typeof vi.fn>;
   let apiDelete: ReturnType<typeof vi.fn>;
   let apiPatch: ReturnType<typeof vi.fn>;
+  let apiPut: ReturnType<typeof vi.fn>;
 
   const emptyResult: BatchOperationResult = {
     successCount: 0,
@@ -23,7 +24,8 @@ describe('TopicService', () => {
     apiGet = vi.fn().mockReturnValue(of([]));
     apiDelete = vi.fn().mockReturnValue(of({ success: true }));
     apiPatch = vi.fn().mockReturnValue(of({}));
-    const apiServiceMock = { post: apiPost, get: apiGet, delete: apiDelete, patch: apiPatch } as unknown as ApiService;
+    apiPut = vi.fn().mockReturnValue(of({}));
+    const apiServiceMock = { post: apiPost, get: apiGet, delete: apiDelete, patch: apiPatch, put: apiPut } as unknown as ApiService;
 
     TestBed.configureTestingModule({
       providers: [
@@ -144,6 +146,51 @@ describe('TopicService', () => {
 
       expect(apiPatch.mock.calls[0][0]).toBe('topics/t%2F1/subscriptions/s%2F2');
       expect(apiPatch.mock.calls[0][1]).toStrictEqual({ forwardDeadLetteredMessagesTo: '' });
+    });
+  });
+
+  describe('list, add, replace and delete the rules of a subscription', () => {
+    const sqlRule: SubscriptionRuleWrite = {
+      name: 'physical-goods',
+      filterType: 'Sql',
+      sqlExpression: "category = 'physical' AND total > 0",
+      correlation: null,
+      sqlAction: "SET priority = 'normal'"
+    };
+    const correlationRule: SubscriptionRuleWrite = {
+      name: 'uk-orders',
+      filterType: 'Correlation',
+      sqlExpression: null,
+      correlation: {
+        correlationId: null, messageId: null, to: null, replyTo: null, subject: 'order.created',
+        sessionId: null, replyToSessionId: null, contentType: null,
+        applicationProperties: [{ name: 'tenant', type: 'String', value: 'contoso-uk' }, { name: 'priority', type: 'Int64', value: '3' }]
+      },
+      sqlAction: null
+    };
+
+    it('the list is GET api/topics/{topic}/subscriptions/{subscription}/rules', () => {
+      service.getRules('t/1', 's/2').subscribe();
+
+      expect(apiGet.mock.calls).toStrictEqual([['topics/t%2F1/subscriptions/s%2F2/rules']]);
+    });
+
+    it('add posts the rule, exactly as given, to POST .../rules', () => {
+      service.createRule('t/1', 's/2', correlationRule).subscribe();
+
+      expect(apiPost.mock.calls).toStrictEqual([['topics/t%2F1/subscriptions/s%2F2/rules', correlationRule]]);
+    });
+
+    it('replace puts the whole rule to PUT .../rules/{ruleName}, the reserved $Default encoded as one segment', () => {
+      service.replaceRule('t/1', 's/2', '$Default', { ...sqlRule, name: '$Default' }).subscribe();
+
+      expect(apiPut.mock.calls).toStrictEqual([['topics/t%2F1/subscriptions/s%2F2/rules/%24Default', { ...sqlRule, name: '$Default' }]]);
+    });
+
+    it('delete is DELETE .../rules/{ruleName} with no body', () => {
+      service.deleteRule('t/1', 's/2', 'physical-goods').subscribe();
+
+      expect(apiDelete.mock.calls).toStrictEqual([['topics/t%2F1/subscriptions/s%2F2/rules/physical-goods']]);
     });
   });
 });

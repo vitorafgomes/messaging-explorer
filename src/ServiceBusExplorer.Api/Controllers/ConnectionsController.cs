@@ -394,6 +394,7 @@ public class ConnectionsController : ControllerBase
                 supportsDuplicateDetection = capabilities.SupportsDuplicateDetection,
                 supportsAutoForwarding = capabilities.SupportsAutoForwarding,
                 supportsEntityUpdate = capabilities.SupportsEntityUpdate,
+                supportsSubscriptionRules = capabilities.SupportsSubscriptionRules,
                 maxMessageSizeInBytes = capabilities.MaxMessageSizeInBytes,
                 maxTimeToLive = capabilities.MaxTimeToLive.ToString(),
                 supportedExchangeTypes = capabilities.SupportedExchangeTypes

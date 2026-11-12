@@ -34,6 +34,7 @@ export const DEFAULT_AZURE_CAPABILITIES: ProviderCapabilities = {
   supportsDuplicateDetection: true,
   supportsAutoForwarding: true,
   supportsEntityUpdate: true,
+  supportsSubscriptionRules: true,
   supportedExchangeTypes: [],
   maxMessageSizeInBytes: 262144, // 256KB Standard tier
   maxTimeToLive: '14.00:00:00', // 14 days
@@ -59,6 +60,7 @@ export const DEFAULT_RABBITMQ_CAPABILITIES: ProviderCapabilities = {
   supportsDuplicateDetection: false,
   supportsAutoForwarding: false,
   supportsEntityUpdate: false,
+  supportsSubscriptionRules: false,
   supportedExchangeTypes: ['direct', 'fanout', 'topic', 'headers'],
   maxMessageSizeInBytes: 134217728, // 128MB
   maxTimeToLive: '10675199.02:48:05.4775807', // TimeSpan.MaxValue
@@ -73,11 +75,11 @@ const DISCONNECTED_STATE: ProviderSelectionState = {
 };
 
 /**
- * The built-in defaults standing in for an API answer: entity administration needs the API's
- * own explicit true, because an older API that lacks the routes does not send the flag.
+ * The built-in defaults standing in for an API answer: entity administration and the rules editor
+ * need the API's own explicit true, because an older API that lacks the routes does not send the flag.
  */
 function unconfirmed(capabilities: ProviderCapabilities): ProviderCapabilities {
-  return { ...capabilities, supportsEntityUpdate: false };
+  return { ...capabilities, supportsEntityUpdate: false, supportsSubscriptionRules: false };
 }
 
 /**
@@ -179,7 +181,8 @@ export class ProviderService {
       map(capabilities => ({
         ...defaultCapabilities,
         ...capabilities,
-        supportsEntityUpdate: capabilities.supportsEntityUpdate === true
+        supportsEntityUpdate: capabilities.supportsEntityUpdate === true,
+        supportsSubscriptionRules: capabilities.supportsSubscriptionRules === true
       })),
       tap(capabilities => {
         this.providerStateSubject.next({

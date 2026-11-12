@@ -210,6 +210,38 @@ public interface IMessagingProvider : IAsyncDisposable
 
     #endregion
 
+    #region Subscription Rules
+
+    /// <summary>
+    /// The rules of a subscription. Throws <see cref="EntityNotFoundException"/> when the subscription does not
+    /// exist; an empty list means the subscription exists and has no rule. A provider without rules throws
+    /// <see cref="NotSupportedException"/> and declares it in <see cref="IProviderCapabilities.SupportsSubscriptionRules"/>;
+    /// so do the three members below.
+    /// </summary>
+    Task<IReadOnlyList<SubscriptionRuleInfo>> GetRulesAsync(string topicName, string subscriptionName, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Adds a rule to a subscription and returns it as stored. A rule outside the provider's limits throws
+    /// <see cref="InvalidEntityConfigurationException"/> before the broker is called; an existing name throws
+    /// <see cref="EntityAlreadyExistsException"/>; a missing subscription <see cref="EntityNotFoundException"/>.
+    /// </summary>
+    Task<SubscriptionRuleInfo> CreateRuleAsync(string topicName, string subscriptionName, SubscriptionRuleInfo rule, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Replaces the filter and the action of the rule named <paramref name="ruleName"/> and returns it as stored;
+    /// <see cref="SubscriptionRuleInfo.Name"/> of <paramref name="rule"/> is not read, so a rule cannot be renamed.
+    /// A missing rule or subscription throws <see cref="EntityNotFoundException"/>.
+    /// </summary>
+    Task<SubscriptionRuleInfo> UpdateRuleAsync(string topicName, string subscriptionName, string ruleName, SubscriptionRuleInfo rule, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes a rule; deleting the last one leaves a subscription that receives nothing. A missing rule or
+    /// subscription throws <see cref="EntityNotFoundException"/>.
+    /// </summary>
+    Task DeleteRuleAsync(string topicName, string subscriptionName, string ruleName, CancellationToken cancellationToken = default);
+
+    #endregion
+
     #region Message Operations
 
     /// <summary>
