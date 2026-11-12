@@ -67,5 +67,6 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 
 ## Roadmap
 
+- [[pages/roadmap/code-audit-2026-11|Code audit, November 2026]] - The line-by-line bug hunt of the back end and the front end: findings by area and severity, improvements, and where to start.
 - [[pages/roadmap/improvement-plan|Improvement plan]] - The order of work in seven phases: land what is open, gates that tell the truth, message and secret safety, a release that works on three systems, dependencies, the API boundary, tests and structure.
 - [[pages/roadmap/followups|Follow-ups]] - The tracker of known gaps, by risk, and the owner decisions pending.

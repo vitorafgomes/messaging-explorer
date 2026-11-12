@@ -30,7 +30,7 @@ reliability: high
 | What | Command | State on 2026-11-12 |
 |---|---|---|
 | Core | `dotnet test src/ServiceBusExplorer.Core.Tests` | 70 passed, 0 skipped |
-| Api | `dotnet test src/ServiceBusExplorer.Api.Tests` | 18 passed, 0 skipped |
+| Api | `dotnet test src/ServiceBusExplorer.Api.Tests` | 28 passed, 0 skipped |
 | Web | `npm test -- --watch=false` in `web-app/` | 21 files: 519 passed, 8 skipped |
 | Electron shell helpers | `npm run test:electron` in `web-app/` (`node --test`) | 10 passed, 0 skipped |
 | Build | `dotnet build ServiceBusExplorer.slnx` | 0 warnings, 0 errors |
@@ -62,7 +62,7 @@ Plain `npx vitest` is not a second way to run them. It has no Angular compiler, 
 From the founding survey; each is on its service page.
 
 - **Core:** `ProviderFactory`, the whole RabbitMQ provider except sessions, `RabbitMQManagementClient`, `RabbitMQPatternDetector`.
-- **Api:** `QueuesController`, `TopicsController`, `SessionsController`, `ConnectionGroupsController`, `MonitoringController`, the monitoring service, the `API_SECRET` fail-fast, port resolution, the loopback binding.
+- **Api:** `QueuesController`, `TopicsController`, `SessionsController`, `ConnectionGroupsController`, `MonitoringController`, the monitoring service, port resolution, the loopback binding.
 - **Electron shell:** `main.js` and `preload.js`. The pure helpers in `web-app/electron/shell-helpers.js` are tested with `node:test`; the wiring around them (dialogs, window order, quit, IPC handlers) needs Electron and has no test.
 
 A refactor of any of these starts with pinning tests (the refactor lane, step 3).

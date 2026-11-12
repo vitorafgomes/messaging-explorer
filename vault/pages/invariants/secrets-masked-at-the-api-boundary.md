@@ -60,13 +60,14 @@ Connection strings and passwords for production brokers pass through this tool. 
 - `src/ServiceBusExplorer.Core.Tests/Services/FileWorkspaceManagerTests.cs:91` - a masked password on update keeps the stored password.
 - `src/ServiceBusExplorer.Core.Tests/Services/FileWorkspaceManagerTests.cs:155` - importing a masked entry for an unknown id never stores the mask.
 - `src/ServiceBusExplorer.Api.Tests/MetricsControllerTests.cs:109` - a 500 from the metrics endpoint does not carry the exception message.
+- `src/ServiceBusExplorer.Api.Tests/ErrorBodyTests.cs:51` - an unhandled exception answers a constant body in every environment. Before 2026-11-12 the Development exception page showed the parse error of an unreadable `workspace.json` and echoed the request headers, the API key among them.
+- `src/ServiceBusExplorer.Api.Tests/ErrorBodyTests.cs:69` - the import action answers a constant message, never the exception's.
 
 ## Known exceptions
 
 None is intended; each is tracked in [[pages/roadmap/followups]].
 
 - **The list endpoint, `export-full` and the two import endpoints are not pinned by a masking test** at the API level.
-- **Under the Development environment the developer exception page can show the inner parse error of an unreadable `workspace.json`**, which may quote a character of the file. The packaged app does not run in Development.
 - **The API's stdout is echoed by the Electron shell**; whether any API log line carries a connection string was not verified.
 
 ## Change protocol

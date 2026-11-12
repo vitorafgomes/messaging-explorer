@@ -22,8 +22,8 @@ An entry is a claim about the code today: when the code under it changes, the en
 
 ## API
 
-- **`/health` answers without the API key.** The Electron shell and a developer need to know the process is up before a key exchange is possible; the route returns a constant. `src/ServiceBusExplorer.Api/Program.cs:181`, locked by `src/ServiceBusExplorer.Api.Tests/AuthMiddlewareTests.cs:38`.
-- **`OPTIONS` passes the key middleware.** A CORS preflight never carries custom headers; the CORS middleware before it decides, and the real request still needs the key. `src/ServiceBusExplorer.Api/Program.cs:187`, locked by `src/ServiceBusExplorer.Api.Tests/CorsTests.cs:26`.
+- **`/health` answers without the API key.** The Electron shell and a developer need to know the process is up before a key exchange is possible; the route returns a constant. `src/ServiceBusExplorer.Api/Program.cs:186`, locked by `src/ServiceBusExplorer.Api.Tests/AuthMiddlewareTests.cs:38`.
+- **`OPTIONS` passes the key middleware.** A CORS preflight never carries custom headers; the CORS middleware before it decides, and the real request still needs the key. `src/ServiceBusExplorer.Api/Program.cs:192`, locked by `src/ServiceBusExplorer.Api.Tests/CorsTests.cs:26`.
 - **An export with `includeSecrets=true` returns raw secrets.** It is the user's backup of their own connections, asked for explicitly, and it logs a warning. `src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs:422`, locked by `src/ServiceBusExplorer.Api.Tests/ConnectionMaskingTests.cs:61`.
 - **Enums travel as strings.** The Angular client sends `"AzureServiceBus"`, not `0`. `src/ServiceBusExplorer.Api/Program.cs:59`.
 

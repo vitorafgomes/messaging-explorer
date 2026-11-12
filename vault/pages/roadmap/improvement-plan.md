@@ -22,6 +22,8 @@ reliability: medium
 
 This page is the order. The findings and their citations stay where they are: "Known gaps" on each service page and [[pages/roadmap/followups]]. A phase that ships removes its entries there.
 
+> **2026-11-12, later the same day:** a line-by-line audit found far more than the founding survey ([[pages/roadmap/code-audit-2026-11]]). Its "Where to start" list comes before phases 4 to 6 below, and it settles the RabbitMQ question of Phase 2: turn the bulk operations off, then rebuild them over AMQP.
+
 ## Why now
 
 The founding survey of 2026-11-12 read the whole repo for the first time against written rules. It found that the three things root `CLAUDE.md` calls never "harden later" are each breached somewhere, that the gates cannot see most of it (CI runs no web test, most controllers and one whole provider have no tests), and that the release packages whatever commit is tagged without running a test. The tool is public and its users point it at production.
@@ -97,8 +99,8 @@ The order is by what each phase makes possible, not only by risk: Phase 1 comes 
 ### Phase 5 - API boundary and lifecycle
 - **Status:** not started
 - **Scope:** the two P2 lists of [[pages/roadmap/followups]].
-  1. One exception handler, one error body shape, no exception message to the client.
-  2. Tests that make the boundary guards fire: a foreign `Host`, the missing `API_SECRET`, the binding the shell actually uses.
+  1. Done 2026-11-12: one exception handler, one error body shape, no exception message to the client.
+  2. Done 2026-11-12 for a foreign `Host` and the missing `API_SECRET`. Open: the binding the shell actually uses.
   3. The active provider held by a service with a lease, not a static field on a controller; the monitoring service takes its provider from it.
   4. Done 2026-11-12 for `clear-all` (it resets through the workspace manager, under its lock, atomically, and works on an unreadable file). Open: `import-full`.
   5. Electron: `openExternal` limited to `https`, a CSP on the packaged window, a validated update channel, no emoji in logs.

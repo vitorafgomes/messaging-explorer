@@ -30,7 +30,7 @@ Each entry carries its date. This page is a tracker: `version` changes only when
 ## P2 - weakens the API boundary
 
 - **2026-11-12 - The loopback binding in `Program.cs` never runs under Electron** (`ASPNETCORE_URLS` is always set), and host filtering has two sources with no test sending a foreign Host. [[pages/services/api]], [[pages/invariants/local-authenticated-api]]
-- **2026-11-12 - Exception messages reach the client** on the import action; many actions have no try/catch and there is no exception handler; two shapes of 500 body. [[pages/services/api]]
+- **2026-11-12 - A malformed JSON request body gets the framework's automatic 400**, whose text may carry the parser's message (unverified). [[pages/services/api]]
 - **2026-11-12 - The packaged window has no CSP.** [[pages/services/electron-shell]]
 - **2026-11-12 - No code signing on any OS.** [[pages/services/electron-shell]]
 - **2026-11-12 - If the API secret cannot be read, requests go out without the header** and fail as 401 with no message to the user. [[pages/services/web-app]]
