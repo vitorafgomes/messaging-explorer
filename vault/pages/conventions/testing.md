@@ -2,7 +2,7 @@
 title: "Testing"
 version: "1.0"
 date: 2026-11-12
-changes: "Integration project against RabbitMQ in a container: the Running row, how it works, what CI runs, what has no test"
+changes: "Integration project against the Azure Service Bus emulator: the Running row, the emulator fixture, what the emulator cannot do"
 page_type: convention
 status: active
 description: "How Messaging Explorer is tested: xUnit with Moq for the two .NET projects, vitest for the Angular app, what runs in CI, the state at the founding, and what has no test."
@@ -32,7 +32,7 @@ reliability: high
 |---|---|---|
 | Core | `dotnet test src/ServiceBusExplorer.Core.Tests` | 70 passed, 0 skipped |
 | Api | `dotnet test src/ServiceBusExplorer.Api.Tests` | 49 passed, 0 skipped |
-| Integration (Docker) | `dotnet test src/ServiceBusExplorer.IntegrationTests` | 27 passed, 0 skipped; about 8 s with the image cached, of which about 1 s is tests and the rest the container start |
+| Integration (Docker) | `dotnet test src/ServiceBusExplorer.IntegrationTests` | 59 passed, 0 skipped (27 RabbitMQ, 32 Azure Service Bus); 93 to 102 s wall with the images cached. The two collections run in parallel and the Azure one dominates: about 20 s to start SQL Server and the emulator, about 68 s of tests, of which 20 s is the deep dead-letter resubmit (350 messages arranged one by one) and 15 s three calls to a closed port that wait out the SDK retries |
 | Web | `npm test -- --watch=false` in `web-app/` | 22 files: 540 passed, 8 skipped |
 | Electron shell helpers | `npm run test:electron` in `web-app/` (`node --test`) | 10 passed, 0 skipped |
 | Build | `dotnet build ServiceBusExplorer.slnx` | 0 warnings, 0 errors |
@@ -41,7 +41,7 @@ The Api tests share process-wide environment variables, so the assembly disables
 
 ## The integration project
 
-`src/ServiceBusExplorer.IntegrationTests` runs the RabbitMQ provider against a real broker, under [[pages/decisions/0002-integration-tests-against-brokers-in-docker]]. Testcontainers.RabbitMq 4.16.0 starts `rabbitmq:4.3.7-management` (`src/ServiceBusExplorer.IntegrationTests/RabbitMqFixture.cs:19`): a pinned patch of the current 4.x line, with the management plugin because the provider uses AMQP and the management HTTP API both.
+`src/ServiceBusExplorer.IntegrationTests` runs the RabbitMQ provider against a real broker and the Azure Service Bus provider against the emulator, under [[pages/decisions/0002-integration-tests-against-brokers-in-docker]]. Testcontainers.RabbitMq 4.16.0 starts `rabbitmq:4.3.7-management` (`src/ServiceBusExplorer.IntegrationTests/RabbitMqFixture.cs:19`): a pinned patch of the current 4.x line, with the management plugin because the provider uses AMQP and the management HTTP API both.
 
 - **One broker per run.** `RabbitMqFixture` is a collection fixture (`src/ServiceBusExplorer.IntegrationTests/RabbitMqFixture.cs:16`, collection at `src/ServiceBusExplorer.IntegrationTests/RabbitMqFixture.cs:210`); every class carries `[Collection]`, so the tests run one after another against one container. It binds 15672 as well as 5672 and waits until `/api/overview` answers (`src/ServiceBusExplorer.IntegrationTests/RabbitMqFixture.cs:35`).
 - **The connection comes only from the fixture.** User and a random password are made in the constructor, host and ports come from the container, and `CreateConfig` builds the provider's config from them. Nothing in the project reads an environment variable, a file or configuration. `The_provider_connects_only_to_the_loopback_container_this_run_started` (`src/ServiceBusExplorer.IntegrationTests/RabbitMqFixtureTests.cs:12`) asserts the host resolves to loopback only and the ports are the mapped ones, not 5672 and 15672. The host itself comes from Testcontainers, and its own settings (`DOCKER_HOST`, `TESTCONTAINERS_HOST_OVERRIDE`, `~/.testcontainers.properties`) can point it elsewhere; the fixture therefore refuses any host that does not resolve to loopback before a test runs (`src/ServiceBusExplorer.IntegrationTests/RabbitMqFixture.cs:179`), so a redirected run fails as a whole.
@@ -49,7 +49,37 @@ The Api tests share process-wide environment variables, so the assembly disables
 - **Arrange and observe beside the provider, never instead of it.** The fixture keeps a second AMQP connection and an HTTP client on the management API. A fresh channel per helper call, because a 404 closes a channel; counts over AMQP (`QueueDeclarePassive`), never from management statistics, which lag by seconds; absence is proved with a sentinel message behind the one that must not arrive.
 - **Isolation.** Each test makes its own queues, exchanges and users with unique names and deletes them through the management API afterwards, whatever state the provider is in. Ryuk removes the container when the run ends.
 - **Two classes.** `RabbitMQProviderTests` is what works today; `RabbitMQProviderDefectTests` pins each reproduced audit entry with a `Defect_` test of today's behaviour, whose summary says what the correct behaviour would be ([[pages/roadmap/code-audit-2026-11]]).
-- **Not covered:** the bulk resubmit and move paths beyond the defects, search, sessions, quorum queues, TLS, more than one virtual host, the Azure Service Bus emulator (the next lane), and every controller.
+- **Not covered (RabbitMQ):** the bulk resubmit and move paths beyond the defects, search, sessions, quorum queues, TLS, more than one virtual host, and every controller.
+
+### The Azure Service Bus emulator
+
+Testcontainers.ServiceBus 4.16.0 starts `mcr.microsoft.com/azure-messaging/servicebus-emulator:2.0.1` (`src/ServiceBusExplorer.IntegrationTests/AzureServiceBusFixture.cs:22`) with the SQL Server container the emulator needs, on a network of their own. `2.0.1` is the tag `latest` pointed at on 2026-11-12 (same manifest digest); the copy of `latest` cached on the development machine was the older `2.0.0`. The SQL image is the module's default, `mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04`, with the module's throwaway password; it changes only when the package does. The fixture accepts the emulator licence through the module (`WithAcceptLicenseAgreement`, which sets `ACCEPT_EULA`). No entity configuration file is mounted: the fixture keeps the emulator's built-in configuration and every test creates its entities through the management API.
+
+- **Two endpoints, two providers.** The emulator serves AMQP on 5672 and the management API over HTTP on 5300, and the SDK reads both ports from the connection string, so no single connection string reaches both. The fixture hands out both connection strings, each from the container (`GetConnectionString`, `GetHttpConnectionString`), and two providers connected through `ProviderFactory.CreateConnectedProviderAsync` the way the API connects: the management one lists, reads, creates and deletes entities, the messaging one sends, peeks, receives and runs the bulk operations. Both strings carry `UseDevelopmentEmulator=true`; `AzureConnectionConfig.IsValid` and the factory accept them unchanged.
+- **The connection comes only from the fixture**, and the loopback guard checks the host of both endpoints before a test runs (`src/ServiceBusExplorer.IntegrationTests/AzureServiceBusFixture.cs:167`). `Both_provider_endpoints_are_the_loopback_container_this_run_started` (`src/ServiceBusExplorer.IntegrationTests/AzureServiceBusFixtureTests.cs:12`) asserts loopback and mapped ports, not 5672 or 5300. The key is the emulator's published development key, which the module puts in the connection string.
+- **A start deadline.** The readiness checks of the SQL and emulator containers have no deadline of their own; on 2026-11-12, with the host short of memory, SQL Server never became ready and the first run hung for ten minutes. The fixture gives the start five minutes (`src/ServiceBusExplorer.IntegrationTests/AzureServiceBusFixture.cs:35`), image pulls on a cold runner included, and the collection then fails: with the deadline set to 3 s the readiness wait threw `TimeoutException` and the run failed in under 5 s (2026-11-12, restored afterwards).
+- **Arrange and observe beside the provider.** A second `ServiceBusClient` and a `ServiceBusAdministrationClient` in the fixture; counts are read by draining or peeking, never from runtime properties, which the emulator reports as zero. The first receive on an idle client can time out while messages are there, so the drain asks a peek first whether the entity is empty (`src/ServiceBusExplorer.IntegrationTests/AzureServiceBusFixture.cs:118`).
+- **Isolation.** Unique entity names per test, deleted afterwards through the administration client. The emulator allows 50 queues and 50 topics per namespace, so a test that does not clean up will eventually break the others.
+- **Three classes.** `AzureServiceBusProviderTests` (15, what works today), `AzureServiceBusProviderDefectTests` (16 `Defect_` tests, [[pages/roadmap/code-audit-2026-11]]) and the guard test.
+
+#### What the emulator can do
+
+Established by running it on 2026-11-12, each by a call through the provider or the SDK: the administration client on the HTTP endpoint (namespace properties, list, get and runtime properties of queues, topics and subscriptions, create and delete of queues, topics, subscriptions and rules, SQL rule filters with a parse error on a bad expression); sessions (session-enabled queues and subscriptions, the session list, session state); duplicate detection; dead-lettering by max delivery count and explicitly, with the reason kept; scheduled messages (hidden from receive, shown by peek); application properties of type string, int, bool, double, `DateTimeOffset` and `Guid` round-trip with their types; the 256 KB message limit; peek of 250 messages per call; the server-side purge the provider calls by reflection, which returned the purged count over AMQP (the provider's own comment says the emulator does not support it: `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:1028`).
+
+#### What the emulator cannot do
+
+Untested by integration, per [[pages/decisions/0002-integration-tests-against-brokers-in-docker]] rule 6:
+
+- **One connection string for messages and entities.** The provider builds both clients from one string, so an operation that needs both cannot run against the emulator: `PurgeMessagesAsync` (active, dead-letter and session, so the session purge entry of the audit as well) and `DeleteMessagesAsync` with `all`, because both read `RequiresSession` through the administration client before draining over AMQP (`src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:900`, `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:905`). With the messaging string the admin call fails after four retries; with the management string the AMQP client talks to the HTTP port and fails after three to five minutes with `GeneralError` (`ProtocolName48545450`, the bytes of "HTTP"). `TestConnectionAsync` probes the administration client, so it answers false for the messaging endpoint (`TestConnection_is_false_for_the_messaging_endpoint_because_it_probes_the_management_api`).
+- **Runtime counts.** Active, dead-letter, scheduled and total message counts are always zero, so the counts on queue, topic and subscription listings are untested.
+- **Authentication.** A wrong `SharedAccessKey` is accepted on both endpoints; there is no Entra ID, so the credential auth types and a rejected key are untested.
+- **Partitioning.** `EnablePartitioning = true` creates a queue that reports itself not partitioned; the audit entry on scan order in partitioned entities cannot be exercised.
+- **Limits of a real namespace.** Default message time to live at most one hour (two hours is rejected with 400); 50 queues and 50 topics; Standard-tier sizes only, no Premium; no throttling, no real network.
+- **Short peek batches.** A peek returns the full count asked for, for small and for 100 KB messages; the only short batch seen was at the gap a dropped duplicate leaves in a queue with duplicate detection.
+- **Lock loss on demand.** No way to make one complete or abandon fail in the middle of a batch, so the audit entries that need it (one failed abandon ends the scan, receive completing one by one) are untested.
+- **Azure Monitor.** The metrics service has no emulator at all.
+
+The emulator is not the service: a result here proves the code path against the emulator's behaviour, which may differ from a namespace in session hand-out order, peek batching, duplicate detection timing and fan-out latency (a message sent to a topic reaches its subscriptions about 100 to 170 ms later on the emulator).
 
 ## Web tests run through `ng test` only
 
