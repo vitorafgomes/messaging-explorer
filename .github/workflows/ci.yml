@@ -39,6 +39,9 @@ jobs:
           done
           bash scripts/check-vault-refs.sh
 
+      - name: Site script tests
+        run: node --test docs/app.test.js
+
   # ---------------------------------------------------------------------------
   # .NET — build and run unit tests
   # ---------------------------------------------------------------------------
