@@ -170,6 +170,20 @@ public sealed class RabbitMQProviderTests(RabbitMqFixture fixture) : IAsyncLifet
     }
 
     [Fact]
+    public async Task A_peek_with_a_cancelled_token_is_cancelled_and_leaves_both_messages_in_the_queue()
+    {
+        var queue = Queue("peek-cancelled");
+        await _provider.CreateQueueAsync(queue);
+        foreach (var body in new[] { "a", "b" }) fixture.PublishToQueue(queue, body);
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => _provider.PeekMessagesAsync(queue, 10, cancellationToken: cancelled.Token));
+
+        Assert.Equal(2u, fixture.MessageCount(queue));
+    }
+
+    [Fact]
     public async Task Purge_empties_the_queue()
     {
         var queue = Queue("purge");

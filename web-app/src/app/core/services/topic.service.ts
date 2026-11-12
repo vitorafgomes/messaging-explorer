@@ -251,6 +251,23 @@ export class TopicService {
     return this.api.post<BatchOperationResult>(apiPath`topics/${topicName}/subscriptions/${subscriptionName}/${path}/delete-batch`, request);
   }
 
+  /** Peeks the transfer dead-letter queue of a subscription: messages it could not forward to another entity. */
+  peekTransferDeadLetterMessages(topicName: string, subscriptionName: string, count: number = 10): Observable<MessageInfo[]> {
+    return this.api.get<MessageInfo[]>(apiPath`topics/${topicName}/subscriptions/${subscriptionName}/transferdeadletter?count=${count}`);
+  }
+
+  /** Deletes the given transfer dead-letter messages of a subscription; never the whole queue, which has no purge. */
+  deleteTransferDeadLetterMessages(topicName: string, subscriptionName: string, sequenceNumbers: number[]): Observable<BatchOperationResult> {
+    const request: DeleteBatchRequest = { sequenceNumbers, all: false };
+    return this.api.post<BatchOperationResult>(apiPath`topics/${topicName}/subscriptions/${subscriptionName}/transferdeadletter/delete-batch`, request);
+  }
+
+  /** Resubmits the given transfer dead-letter messages of a subscription to its topic. */
+  resubmitTransferDeadLetterMessages(topicName: string, subscriptionName: string, sequenceNumbers: number[]): Observable<BatchOperationResult> {
+    const request: ResubmitBatchRequest = { sequenceNumbers };
+    return this.api.post<BatchOperationResult>(apiPath`topics/${topicName}/subscriptions/${subscriptionName}/transferdeadletter/resubmit-batch`, request);
+  }
+
   /**
    * Purges messages from a subscription.
    * @param topicName - The topic/exchange name

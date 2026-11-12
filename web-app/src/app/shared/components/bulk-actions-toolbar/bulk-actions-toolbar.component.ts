@@ -6,7 +6,7 @@ import { trigger, state, style, transition, animate } from '@angular/animations'
  * Bulk action type enumeration
  * Represents all available bulk operations
  */
-export type BulkActionType = 'delete' | 'resubmit' | 'move' | 'export' | 'compare';
+export type BulkActionType = 'delete' | 'resubmit' | 'move' | 'export' | 'compare' | 'cancel-scheduled';
 
 /**
  * Bulk action event payload
@@ -77,6 +77,21 @@ export interface BulkActionEvent {
               Delete
             </button>
 
+            <!-- Cancel scheduled (queue, Active tab): blocked with its reason, still focusable -->
+            @if (showCancelScheduled) {
+              <button
+                class="btn btn-outline-danger btn-sm"
+                [class.blocked]="!!cancelScheduledBlockedReason"
+                (click)="cancelScheduledBlockedReason ? null : onActionClick('cancel-scheduled')"
+                [disabled]="disabled"
+                [attr.aria-disabled]="cancelScheduledBlockedReason ? 'true' : null"
+                [attr.aria-describedby]="cancelScheduledBlockedReason ? 'cancel-scheduled-reason' : null"
+                [title]="cancelScheduledBlockedReason || 'Delete the selected scheduled messages before they are delivered'">Cancel scheduled</button>
+              @if (cancelScheduledBlockedReason) {
+                <span id="cancel-scheduled-reason" class="blocked-reason">{{ cancelScheduledBlockedReason }}</span>
+              }
+            }
+
             <!-- Resubmit Button (Dead Letter only) -->
             @if (showResubmit) {
               <button
@@ -90,14 +105,16 @@ export interface BulkActionEvent {
             }
 
             <!-- Move Button -->
-            <button
-              class="btn btn-outline-secondary btn-sm"
-              (click)="onActionClick('move')"
-              [disabled]="disabled"
-              title="Move selected messages to another queue">
-              <i class="fa fa-exchange me-1"></i>
-              Move
-            </button>
+            @if (showMove) {
+              <button
+                class="btn btn-outline-secondary btn-sm"
+                (click)="onActionClick('move')"
+                [disabled]="disabled"
+                title="Move selected messages to another queue">
+                <i class="fa fa-exchange me-1"></i>
+                Move
+              </button>
+            }
 
             <!-- Compare Button (exactly 2 selected) -->
             @if (showCompare) {
@@ -229,6 +246,16 @@ export interface BulkActionEvent {
       }
     }
 
+    .blocked {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .blocked-reason {
+      font: var(--mat-sys-body-small);
+      color: var(--mat-sys-on-surface-variant);
+    }
+
     /* Responsive adjustments */
     @media (max-width: 768px) {
       .bulk-actions-toolbar {
@@ -329,6 +356,21 @@ export class BulkActionsToolbarComponent {
    * Whether to show the Compare button (exactly 2 messages selected)
    */
   @Input() showCompare = false;
+
+  /**
+   * Whether to show the Move button; a sub-queue that cannot be moved hides it
+   */
+  @Input() showMove = true;
+
+  /**
+   * Whether to show Cancel scheduled; offered on a queue's Active tab only
+   */
+  @Input() showCancelScheduled = false;
+
+  /**
+   * Why Cancel scheduled cannot run for the current selection; empty when it can
+   */
+  @Input() cancelScheduledBlockedReason = '';
 
   /**
    * Whether all action buttons should be disabled

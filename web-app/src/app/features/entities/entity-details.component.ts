@@ -104,14 +104,25 @@ const NOT_SET = 'Not set';
               <span class="stat-label">Dead Letter</span>
             </div>
             @if (queueEntity.transferDeadLetterMessageCount > 0) {
-              <div class="stat-card stat-card-queue">
+              <div class="stat-card stat-card-queue"
+                [class.clickable]="transferDeadLetterReachable()"
+                [attr.role]="transferDeadLetterReachable() ? 'button' : null"
+                [attr.tabindex]="transferDeadLetterReachable() ? 0 : null"
+                [attr.aria-label]="transferDeadLetterReachable() ? 'View the ' + queueEntity.transferDeadLetterMessageCount + ' transfer dead-letter messages' : null"
+                (click)="openTransferDeadLetter()"
+                (keydown.enter)="openTransferDeadLetter()"
+                (keydown.space)="$event.preventDefault(); openTransferDeadLetter()">
                 <span class="stat-value">{{ queueEntity.transferDeadLetterMessageCount }}</span>
                 <span class="stat-label">Transfer Dead Letter</span>
               </div>
             }
           }
           @if (supports('supportsScheduledMessages')) {
-            <div class="stat-card stat-card-queue">
+            <div class="stat-card stat-card-queue clickable" role="button" tabindex="0"
+              [attr.aria-label]="'View the ' + queueEntity.scheduledMessageCount + ' scheduled messages'"
+              (click)="viewMessages(0, 'Scheduled')"
+              (keydown.enter)="viewMessages(0, 'Scheduled')"
+              (keydown.space)="$event.preventDefault(); viewMessages(0, 'Scheduled')">
               <span class="stat-value">{{ queueEntity.scheduledMessageCount }}</span>
               <span class="stat-label">Scheduled</span>
             </div>
@@ -323,6 +334,24 @@ const NOT_SET = 'Not set';
                   <div class="metric-label">Failed messages</div>
                 </div>
               </div>
+              @if (subscriptionEntity.transferDeadLetterMessageCount > 0) {
+                <div class="metric-card warning-card"
+                  [class.clickable]="transferDeadLetterReachable()"
+                  [attr.role]="transferDeadLetterReachable() ? 'button' : null"
+                  [attr.tabindex]="transferDeadLetterReachable() ? 0 : null"
+                  [attr.aria-label]="transferDeadLetterReachable() ? 'View the ' + subscriptionEntity.transferDeadLetterMessageCount + ' transfer dead-letter messages' : null"
+                  (click)="openTransferDeadLetter()"
+                  (keydown.enter)="openTransferDeadLetter()"
+                  (keydown.space)="$event.preventDefault(); openTransferDeadLetter()">
+                  <div class="card-header">
+                    <span>Transfer Dead Letter</span>
+                  </div>
+                  <div class="card-body">
+                    <div class="metric-value">{{ subscriptionEntity.transferDeadLetterMessageCount }}</div>
+                    <div class="metric-label">Could not be forwarded</div>
+                  </div>
+                </div>
+              }
             }
           </div>
 
@@ -2191,6 +2220,17 @@ export class EntityDetailsComponent {
     return this.providerService.capabilities()?.[feature] !== false;
   }
 
+  /** The transfer dead-letter queue opens only when the API itself said it supports it. */
+  transferDeadLetterReachable(): boolean {
+    return this.providerService.capabilities()?.supportsTransferDeadLetter === true;
+  }
+
+  openTransferDeadLetter() {
+    if (this.transferDeadLetterReachable()) {
+      this.viewMessages(2);
+    }
+  }
+
   get selection(): EntitySelection | null {
     return this.selectionService.currentSelection;
   }
@@ -2312,7 +2352,7 @@ export class EntityDetailsComponent {
     });
   }
 
-  viewMessages(initialTab?: number) {
+  viewMessages(initialTab?: number, initialStateFilter?: 'Scheduled') {
     if (!this.selection) return;
 
     let entityType: 'queue' | 'subscription';
@@ -2320,6 +2360,7 @@ export class EntityDetailsComponent {
     let topicName: string | undefined;
     let activeMessageCount: number | undefined;
     let deadLetterMessageCount: number | undefined;
+    let transferDeadLetterMessageCount: number | undefined;
 
     if (this.selection.type === 'queue') {
       entityType = 'queue';
@@ -2327,6 +2368,7 @@ export class EntityDetailsComponent {
       const queueEntity = this.selection.entity as QueueInfo;
       activeMessageCount = queueEntity?.activeMessageCount;
       deadLetterMessageCount = queueEntity?.deadLetterMessageCount;
+      transferDeadLetterMessageCount = queueEntity?.transferDeadLetterMessageCount;
     } else if (this.selection.type === 'subscription') {
       entityType = 'subscription';
       entityName = this.selection.node.name;
@@ -2334,6 +2376,7 @@ export class EntityDetailsComponent {
       topicName = subscriptionEntity?.topicName;
       activeMessageCount = subscriptionEntity?.activeMessageCount;
       deadLetterMessageCount = subscriptionEntity?.deadLetterMessageCount;
+      transferDeadLetterMessageCount = subscriptionEntity?.transferDeadLetterMessageCount;
     } else {
       return;
     }
@@ -2342,7 +2385,7 @@ export class EntityDetailsComponent {
       width: '95vw',
       maxWidth: '1400px',
       height: '90vh',
-      data: { entityType, entityName, topicName, activeMessageCount, deadLetterMessageCount, initialTab }
+      data: { entityType, entityName, topicName, activeMessageCount, deadLetterMessageCount, transferDeadLetterMessageCount, initialTab, initialStateFilter }
     });
   }
 

@@ -106,6 +106,14 @@ public interface IProviderCapabilities
     bool SupportsSubscriptionRules { get; }
 
     /// <summary>
+    /// Indicates whether the provider can peek, search, delete and resubmit the messages of the transfer
+    /// dead-letter queue, where the broker puts the messages it could not forward to another entity.
+    /// For Azure Service Bus: true.
+    /// For RabbitMQ: false (no such queue).
+    /// </summary>
+    bool SupportsTransferDeadLetter { get; }
+
+    /// <summary>
     /// Gets the supported exchange types for the provider.
     /// For Azure Service Bus: empty (not applicable).
     /// For RabbitMQ: ["direct", "fanout", "topic", "headers"].

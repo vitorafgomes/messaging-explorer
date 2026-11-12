@@ -39,6 +39,21 @@ export interface SendMessageRequest {
   applicationProperties?: { [key: string]: any };
 }
 
+/** The part of a queue or subscription a message list reads and a bulk action acts on. */
+export type SubQueue = 'active' | 'deadletter' | 'transferdeadletter';
+
+/** How an operation report names the messages of each sub-queue. */
+export const SUB_QUEUE_LABEL: Record<SubQueue, string> = {
+  active: 'active',
+  deadletter: 'dead letter',
+  transferdeadletter: 'transfer dead-letter'
+};
+
+/** Body of a scheduled-message cancel: 1 to 500 sequence numbers of scheduled messages. */
+export interface CancelScheduledRequest {
+  sequenceNumbers: number[];
+}
+
 export interface DeleteBatchRequest {
   sequenceNumbers: number[];
   /**

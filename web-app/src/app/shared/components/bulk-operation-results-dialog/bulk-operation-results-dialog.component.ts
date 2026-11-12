@@ -1,15 +1,18 @@
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
-import { BatchOperationResult } from '../../../core/models/message.model';
+import { BatchOperationResult, SUB_QUEUE_LABEL, SubQueue } from '../../../core/models/message.model';
 import { isPossibleDuplicate } from '../../../core/services/bulk-operations.service';
 
 export interface BulkOperationResultsDialogData {
-  operation: 'delete' | 'resubmit' | 'move' | 'export';
+  operation: 'delete' | 'resubmit' | 'move' | 'export' | 'cancel-scheduled';
   result: BatchOperationResult;
   entityName: string;
   entityType: 'queue' | 'topic';
-  isDeadLetter: boolean;
+  /** The sub-queue the operation ran on; callers pass this. */
+  subQueue?: SubQueue;
+  /** Older form of subQueue, read only when subQueue is absent. */
+  isDeadLetter?: boolean;
   targetQueue?: string; // For move operations
   allowRetry?: boolean; // Whether retry option should be shown
 }
@@ -372,6 +375,9 @@ export class BulkOperationResultsDialogComponent {
   }
 
   getOperationTitle(): string {
+    if (this.data.operation === 'cancel-scheduled') {
+      return 'Cancel scheduled results';
+    }
     const operation = this.data.operation.charAt(0).toUpperCase() + this.data.operation.slice(1);
     return `${operation} Results`;
   }
@@ -379,17 +385,20 @@ export class BulkOperationResultsDialogComponent {
   getOperationSummary(): string {
     const total = this.data.result.successCount + this.data.result.failureCount;
     const entity = this.data.entityName;
-    const type = this.data.isDeadLetter ? 'dead letter' : 'active';
+    const subQueue = this.data.subQueue ?? (this.data.isDeadLetter ? 'deadletter' : 'active');
+    const type = SUB_QUEUE_LABEL[subQueue];
 
     switch (this.data.operation) {
       case 'delete':
         return `Attempted to delete ${total} ${type} ${total === 1 ? 'message' : 'messages'} from ${entity}.`;
       case 'resubmit':
-        return `Attempted to resubmit ${total} dead letter ${total === 1 ? 'message' : 'messages'} from ${entity}.`;
+        return `Attempted to resubmit ${total} ${SUB_QUEUE_LABEL[subQueue === 'transferdeadletter' ? 'transferdeadletter' : 'deadletter']} ${total === 1 ? 'message' : 'messages'} from ${entity}.`;
       case 'move':
         return `Attempted to move ${total} ${type} ${total === 1 ? 'message' : 'messages'} from ${entity} to ${this.data.targetQueue}.`;
       case 'export':
         return `Attempted to export ${total} ${type} ${total === 1 ? 'message' : 'messages'} from ${entity}.`;
+      case 'cancel-scheduled':
+        return `Attempted to cancel ${total} scheduled ${total === 1 ? 'message' : 'messages'} in ${entity}.`;
       default:
         return `Processed ${total} ${total === 1 ? 'message' : 'messages'}.`;
     }

@@ -52,8 +52,8 @@ public sealed class AzureServiceBusProviderDefectTests(AzureServiceBusFixture fi
         return options.Name;
     }
 
-    private async Task<long> SequenceOfAsync(string queue, string body, bool isDeadLetter = false) =>
-        (await _messaging.PeekMessagesAsync(queue, 500, isDeadLetter)).Single(m => m.Body == body).SequenceNumber!.Value;
+    private async Task<long> SequenceOfAsync(string queue, string body, MessageSubQueue subQueue = MessageSubQueue.Active) =>
+        (await _messaging.PeekMessagesAsync(queue, 500, subQueue)).Single(m => m.Body == body).SequenceNumber!.Value;
 
     /// <summary>Correct: a property value bound from JSON is sent as its string, number or boolean value.</summary>
     [Fact]
@@ -77,26 +77,33 @@ public sealed class AzureServiceBusProviderDefectTests(AzureServiceBusFixture fi
         Assert.Equal(["plain"], await fixture.DrainAsync(queue));
     }
 
-    /// <summary>Correct: peeking 10 messages of a queue that holds 2 returns both.</summary>
+    /// <summary>
+    /// Correct: a cancel where one sequence number is not a scheduled message cancels the scheduled ones and fails only
+    /// that number. The emulator refuses the whole batch call, cancels none, and then answers every number of that batch
+    /// as already being cancelled, so the one call per number that follows cancels none either: every number is reported
+    /// failed and the scheduled messages stay. Nothing is lost and nothing is reported as cancelled that was not.
+    /// </summary>
     [Fact]
-    public async Task Defect_peek_stops_at_the_short_batch_a_dropped_duplicate_leaves_and_returns_fewer_messages_than_exist()
+    public async Task Defect_a_cancel_where_one_number_is_not_scheduled_cancels_none_on_the_emulator_and_fails_every_number()
     {
-        var queue = await CreateQueueAsync("short-peek", o =>
-        {
-            o.RequiresDuplicateDetection = true;
-            o.DuplicateDetectionHistoryTimeWindow = TimeSpan.FromMinutes(5);
-        });
+        var queue = await CreateQueueAsync("cancel-mixed");
+        long first, second;
         await using (var sender = fixture.Client.CreateSender(queue))
         {
-            await sender.SendMessageAsync(new ServiceBusMessage("one") { MessageId = "same" });
-            await sender.SendMessageAsync(new ServiceBusMessage("dropped") { MessageId = "same" });
-            await sender.SendMessageAsync(new ServiceBusMessage("three") { MessageId = "other" });
+            first = await sender.ScheduleMessageAsync(new ServiceBusMessage("s1"), DateTimeOffset.UtcNow.AddHours(1));
+            second = await sender.ScheduleMessageAsync(new ServiceBusMessage("s2"), DateTimeOffset.UtcNow.AddHours(1));
+            await sender.SendMessageAsync(new ServiceBusMessage("active"));
         }
 
-        var peeked = (await _messaging.PeekMessagesAsync(queue, 10)).Select(m => m.Body).ToList();
+        var active = await SequenceOfAsync(queue, "active");
 
-        Assert.Equal(["one"], peeked);
-        Assert.Equal(["one", "three"], await fixture.DrainAsync(queue));
+        var result = await _messaging.CancelScheduledMessagesAsync(queue, [first, active, second]);
+
+        Assert.Equal(0, result.SuccessCount);
+        Assert.Equal([first, active, second], result.Failures.Select(f => f.SequenceNumber));
+        Assert.All(result.Failures, f => Assert.Equal("The broker did not cancel this message.", f.Error));
+        Assert.Equal([("s1", "Scheduled"), ("s2", "Scheduled"), ("active", "Active")],
+            (await _messaging.PeekMessagesAsync(queue, 10)).Select(m => (m.Body, m.State)));
     }
 
     /// <summary>
@@ -121,7 +128,7 @@ public sealed class AzureServiceBusProviderDefectTests(AzureServiceBusFixture fi
             await receiver.DeadLetterMessageAsync(await receiver.ReceiveMessageAsync(TimeSpan.FromSeconds(5)));
         }
 
-        var original = await SequenceOfAsync(queue, "order", isDeadLetter: true);
+        var original = await SequenceOfAsync(queue, "order", subQueue: MessageSubQueue.DeadLetter);
 
         var result = await _messaging.ResubmitDeadLetterMessagesAsync(queue, [original]);
         await fixture.SendAsync(queue, "sentinel");
@@ -157,7 +164,7 @@ public sealed class AzureServiceBusProviderDefectTests(AzureServiceBusFixture fi
         var target = await SequenceOfAsync(queue, "m3");
 
         var result = await _messaging.DeleteMessagesAsync(queue, [target]);
-        var deadLettered = (await _messaging.PeekMessagesAsync(queue, 10, isDeadLetter: true)).Select(m => (m.Body, m.DeadLetterReason)).ToList();
+        var deadLettered = (await _messaging.PeekMessagesAsync(queue, 10, subQueue: MessageSubQueue.DeadLetter)).Select(m => (m.Body, m.DeadLetterReason)).ToList();
 
         Assert.Equal((1, 0), (result.SuccessCount, result.FailureCount));
         Assert.Equal([("m1", "MaxDeliveryCountExceeded"), ("m2", "MaxDeliveryCountExceeded")], deadLettered);
@@ -192,10 +199,10 @@ public sealed class AzureServiceBusProviderDefectTests(AzureServiceBusFixture fi
         var queue = await CreateQueueAsync("deep-dlq");
         var bodies = Enumerable.Range(0, 350).Select(i => $"m{i}").ToArray();
         await fixture.SendToDeadLetterAsync(queue, bodies);
-        var deepest = await SequenceOfAsync(queue, "m349", isDeadLetter: true);
+        var deepest = await SequenceOfAsync(queue, "m349", subQueue: MessageSubQueue.DeadLetter);
 
         await _messaging.ResubmitDeadLetterMessageAsync(queue, deepest);
-        var stillDeadLettered = (await _messaging.PeekMessagesAsync(queue, 500, isDeadLetter: true)).Select(m => m.SequenceNumber).ToList();
+        var stillDeadLettered = (await _messaging.PeekMessagesAsync(queue, 500, subQueue: MessageSubQueue.DeadLetter)).Select(m => m.SequenceNumber).ToList();
 
         Assert.Equal(["m349"], await fixture.DrainAsync(queue));
         Assert.Equal(350, stillDeadLettered.Count);

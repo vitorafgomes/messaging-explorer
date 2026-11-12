@@ -153,6 +153,61 @@ describe('ProviderService holds the capabilities of the connected provider', () 
     });
   });
 
+  describe('the transfer dead-letter queue is offered only when the API explicitly says supportsTransferDeadLetter is true', () => {
+    const azureConnected = { connected: true, namespace: 'ns.example.net', providerType: 'AzureServiceBus' } as unknown as ConnectionStatus;
+
+    it('an Azure API that answers supportsTransferDeadLetter: true enables it', () => {
+      capabilitiesResponse = () => of({ supportsTransferDeadLetter: true });
+
+      status$.next(azureConnected);
+
+      expect(service.capabilities()?.supportsTransferDeadLetter).toBe(true);
+    });
+
+    it('an Azure API that does not send the flag leaves it off', () => {
+      capabilitiesResponse = () => of({ supportsSessions: true });
+
+      status$.next(azureConnected);
+
+      expect(service.capabilities()?.supportsTransferDeadLetter, 'the API did not send the flag').toBe(false);
+    });
+
+    it('while the capabilities load, and when the call fails with a 500, it is off', () => {
+      const pending = new Subject<ProviderCapabilities>();
+      capabilitiesResponse = () => pending;
+      status$.next(azureConnected);
+      expect(service.capabilities()?.supportsTransferDeadLetter, 'while the capabilities load').toBe(false);
+
+      pending.error(new HttpErrorResponse({ status: 500, statusText: 'Internal Server Error' }));
+      expect(service.capabilities()?.supportsTransferDeadLetter, 'after a 500').toBe(false);
+    });
+
+    it('RabbitMQ: off when its API says false', () => {
+      capabilitiesResponse = () => of({ supportsTransferDeadLetter: false });
+
+      status$.next(rabbitConnected);
+
+      expect(service.capabilities()?.supportsTransferDeadLetter).toBe(false);
+    });
+  });
+
+  describe('deferral is not declared for Azure', () => {
+    it('an Azure connection whose API leaves the flag out, and one whose call fails, does not declare deferral', () => {
+      const azureConnected = { connected: true, namespace: 'ns.example.net', providerType: 'AzureServiceBus' } as unknown as ConnectionStatus;
+      const pending = new Subject<ProviderCapabilities>();
+      capabilitiesResponse = () => pending;
+
+      status$.next(azureConnected);
+      expect(service.capabilities()?.supportsDeferral, 'while the capabilities load').toBe(false);
+      pending.error(new HttpErrorResponse({ status: 500, statusText: 'Internal Server Error' }));
+      expect(service.capabilities()?.supportsDeferral, 'after a 500').toBe(false);
+
+      capabilitiesResponse = () => of({ supportsSessions: true });
+      service.refreshCapabilities();
+      expect(service.capabilities()?.supportsDeferral, 'the API left the flag out').toBe(false);
+    });
+  });
+
   it('on disconnect the state resets, and a late answer for the old connection does not bring it back', () => {
     const late = new Subject<ProviderCapabilities>();
     capabilitiesResponse = () => late;

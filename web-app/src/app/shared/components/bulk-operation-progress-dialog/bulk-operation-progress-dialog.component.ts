@@ -3,13 +3,14 @@ import { CommonModule } from '@angular/common';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { Subject } from 'rxjs';
+import { SUB_QUEUE_LABEL, SubQueue } from '../../../core/models/message.model';
 
 export interface BulkOperationProgressDialogData {
   operation: 'delete' | 'resubmit' | 'move' | 'export';
   totalCount: number;
   entityName: string;
   entityType: 'queue' | 'topic';
-  isDeadLetter: boolean;
+  subQueue: SubQueue;
   targetQueue?: string; // For move operations
 }
 
@@ -327,13 +328,13 @@ export class BulkOperationProgressDialogComponent implements OnDestroy {
   getOperationDescription(): string {
     const count = this.data.totalCount;
     const entity = this.data.entityName;
-    const type = this.data.isDeadLetter ? 'dead letter' : 'active';
+    const type = SUB_QUEUE_LABEL[this.data.subQueue];
 
     switch (this.data.operation) {
       case 'delete':
         return `Deleting ${count} ${type} ${count === 1 ? 'message' : 'messages'} from ${entity}...`;
       case 'resubmit':
-        return `Resubmitting ${count} dead letter ${count === 1 ? 'message' : 'messages'} from ${entity}...`;
+        return `Resubmitting ${count} ${SUB_QUEUE_LABEL[this.data.subQueue === 'transferdeadletter' ? 'transferdeadletter' : 'deadletter']} ${count === 1 ? 'message' : 'messages'} from ${entity}...`;
       case 'move':
         return `Moving ${count} ${type} ${count === 1 ? 'message' : 'messages'} from ${entity} to ${this.data.targetQueue}...`;
       case 'export':

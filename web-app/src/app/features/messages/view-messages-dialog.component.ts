@@ -3,12 +3,12 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
-import { Subject, finalize } from 'rxjs';
+import { Observable, Subject, finalize } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { QueueService, TopicService, ConnectionService, MessageSearchService, AdvancedMessageFilterService, BulkOperationsService, MessageExportService, isPossibleDuplicate } from '../../core/services';
-import { MessageInfo, AdvancedFilterState, FilterLogic } from '../../core/models';
+import { MessageInfo, AdvancedFilterState, FilterLogic, SubQueue, BatchOperationResult } from '../../core/models';
 import { HighlightPipe } from '../../shared/pipes';
 import { AdvancedFilterPanelComponent } from '../../shared/components/advanced-filter-panel/advanced-filter-panel.component';
 import { BulkActionsToolbarComponent, BulkActionEvent } from '../../shared/components/bulk-actions-toolbar/bulk-actions-toolbar.component';
@@ -19,7 +19,9 @@ import { BulkOperationProgressDialogComponent, BulkOperationProgressDialogData }
 import { BulkOperationResultsDialogComponent, BulkOperationResultsDialogData } from '../../shared/components/bulk-operation-results-dialog/bulk-operation-results-dialog.component';
 import { SendMessageDialogComponent, SendMessageDialogData } from './send-message-dialog.component';
 import { MessageDiffDialogComponent, MessageDiffDialogData } from './message-diff-dialog.component';
+import { CancelScheduledDialogComponent, CancelScheduledDialogData } from './cancel-scheduled-dialog.component';
 import { ProviderService } from '../../core/services/provider.service';
+import { messageCallFailure } from './message-call-failure';
 
 export interface ViewMessagesDialogData {
   entityType: 'queue' | 'subscription';
@@ -27,8 +29,17 @@ export interface ViewMessagesDialogData {
   topicName?: string; // For subscriptions
   activeMessageCount?: number;
   deadLetterMessageCount?: number;
-  initialTab?: number; // 0 = Active Messages, 1 = Dead Letter
+  initialTab?: number; // 0 = Active Messages, 1 = Dead Letter, 2 = Transfer dead-letter
+  transferDeadLetterMessageCount?: number;
+  /** Opens the Active tab showing only the scheduled messages among the loaded. */
+  initialStateFilter?: 'Scheduled';
 }
+
+/** The sub-queue each tab lists, by tab index. */
+const TAB_SUB_QUEUES: readonly SubQueue[] = ['active', 'deadletter', 'transferdeadletter'];
+
+/** The most sequence numbers one scheduled-message cancel may carry. */
+const MAX_CANCEL_SCHEDULED = 500;
 
 @Component({
   selector: 'app-view-messages-dialog',
@@ -69,6 +80,14 @@ export interface ViewMessagesDialogData {
             </button>
           </li>
         }
+        @if (capabilities()?.supportsTransferDeadLetter === true) {
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" [class.active]="selectedTabIndex === 2" (click)="setTab(2)" type="button">
+              Transfer dead-letter
+              <span class="badge bg-secondary ms-2">{{ transferDeadLetterMessageCount() ?? transferMessages.length }}</span>
+            </button>
+          </li>
+        }
       </ul>
 
       @if (selectedTabIndex === 0) {
@@ -103,6 +122,16 @@ export interface ViewMessagesDialogData {
                 </div>
               }
             </div>
+            @if (capabilities()?.supportsScheduledMessages !== false) {
+              <div class="state-field">
+                <label class="form-label" for="activeStateFilter">Show</label>
+                <select id="activeStateFilter" class="form-select" [ngModel]="activeStateFilter" (ngModelChange)="setStateFilter($event)">
+                  <option value="All">All</option>
+                  <option value="Scheduled">Scheduled</option>
+                </select>
+                <span class="state-count">{{ scheduledLoadedCount() }} scheduled of {{ activeMessages.length }} loaded</span>
+              </div>
+            }
             <div class="refresh-button-container">
               <button class="btn btn-outline-primary" (click)="loadActiveMessages()" [disabled]="loadingActive()">
                 <i class="fa-solid fa-arrows-rotate me-2"></i>
@@ -173,6 +202,9 @@ export interface ViewMessagesDialogData {
                       <div class="message-header">
                         <span class="seq">#{{ msg.sequenceNumber }}</span>
                         <span class="id">{{ msg.messageId }}</span>
+                        @if (msg.state === 'Scheduled' || msg.state === 'Deferred') {
+                          <span class="state-chip">{{ msg.state }}</span>
+                        }
                         <span class="time">{{ msg.enqueuedTime | date:'short' }}</span>
                       </div>
                       <div class="message-preview" [innerHTML]="getTruncatedBody(msg.body) | highlight:activeFilterText:{ mode: activeRegexMode ? 'regex' : 'text', caseSensitive: false }"></div>
@@ -293,6 +325,9 @@ export interface ViewMessagesDialogData {
                         <div class="message-header">
                           <span class="seq">#{{ msg.sequenceNumber }}</span>
                           <span class="reason">{{ msg.deadLetterReason || 'Unknown' }}</span>
+                          @if (msg.state === 'Scheduled' || msg.state === 'Deferred') {
+                            <span class="state-chip">{{ msg.state }}</span>
+                          }
                           <span class="time">{{ msg.enqueuedTime | date:'short' }}</span>
                         </div>
                         <div class="message-preview" [innerHTML]="getTruncatedBody(msg.body) | highlight:dlFilterText:{ mode: dlRegexMode ? 'regex' : 'text', caseSensitive: false }"></div>
@@ -304,6 +339,104 @@ export interface ViewMessagesDialogData {
             }
           </div>
         }
+
+      @if (selectedTabIndex === 2) {
+        <div class="tab-pane-content">
+          <p class="sub-queue-note">
+            Messages this {{ data.entityType }} could not forward to another entity.
+            They can be resubmitted to the {{ data.entityType === 'queue' ? 'queue' : 'topic' }} or deleted.
+          </p>
+          @if (data.entityType === 'subscription') {
+            <div class="filter-warning">
+              <span>Resubmitted messages will be sent to the topic and will pass through all subscription filters. If this subscription has filters configured, the message may not return to it.</span>
+            </div>
+          }
+          <div class="toolbar">
+            <div class="count-field">
+              <label class="form-label" for="tdlCount">Count</label>
+              <input id="tdlCount" class="form-control" type="number" [(ngModel)]="peekCount" (ngModelChange)="onCountChange($event)" min="0">
+            </div>
+            <div class="filter-field">
+              <label class="form-label" for="tdlSearch">Quick search</label>
+              <div class="input-group" [class.has-error]="tdlRegexError">
+                <input id="tdlSearch" class="form-control" [class.is-invalid]="tdlRegexError" [(ngModel)]="tdlFilterText" (ngModelChange)="applyTDLFilter()" placeholder="Search in any field...">
+                <button
+                  class="btn btn-outline-secondary regex-toggle"
+                  [class.active]="tdlRegexMode"
+                  [attr.aria-pressed]="tdlRegexMode"
+                  aria-label="Regular expression"
+                  (click)="toggleTDLRegexMode()"
+                  title="Toggle regex search mode">
+                  <span class="regex-icon" aria-hidden="true">.*</span>
+                </button>
+                @if (tdlFilterText) {
+                  <button class="btn btn-outline-secondary" (click)="clearTDLFilter()">Clear</button>
+                }
+              </div>
+              @if (tdlRegexError) {
+                <div class="regex-error" role="alert">{{ tdlRegexError }}</div>
+              }
+            </div>
+            <div class="refresh-button-container">
+              <button class="btn btn-outline-primary" (click)="loadTransferDeadLetterMessages()" [disabled]="loadingTDL()">Refresh</button>
+            </div>
+          </div>
+
+          @if (loadingTDL()) {
+            <div class="text-center py-5">
+              <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+              </div>
+            </div>
+          } @else if (transferMessages.length === 0) {
+            <div class="text-center py-5">
+              <p class="mb-0">No transfer dead-letter messages</p>
+            </div>
+          } @else if (filteredTransferMessages.length === 0) {
+            <div class="text-center py-5">
+              <p class="mb-0">No messages match your filter</p>
+            </div>
+          } @else {
+            <div class="select-all-row">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="selectAllTDL"
+                  [checked]="isAllSelectedIn('transferdeadletter')"
+                  [indeterminate]="bulkOperationsService.isIndeterminate('transferdeadletter')"
+                  (change)="toggleAll('transferdeadletter', $any($event.target).checked)">
+                <label class="form-check-label" for="selectAllTDL">
+                  Select All ({{ filteredTransferMessages.length }})
+                </label>
+              </div>
+            </div>
+            <cdk-virtual-scroll-viewport itemSize="80" class="messages-list">
+              @for (msg of filteredTransferMessages; track msg.sequenceNumber) {
+                <div class="message-card dead-letter" (click)="selectMessage(msg)" [class.selected]="selectedMessage === msg">
+                  <div class="message-row">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" [id]="'tdlMsg-' + msg.sequenceNumber"
+                        [attr.aria-label]="'Select ' + msg.sequenceNumber"
+                        [checked]="bulkOperationsService.isSelected('transferdeadletter', msg.sequenceNumber)"
+                        (change)="toggleSelection('transferdeadletter', msg, $any($event.target).checked)"
+                        (click)="$event.stopPropagation()">
+                    </div>
+                    <div class="message-content">
+                      <div class="message-header">
+                        <span class="seq">#{{ msg.sequenceNumber }}</span>
+                        <span class="reason">{{ msg.deadLetterReason || 'Unknown' }}</span>
+                        @if (msg.state === 'Scheduled' || msg.state === 'Deferred') {
+                          <span class="state-chip">{{ msg.state }}</span>
+                        }
+                        <span class="time">{{ msg.enqueuedTime | date:'short' }}</span>
+                      </div>
+                      <div class="message-preview" [innerHTML]="getTruncatedBody(msg.body) | highlight:tdlFilterText:{ mode: tdlRegexMode ? 'regex' : 'text', caseSensitive: false }"></div>
+                    </div>
+                  </div>
+                </div>
+              }
+            </cdk-virtual-scroll-viewport>
+          }
+        </div>
+      }
 
       @if (selectedMessage) {
         <div class="message-detail">
@@ -337,6 +470,9 @@ export interface ViewMessagesDialogData {
               <div class="detail-item">
                 <label class="text-muted small">State</label>
                 <span class="fw-medium">{{ selectedMessage.state }}</span>
+                @if (selectedMessage.state === 'Deferred') {
+                  <small class="state-note">This app cannot receive a deferred message.</small>
+                }
               </div>
             }
             <div class="detail-item">
@@ -384,7 +520,7 @@ export interface ViewMessagesDialogData {
             </div>
           }
 
-          @if (selectedTabIndex === 1) {
+          @if (subQueue === 'deadletter') {
             <div class="message-actions mt-4">
               <button class="btn btn-outline-warning" (click)="editAndResubmit(selectedMessage)">
                 <i class="fa fa-pencil me-2"></i>
@@ -404,8 +540,11 @@ export interface ViewMessagesDialogData {
     <app-bulk-actions-toolbar
       [selectedCount]="getSelectedCount()"
       [detail]="getSelectionSummary()"
-      [showResubmit]="selectedTabIndex === 1"
-      [showCompare]="getSelectedCount() === 2"
+      [showResubmit]="subQueue !== 'active'"
+      [showCompare]="getSelectedCount() === 2 && subQueue !== 'transferdeadletter'"
+      [showMove]="subQueue !== 'transferdeadletter'"
+      [showCancelScheduled]="canOfferCancelScheduled()"
+      [cancelScheduledBlockedReason]="canOfferCancelScheduled() ? cancelScheduledBlockedReason() : ''"
       [disabled]="isBulkOperationInProgress()"
       (actionClicked)="onBulkAction($event)"
       (clearSelection)="onClearSelection()">
@@ -447,6 +586,31 @@ export interface ViewMessagesDialogData {
       flex: 1;
       display: flex;
       flex-direction: column;
+    }
+
+    .state-field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .state-count,
+    .state-note {
+      font: var(--mat-sys-body-small);
+      color: var(--mat-sys-on-surface-variant);
+    }
+
+    .state-chip {
+      padding: 0 8px;
+      border: 1px solid var(--mat-sys-outline);
+      border-radius: 8px;
+      font: var(--mat-sys-label-small);
+      color: var(--mat-sys-on-surface);
+    }
+
+    .sub-queue-note {
+      margin: 0 0 12px;
+      color: var(--mat-sys-on-surface-variant);
     }
 
     .filter-warning {
@@ -834,31 +998,40 @@ export class ViewMessagesDialogComponent implements OnInit {
 
   activeMessages: MessageInfo[] = [];
   deadLetterMessages: MessageInfo[] = [];
+  transferMessages: MessageInfo[] = [];
   filteredActiveMessages: MessageInfo[] = [];
   filteredDeadLetterMessages: MessageInfo[] = [];
+  filteredTransferMessages: MessageInfo[] = [];
   selectedMessage: MessageInfo | null = null;
 
   loadingActive = signal(false);
   loadingDL = signal(false);
+  loadingTDL = signal(false);
   resubmitting = signal(false);
   deleting = signal(false);
   moving = signal(false);
+  cancellingScheduled = signal(false);
   peekCount = 20;
   selectedTabIndex = 0;
 
   // Message count signals for automatic UI updates
   activeMessageCount = signal<number | undefined>(undefined);
   deadLetterMessageCount = signal<number | undefined>(undefined);
+  transferDeadLetterMessageCount = signal<number | undefined>(undefined);
 
   // Filter properties
   activeFilterText = '';
   activeFilterProperty: string | null = null;
   activeRegexMode = false;
   activeRegexError = '';
+  activeStateFilter: 'All' | 'Scheduled' = 'All';
   dlFilterText = '';
   dlFilterProperty: string | null = null;
   dlRegexMode = false;
   dlRegexError = '';
+  tdlFilterText = '';
+  tdlRegexMode = false;
+  tdlRegexError = '';
 
   // Advanced filter state
   activeAdvancedFilterState: AdvancedFilterState = {
@@ -896,7 +1069,8 @@ export class ViewMessagesDialogComponent implements OnInit {
   ngOnInit() {
     // Set initial tab from data
     if (this.data.initialTab !== undefined) {
-      this.selectedTabIndex = this.data.initialTab;
+      const transferShown = this.capabilities()?.supportsTransferDeadLetter === true;
+      this.selectedTabIndex = this.data.initialTab === 2 && !transferShown ? 0 : this.data.initialTab;
     }
 
     // Initialize message count signals from data
@@ -905,6 +1079,13 @@ export class ViewMessagesDialogComponent implements OnInit {
     }
     if (this.data.deadLetterMessageCount !== undefined) {
       this.deadLetterMessageCount.set(this.data.deadLetterMessageCount);
+    }
+    if (this.data.transferDeadLetterMessageCount !== undefined) {
+      this.transferDeadLetterMessageCount.set(this.data.transferDeadLetterMessageCount);
+    }
+
+    if (this.data.initialStateFilter === 'Scheduled' && this.subQueue === 'active') {
+      this.activeStateFilter = 'Scheduled';
     }
 
     // Load saved filter states from session storage
@@ -923,12 +1104,12 @@ export class ViewMessagesDialogComponent implements OnInit {
       }
     });
 
-    // Load messages based on initial tab
-    if (this.selectedTabIndex === 1) {
-      this.loadDeadLetterMessages();
-    } else {
-      this.loadActiveMessages();
-    }
+    this.load(this.subQueue);
+  }
+
+  /** The sub-queue of the tab shown now; every list, selection and action of the dialog reads it. */
+  get subQueue(): SubQueue {
+    return TAB_SUB_QUEUES[this.selectedTabIndex];
   }
 
   /** An absent date, or the .NET default of year 1, is not set. */
@@ -945,60 +1126,122 @@ export class ViewMessagesDialogComponent implements OnInit {
     this.selectedMessage = null;
 
     // Clear selections when switching tabs for better UX
-    this.bulkOperationsService.clearSelection('active');
-    this.bulkOperationsService.clearSelection('deadletter');
+    this.bulkOperationsService.clearAllSelections();
 
-    if (index === 1 && this.deadLetterMessages.length === 0) {
-      this.loadDeadLetterMessages();
-    } else if (index === 0 && this.activeMessages.length === 0) {
-      this.loadActiveMessages();
+    if (this.loadedOf(this.subQueue).length === 0) {
+      this.load(this.subQueue);
     }
   }
 
   private reloadCurrentTab() {
-    if (this.selectedTabIndex === 1) {
-      this.loadDeadLetterMessages();
-    } else {
-      this.loadActiveMessages();
-    }
+    this.load(this.subQueue);
   }
 
   private clearCurrentTab() {
     this.selectedMessage = null;
-    if (this.selectedTabIndex === 1) {
-      this.deadLetterMessages = [];
-    } else {
-      this.activeMessages = [];
+    switch (this.subQueue) {
+      case 'active': this.activeMessages = []; break;
+      case 'deadletter': this.deadLetterMessages = []; break;
+      case 'transferdeadletter': this.transferMessages = []; break;
     }
   }
 
-  onTabChange(event: any) {
-    if (event.index === 1 && this.deadLetterMessages.length === 0) {
-      this.loadDeadLetterMessages();
+  private load(subQueue: SubQueue) {
+    switch (subQueue) {
+      case 'active': return this.loadActiveMessages();
+      case 'deadletter': return this.loadDeadLetterMessages();
+      case 'transferdeadletter': return this.loadTransferDeadLetterMessages();
+    }
+  }
+
+  /** The one place a sub-queue becomes a peek route. */
+  private peek(subQueue: SubQueue): Observable<MessageInfo[]> {
+    const { entityName, topicName } = this.data;
+    const queue = this.data.entityType === 'queue';
+    switch (subQueue) {
+      case 'active':
+        return queue ? this.queueService.peekMessages(entityName, this.peekCount) : this.topicService.peekMessages(topicName!, entityName, this.peekCount);
+      case 'deadletter':
+        return queue ? this.queueService.peekDeadLetterMessages(entityName, this.peekCount) : this.topicService.peekDeadLetterMessages(topicName!, entityName, this.peekCount);
+      case 'transferdeadletter':
+        return queue ? this.queueService.peekTransferDeadLetterMessages(entityName, this.peekCount) : this.topicService.peekTransferDeadLetterMessages(topicName!, entityName, this.peekCount);
+    }
+  }
+
+  /** The one place a sub-queue becomes a delete-batch route; the transfer dead-letter queue is never drained whole. */
+  private deleteBatch(subQueue: SubQueue, sequenceNumbers: number[], all: boolean): Observable<BatchOperationResult> {
+    const { entityName, topicName } = this.data;
+    const queue = this.data.entityType === 'queue';
+    switch (subQueue) {
+      case 'active':
+      case 'deadletter': {
+        const isDeadLetter = subQueue === 'deadletter';
+        return queue
+          ? this.queueService.deleteMessages(entityName, sequenceNumbers, isDeadLetter, all)
+          : this.topicService.deleteMessages(topicName!, entityName, sequenceNumbers, isDeadLetter, all);
+      }
+      case 'transferdeadletter':
+        return queue
+          ? this.queueService.deleteTransferDeadLetterMessages(entityName, sequenceNumbers)
+          : this.topicService.deleteTransferDeadLetterMessages(topicName!, entityName, sequenceNumbers);
+    }
+  }
+
+  /** The one place a sub-queue becomes a resubmit-batch route. */
+  private resubmitBatch(subQueue: 'deadletter' | 'transferdeadletter', sequenceNumbers: number[]): Observable<BatchOperationResult> {
+    const { entityName, topicName } = this.data;
+    const queue = this.data.entityType === 'queue';
+    if (subQueue === 'transferdeadletter') {
+      return queue
+        ? this.queueService.resubmitTransferDeadLetterMessages(entityName, sequenceNumbers)
+        : this.topicService.resubmitTransferDeadLetterMessages(topicName!, entityName, sequenceNumbers);
+    }
+    return queue
+      ? this.queueService.resubmitDeadLetterMessages(entityName, sequenceNumbers)
+      : this.topicService.resubmitDeadLetterMessages(topicName!, entityName, sequenceNumbers);
+  }
+
+  /** The messages loaded in a sub-queue. */
+  loadedOf(subQueue: SubQueue): MessageInfo[] {
+    switch (subQueue) {
+      case 'active': return this.activeMessages;
+      case 'deadletter': return this.deadLetterMessages;
+      case 'transferdeadletter': return this.transferMessages;
+    }
+  }
+
+  /** The messages a sub-queue's tab shows after its search and filters. */
+  shownOf(subQueue: SubQueue): MessageInfo[] {
+    switch (subQueue) {
+      case 'active': return this.filteredActiveMessages;
+      case 'deadletter': return this.filteredDeadLetterMessages;
+      case 'transferdeadletter': return this.filteredTransferMessages;
+    }
+  }
+
+  private countOf(subQueue: SubQueue) {
+    switch (subQueue) {
+      case 'active': return this.activeMessageCount;
+      case 'deadletter': return this.deadLetterMessageCount;
+      case 'transferdeadletter': return this.transferDeadLetterMessageCount;
     }
   }
 
   loadActiveMessages() {
     this.loadingActive.set(true);
-    this.selectedMessage = null;
 
-    // Clear selection when reloading to avoid stale selections
-    this.bulkOperationsService.clearSelection('active');
-
-    const observable = this.data.entityType === 'queue'
-      ? this.queueService.peekMessages(this.data.entityName, this.peekCount)
-      : this.topicService.peekMessages(this.data.topicName!, this.data.entityName, this.peekCount);
-
-    observable.pipe(
+    this.peek('active').pipe(
       finalize(() => this.loadingActive.set(false)),
       takeUntilDestroyed(this.destroyRef)
     ).subscribe({
       next: (messages) => {
+        // A new list replaces the old one, so the selection and the detail of the old one go with it
+        this.selectedMessage = null;
         this.activeMessages = messages;
         this.applyActiveFilter();
       },
-      error: () => {
-        this.snackBar.open('Failed to load messages', 'Close', { duration: 3000 });
+      error: (err) => {
+        this.snackBar.open(messageCallFailure(err, 'Failed to load messages'), 'Close', { duration: 3000 });
       }
     });
   }
@@ -1013,7 +1256,7 @@ export class ViewMessagesDialogComponent implements OnInit {
       if (this.activeRegexMode) {
         if (!this.messageSearchService.isValidRegex(this.activeFilterText)) {
           this.activeRegexError = this.getRegexError(this.activeFilterText);
-          this.filteredActiveMessages = this.activeMessages; // Don't filter with invalid regex
+          this.filteredActiveMessages = this.byState(this.activeMessages); // Don't filter with invalid regex
           return;
         }
         this.activeRegexError = '';
@@ -1040,7 +1283,21 @@ export class ViewMessagesDialogComponent implements OnInit {
       messages = this.advancedFilterService.filterMessages(messages, this.activeAdvancedFilterState);
     }
 
-    this.filteredActiveMessages = messages;
+    this.filteredActiveMessages = this.byState(messages);
+  }
+
+  /** The Active tab's state filter, applied to the loaded messages only. */
+  private byState(messages: MessageInfo[]): MessageInfo[] {
+    return this.activeStateFilter === 'Scheduled' ? messages.filter(m => m.state === 'Scheduled') : messages;
+  }
+
+  setStateFilter(value: 'All' | 'Scheduled') {
+    this.activeStateFilter = value;
+    this.applyActiveFilter();
+  }
+
+  scheduledLoadedCount(): number {
+    return this.activeMessages.filter(m => m.state === 'Scheduled').length;
   }
 
   onFilterChange() {
@@ -1131,13 +1388,8 @@ export class ViewMessagesDialogComponent implements OnInit {
 
   loadDeadLetterMessages() {
     this.loadingDL.set(true);
-    this.bulkOperationsService.clearSelection('deadletter');
 
-    const observable = this.data.entityType === 'queue'
-      ? this.queueService.peekDeadLetterMessages(this.data.entityName, this.peekCount)
-      : this.topicService.peekDeadLetterMessages(this.data.topicName!, this.data.entityName, this.peekCount);
-
-    observable.pipe(
+    this.peek('deadletter').pipe(
       finalize(() => this.loadingDL.set(false)),
       takeUntilDestroyed(this.destroyRef)
     ).subscribe({
@@ -1147,9 +1399,49 @@ export class ViewMessagesDialogComponent implements OnInit {
       },
       error: (err) => {
         console.error('Failed to load dead letter messages:', err);
-        this.snackBar.open('Failed to load dead letter messages', 'Close', { duration: 3000 });
+        this.snackBar.open(messageCallFailure(err, 'Failed to load dead letter messages'), 'Close', { duration: 3000 });
       }
     });
+  }
+
+  loadTransferDeadLetterMessages() {
+    this.loadingTDL.set(true);
+
+    this.peek('transferdeadletter').pipe(
+      finalize(() => this.loadingTDL.set(false)),
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe({
+      next: (messages) => {
+        this.transferMessages = messages;
+        this.applyTDLFilter();
+      },
+      error: (err) => {
+        this.snackBar.open(messageCallFailure(err, 'Failed to load transfer dead-letter messages'), 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  applyTDLFilter() {
+    this.bulkOperationsService.clearSelection('transferdeadletter');
+    const invalid = !!this.tdlFilterText && this.tdlRegexMode && !this.messageSearchService.isValidRegex(this.tdlFilterText);
+    this.tdlRegexError = invalid ? this.getRegexError(this.tdlFilterText) : '';
+    this.filteredTransferMessages = !this.tdlFilterText || invalid
+      ? this.transferMessages
+      : this.messageSearchService.searchMessages(this.transferMessages, this.tdlFilterText, {
+        mode: this.tdlRegexMode ? 'regex' : 'text',
+        caseSensitive: false,
+        property: null
+      });
+  }
+
+  clearTDLFilter() {
+    this.tdlFilterText = '';
+    this.applyTDLFilter();
+  }
+
+  toggleTDLRegexMode() {
+    this.tdlRegexMode = !this.tdlRegexMode;
+    this.applyTDLFilter();
   }
 
   selectMessage(msg: MessageInfo) {
@@ -1168,8 +1460,8 @@ export class ViewMessagesDialogComponent implements OnInit {
         this.snackBar.open('Message resubmitted', 'Close', { duration: 3000 });
         this.loadDeadLetterMessages();
       },
-      error: () => {
-        this.snackBar.open('Failed to resubmit message', 'Close', { duration: 3000 });
+      error: (err) => {
+        this.snackBar.open(messageCallFailure(err, 'Failed to resubmit message'), 'Close', { duration: 3000 });
       }
     });
   }
@@ -1208,46 +1500,59 @@ export class ViewMessagesDialogComponent implements OnInit {
     });
   }
 
-  // Active Messages selection methods
-  toggleActiveSelection(msg: MessageInfo, checked: boolean) {
+  toggleSelection(subQueue: SubQueue, msg: MessageInfo, checked: boolean) {
+    const shown = this.shownOf(subQueue).length;
     if (checked) {
-      this.bulkOperationsService.selectMessage('active', msg.sequenceNumber, this.filteredActiveMessages.length);
+      this.bulkOperationsService.selectMessage(subQueue, msg.sequenceNumber, shown);
     } else {
-      this.bulkOperationsService.deselectMessage('active', msg.sequenceNumber, this.filteredActiveMessages.length);
+      this.bulkOperationsService.deselectMessage(subQueue, msg.sequenceNumber, shown);
     }
+  }
+
+  toggleAll(subQueue: SubQueue, checked: boolean) {
+    const shown = this.shownOf(subQueue);
+    if (!checked) {
+      this.bulkOperationsService.clearSelection(subQueue);
+      return;
+    }
+    // Warn user about large selections (>500 messages)
+    if (shown.length <= 500) {
+      this.bulkOperationsService.selectAll(subQueue, shown);
+      return;
+    }
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      data: {
+        title: 'Large Selection',
+        message: `You are about to select ${shown.length} messages. This may take some time to process. Do you want to continue?`,
+        confirmText: 'Select All',
+        confirmColor: 'primary',
+        icon: 'info-circle'
+      }
+    });
+
+    dialogRef.afterClosed().pipe(
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe(result => {
+      if (result) {
+        this.bulkOperationsService.selectAll(subQueue, shown);
+      }
+    });
+  }
+
+  isAllSelectedIn(subQueue: SubQueue): boolean {
+    return this.bulkOperationsService.isAllSelected(subQueue, this.shownOf(subQueue));
+  }
+
+  toggleActiveSelection(msg: MessageInfo, checked: boolean) {
+    this.toggleSelection('active', msg, checked);
   }
 
   toggleAllActive(checked: boolean) {
-    if (checked) {
-      // Warn user about large selections (>500 messages)
-      if (this.filteredActiveMessages.length > 500) {
-        const dialogRef = this.dialog.open(ConfirmDialogComponent, {
-          data: {
-            title: 'Large Selection',
-            message: `You are about to select ${this.filteredActiveMessages.length} messages. This may take some time to process. Do you want to continue?`,
-            confirmText: 'Select All',
-            confirmColor: 'primary',
-            icon: 'info-circle'
-          }
-        });
-
-        dialogRef.afterClosed().pipe(
-          takeUntilDestroyed(this.destroyRef)
-        ).subscribe(result => {
-          if (result) {
-            this.bulkOperationsService.selectAll('active', this.filteredActiveMessages);
-          }
-        });
-      } else {
-        this.bulkOperationsService.selectAll('active', this.filteredActiveMessages);
-      }
-    } else {
-      this.bulkOperationsService.clearSelection('active');
-    }
+    this.toggleAll('active', checked);
   }
 
   isAllActiveSelected(): boolean {
-    return this.bulkOperationsService.isAllSelected('active', this.filteredActiveMessages);
+    return this.isAllSelectedIn('active');
   }
 
   isActiveIndeterminate(): boolean {
@@ -1258,46 +1563,16 @@ export class ViewMessagesDialogComponent implements OnInit {
     return this.bulkOperationsService.isSelected('active', sequenceNumber);
   }
 
-  // Dead Letter selection methods
   toggleDeadLetterSelection(msg: MessageInfo, checked: boolean) {
-    if (checked) {
-      this.bulkOperationsService.selectMessage('deadletter', msg.sequenceNumber, this.filteredDeadLetterMessages.length);
-    } else {
-      this.bulkOperationsService.deselectMessage('deadletter', msg.sequenceNumber, this.filteredDeadLetterMessages.length);
-    }
+    this.toggleSelection('deadletter', msg, checked);
   }
 
   toggleAllDeadLetter(checked: boolean) {
-    if (checked) {
-      // Warn user about large selections (>500 messages)
-      if (this.filteredDeadLetterMessages.length > 500) {
-        const dialogRef = this.dialog.open(ConfirmDialogComponent, {
-          data: {
-            title: 'Large Selection',
-            message: `You are about to select ${this.filteredDeadLetterMessages.length} messages. This may take some time to process. Do you want to continue?`,
-            confirmText: 'Select All',
-            confirmColor: 'primary',
-            icon: 'info-circle'
-          }
-        });
-
-        dialogRef.afterClosed().pipe(
-          takeUntilDestroyed(this.destroyRef)
-        ).subscribe(result => {
-          if (result) {
-            this.bulkOperationsService.selectAll('deadletter', this.filteredDeadLetterMessages);
-          }
-        });
-      } else {
-        this.bulkOperationsService.selectAll('deadletter', this.filteredDeadLetterMessages);
-      }
-    } else {
-      this.bulkOperationsService.clearSelection('deadletter');
-    }
+    this.toggleAll('deadletter', checked);
   }
 
   isAllDeadLetterSelected(): boolean {
-    return this.bulkOperationsService.isAllSelected('deadletter', this.filteredDeadLetterMessages);
+    return this.isAllSelectedIn('deadletter');
   }
 
   isDeadLetterIndeterminate(): boolean {
@@ -1308,9 +1583,10 @@ export class ViewMessagesDialogComponent implements OnInit {
     return this.bulkOperationsService.isSelected('deadletter', sequenceNumber);
   }
 
-  resubmitSelected(sequenceNumbersToResubmit?: number[]) {
+  resubmitSelected(sequenceNumbersToResubmit?: number[],
+    subQueue: 'deadletter' | 'transferdeadletter' = this.subQueue === 'transferdeadletter' ? 'transferdeadletter' : 'deadletter') {
     // Use provided sequence numbers or get from service
-    const sequenceNumbers = sequenceNumbersToResubmit || this.bulkOperationsService.getSelectedSequenceNumbers('deadletter');
+    const sequenceNumbers = sequenceNumbersToResubmit || this.bulkOperationsService.getSelectedSequenceNumbers(subQueue);
     const selectedCount = sequenceNumbers.length;
 
     if (selectedCount === 0) {
@@ -1334,14 +1610,12 @@ export class ViewMessagesDialogComponent implements OnInit {
         totalCount: selectedCount,
         entityName: this.data.entityName,
         entityType: this.data.entityType,
-        isDeadLetter: true
+        subQueue
       } as BulkOperationProgressDialogData,
       disableClose: true
     });
 
-    const observable = this.data.entityType === 'queue'
-      ? this.queueService.resubmitDeadLetterMessages(this.data.entityName, sequenceNumbers)
-      : this.topicService.resubmitDeadLetterMessages(this.data.topicName!, this.data.entityName, sequenceNumbers);
+    const observable = this.resubmitBatch(subQueue, sequenceNumbers);
 
     const progressComponent = progressDialogRef.componentInstance;
 
@@ -1386,7 +1660,7 @@ export class ViewMessagesDialogComponent implements OnInit {
               result: result,
               entityName: this.data.entityName,
               entityType: this.data.entityType,
-              isDeadLetter: true,
+              subQueue,
               allowRetry: retryable.length > 0
             } as BulkOperationResultsDialogData
           });
@@ -1396,13 +1670,13 @@ export class ViewMessagesDialogComponent implements OnInit {
           ).subscribe((resultsResponse) => {
             // Clear selection (only if not retrying)
             if (!resultsResponse?.retry) {
-              this.bulkOperationsService.clearSelection('deadletter');
+              this.bulkOperationsService.clearSelection(subQueue);
             }
 
             // Update message counts based on successful resubmissions
             if (result.successCount > 0) {
-              // Decrease dead letter count
-              this.deadLetterMessageCount.update(count =>
+              // Decrease the count of the sub-queue the messages left
+              this.countOf(subQueue).update(count =>
                 count !== undefined ? Math.max(0, count - result.successCount) : undefined
               );
 
@@ -1412,12 +1686,12 @@ export class ViewMessagesDialogComponent implements OnInit {
               );
             }
 
-            // Refresh the dead letter message list
-            this.loadDeadLetterMessages();
+            // Refresh the list the messages left
+            this.load(subQueue);
 
             if (resultsResponse?.retry && retryable.length > 0) {
               setTimeout(() => {
-                this.resubmitSelected(retryable);
+                this.resubmitSelected(retryable, subQueue);
               }, 500);
             }
           });
@@ -1431,7 +1705,7 @@ export class ViewMessagesDialogComponent implements OnInit {
         if (err.status === 500 && err.error?.error?.includes('Not connected')) {
           this.snackBar.open('Connection lost. Please reconnect to Service Bus.', 'Close', { duration: 5000 });
         } else {
-          this.snackBar.open('Failed to resubmit messages', 'Close', { duration: 3000 });
+          this.snackBar.open(messageCallFailure(err, 'Failed to resubmit messages'), 'Close', { duration: 3000 });
         }
       }
     });
@@ -1486,7 +1760,11 @@ export class ViewMessagesDialogComponent implements OnInit {
    * Returns the appropriate filter text for highlighting
    */
   getActiveFilterText(): string {
-    return this.selectedTabIndex === 0 ? this.activeFilterText : this.dlFilterText;
+    switch (this.subQueue) {
+      case 'active': return this.activeFilterText;
+      case 'deadletter': return this.dlFilterText;
+      case 'transferdeadletter': return this.tdlFilterText;
+    }
   }
 
   /**
@@ -1494,7 +1772,11 @@ export class ViewMessagesDialogComponent implements OnInit {
    * Returns the appropriate regex mode for highlighting
    */
   getActiveRegexMode(): boolean {
-    return this.selectedTabIndex === 0 ? this.activeRegexMode : this.dlRegexMode;
+    switch (this.subQueue) {
+      case 'active': return this.activeRegexMode;
+      case 'deadletter': return this.dlRegexMode;
+      case 'transferdeadletter': return this.tdlRegexMode;
+    }
   }
 
   /**
@@ -1706,8 +1988,7 @@ export class ViewMessagesDialogComponent implements OnInit {
    * @returns Number of selected messages in the current tab
    */
   getSelectedCount(): number {
-    const tabType = this.selectedTabIndex === 0 ? 'active' : 'deadletter';
-    return this.bulkOperationsService.getSelectionCount(tabType);
+    return this.bulkOperationsService.getSelectionCount(this.subQueue);
   }
 
   /**
@@ -1715,10 +1996,11 @@ export class ViewMessagesDialogComponent implements OnInit {
    * tab and how many the entity holds, so a selection never reads as more than it is.
    */
   getSelectionSummary(): string {
-    const deadLetter = this.selectedTabIndex === 1;
-    const loaded = deadLetter ? this.deadLetterMessages.length : this.activeMessages.length;
-    const total = deadLetter ? this.deadLetterMessageCount() : this.activeMessageCount();
-    const where = deadLetter ? 'dead-letter queue' : this.data.entityType;
+    const subQueue = this.subQueue;
+    const loaded = this.loadedOf(subQueue).length;
+    const total = this.countOf(subQueue)();
+    const where = subQueue === 'active' ? this.data.entityType
+      : subQueue === 'deadletter' ? 'dead-letter queue' : 'transfer dead-letter queue';
     return total === undefined
       ? `selected of ${loaded} loaded`
       : `selected of ${loaded} loaded, ${total.toLocaleString()} in the ${where}`;
@@ -1729,7 +2011,7 @@ export class ViewMessagesDialogComponent implements OnInit {
    * @returns True if any operation is running
    */
   isBulkOperationInProgress(): boolean {
-    return this.loadingActive() || this.loadingDL() || this.resubmitting() || this.deleting() || this.moving();
+    return this.loadingActive() || this.loadingDL() || this.loadingTDL() || this.resubmitting() || this.deleting() || this.moving() || this.cancellingScheduled();
   }
 
   /**
@@ -1754,7 +2036,77 @@ export class ViewMessagesDialogComponent implements OnInit {
       case 'compare':
         this.handleCompare();
         break;
+      case 'cancel-scheduled':
+        this.handleCancelScheduled();
+        break;
     }
+  }
+
+  /** Cancel scheduled is offered on a queue's Active tab, unless the broker has no scheduled messages. */
+  canOfferCancelScheduled(): boolean {
+    return this.data.entityType === 'queue' && this.subQueue === 'active' && this.capabilities()?.supportsScheduledMessages !== false;
+  }
+
+  /** Why the active selection cannot be cancelled as scheduled messages; empty when it can. */
+  cancelScheduledBlockedReason(): string {
+    const selected = this.bulkOperationsService.getSelectedSequenceNumbers('active');
+    if (selected.length > MAX_CANCEL_SCHEDULED) {
+      return `Cancel takes at most ${MAX_CANCEL_SCHEDULED} messages at a time; ${selected.length} are selected.`;
+    }
+    const scheduled = new Set(this.activeMessages.filter(m => m.state === 'Scheduled').map(m => m.sequenceNumber));
+    const notScheduled = selected.filter(n => !scheduled.has(n)).length;
+    return notScheduled === 0 ? ''
+      : `Only scheduled messages can be cancelled; ${notScheduled} of the ${selected.length} selected ${notScheduled === 1 ? 'is' : 'are'} not scheduled.`;
+  }
+
+  private handleCancelScheduled(): void {
+    const sequenceNumbers = this.bulkOperationsService.getSelectedSequenceNumbers('active');
+    if (!this.canOfferCancelScheduled() || sequenceNumbers.length === 0 || this.cancelScheduledBlockedReason()) {
+      return;
+    }
+    const dialogRef = this.dialog.open(CancelScheduledDialogComponent, {
+      data: { queueName: this.data.entityName, sequenceNumbers } as CancelScheduledDialogData
+    });
+    dialogRef.afterClosed().pipe(
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe(confirmed => {
+      if (confirmed === true) {
+        this.executeCancelScheduled(sequenceNumbers);
+      }
+    });
+  }
+
+  private executeCancelScheduled(sequenceNumbers: number[]): void {
+    if (this.cancellingScheduled()) {
+      return;
+    }
+    this.cancellingScheduled.set(true);
+    this.queueService.cancelScheduledMessages(this.data.entityName, sequenceNumbers).pipe(
+      finalize(() => this.cancellingScheduled.set(false)),
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe({
+      next: (result) => {
+        const resultsDialogRef = this.dialog.open(BulkOperationResultsDialogComponent, {
+          data: {
+            operation: 'cancel-scheduled',
+            result,
+            entityName: this.data.entityName,
+            entityType: 'queue',
+            subQueue: 'active',
+            allowRetry: false
+          } as BulkOperationResultsDialogData
+        });
+        resultsDialogRef.afterClosed().pipe(
+          takeUntilDestroyed(this.destroyRef)
+        ).subscribe(() => {
+          this.bulkOperationsService.clearSelection('active');
+          this.loadActiveMessages();
+        });
+      },
+      error: (err) => {
+        this.snackBar.open(messageCallFailure(err, 'Failed to cancel the scheduled messages'), 'Close', { duration: 5000 });
+      }
+    });
   }
 
   /**
@@ -1762,8 +2114,7 @@ export class ViewMessagesDialogComponent implements OnInit {
    * Clears the selection for the current tab
    */
   onClearSelection(): void {
-    const tabType = this.selectedTabIndex === 0 ? 'active' : 'deadletter';
-    this.bulkOperationsService.clearSelection(tabType);
+    this.bulkOperationsService.clearSelection(this.subQueue);
   }
 
   /**
@@ -1771,23 +2122,23 @@ export class ViewMessagesDialogComponent implements OnInit {
    * Shows confirmation dialog and executes bulk delete operation
    */
   private handleBulkDelete(): void {
-    const tabType = this.selectedTabIndex === 0 ? 'active' : 'deadletter';
-    const selectedCount = this.bulkOperationsService.getSelectionCount(tabType);
+    const subQueue = this.subQueue;
+    const selectedCount = this.bulkOperationsService.getSelectionCount(subQueue);
 
     if (selectedCount === 0) {
       this.snackBar.open('Please select at least one message to delete', 'Close', { duration: 3000 });
       return;
     }
 
-    const isDeadLetter = this.selectedTabIndex === 1;
-    const messageType = isDeadLetter ? 'dead letter messages' : 'messages';
+    const messageType = subQueue === 'active' ? 'messages'
+      : subQueue === 'deadletter' ? 'dead letter messages' : 'transfer dead-letter messages';
     const entityName = this.data.entityName;
 
     // A drain-all delete tells the backend to purge the whole tab server-side at
     // execution time, so it affects every message present then, including any
     // that arrive after this dialog opened, not just the ones currently loaded.
     // That case warrants a stronger, explicit confirmation.
-    const drainAll = this.shouldDrainEntireTab(tabType);
+    const drainAll = this.shouldDrainEntireTab(subQueue);
     const entityLabel = this.data.entityType === 'queue' ? 'queue' : 'subscription';
 
     const confirmData: ConfirmDialogData = drainAll
@@ -1817,22 +2168,21 @@ export class ViewMessagesDialogComponent implements OnInit {
       takeUntilDestroyed(this.destroyRef)
     ).subscribe(result => {
       if (result) {
-        this.executeDeleteOperation(tabType, isDeadLetter);
+        this.executeDeleteOperation(subQueue);
       }
     });
   }
 
   /**
    * Executes the bulk delete operation
-   * @param tabType - The current tab type ('active' or 'deadletter')
-   * @param isDeadLetter - Whether deleting from dead letter queue
+   * @param subQueue - The sub-queue the selection belongs to, captured when the action started
    */
-  private executeDeleteOperation(tabType: 'active' | 'deadletter', isDeadLetter: boolean): void {
+  private executeDeleteOperation(subQueue: SubQueue): void {
     if (this.deleting()) {
       return;
     }
     this.deleting.set(true);
-    const selectedSequenceNumbers = this.bulkOperationsService.getSelectedSequenceNumbers(tabType);
+    const selectedSequenceNumbers = this.bulkOperationsService.getSelectedSequenceNumbers(subQueue);
     const totalCount = selectedSequenceNumbers.length;
 
     // Defensive check: ensure we have messages to delete
@@ -1845,7 +2195,7 @@ export class ViewMessagesDialogComponent implements OnInit {
     // When the selection covers the whole tab with no active filter, ask the
     // backend to drain the entity server-side. In that mode sequenceNumbers are
     // ignored, so send an empty array.
-    const drainAll = this.shouldDrainEntireTab(tabType);
+    const drainAll = this.shouldDrainEntireTab(subQueue);
     const sequenceNumbers = drainAll ? [] : selectedSequenceNumbers;
 
     // Open progress dialog
@@ -1855,14 +2205,12 @@ export class ViewMessagesDialogComponent implements OnInit {
         totalCount: totalCount,
         entityName: this.data.entityName,
         entityType: this.data.entityType,
-        isDeadLetter: isDeadLetter
+        subQueue
       } as BulkOperationProgressDialogData,
       disableClose: true
     });
 
-    const observable = this.data.entityType === 'queue'
-      ? this.queueService.deleteMessages(this.data.entityName, sequenceNumbers, isDeadLetter, drainAll)
-      : this.topicService.deleteMessages(this.data.topicName!, this.data.entityName, sequenceNumbers, isDeadLetter, drainAll);
+    const observable = this.deleteBatch(subQueue, sequenceNumbers, drainAll);
 
     const progressComponent = progressDialogRef.componentInstance;
 
@@ -1907,7 +2255,7 @@ export class ViewMessagesDialogComponent implements OnInit {
               result: result,
               entityName: this.data.entityName,
               entityType: this.data.entityType,
-              isDeadLetter: isDeadLetter,
+              subQueue,
               allowRetry: false // Delete operations cannot be retried
             } as BulkOperationResultsDialogData
           });
@@ -1916,27 +2264,17 @@ export class ViewMessagesDialogComponent implements OnInit {
             takeUntilDestroyed(this.destroyRef)
           ).subscribe(() => {
             // Clear selection
-            this.bulkOperationsService.clearSelection(tabType);
+            this.bulkOperationsService.clearSelection(subQueue);
 
             // Update message counts based on successful deletions
             if (result.successCount > 0) {
-              if (isDeadLetter) {
-                this.deadLetterMessageCount.update(count =>
-                  count !== undefined ? Math.max(0, count - result.successCount) : undefined
-                );
-              } else {
-                this.activeMessageCount.update(count =>
-                  count !== undefined ? Math.max(0, count - result.successCount) : undefined
-                );
-              }
+              this.countOf(subQueue).update(count =>
+                count !== undefined ? Math.max(0, count - result.successCount) : undefined
+              );
             }
 
             // Refresh the message list
-            if (isDeadLetter) {
-              this.loadDeadLetterMessages();
-            } else {
-              this.loadActiveMessages();
-            }
+            this.load(subQueue);
           });
         }, 1000);
       },
@@ -1945,7 +2283,7 @@ export class ViewMessagesDialogComponent implements OnInit {
         // Close the progress dialog instead of leaving it fake-completed, and
         // surface a retry hint so the user knows the operation can be reattempted.
         progressDialogRef.close();
-        this.snackBar.open('Failed to delete messages. Please try again.', 'Close', { duration: 5000 });
+        this.snackBar.open(messageCallFailure(err, 'Failed to delete messages. Please try again.'), 'Close', { duration: 5000 });
       }
     });
   }
@@ -1955,25 +2293,33 @@ export class ViewMessagesDialogComponent implements OnInit {
    * the number of selected messages equals the entity's count for that tab and no search
    * or filter is applied. A selected page, or the hits of a search, is sent as its
    * sequence numbers.
-   * @param tabType - The current tab type ('active' or 'deadletter')
+   * The transfer dead-letter queue has no purge, so it is never drained.
+   * @param subQueue - The sub-queue of the selection
    */
-  private shouldDrainEntireTab(tabType: 'active' | 'deadletter'): boolean {
-    const entityCount = tabType === 'active' ? this.activeMessageCount() : this.deadLetterMessageCount();
+  private shouldDrainEntireTab(subQueue: SubQueue): boolean {
+    if (subQueue === 'transferdeadletter') {
+      return false;
+    }
+    const entityCount = this.countOf(subQueue)();
     return entityCount !== undefined
       && entityCount > 0
-      && this.bulkOperationsService.getSelectionCount(tabType) === entityCount
-      && !this.hasActiveFilter(tabType);
+      && this.bulkOperationsService.getSelectionCount(subQueue) === entityCount
+      && !this.hasActiveFilter(subQueue);
   }
 
   /**
    * Reports whether a text or advanced filter is currently applied to a tab.
-   * @param tabType - The current tab type ('active' or 'deadletter')
+   * @param subQueue - The sub-queue of the tab
    */
-  private hasActiveFilter(tabType: 'active' | 'deadletter'): boolean {
-    if (tabType === 'deadletter') {
-      return this.dlFilterText.trim() !== '' || this.dlAdvancedFilterState.conditions.length > 0;
+  private hasActiveFilter(subQueue: SubQueue): boolean {
+    switch (subQueue) {
+      case 'active':
+        return this.activeFilterText.trim() !== '' || this.activeAdvancedFilterState.conditions.length > 0 || this.activeStateFilter !== 'All';
+      case 'deadletter':
+        return this.dlFilterText.trim() !== '' || this.dlAdvancedFilterState.conditions.length > 0;
+      case 'transferdeadletter':
+        return this.tdlFilterText.trim() !== '';
     }
-    return this.activeFilterText.trim() !== '' || this.activeAdvancedFilterState.conditions.length > 0;
   }
 
   /**
@@ -1981,8 +2327,9 @@ export class ViewMessagesDialogComponent implements OnInit {
    * Uses the existing resubmitSelected method for Dead Letter messages
    */
   private handleBulkResubmit(): void {
-    if (this.selectedTabIndex === 1) {
-      this.resubmitSelected();
+    const subQueue = this.subQueue;
+    if (subQueue !== 'active') {
+      this.resubmitSelected(undefined, subQueue);
     }
   }
 
@@ -1997,15 +2344,18 @@ export class ViewMessagesDialogComponent implements OnInit {
       return;
     }
 
-    const tabType = this.selectedTabIndex === 0 ? 'active' : 'deadletter';
-    const selectedCount = this.bulkOperationsService.getSelectionCount(tabType);
+    const subQueue = this.subQueue;
+    if (subQueue === 'transferdeadletter') {
+      return;
+    }
+    const selectedCount = this.bulkOperationsService.getSelectionCount(subQueue);
 
     if (selectedCount === 0) {
       this.snackBar.open('Please select at least one message to move', 'Close', { duration: 3000 });
       return;
     }
 
-    const isDeadLetter = this.selectedTabIndex === 1;
+    const isDeadLetter = subQueue === 'deadletter';
 
     // Open move dialog
     const dialogRef = this.dialog.open<MoveMessagesDialogComponent, MoveMessagesDialogData, string>(MoveMessagesDialogComponent, {
@@ -2020,21 +2370,21 @@ export class ViewMessagesDialogComponent implements OnInit {
       takeUntilDestroyed(this.destroyRef)
     ).subscribe(targetQueueName => {
       if (targetQueueName) {
-        this.executeMoveOperation(tabType, isDeadLetter, targetQueueName);
+        this.executeMoveOperation(subQueue, targetQueueName);
       }
     });
   }
 
   /**
    * Executes the bulk move operation
-   * @param tabType - The current tab type ('active' or 'deadletter')
-   * @param isDeadLetter - Whether moving from dead letter queue
+   * @param subQueue - The sub-queue the selection belongs to, captured when the action started
    * @param targetQueueName - The destination queue name
    * @param sequenceNumbersToMove - Optional array of specific sequence numbers to move (for retry)
    */
-  private executeMoveOperation(tabType: 'active' | 'deadletter', isDeadLetter: boolean, targetQueueName: string, sequenceNumbersToMove?: number[]): void {
+  private executeMoveOperation(subQueue: 'active' | 'deadletter', targetQueueName: string, sequenceNumbersToMove?: number[]): void {
     this.moving.set(true);
-    const sequenceNumbers = sequenceNumbersToMove || this.bulkOperationsService.getSelectedSequenceNumbers(tabType);
+    const isDeadLetter = subQueue === 'deadletter';
+    const sequenceNumbers = sequenceNumbersToMove || this.bulkOperationsService.getSelectedSequenceNumbers(subQueue);
     const totalCount = sequenceNumbers.length;
 
     // Defensive check: ensure we have messages to move
@@ -2058,7 +2408,7 @@ export class ViewMessagesDialogComponent implements OnInit {
         totalCount: totalCount,
         entityName: this.data.entityName,
         entityType: this.data.entityType,
-        isDeadLetter: isDeadLetter,
+        subQueue,
         targetQueue: targetQueueName
       } as BulkOperationProgressDialogData,
       disableClose: true
@@ -2107,7 +2457,7 @@ export class ViewMessagesDialogComponent implements OnInit {
               result: result,
               entityName: this.data.entityName,
               entityType: this.data.entityType,
-              isDeadLetter: isDeadLetter,
+              subQueue,
               targetQueue: targetQueueName,
               allowRetry: retryable.length > 0
             } as BulkOperationResultsDialogData
@@ -2118,33 +2468,23 @@ export class ViewMessagesDialogComponent implements OnInit {
           ).subscribe((resultsResponse) => {
             // Clear selection (only if not retrying)
             if (!resultsResponse?.retry) {
-              this.bulkOperationsService.clearSelection(tabType);
+              this.bulkOperationsService.clearSelection(subQueue);
             }
 
             // Update message counts based on successful moves
             // Messages moved out of current queue
             if (result.successCount > 0) {
-              if (isDeadLetter) {
-                this.deadLetterMessageCount.update(count =>
-                  count !== undefined ? Math.max(0, count - result.successCount) : undefined
-                );
-              } else {
-                this.activeMessageCount.update(count =>
-                  count !== undefined ? Math.max(0, count - result.successCount) : undefined
-                );
-              }
+              this.countOf(subQueue).update(count =>
+                count !== undefined ? Math.max(0, count - result.successCount) : undefined
+              );
             }
 
             // Refresh the message list
-            if (isDeadLetter) {
-              this.loadDeadLetterMessages();
-            } else {
-              this.loadActiveMessages();
-            }
+            this.load(subQueue);
 
             if (resultsResponse?.retry && retryable.length > 0) {
               setTimeout(() => {
-                this.executeMoveOperation(tabType, isDeadLetter, targetQueueName, retryable);
+                this.executeMoveOperation(subQueue, targetQueueName, retryable);
               }, 500);
             }
           });
@@ -2153,7 +2493,7 @@ export class ViewMessagesDialogComponent implements OnInit {
       error: (err) => {
         console.error('Failed to move messages:', err);
         progressDialogRef.close();
-        this.snackBar.open('Failed to move messages', 'Close', { duration: 3000 });
+        this.snackBar.open(messageCallFailure(err, 'Failed to move messages'), 'Close', { duration: 3000 });
       }
     });
   }
@@ -2163,15 +2503,15 @@ export class ViewMessagesDialogComponent implements OnInit {
    * Opens dialog to select export format and options, then generates and downloads the file
    */
   private handleBulkExport(): void {
-    const tabType = this.selectedTabIndex === 0 ? 'active' : 'deadletter';
-    const selectedCount = this.bulkOperationsService.getSelectionCount(tabType);
+    const subQueue = this.subQueue;
+    const selectedCount = this.bulkOperationsService.getSelectionCount(subQueue);
 
     if (selectedCount === 0) {
       this.snackBar.open('Please select at least one message to export', 'Close', { duration: 3000 });
       return;
     }
 
-    const isDeadLetter = this.selectedTabIndex === 1;
+    const isDeadLetter = subQueue !== 'active';
 
     // Open export dialog
     const dialogRef = this.dialog.open<ExportMessagesDialogComponent, ExportMessagesDialogData, ExportOptions>(ExportMessagesDialogComponent, {
@@ -2187,7 +2527,7 @@ export class ViewMessagesDialogComponent implements OnInit {
       takeUntilDestroyed(this.destroyRef)
     ).subscribe(exportOptions => {
       if (exportOptions) {
-        this.executeExportOperation(tabType, isDeadLetter, exportOptions);
+        this.executeExportOperation(subQueue, exportOptions);
       }
     });
   }
@@ -2197,16 +2537,15 @@ export class ViewMessagesDialogComponent implements OnInit {
    * Opens the MessageDiffDialogComponent for side-by-side comparison.
    */
   private handleCompare(): void {
-    const tabType = this.selectedTabIndex === 0 ? 'active' : 'deadletter';
-    const sequenceNumbers = this.bulkOperationsService.getSelectedSequenceNumbers(tabType);
+    const subQueue = this.subQueue;
+    const sequenceNumbers = this.bulkOperationsService.getSelectedSequenceNumbers(subQueue);
 
     if (sequenceNumbers.length !== 2) {
       this.snackBar.open('Please select exactly 2 messages to compare', 'Close', { duration: 3000 });
       return;
     }
 
-    const isDeadLetter = this.selectedTabIndex === 1;
-    const allMessages = isDeadLetter ? this.deadLetterMessages : this.activeMessages;
+    const allMessages = this.loadedOf(subQueue);
     const sequenceSet = new Set(sequenceNumbers);
     const selected = allMessages.filter(m => sequenceSet.has(m.sequenceNumber));
 
@@ -2231,14 +2570,13 @@ export class ViewMessagesDialogComponent implements OnInit {
   /**
    * Executes the export operation
    * Filters selected messages, generates export content, and triggers download
-   * @param tabType - The current tab type ('active' or 'deadletter')
-   * @param isDeadLetter - Whether exporting from dead letter queue
+   * @param subQueue - The sub-queue the selection belongs to
    * @param exportOptions - Export format and options selected by user
    */
-  private executeExportOperation(tabType: 'active' | 'deadletter', isDeadLetter: boolean, exportOptions: ExportOptions): void {
+  private executeExportOperation(subQueue: SubQueue, exportOptions: ExportOptions): void {
     try {
       // Get selected sequence numbers
-      const sequenceNumbers = this.bulkOperationsService.getSelectedSequenceNumbers(tabType);
+      const sequenceNumbers = this.bulkOperationsService.getSelectedSequenceNumbers(subQueue);
 
       // Defensive check: ensure we have sequence numbers
       if (!sequenceNumbers || sequenceNumbers.length === 0) {
@@ -2249,7 +2587,7 @@ export class ViewMessagesDialogComponent implements OnInit {
       const sequenceNumberSet = new Set(sequenceNumbers);
 
       // Get the appropriate message array
-      const allMessages = isDeadLetter ? this.deadLetterMessages : this.activeMessages;
+      const allMessages = this.loadedOf(subQueue);
 
       // Defensive check: ensure messages array exists
       if (!allMessages || allMessages.length === 0) {
@@ -2267,7 +2605,7 @@ export class ViewMessagesDialogComponent implements OnInit {
 
       // Generate filename parts
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
-      const messageType = isDeadLetter ? 'deadletter' : 'messages';
+      const messageType = subQueue === 'active' ? 'messages' : subQueue;
 
       // Handle XLSX format (async) separately from synchronous formats
       if (exportOptions.format === 'xlsx') {
@@ -2279,7 +2617,7 @@ export class ViewMessagesDialogComponent implements OnInit {
             'Close',
             { duration: 3000 }
           );
-          this.bulkOperationsService.clearSelection(tabType);
+          this.bulkOperationsService.clearSelection(subQueue);
         }).catch(error => {
           console.error('Failed to export messages as XLSX:', error);
           this.snackBar.open('Failed to export messages as XLSX', 'Close', { duration: 3000 });
@@ -2316,7 +2654,7 @@ export class ViewMessagesDialogComponent implements OnInit {
       );
 
       // Clear selection after export
-      this.bulkOperationsService.clearSelection(tabType);
+      this.bulkOperationsService.clearSelection(subQueue);
     } catch (error) {
       console.error('Failed to export messages:', error);
       this.snackBar.open('Failed to export messages', 'Close', { duration: 3000 });
@@ -2339,8 +2677,8 @@ export class ViewMessagesDialogComponent implements OnInit {
       return;
     }
 
-    const tabType = this.selectedTabIndex === 0 ? 'active' : 'deadletter';
-    const filteredMessages = this.selectedTabIndex === 0 ? this.filteredActiveMessages : this.filteredDeadLetterMessages;
+    const tabType = this.subQueue;
+    const filteredMessages = this.shownOf(tabType);
 
     // Check if there are any messages to operate on
     const hasMessages = filteredMessages.length > 0;
