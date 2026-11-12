@@ -49,6 +49,12 @@ The owner asked what the reference tool for Azure Service Bus has that this prod
 - **2026-11-12 - Sort the message list, copy the body, filter the tree by name, dates on the queue panel.** Item 11.
 - **2026-11-12 - Sovereign clouds** as a fixed list on the connection. Item 12; only on request.
 
+## RabbitMQ: the eight tutorial scenarios, each with tests (2026-11-12)
+
+The owner named the official tutorials as "the ways we can receive messages" on RabbitMQ: queues 1 to 6 (Hello World, Work Queues, Publish/Subscribe, Routing, Topics, RPC) and streams 1 and 2 (Hello World, Offset Tracking), and requires tests that validate each of them.
+Reading must not change the broker unless the user asked for a destructive action; a stream is read from a position and never purged, received or moved.
+The topology of each, what the app shows today, how to represent it, what to build per layer, the test plan and the order are on [[pages/roadmap/rabbitmq-messaging-scenarios]].
+
 ## Smaller, unordered
 
 - 2026-04-08 - Connection profiles by environment with a colour label. The toolbar badge on the UI prototype is the first piece ([[pages/conventions/ui]]).
