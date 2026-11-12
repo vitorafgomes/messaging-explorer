@@ -574,17 +574,6 @@ public class ConnectionsController : ControllerBase
         {
             _logger.LogInformation("Clear-all request received");
 
-            // Get counts before clearing
-            var connections = await _connectionManager.GetConnectionsAsync();
-            var groups = await _groupManager.GetGroupsAsync();
-
-            var connectionCount = connections.Count();
-            var groupCount = groups.Count();
-
-            _logger.LogInformation(
-                "Clearing {ConnectionCount} connections and {GroupCount} groups",
-                connectionCount, groupCount);
-
             // Disconnect current provider if connected
             var provider = CurrentProvider;
             if (provider != null)
@@ -600,23 +589,11 @@ public class ConnectionsController : ControllerBase
                 await _serviceBusService.DisconnectAsync();
             }
 
-            // Get data path from environment variable or use default (same logic as Program.cs)
-            var dataPath = Environment.GetEnvironmentVariable("SERVICEBUS_DATA_PATH");
-            if (string.IsNullOrEmpty(dataPath))
-            {
-                dataPath = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "ServiceBusExplorer"
-                );
-            }
+            var (connectionCount, groupCount) = await _connectionManager.ClearAllAsync();
 
-            var workspaceFile = Path.Combine(dataPath, "workspace.json");
-
-            // Clear the unified workspace file
-            _logger.LogInformation("Resetting workspace file");
-            await System.IO.File.WriteAllTextAsync(workspaceFile, "{\"Connections\":[],\"Groups\":[]}");
-
-            _logger.LogInformation("All data cleared successfully");
+            _logger.LogInformation(
+                "All data cleared successfully: {ConnectionCount} connections, {GroupCount} groups",
+                connectionCount, groupCount);
             return Ok(new {
                 message = $"All data cleared successfully: {connectionCount} connections, {groupCount} groups deleted",
                 connectionsDeleted = connectionCount,
