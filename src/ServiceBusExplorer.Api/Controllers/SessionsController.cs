@@ -85,7 +85,7 @@ public class SessionsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Set subscription session state failed for {TopicName}/{SubscriptionName}/{SessionId}", topicName, subscriptionName, sessionId);
-            return StatusCode(500, new { success = false, error = "An internal error occurred." });
+            return StatusCode(500, new { message = "An internal error occurred." });
         }
     }
 
@@ -109,7 +109,7 @@ public class SessionsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Set queue session state failed for {EntityName}/{SessionId}", entityName, sessionId);
-            return StatusCode(500, new { success = false, error = "An internal error occurred." });
+            return StatusCode(500, new { message = "An internal error occurred." });
         }
     }
 }

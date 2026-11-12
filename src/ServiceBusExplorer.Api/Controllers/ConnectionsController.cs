@@ -452,7 +452,7 @@ public class ConnectionsController : ControllerBase
         catch (ArgumentException ex)
         {
             _logger.LogWarning(ex, "Import configuration rejected due to invalid payload");
-            return BadRequest(new { message = ex.Message });
+            return BadRequest(new { message = "Invalid or empty configuration data" });
         }
         catch (System.Text.Json.JsonException ex)
         {

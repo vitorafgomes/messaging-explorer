@@ -170,6 +170,11 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+// Outermost, so an exception from any later middleware or controller answers one constant
+// body in every environment; the framework logs the exception, the client never sees it.
+app.UseExceptionHandler(errorApp => errorApp.Run(context =>
+    context.Response.WriteAsJsonAsync(new { message = "An internal error occurred." })));
+
 // Host filtering must run before auth so unknown hosts get rejected first.
 app.UseHostFiltering();
 
