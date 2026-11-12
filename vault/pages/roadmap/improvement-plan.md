@@ -88,7 +88,7 @@ The order is by what each phase makes possible, not only by risk: Phase 1 comes 
 
 ### Phase 4 - Dependencies
 - **Status:** not started
-- **Scope:** `npm audit` on 2026-11-12 reports 79 advisories (5 critical, 41 high); 20 remain with `--omit=dev` (11 high, none critical), among them `@angular/common`, `@angular/compiler`, `@angular/core`, `@angular/router` and `electron-updater`, all with a fix available. The five critical ones are in development tooling (`concurrently` and transitive packages). .NET: no vulnerable package; outdated ones include `RabbitMQ.Client` 6.8.1 (7.x is a breaking API), `Azure.Identity` 1.13.1 and the test stack (xunit 2.6.2, Test SDK 17.8.0).
+- **Scope:** `npm audit` on 2026-11-12 reports 79 advisories (5 critical, 41 high); 20 remain with `--omit=dev` (11 high, none critical), among them `@angular/common`, `@angular/compiler`, `@angular/core`, `@angular/router` and `electron-updater`, all with a fix available. The five critical ones are in development tooling (`concurrently` and transitive packages). .NET: no vulnerable package; outdated ones include `RabbitMQ.Client` 6.8.1 (7.x is a breaking API), `Azure.Identity` 1.13.1 and the test stack (xunit 2.6.2, Test SDK 17.8.0). **Done on 2026-11-12 for everything inside the current majors:** npm went from 79 to 25 advisories (20 to 2 with `--omit=dev`), Angular to 21.2.26, Electron to 41.10.7, the Azure SDKs and the test stack to their newest minor; what is left, Electron 42 first, is on [[pages/roadmap/followups]].
   1. Angular patch line and `electron-updater` first: they ship to users.
   2. Development tooling next.
   3. .NET minor updates in one PR; `RabbitMQ.Client` 7 is a migration of its own and waits for Phase 2 item 1 and for RabbitMQ tests.

@@ -71,10 +71,13 @@ Read on 2026-11-12 from the workflow and the package configuration; the inferred
 
 - **2026-11-12 - The packaged API is framework-dependent and one publish is shared by every package**, so the user needs the .NET 10 runtime and the macOS x64 package most likely carries an arm64 executable (inferred). [[pages/services/electron-shell]]
 - **2026-11-12 - No smoke test of a packaged app; CI builds on Linux only.**
-- **2026-11-12 - Windows and Linux ship x64 only; the beta channel's update manifests are not uploaded (unverified).**
+- **2026-11-12 - Windows and Linux ship x64 only.**
+- **2026-11-12 - The update is offered where it cannot be installed.** macOS refuses to apply an unsigned update and the builds are unsigned by decision ([[pages/history/product]]); the Windows portable build has no updater; the shell still announces a new version on both. Offer a download link there instead of Update. Not reproduced on a machine: it follows from the platform's rule and the library ([[pages/services/electron-shell]]).
+- **2026-11-12 - The beta update path has never run for real.** The channel fix and the upload of `beta*.yml` are covered by tests and by reading the library; the first `-beta` tag is the first real check. A beta build installed by hand stays on Stable until the user picks Beta.
+- **2026-11-12 - Updates install on quit without a second question** (`autoInstallOnAppQuit`), after a download the user asked for. Whether install should need its own click is the owner's call.
 - **2026-11-12 - Workflow actions are referenced by moving tags, and there is no Dependabot configuration.**
-- **2026-11-12 - `npm audit`: 79 advisories, 5 critical and 41 high; 20 with `--omit=dev`, 11 high**, including the Angular packages and `electron-updater`, each with a fix available.
-- **2026-11-12 - Outdated .NET packages**, none vulnerable: `RabbitMQ.Client` 6.8.1 (7.x breaks the API), `Azure.Identity` 1.13.1, the test stack.
+- **2026-11-12 - `npm audit`: 25 advisories left after the in-range update (was 79), 2 high, none critical; 2 moderate with `--omit=dev`.** What remains needs a major or does not apply: Electron 41 has one high and seven lower advisories fixed only from 42.11.16 on, and Electron is shipped in every installer although npm counts it as a development dependency; `sharp` (high) only draws the repository's own icons at build time and needs 0.35; `exceljs` 4.4.0 pulls a `uuid` whose flawed path it does not call; the rest sits in the Angular CLI and electron-builder trees, where the only offered fix is a downgrade. `@angular/animations` is now deprecated upstream.
+- **2026-11-12 - .NET packages held at an older major or patch**, none vulnerable: `RabbitMQ.Client` 6.8.1 (7.x rewrites the API as async; goes with the RabbitMQ bulk rebuild), `Moq` 4.20.70 (4.21.0 raises six CS8602 warnings in `AzureMonitorMetricsServiceTests`, one `!` each), `Microsoft.OpenApi` 2.x, `xunit.runner.visualstudio` 2.x, `coverlet.collector` 6.x, `Microsoft.NET.Test.Sdk` 17.x. Everything else was moved to the newest version inside its major on 2026-11-12, and `Microsoft.Extensions.*` to 10.0.x.
 
 ## Owner decisions pending
 

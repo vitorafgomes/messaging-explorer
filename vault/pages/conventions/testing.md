@@ -22,7 +22,7 @@ reliability: high
 
 ## Stack
 
-- **.NET:** xUnit 2.6.2 with plain `Assert`, Moq 4.20.70 in the Core tests (`src/ServiceBusExplorer.Core.Tests/ServiceBusExplorer.Core.Tests.csproj:17`), `Microsoft.AspNetCore.Mvc.Testing` in the Api tests (`src/ServiceBusExplorer.Api.Tests/ServiceBusExplorer.Api.Tests.csproj:12`), `coverlet.collector` in both. No assertion library beyond xUnit; adding one is an ADR, not a package reference.
+- **.NET:** xUnit 2.9.3 with plain `Assert`, Moq 4.20.70 in the Core tests (`src/ServiceBusExplorer.Core.Tests/ServiceBusExplorer.Core.Tests.csproj:17`), `Microsoft.AspNetCore.Mvc.Testing` in the Api tests (`src/ServiceBusExplorer.Api.Tests/ServiceBusExplorer.Api.Tests.csproj:12`), `coverlet.collector` in both. No assertion library beyond xUnit; adding one is an ADR, not a package reference.
 - **Web:** vitest 4 with jsdom, driven by the Angular unit-test builder (`web-app/angular.json:91`).
 - The test projects live under `src/`, beside the code, not under `tests/`.
 
@@ -34,7 +34,7 @@ reliability: high
 | Api | `dotnet test src/ServiceBusExplorer.Api.Tests` | 49 passed, 0 skipped |
 | Integration (Docker) | `dotnet test src/ServiceBusExplorer.IntegrationTests` | 59 passed, 0 skipped (27 RabbitMQ, 32 Azure Service Bus); 93 to 102 s wall with the images cached. The two collections run in parallel and the Azure one dominates: about 20 s to start SQL Server and the emulator, about 68 s of tests, of which 20 s is the deep dead-letter resubmit (350 messages arranged one by one) and 15 s three calls to a closed port that wait out the SDK retries |
 | Web | `npm test -- --watch=false` in `web-app/` | 27 files: 564 passed, 8 skipped |
-| Electron shell helpers | `npm run test:electron` in `web-app/` (`node --test`) | 10 passed, 0 skipped |
+| Electron shell helpers | `npm run test:electron` in `web-app/` (`node --test`) | 17 passed, 0 skipped |
 | Build | `dotnet build ServiceBusExplorer.slnx` | 0 warnings, 0 errors |
 
 The Api tests share process-wide environment variables, so the assembly disables parallelisation (`src/ServiceBusExplorer.Api.Tests/Usings.cs:4`).
