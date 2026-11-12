@@ -1,4 +1,6 @@
 import { TestBed } from '@angular/core/testing';
+import { signal } from '@angular/core';
+import { formatDate } from '@angular/common';
 import { Observable, of, Subject } from 'rxjs';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -9,6 +11,8 @@ import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
 import { MoveMessagesDialogComponent } from './move-messages-dialog.component';
 import { BulkOperationProgressDialogComponent } from '../../shared/components/bulk-operation-progress-dialog/bulk-operation-progress-dialog.component';
 import { BulkOperationResultsDialogComponent } from '../../shared/components/bulk-operation-results-dialog/bulk-operation-results-dialog.component';
+import { DEFAULT_AZURE_CAPABILITIES, ProviderService } from '../../core/services/provider.service';
+import { ProviderCapabilities } from '../../core/models/provider.model';
 
 const message = (sequenceNumber: number, body = `body ${sequenceNumber}`): MessageInfo => ({
   messageId: `id-${sequenceNumber}`,
@@ -36,7 +40,8 @@ describe('ViewMessagesDialogComponent', () => {
   let resultsData: any[];
   const selfRef = { close: vi.fn() };
 
-  function create(data: Partial<ViewMessagesDialogData>, active: MessageInfo[], deadLetter: MessageInfo[] = []) {
+  function configure(data: Partial<ViewMessagesDialogData>, active: MessageInfo[], deadLetter: MessageInfo[] = [],
+    capabilities: ProviderCapabilities | null = DEFAULT_AZURE_CAPABILITIES) {
     queueService['peekMessages'].mockReturnValue(of(active));
     queueService['peekDeadLetterMessages'].mockReturnValue(of(deadLetter));
     TestBed.configureTestingModule({
@@ -47,9 +52,14 @@ describe('ViewMessagesDialogComponent', () => {
         { provide: QueueService, useValue: queueService },
         { provide: TopicService, useValue: {} },
         { provide: ConnectionService, useValue: { isConnected: true } },
-        { provide: MatSnackBar, useValue: snackBar }
+        { provide: MatSnackBar, useValue: snackBar },
+        { provide: ProviderService, useValue: { capabilities: signal(capabilities) } }
       ]
     });
+  }
+
+  function create(data: Partial<ViewMessagesDialogData>, active: MessageInfo[], deadLetter: MessageInfo[] = []) {
+    configure(data, active, deadLetter);
     const component = TestBed.runInInjectionContext(() => new ViewMessagesDialogComponent());
     component.ngOnInit();
     return component;
@@ -280,6 +290,68 @@ describe('ViewMessagesDialogComponent', () => {
       confirmations[1].closed.next(true);
 
       expect(queueService['deleteMessages']).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('the message detail shows what the API sends about a message', () => {
+    function render(selected: MessageInfo | null, capabilities: ProviderCapabilities | null = DEFAULT_AZURE_CAPABILITIES) {
+      configure({}, selected ? [selected] : [], [], capabilities);
+      const fixture = TestBed.createComponent(ViewMessagesDialogComponent);
+      fixture.detectChanges();
+      if (selected) {
+        fixture.componentInstance.selectMessage(selected);
+        fixture.changeDetectorRef.markForCheck();
+        fixture.detectChanges();
+      }
+      return fixture.nativeElement as HTMLElement;
+    }
+
+    const text = (e: Element | null) => (e?.textContent ?? '').replace(/\s+/g, ' ').trim();
+    const detail = (el: HTMLElement, label: string) => {
+      const item = Array.from(el.querySelectorAll('.detail-item')).find(i => text(i.querySelector('label')) === label);
+      return item ? text(item.querySelector('span')) : undefined;
+    };
+
+    it('the message detail shows the state when it is not Active, the size, and the session, subject, to, reply to, scheduled time and expiry', () => {
+      const scheduled = '2026-11-20T09:30:00Z';
+      const expires = '2026-12-01T00:00:00Z';
+      const el = render({
+        ...message(7),
+        state: 'Deferred',
+        sizeInBytes: 1536,
+        sessionId: 'session-42',
+        subject: 'order-created',
+        to: 'billing',
+        replyTo: 'orders-replies',
+        scheduledEnqueueTime: scheduled as unknown as Date,
+        expiresAt: expires as unknown as Date
+      });
+
+      expect(detail(el, 'State')).toBe('Deferred');
+      expect(detail(el, 'Size')).toBe('1,536 bytes');
+      expect(detail(el, 'Session ID')).toBe('session-42');
+      expect(detail(el, 'Subject')).toBe('order-created');
+      expect(detail(el, 'To')).toBe('billing');
+      expect(detail(el, 'Reply To')).toBe('orders-replies');
+      expect(detail(el, 'Scheduled Time')).toBe(formatDate(scheduled, 'medium', 'en-US').replace(/\s+/g, ' '));
+      expect(detail(el, 'Expires At')).toBe(formatDate(expires, 'medium', 'en-US').replace(/\s+/g, ' '));
+    });
+
+    it('an Active message has no State row, and a field the API did not send shows a dash', () => {
+      const el = render({ ...message(8), state: 'Active', scheduledEnqueueTime: '0001-01-01T00:00:00+00:00' as unknown as Date });
+
+      expect(detail(el, 'State')).toBeUndefined();
+      for (const label of ['Size', 'Session ID', 'Subject', 'To', 'Reply To', 'Scheduled Time', 'Expires At']) {
+        expect(detail(el, label), label).toBe('-');
+      }
+    });
+
+    it('a broker without a dead-letter queue has no Dead Letter tab; Azure has it', () => {
+      const tabs = (el: HTMLElement) => Array.from(el.querySelectorAll('.nav-link')).map(t => text(t).replace(/ \d+$/, ''));
+
+      expect(tabs(render(null, { ...DEFAULT_AZURE_CAPABILITIES, supportsDeadLetterQueue: false }))).toEqual(['Active Messages']);
+      TestBed.resetTestingModule();
+      expect(tabs(render(null, DEFAULT_AZURE_CAPABILITIES))).toEqual(['Active Messages', 'Dead Letter']);
     });
   });
 });

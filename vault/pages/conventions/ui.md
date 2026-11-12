@@ -28,7 +28,7 @@ Measured on 2026-11-12. The move from Bootstrap to Angular Material stopped half
 | Icons | 208 Font Awesome | 47 `mat-icon` |
 | Colour variables in components | about 560 `--bs-*` | 1 `--mat-sys-*` |
 
-The toolbar and the dialogs are Material; the entity screens are Bootstrap. The dark theme of those screens therefore comes from Bootstrap's variables, not from the Material theme defined at `web-app/src/styles.scss:36`. There are 264 literal hex colours, 99 fixed pixel widths against 13 media queries, no `aria-label` anywhere, and 2,058 lines of styles inside `entity-details.component.ts`. `ng-bootstrap` is a dependency nothing uses.
+The toolbar and the dialogs are Material; the entity screens are Bootstrap. The dark theme of those screens therefore comes from Bootstrap's variables, not from the Material theme defined at `web-app/src/styles.scss:36`. There are 264 literal hex colours, 99 fixed pixel widths against 13 media queries, no `aria-label` anywhere, and 1,685 lines of styles inside `entity-details.component.ts`. `ng-bootstrap` is a dependency nothing uses.
 
 ## The rules
 
@@ -51,7 +51,7 @@ They apply to every new screen and to every screen a change touches. A change is
 
 `vault/prototypes/web-app/index.html` draws the target layout as five artboards in one self-contained file, with its screenshots and a README beside it: a queue, a subscription, the purge confirmation, the messages list and the three states, each in light and dark. It is the picture of the rules above.
 
-The prototype is the spec. Where the application and an artboard differ, the artboard is what the screen should become, and what an artboard draws that the application lacks is owed. A change to a screen updates its artboard and its screenshot in the same change. A layout question is settled on the prototype first, because it costs minutes there and days in a 3,760-line component.
+The prototype is the spec. Where the application and an artboard differ, the artboard is what the screen should become, and what an artboard draws that the application lacks is owed. A change to a screen updates its artboard and its screenshot in the same change. A layout question is settled on the prototype first, because it costs minutes there and days in a 2,760-line component.
 
 ## How it is checked
 

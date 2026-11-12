@@ -1,8 +1,10 @@
 import { Injectable, inject } from '@angular/core';
-import { BehaviorSubject, Observable, of } from 'rxjs';
-import { tap, catchError, map } from 'rxjs/operators';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { BehaviorSubject, EMPTY, Observable, of } from 'rxjs';
+import { tap, catchError, map, switchMap } from 'rxjs/operators';
 import { ApiService } from './api.service';
 import { apiPath } from './api-path';
+import { ConnectionService } from './connection.service';
 import { ProviderType, ProviderCapabilities, ProviderInfo, getProviderDisplayName } from '../models/provider.model';
 
 /**
@@ -18,7 +20,7 @@ export interface ProviderSelectionState {
  * Default Azure Service Bus capabilities used when API is unavailable.
  * These values match the backend AzureProviderCapabilities.
  */
-const DEFAULT_AZURE_CAPABILITIES: ProviderCapabilities = {
+export const DEFAULT_AZURE_CAPABILITIES: ProviderCapabilities = {
   supportsTopics: true,
   supportsSubscriptions: true,
   supportsScheduledMessages: true,
@@ -42,7 +44,7 @@ const DEFAULT_AZURE_CAPABILITIES: ProviderCapabilities = {
  * Default RabbitMQ capabilities used when API is unavailable.
  * These values match the backend RabbitMQProviderCapabilities.
  */
-const DEFAULT_RABBITMQ_CAPABILITIES: ProviderCapabilities = {
+export const DEFAULT_RABBITMQ_CAPABILITIES: ProviderCapabilities = {
   supportsTopics: true, // via Exchanges
   supportsSubscriptions: true, // via Queue Bindings
   supportsScheduledMessages: false, // requires plugin
@@ -62,18 +64,31 @@ const DEFAULT_RABBITMQ_CAPABILITIES: ProviderCapabilities = {
   providerVersion: '1.0.0'
 };
 
+const DISCONNECTED_STATE: ProviderSelectionState = {
+  selectedProvider: ProviderType.AzureServiceBus,
+  capabilities: null,
+  isLoading: false
+};
+
+/**
+ * Reads the provider type of a connection status, which the API sends as the enum name.
+ */
+function toProviderType(value: ProviderType | string | undefined): ProviderType {
+  const parsed = typeof value === 'string' ? ProviderType[value as keyof typeof ProviderType] : value;
+  return typeof parsed === 'number' ? parsed : ProviderType.AzureServiceBus;
+}
+
 @Injectable({
   providedIn: 'root'
 })
 export class ProviderService {
   private api = inject(ApiService);
 
-  private providerStateSubject = new BehaviorSubject<ProviderSelectionState>({
-    selectedProvider: ProviderType.AzureServiceBus,
-    capabilities: null,
-    isLoading: false
-  });
+  private providerStateSubject = new BehaviorSubject<ProviderSelectionState>(DISCONNECTED_STATE);
   providerState$ = this.providerStateSubject.asObservable();
+
+  /** Capabilities of the connected provider; null while no connection is active. */
+  readonly capabilities = toSignal(this.providerState$.pipe(map(state => state.capabilities)), { requireSync: true });
 
   private availableProvidersSubject = new BehaviorSubject<ProviderInfo[]>([]);
   availableProviders$ = this.availableProvidersSubject.asObservable();
@@ -81,8 +96,21 @@ export class ProviderService {
   private capabilitiesCacheSubject = new BehaviorSubject<Map<ProviderType, ProviderCapabilities>>(new Map());
   private capabilitiesCache$ = this.capabilitiesCacheSubject.asObservable();
 
+  /**
+   * Follows the active connection: on connect it holds that connection's provider type and
+   * its capabilities, on disconnect it resets.
+   */
   constructor() {
     this.loadAvailableProviders();
+    inject(ConnectionService).connectionStatus$.pipe(
+      switchMap(status => {
+        if (!status.connected) {
+          this.providerStateSubject.next(DISCONNECTED_STATE);
+          return EMPTY;
+        }
+        return this.selectProvider(toProviderType(status.providerType));
+      })
+    ).subscribe();
   }
 
   /**
@@ -130,14 +158,15 @@ export class ProviderService {
    * Updates the provider state with the selected provider and its capabilities.
    */
   selectProvider(providerType: ProviderType): Observable<ProviderCapabilities> {
-    // Update state to loading
+    const defaultCapabilities = this.getDefaultCapabilities(providerType);
     this.providerStateSubject.next({
-      ...this.providerStateSubject.value,
       selectedProvider: providerType,
+      capabilities: defaultCapabilities,
       isLoading: true
     });
 
     return this.getCapabilities(providerType).pipe(
+      map(capabilities => ({ ...defaultCapabilities, ...capabilities })),
       tap(capabilities => {
         this.providerStateSubject.next({
           selectedProvider: providerType,
