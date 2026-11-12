@@ -1,0 +1,724 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Auto resubmit dead-letter</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.hov:hover{background-image:linear-gradient(rgba(128,128,128,.16),rgba(128,128,128,.16)) !important}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #ffffff;outline-offset:0;box-shadow:0 0 0 4px #005cbb !important}
+input::placeholder{color:currentColor;opacity:.72}
+@keyframes dc-spin{to{transform:rotate(360deg)}}
+.spin{animation:dc-spin 1s linear infinite}
+@media (prefers-reduced-motion: reduce){.spin{animation:none}}
+</style>
+</helmet>
+<div style="min-height: 3260px; box-sizing: border-box; display: flex; flex-direction: column; background: {{t.surface}}; color: {{t.onSurface}}; font-family: Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 14px; line-height: 20px">
+
+  <div style="display: flex; align-items: center; gap: 8px; height: 28px; box-sizing: border-box; padding: 0 16px; background: {{t.surfaceHigh}}; color: {{t.onSurfaceVariant}}; border-bottom: 1px solid {{t.outlineVariant}}; font-size: 12px; line-height: 16px">
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M4 10h16M10 10v10"></path></svg>
+    <strong style="font-weight: 600; color: {{t.onSurface}}">Built, layout to migrate</strong>
+    <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Auto resubmit dead-letter: the dialog and its loop exist today. Each part the app lacks carries its own "Design, not built" tag; the second half of this board is all proposal.</span>
+  </div>
+
+  <header style="display: flex; align-items: center; gap: 16px; height: 56px; box-sizing: border-box; padding: 0 8px 0 12px; background: {{bar.bg}}; color: {{bar.fg}}; border-bottom: 1px solid {{bar.line}}">
+    <nav aria-label="Main" style="display: flex; align-items: center; gap: 4px">
+      <a href="Connections.dc.html" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none; font-weight: 500">Connections</a>
+      <a href="Main.dc.html" aria-current="page" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; background: {{bar.navOn}}; color: {{bar.navOnFg}}; text-decoration: underline; text-underline-offset: 6px; text-decoration-thickness: 2px; font-weight: 700">Entities</a>
+      <a href="Monitoring.dc.html" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none; font-weight: 500">Monitoring</a>
+    </nav>
+    <span aria-hidden="true" style="flex: none; width: 1px; height: 24px; background: {{bar.sep}}"></span>
+    <span style="display: inline-flex; align-items: center; gap: 6px; flex: none; height: 24px; padding: 0 10px; border-radius: 999px; background: {{env.bg}}; color: {{env.fg}}; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap">
+      <sc-if value="{{env.isProd}}" hint-placeholder-val="{{true}}">
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
+      </sc-if>
+      <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Environment:</span>
+      {{env.label}}
+    </span>
+    <span title="{{conn}}" style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; font-weight: 500">
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="12" cy="12" r="9"></circle><path d="M8 12l3 3 5-6"></path></svg>
+      <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Connected to</span>
+      <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{conn}}</span>
+    </span>
+    <div style="display: flex; align-items: center; gap: 4px">
+      <button type="button" aria-label="Notifications: 1 subscription with dead-letter messages" title="Notifications" class="hov" style="position: relative; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: {{bar.fg}}; font: inherit; cursor: pointer">
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16v-5a6 6 0 1 1 12 0v5l2 2H4zM10 21a2 2 0 0 0 4 0"></path></svg>
+        <span aria-hidden="true" style="position: absolute; top: 4px; right: 2px; min-width: 16px; height: 16px; box-sizing: border-box; padding: 0 4px; border-radius: 999px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}; font-size: 11px; line-height: 16px; font-weight: 700; font-variant-numeric: tabular-nums; text-align: center">1</span>
+      </button>
+      <button type="button" aria-label="Help" title="Help" class="hov" style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: {{bar.fg}}; font: inherit; cursor: pointer">
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1 1-1.1 1.8M12 17h.01"></path></svg>
+      </button>
+      <a href="Settings.dc.html" aria-label="Settings" title="Settings" class="hov" style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none">
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h9M19 7h1M4 17h1M11 17h9"></path><circle cx="16" cy="7" r="3"></circle><circle cx="8" cy="17" r="3"></circle></svg>
+      </a>
+    </div>
+  </header>
+
+  <div style="position: relative; display: flex; min-height: 896px">
+    <div aria-hidden="true" style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: flex; overflow: hidden">
+      <div style="flex: 0 0 26%; min-width: 264px; max-width: 340px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px; padding: 12px 8px; background: {{t.surfaceLow}}; border-right: 1px solid {{t.outlineVariant}}">
+        <div style="height: 36px; margin: 0 4px 8px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}"></div>
+        <div style="padding: 10px 8px; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: {{t.onSurfaceVariant}}">Queues</div>
+        <sc-for list="{{backRows}}" as="row" hint-placeholder-count="4">
+          <div style="display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 8px; border-radius: 8px; background: {{row.bg}}; font-weight: {{row.weight}}"><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{row.name}}</span><span style="font-size: 12px; line-height: 16px; font-variant-numeric: tabular-nums">{{row.count}}</span></div>
+        </sc-for>
+      </div>
+      <div style="flex: 1; min-width: 0; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px; padding: 20px 24px">
+        <div>
+          <div style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">{{back.kind}}</div>
+          <div style="font-size: 28px; line-height: 36px">{{back.name}}</div>
+        </div>
+        <div style="display: flex; gap: 12px">
+          <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; box-sizing: border-box; padding: 12px 16px; border-radius: 8px; flex: 1 1 0; background: {{t.surfaceLow}}"><span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Active</span><span style="font-size: 28px; line-height: 36px; font-variant-numeric: tabular-nums">{{back.active}}</span></div>
+          <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; box-sizing: border-box; padding: 12px 16px; border-radius: 8px; flex: 1 1 0; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}"><span style="font-size: 12px; line-height: 16px">Dead-letter</span><span style="font-size: 28px; line-height: 36px; font-variant-numeric: tabular-nums">{{back.dlq}}</span></div>
+          <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; box-sizing: border-box; padding: 12px 16px; border-radius: 8px; flex: 1 1 0; background: {{t.surfaceLow}}"><span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Size</span><span style="font-size: 28px; line-height: 36px; font-variant-numeric: tabular-nums">{{back.size}}</span></div>
+        </div>
+      </div>
+    </div>
+    <div style="position: relative; display: flex; flex: 1; min-width: 0; justify-content: center; align-items: flex-start; box-sizing: border-box; padding: 32px 24px; background: {{t.scrim}}">
+      <section aria-label="Auto Resubmit Dead Letters" style="display: flex; flex-direction: column; gap: 16px; width: 100%; box-sizing: border-box; padding: 24px; border-radius: 20px; background: {{t.surfaceContainer}}; color: {{t.onSurface}}; box-shadow: {{t.shadow}}; max-width: 720px">
+        <h1 style="display: flex; align-items: center; gap: 10px; margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">
+          <span style="display: flex; color: {{t.primary}}"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg></span>
+          Auto Resubmit Dead Letters
+        </h1>
+        <p style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; color: {{t.onSurfaceVariant}}">
+          <span style="display: inline-flex; align-items: center; gap: 6px; flex: none; height: 24px; padding: 0 10px; border-radius: 999px; background: {{env.bg}}; color: {{env.fg}}; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap"><sc-if value="{{env.isProd}}" hint-placeholder-val="{{true}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg></sc-if>{{env.label}}</span>
+          <span style="min-width: 0; overflow-wrap: anywhere"><strong style="font-weight: 600; color: {{t.onSurface}}">{{ent.name}}</strong> {{ent.where}}</span>
+        </p>
+
+        <sc-if value="{{isConfig}}" hint-placeholder-val="{{true}}">
+          <div style="display: flex; flex-direction: column; gap: 16px">
+            <p style="margin: 0; color: {{t.onSurfaceVariant}}">This will continuously resubmit dead letter messages in batches until the queue is empty or you stop the process.</p>
+            <sc-if value="{{isSub}}" hint-placeholder-val="{{false}}">
+              <p style="display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 10px 14px; border-radius: 8px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}">
+                <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
+                <span>Messages will be sent to the topic and will pass through all subscription filters. If this subscription has filters configured, messages may not return to it.</span>
+              </p>
+            </sc-if>
+            <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0; max-width: 240px">
+              <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{batchLabelFg}}">Batch Size</span>
+              <input type="text" inputmode="numeric" value="{{batch}}" onChange="{{onBatch}}" aria-invalid="{{batchInvalid}}" autocomplete="off" style="height: 40px; box-sizing: border-box; padding: 0 12px; border: {{batchBorder}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit; font-variant-numeric: tabular-nums">
+              <span style="font-size: 12px; line-height: 16px; color: {{batchLabelFg}}">{{batchHint}}</span>
+            </label>
+            <p style="display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 10px 14px; border-radius: 8px; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v6M12 7.5h.01"></path></svg>
+              <span style="font-variant-numeric: tabular-nums">Approximately <strong style="font-weight: 600">{{ent.total}}</strong> dead letter messages in queue.</span>
+            </p>
+            <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px; border: 1px dashed {{t.outline}}; border-radius: 8px; align-items: stretch">
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+                <strong style="flex: 1; min-width: 200px; font-weight: 600">What this run costs as the app is today</strong>
+                <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; letter-spacing: 0; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built</span>
+              </div>
+              <dl style="display: flex; flex-direction: column; margin: 0; font-variant-numeric: tabular-nums">
+                <div style="display: flex; gap: 16px; padding: 6px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+                  <dt style="flex: 0 0 34%; color: {{t.onSurfaceVariant}}">Cycles</dt>
+                  <dd style="flex: 1; min-width: 0; margin: 0"><strong style="font-weight: 600">{{cost.cycles}}</strong> {{cost.cyclesNote}}</dd>
+                </div>
+                <div style="display: flex; gap: 16px; padding: 6px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+                  <dt style="flex: 0 0 34%; color: {{t.onSurfaceVariant}}">Requests to the broker</dt>
+                  <dd style="flex: 1; min-width: 0; margin: 0"><strong style="font-weight: 600">{{cost.requests}}</strong>: one peek, then one resubmit, per cycle, one after the other</dd>
+                </div>
+                <div style="display: flex; gap: 16px; padding: 6px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+                  <dt style="flex: 0 0 34%; color: {{t.onSurfaceVariant}}">While it runs</dt>
+                  <dd style="flex: 1; min-width: 0; margin: 0">The loop lives in this dialog. It stays open for every cycle and cannot be closed; quitting the app ends the run.</dd>
+                </div>
+                <div style="display: flex; gap: 16px; padding: 6px 0">
+                  <dt style="flex: 0 0 34%; color: {{t.onSurfaceVariant}}">If one message fails</dt>
+                  <dd style="flex: 1; min-width: 0; margin: 0">The run stops at that batch and names the sequence numbers. The rest stay in dead-letter.</dd>
+                </div>
+              </dl>
+              <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">At-least-once: each batch is sent first and removed from dead-letter after. A message sent but not removed is reported as a possible duplicate and is not sent again by that run.</span>
+            </div>
+            <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 8px">
+              <a href="Main.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 12px; border: 0; background: transparent; color: {{t.primary}}">Cancel</a>
+              <sc-if value="{{canStart}}" hint-placeholder-val="{{true}}">
+                <button type="button" onClick="{{start}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 20px 0 16px; border: 0; background: {{t.primary}}; color: {{t.onPrimary}}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M7 5l12 7-12 7z"></path></svg>Start</button>
+              </sc-if>
+              <sc-if value="{{cannotStart}}" hint-placeholder-val="{{false}}">
+                <button type="button" disabled style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; padding: 0 20px 0 16px; border: 0; border-radius: 999px; background: {{t.surfaceHigh}}; color: {{t.outline}}; font: inherit; font-weight: 500; white-space: nowrap; font-variant-numeric: tabular-nums"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M7 5l12 7-12 7z"></path></svg>Start</button>
+              </sc-if>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{isRun}}" hint-placeholder-val="{{false}}">
+          <div style="display: flex; flex-direction: column; gap: 16px">
+            <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+              <sc-for list="{{run.stats}}" as="st" hint-placeholder-count="4">
+                <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; box-sizing: border-box; padding: 12px 16px; border-radius: 8px; background: {{t.surface}}">
+                  <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">{{st.label}}</span>
+                  <span style="font-size: 24px; line-height: 32px; font-weight: 500; font-variant-numeric: tabular-nums; color: {{st.fg}}; overflow-wrap: anywhere">{{st.value}}</span>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 6px">
+              <div style="display: flex; justify-content: space-between; gap: 12px; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">
+                <span>Overall Progress</span>
+                <span style="font-variant-numeric: tabular-nums; color: {{t.onSurface}}">{{run.pct}}%</span>
+              </div>
+              <div aria-hidden="true" style="height: 8px; border-radius: 999px; background: {{t.surfaceHigh}}; overflow: hidden">
+                <div style="width: {{run.pct}}%; height: 100%; border-radius: 999px; background: {{run.barBg}}"></div>
+              </div>
+            </div>
+
+            <sc-if value="{{run.hasTiming}}" hint-placeholder-val="{{false}}">
+              <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 8px 12px; border: 1px dashed {{t.outline}}; border-radius: 8px; font-variant-numeric: tabular-nums">
+                <span><span style="color: {{t.onSurfaceVariant}}">Elapsed</span> <strong style="font-weight: 600">2 h 40 min</strong></span>
+                <span style="flex: 1; min-width: 160px"><span style="color: {{t.onSurfaceVariant}}">Rate</span> <strong style="font-weight: 600">50 messages per second</strong></span>
+                <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; letter-spacing: 0; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built</span>
+              </div>
+            </sc-if>
+
+            <div aria-live="polite" style="display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px; border-radius: 8px; background: {{run.statusBg}}; color: {{run.statusFg}}; overflow-wrap: anywhere">
+              <sc-if value="{{run.isRunning}}" hint-placeholder-val="{{true}}">
+                <span style="display: flex; margin-top: 1px; color: {{t.primary}}"><svg aria-hidden="true" class="spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" style="flex: none"><path d="M12 3a9 9 0 1 0 9 9"></path></svg></span>
+              </sc-if>
+              <sc-if value="{{run.isUserStop}}" hint-placeholder-val="{{false}}">
+                <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><circle cx="12" cy="12" r="9"></circle><rect x="9" y="9" width="6" height="6"></rect></svg>
+              </sc-if>
+              <sc-if value="{{run.isFailStop}}" hint-placeholder-val="{{false}}">
+                <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><path d="M8 3h8l5 5v8l-5 5H8l-5-5V8zM12 8v5M12 16.5h.01"></path></svg>
+              </sc-if>
+              <sc-if value="{{run.isDone}}" hint-placeholder-val="{{false}}">
+                <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><circle cx="12" cy="12" r="9"></circle><path d="M8 12l3 3 5-6"></path></svg>
+              </sc-if>
+              <span style="min-width: 0; font-variant-numeric: tabular-nums">{{run.status}}</span>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 6px">
+              <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Batch Log</span>
+              <div style="display: flex; flex-direction: column; padding: 4px; border: 1px solid {{t.outlineVariant}}; border-radius: 8px; background: {{t.surface}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; line-height: 20px">
+                <sc-for list="{{run.log}}" as="entry" hint-placeholder-count="5">
+                  <div style="display: flex; gap: 8px; padding: 2px 8px; border-radius: 4px; background: {{entry.bg}}">
+                    <span style="flex: 0 0 64px; font-weight: 600">{{entry.batch}}</span>
+                    <span style="min-width: 0">{{entry.text}}<span style="color: {{t.error}}; font-weight: 600">{{entry.fail}}</span></span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <sc-if value="{{run.isFailStop}}" hint-placeholder-val="{{false}}">
+              <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px; border: 1px dashed {{t.outline}}; border-radius: 8px; align-items: stretch">
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+                  <strong style="flex: 1; min-width: 200px; font-weight: 600">What you can do next</strong>
+                  <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; letter-spacing: 0; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built</span>
+                </div>
+                <ul style="display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0 0 0 18px">
+                  <li><span style="font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">48211930</span> and <span style="font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">48211944</span> failed and were not sent. They are still in dead-letter and can be resubmitted from the message list.</li>
+                  <li><span style="font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">48211951</span> was sent to orders and could not be removed from dead-letter. Do not resubmit it: check that it arrived, then delete it from dead-letter.</li>
+                  <li>Starting again reads from the head of the dead-letter queue, where these 3 still are, and would send <span style="font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">48211951</span> a second time. Deal with the 3 first.</li>
+                </ul>
+                <a href="Messages.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 6px; height: 32px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; background: transparent; color: {{t.primary}}; align-self: flex-start"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg>View dead-letter messages</a>
+              </div>
+            </sc-if>
+
+            <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 8px">
+              <sc-if value="{{run.isRunning}}" hint-placeholder-val="{{true}}">
+                <button type="button" onClick="{{stop}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 20px 0 16px; border: 0; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><rect x="6" y="6" width="12" height="12" rx="1"></rect></svg>Stop</button>
+              </sc-if>
+              <sc-if value="{{run.isOver}}" hint-placeholder-val="{{false}}">
+                <a href="Main.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 20px 0 16px; border: 0; background: {{t.primary}}; color: {{t.onPrimary}}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 12l5 5 9-10"></path></svg>Close</a>
+              </sc-if>
+            </div>
+          </div>
+        </sc-if>
+      </section>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 32px; padding: 40px 32px 48px; border-top: 1px solid {{t.outlineVariant}}">
+
+    <div style="display: flex; flex-direction: column; gap: 8px; max-width: 860px">
+      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+        <h2 style="margin: 0; font-size: 28px; line-height: 36px; font-weight: 400">What a run of 700,000 needs</h2>
+        <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; letter-spacing: 0; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built</span>
+      </div>
+      <p style="margin: 0; color: {{t.onSurfaceVariant}}">Nothing below this line exists in the app. Five changes, each drawn as the screen it would be, on the same queue and the same run: 700,000 dead-letter messages on orders, 500 per cycle, measured at 50 messages per second.</p>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+      <sc-for list="{{promises}}" as="pr" hint-placeholder-count="4">
+        <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 8px; background: {{t.surfaceLow}}">
+          <span style="display: flex; margin-top: 1px; color: {{t.success}}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="12" cy="12" r="9"></circle><path d="M8 12l3 3 5-6"></path></svg></span>
+          <span style="min-width: 0"><strong style="display: block; font-weight: 600">{{pr.title}}</strong><span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">{{pr.text}}</span></span>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px">
+
+      <div style="display: flex; flex-direction: column; gap: 12px; min-width: 0">
+        <div>
+          <h3 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">1. A filter before starting</h3>
+          <p style="margin: 0; color: {{t.onSurfaceVariant}}">Only the messages whose dead-letter reason or enqueued time matches, with the count the run applies to. Left on "All", the run takes the 700,000 of the other figures.</p>
+        </div>
+        <section aria-label="Proposed: configure the run" style="display: flex; flex-direction: column; gap: 16px; width: 100%; box-sizing: border-box; padding: 24px; border-radius: 20px; background: {{t.surfaceContainer}}; color: {{t.onSurface}}; box-shadow: {{t.shadow}}">
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+            <h4 style="flex: 1; min-width: 200px; margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">Auto resubmit dead-letter</h4>
+            <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; letter-spacing: 0; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built</span>
+          </div>
+          <p style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; color: {{t.onSurfaceVariant}}">
+            <span style="display: inline-flex; align-items: center; gap: 6px; flex: none; height: 24px; padding: 0 10px; border-radius: 999px; background: {{env.bg}}; color: {{env.fg}}; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap"><sc-if value="{{env.isProd}}" hint-placeholder-val="{{true}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg></sc-if>{{env.label}}</span>
+            <span style="min-width: 0; overflow-wrap: anywhere"><strong style="font-weight: 600; color: {{t.onSurface}}">orders</strong> on Contoso ({{conn}})</span>
+          </p>
+          <fieldset style="display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; border: 0; min-width: 0">
+            <legend style="padding: 0 0 4px; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Which messages</legend>
+            <label style="display: flex; align-items: center; gap: 10px; min-height: 32px; cursor: pointer">
+              <input type="radio" name="p-scope" style="width: 18px; height: 18px; flex: none; margin: 0; accent-color: {{t.primary}}">
+              <span style="font-variant-numeric: tabular-nums">All 700,000 dead-letter messages</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 10px; min-height: 32px; cursor: pointer">
+              <input type="radio" name="p-scope" checked style="width: 18px; height: 18px; flex: none; margin: 0; accent-color: {{t.primary}}">
+              <span>Only the messages that match</span>
+            </label>
+            <div style="display: flex; flex-direction: column; gap: 12px; margin: 4px 0 0 28px; padding: 12px; border-radius: 8px; background: {{t.surface}}">
+              <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+                <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Dead-letter reason</span>
+                <select style="height: 40px; box-sizing: border-box; padding: 0 8px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit">
+                  <option>Any reason</option>
+                  <option selected>MaxDeliveryCountExceeded</option>
+                  <option>TTLExpiredException</option>
+                  <option>HeaderSizeExceeded</option>
+                </select>
+              </label>
+              <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+                <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+                  <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Enqueued from</span>
+                  <input type="datetime-local" value="2026-11-10T00:00" style="height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit; min-width: 0">
+                </label>
+                <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+                  <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Enqueued to</span>
+                  <input type="datetime-local" value="2026-11-12T14:00" style="height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit; min-width: 0">
+                </label>
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+                <span style="flex: 1; min-width: 200px; font-variant-numeric: tabular-nums"><strong style="font-size: 16px; line-height: 24px; font-weight: 600">612,400</strong> of 700,000 match<span style="display: block; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Counted by reading the dead-letter queue once: 1,400 peeks of 500. Nothing was changed.</span></span>
+                <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 6px; height: 32px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; background: transparent; color: {{t.primary}}"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg>Count again</button>
+              </div>
+            </div>
+          </fieldset>
+          <fieldset style="display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; border: 0; min-width: 0">
+            <legend style="padding: 0 0 4px; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">When a message fails</legend>
+            <label style="display: flex; align-items: center; gap: 10px; min-height: 32px; cursor: pointer">
+              <input type="radio" name="p-fail" checked style="width: 18px; height: 18px; flex: none; margin: 0; accent-color: {{t.primary}}">
+              <span>Skip it, continue, and report it at the end</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 10px; min-height: 32px; cursor: pointer">
+              <input type="radio" name="p-fail" style="width: 18px; height: 18px; flex: none; margin: 0; accent-color: {{t.primary}}">
+              <span>Stop at the first failure <span style="color: {{t.onSurfaceVariant}}">(what the app does today)</span></span>
+            </label>
+          </fieldset>
+          <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0; max-width: 240px">
+            <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Batch Size</span>
+            <input type="text" inputmode="numeric" value="500" autocomplete="off" style="height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit; font-variant-numeric: tabular-nums">
+            <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">1 to 500 messages per cycle: 1,225 cycles for 612,400.</span>
+          </label>
+          <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 8px">
+            <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 12px; border: 0; background: transparent; color: {{t.primary}}">Cancel</button>
+            <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 20px 0 16px; border: 0; background: {{t.primary}}; color: {{t.onPrimary}}; font-variant-numeric: tabular-nums"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M7 5l12 7-12 7z"></path></svg>Start: resubmit 612,400</button>
+          </div>
+        </section>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 12px; min-width: 0">
+        <div>
+          <h3 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">2. It continues past a failed message. 3. It says how long is left.</h3>
+          <p style="margin: 0; color: {{t.onSurfaceVariant}}">The run remembers the last sequence number it read and reads onward, so what failed is left behind and never read twice. Time left comes from the measured rate, not from a guess.</p>
+        </div>
+        <section aria-label="Proposed: the run in progress" style="display: flex; flex-direction: column; gap: 16px; width: 100%; box-sizing: border-box; padding: 24px; border-radius: 20px; background: {{t.surfaceContainer}}; color: {{t.onSurface}}; box-shadow: {{t.shadow}}">
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+            <h4 style="flex: 1; min-width: 200px; margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">Resubmit running</h4>
+            <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; letter-spacing: 0; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built</span>
+          </div>
+          <p style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; color: {{t.onSurfaceVariant}}">
+            <span style="display: inline-flex; align-items: center; gap: 6px; flex: none; height: 24px; padding: 0 10px; border-radius: 999px; background: {{env.bg}}; color: {{env.fg}}; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap"><sc-if value="{{env.isProd}}" hint-placeholder-val="{{true}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg></sc-if>{{env.label}}</span>
+            <span style="min-width: 0; overflow-wrap: anywhere"><strong style="font-weight: 600; color: {{t.onSurface}}">orders</strong> on Contoso ({{conn}})</span>
+          </p>
+          <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
+            <sc-for list="{{liveStats}}" as="st" hint-placeholder-count="4">
+              <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; box-sizing: border-box; padding: 12px 16px; border-radius: 8px; padding: 10px 12px; background: {{t.surface}}">
+                <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">{{st.label}}</span>
+                <span style="font-size: 20px; line-height: 28px; font-weight: 500; font-variant-numeric: tabular-nums; color: {{st.fg}}; overflow-wrap: anywhere">{{st.value}}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <div style="display: flex; justify-content: space-between; gap: 12px; font-variant-numeric: tabular-nums">
+              <span><strong style="font-weight: 600">480,000</strong> of 700,000 read</span>
+              <span>69%</span>
+            </div>
+            <div aria-hidden="true" style="height: 8px; border-radius: 999px; background: {{t.surfaceHigh}}; overflow: hidden">
+              <div style="width: 69%; height: 100%; border-radius: 999px; background: {{t.primary}}"></div>
+            </div>
+            <div style="display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}; font-variant-numeric: tabular-nums">
+              <span>Elapsed <strong style="font-weight: 600; color: {{t.onSurface}}">2 h 40 min</strong></span>
+              <span>Rate <strong style="font-weight: 600; color: {{t.onSurface}}">50 messages per second</strong>, last 5 minutes</span>
+              <span>About <strong style="font-weight: 600; color: {{t.onSurface}}">1 h 13 min</strong> left</span>
+            </div>
+          </div>
+          <div aria-live="polite" style="display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px; border-radius: 8px; background: {{t.surface}}">
+            <span style="display: flex; margin-top: 1px; color: {{t.primary}}"><svg aria-hidden="true" class="spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" style="flex: none"><path d="M12 3a9 9 0 1 0 9 9"></path></svg></span>
+            <span style="min-width: 0; font-variant-numeric: tabular-nums">Batch 961 of 1,400: resubmitting 500. Reading onward from sequence number <span style="font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">48211951</span>; the 12 left behind are not read again by this run.</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px">
+            <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; font-variant-numeric: tabular-nums">Left behind so far: 12, each by sequence number. Newest first, 3 shown.</span>
+            <table style="width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums">
+              <thead>
+                <tr>
+                  <th scope="col" style="padding: 8px 12px 8px 0; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Sequence Number</th>
+                  <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: right">Batch</th>
+                  <th scope="col" style="padding: 8px 0 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Result</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style="padding: 8px 12px 8px 0; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">48211951</td>
+                  <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top; text-align: right">961</td>
+                  <td style="padding: 8px 0 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top"><strong style="font-weight: 600; color: {{t.error}}">Possible duplicate, do not retry.</strong> Sent to orders, not removed from dead-letter.</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 12px 8px 0; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">48211944</td>
+                  <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top; text-align: right">961</td>
+                  <td style="padding: 8px 0 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top"><strong style="font-weight: 600">Failed, not sent.</strong> Not found within scan window.</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 12px 8px 0; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">48211930</td>
+                  <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top; text-align: right">961</td>
+                  <td style="padding: 8px 0 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top"><strong style="font-weight: 600">Failed, not sent.</strong> Not found within scan window.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Pause and Stop take effect when the batch in flight has finished its send and its remove. Stop keeps the position and the list above for the report.</span>
+          <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 8px">
+            <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 12px; border: 0; background: transparent; color: {{t.primary}}">Close, keep running</button>
+            <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 20px 0 16px; border: 1px solid {{t.outline}}; background: transparent; color: {{t.primary}}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M9 6v12M15 6v12"></path></svg>Pause</button>
+            <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 20px 0 16px; border: 0; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><rect x="6" y="6" width="12" height="12" rx="1"></rect></svg>Stop</button>
+          </div>
+        </section>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 12px; min-width: 0">
+        <div>
+          <h3 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">4. The run belongs to the app, not to the dialog</h3>
+          <p style="margin: 0; color: {{t.onSurfaceVariant}}">The dialog can be closed. The run stays on the bell of the toolbar and on the queue panel, and opening it again shows the live state with Pause and Stop. Quitting the app asks first, because that would stop it.</p>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 16px; padding: 16px; border: 1px dashed {{t.outline}}; border-radius: 8px">
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+            <span style="flex: 1; min-width: 160px; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">On the toolbar, on every screen</span>
+            <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; letter-spacing: 0; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built</span>
+          </div>
+          <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px">
+            <div style="display: flex; align-items: center; gap: 12px; align-self: stretch; height: 56px; box-sizing: border-box; padding: 0 8px 0 16px; border-radius: 8px; background: {{bar.bg}}; color: {{bar.fg}}">
+              <span style="display: inline-flex; align-items: center; gap: 6px; flex: none; height: 24px; padding: 0 10px; border-radius: 999px; background: {{env.bg}}; color: {{env.fg}}; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap">{{env.label}}</span>
+              <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500">{{conn}}</span>
+              <button type="button" aria-label="Notifications: resubmit running on orders, 480,000 of 700,000" aria-expanded="true" class="hov" style="display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px 0 10px; border: 0; border-radius: 999px; background: {{bar.navOn}}; color: {{bar.navOnFg}}; font: inherit; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; cursor: pointer">
+                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M6 16v-5a6 6 0 1 1 12 0v5l2 2H4zM10 21a2 2 0 0 0 4 0"></path></svg>
+                <svg aria-hidden="true" class="spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" style="flex: none"><path d="M12 3a9 9 0 1 0 9 9"></path></svg>
+                <span aria-hidden="true">69%</span>
+              </button>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 400px; box-sizing: border-box; padding: 16px; border-radius: 8px; background: {{t.surfaceContainer}}; box-shadow: {{t.shadow}}">
+              <div style="display: flex; align-items: center; gap: 8px">
+                <strong style="flex: 1; min-width: 0; font-weight: 600; font-variant-numeric: tabular-nums">Resubmit running: 480,000 of 700,000</strong>
+              </div>
+              <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Dead-letter of orders, back to the queue. {{env.name}}, {{conn}}.</span>
+              <div aria-hidden="true" style="height: 6px; border-radius: 999px; background: {{t.surfaceHigh}}; overflow: hidden">
+                <div style="width: 69%; height: 100%; border-radius: 999px; background: {{t.primary}}"></div>
+              </div>
+              <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}; font-variant-numeric: tabular-nums">About 1 h 13 min left. 12 left behind, 3 of them possible duplicates.</span>
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+                <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 6px; height: 32px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 16px 0 12px; border: 0; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}">Open</button>
+                <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 6px; height: 32px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; background: transparent; color: {{t.primary}}"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M9 6v12M15 6v12"></path></svg>Pause</button>
+                <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 6px; height: 32px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; background: transparent; color: {{t.primary}}"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><rect x="6" y="6" width="12" height="12" rx="1"></rect></svg>Stop</button>
+              </div>
+            </div>
+          </div>
+          <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">On the queue panel</span>
+          <div style="display: flex; gap: 12px; flex-wrap: wrap">
+            <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; box-sizing: border-box; padding: 12px 16px; border-radius: 8px; flex: 1 1 240px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}">
+              <span style="display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 16px"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>Dead-letter</span>
+              <span style="font-size: 28px; line-height: 36px; font-variant-numeric: tabular-nums">220,012</span>
+              <span style="display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 16px; font-variant-numeric: tabular-nums"><svg aria-hidden="true" class="spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" style="flex: none"><path d="M12 3a9 9 0 1 0 9 9"></path></svg>Resubmit running: 480,000 of 700,000</span>
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 6px">
+                <button type="button" class="hov" style="display: inline-flex; align-items: center; height: 32px; padding: 0 14px; border: 1px solid {{t.onWarnContainer}}; border-radius: 999px; background: transparent; color: {{t.onWarnContainer}}; font: inherit; font-weight: 500; cursor: pointer">Open run</button>
+                <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 14px 0 10px; border: 1px solid {{t.onWarnContainer}}; border-radius: 999px; background: transparent; color: {{t.onWarnContainer}}; font: inherit; font-weight: 500; cursor: pointer"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><rect x="6" y="6" width="12" height="12" rx="1"></rect></svg>Stop</button>
+              </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 6px; flex: 1 1 200px; min-width: 0; align-self: center">
+              <span style="display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 8px; border-radius: 8px; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}; font-weight: 600">
+                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M4 13l2.5-8h11L20 13v6H4zM4 13h5l1 2h4l1-2h5"></path></svg>
+                <span style="flex: 1; min-width: 0">orders</span>
+                <span style="display: flex; color: {{t.primary}}"><svg aria-hidden="true" class="spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" style="flex: none"><path d="M12 3a9 9 0 1 0 9 9"></path></svg></span>
+                <span style="display: inline-flex; align-items: center; gap: 4px; flex: none; height: 20px; padding: 0 8px 0 6px; border-radius: 999px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}; font-size: 12px; line-height: 16px; font-weight: 700; font-variant-numeric: tabular-nums">220,012</span>
+              </span>
+              <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">In the tree, the row of a queue with a run shows the spinner beside its dead-letter count.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 12px; min-width: 0">
+        <div>
+          <h3 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">5. A final report that can be saved</h3>
+          <p style="margin: 0; color: {{t.onSurfaceVariant}}">What was read, per dead-letter reason, and every message left behind by sequence number. The file holds all 21 rows; a retry never includes a possible duplicate.</p>
+        </div>
+        <section aria-label="Proposed: the report of a finished run" style="display: flex; flex-direction: column; gap: 16px; width: 100%; box-sizing: border-box; padding: 24px; border-radius: 20px; background: {{t.surfaceContainer}}; color: {{t.onSurface}}; box-shadow: {{t.shadow}}">
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+            <h4 style="flex: 1; min-width: 200px; margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">Resubmit finished</h4>
+            <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; letter-spacing: 0; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built</span>
+          </div>
+          <p style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; color: {{t.onSurfaceVariant}}">
+            <span style="display: inline-flex; align-items: center; gap: 6px; flex: none; height: 24px; padding: 0 10px; border-radius: 999px; background: {{env.bg}}; color: {{env.fg}}; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap"><sc-if value="{{env.isProd}}" hint-placeholder-val="{{true}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg></sc-if>{{env.label}}</span>
+            <span style="min-width: 0; overflow-wrap: anywhere"><strong style="font-weight: 600; color: {{t.onSurface}}">orders</strong> on Contoso ({{conn}})</span>
+          </p>
+          <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
+            <sc-for list="{{reportStats}}" as="st" hint-placeholder-count="4">
+              <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; box-sizing: border-box; padding: 12px 16px; border-radius: 8px; padding: 10px 12px; background: {{t.surface}}">
+                <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">{{st.label}}</span>
+                <span style="font-size: 20px; line-height: 28px; font-weight: 500; font-variant-numeric: tabular-nums; color: {{st.fg}}; overflow-wrap: anywhere">{{st.value}}</span>
+              </div>
+            </sc-for>
+          </div>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}; font-variant-numeric: tabular-nums">1,400 cycles in 3 h 53 min 20 s, 50 messages per second on average. Started Nov 12, 2026, 9:02:10 AM, finished 12:55:30 PM.</span>
+          <table style="width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums">
+            <caption style="padding: 0 0 4px; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">By dead-letter reason</caption>
+            <thead>
+              <tr>
+                <th scope="col" style="padding: 8px 12px 8px 0; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Reason</th>
+                <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: right">Read</th>
+                <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: right">Resubmitted</th>
+                <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: right">Failed</th>
+                <th scope="col" style="padding: 8px 0 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: right">Possible duplicate</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="padding: 8px 12px 8px 0; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top; overflow-wrap: anywhere">MaxDeliveryCountExceeded</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top; text-align: right">612,400</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top; text-align: right">612,385</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top; text-align: right">12</td>
+                <td style="padding: 8px 0 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top; text-align: right">3</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 12px 8px 0; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top; overflow-wrap: anywhere">TTLExpiredException</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top; text-align: right">87,150</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top; text-align: right">87,145</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top; text-align: right">4</td>
+                <td style="padding: 8px 0 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top; text-align: right">1</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 12px 8px 0; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top; overflow-wrap: anywhere">HeaderSizeExceeded</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top; text-align: right">450</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top; text-align: right">449</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top; text-align: right">1</td>
+                <td style="padding: 8px 0 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top; text-align: right">0</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 12px 8px 0; font-weight: 600">Total</td>
+                <td style="padding: 8px 12px; text-align: right; font-weight: 600">700,000</td>
+                <td style="padding: 8px 12px; text-align: right; font-weight: 600">699,979</td>
+                <td style="padding: 8px 12px; text-align: right; font-weight: 600">17</td>
+                <td style="padding: 8px 0 8px 12px; text-align: right; font-weight: 600">4</td>
+              </tr>
+            </tbody>
+          </table>
+          <table style="width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums">
+            <caption style="padding: 0 0 4px; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Left in dead-letter: 21, by sequence number. 3 shown, all 21 in the file.</caption>
+            <thead>
+              <tr>
+                <th scope="col" style="padding: 8px 12px 8px 0; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Sequence Number</th>
+                <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Reason</th>
+                <th scope="col" style="padding: 8px 0 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="padding: 8px 12px 8px 0; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">48211930</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top; overflow-wrap: anywhere">MaxDeliveryCountExceeded</td>
+                <td style="padding: 8px 0 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top"><strong style="font-weight: 600">Failed, not sent.</strong> Not found within scan window.</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 12px 8px 0; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">48211944</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top; overflow-wrap: anywhere">MaxDeliveryCountExceeded</td>
+                <td style="padding: 8px 0 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top"><strong style="font-weight: 600">Failed, not sent.</strong> Not found within scan window.</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 12px 8px 0; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">48211951</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top; overflow-wrap: anywhere">TTLExpiredException</td>
+                <td style="padding: 8px 0 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top"><strong style="font-weight: 600; color: {{t.error}}">Possible duplicate, do not retry.</strong> Sent, not removed.</td>
+              </tr>
+            </tbody>
+          </table>
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 8px">
+            <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 6px; height: 32px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; background: transparent; color: {{t.primary}}"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"></path></svg>Save report, JSON</button>
+            <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 6px; height: 32px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; background: transparent; color: {{t.primary}}"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"></path></svg>Save report, CSV</button>
+            <span style="flex: 1"></span>
+            <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 6px; height: 32px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; background: transparent; color: {{t.primary}}; font-variant-numeric: tabular-nums"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg>Retry the 17 failed</button>
+            <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 6px; height: 32px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 16px 0 12px; border: 0; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}">Close</button>
+          </div>
+        </section>
+      </div>
+
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Preview"},"state":{"editor":"enum","options":["configure","running","runningLate","completed","stoppedByUser","stoppedOnFailure","subscription"],"default":"configure","section":"Preview"},"environment":{"editor":"enum","options":["production","development"],"default":"production","section":"Preview"},"$preview":{"width":1280,"height":3260}}'>
+const LIGHT = { surface:'#f9f9ff', surfaceLow:'#f2f3fa', surfaceContainer:'#ecedf4', surfaceHigh:'#e6e8ee',
+  onSurface:'#191c20', onSurfaceVariant:'#43474e', outline:'#73777f', outlineVariant:'#c3c6cf',
+  primary:'#005cbb', onPrimary:'#ffffff', primaryContainer:'#d7e3ff', onPrimaryContainer:'#001b3f',
+  secondaryContainer:'#dae2f9', onSecondaryContainer:'#131c2b',
+  error:'#ba1a1a', onError:'#ffffff', errorContainer:'#ffdad6', onErrorContainer:'#410002',
+  warnContainer:'#ffdea3', onWarnContainer:'#261900', success:'#1b6b32', successContainer:'#b6f2be', onSuccessContainer:'#002108',
+  scrim:'rgba(0,0,0,.45)', shadow:'0 1px 2px rgba(0,0,0,.3), 0 2px 6px 2px rgba(0,0,0,.15)' };
+const DARK = { surface:'#111318', surfaceLow:'#191c20', surfaceContainer:'#1d2024', surfaceHigh:'#282a2f',
+  onSurface:'#e2e2e9', onSurfaceVariant:'#c3c6cf', outline:'#8d9199', outlineVariant:'#43474e',
+  primary:'#abc7ff', onPrimary:'#002f65', primaryContainer:'#00458f', onPrimaryContainer:'#d7e3ff',
+  secondaryContainer:'#3e4759', onSecondaryContainer:'#dae2f9',
+  error:'#ffb4ab', onError:'#690005', errorContainer:'#93000a', onErrorContainer:'#ffdad6',
+  warnContainer:'#5c4300', onWarnContainer:'#ffdea3', success:'#9bd6a4', successContainer:'#00531f', onSuccessContainer:'#b6f2be',
+  scrim:'rgba(0,0,0,.6)', shadow:'0 1px 3px rgba(0,0,0,.6), 0 4px 8px 3px rgba(0,0,0,.3)' };
+
+const TOTAL = 700000;
+const STOP_REASON = 'Stopped: batch #961 reported 3 failure(s); they are not resubmitted again (failed: 48211930, 48211944; possible duplicate - do not retry: 48211951)';
+
+const RUNS = {
+  running: { kind: 'running', batch: 12, processed: 5500, success: 5500, failed: 0, logFrom: 7, logTo: 11, status: 'Batch #12: Resubmitting 500 messages...' },
+  runningLate: { kind: 'running', batch: 961, processed: 480000, success: 480000, failed: 0, logFrom: 956, logTo: 960, status: 'Batch #961: Resubmitting 500 messages...', timing: true },
+  completed: { kind: 'done', batch: 1401, processed: 700000, success: 700000, failed: 0, logFrom: 1396, logTo: 1400, status: 'Completed - Dead letter queue is empty' },
+  stoppedByUser: { kind: 'user', batch: 961, processed: 480500, success: 480500, failed: 0, logFrom: 957, logTo: 961, status: 'Stopped by user' },
+  stoppedOnFailure: { kind: 'fail', batch: 961, processed: 480500, success: 480497, failed: 3, logFrom: 958, logTo: 961, failedBatch: 961, status: STOP_REASON },
+  subscriptionDone: { kind: 'done', batch: 1, processed: 4, success: 4, failed: 0, logFrom: 1, logTo: 1, peeked: 4, status: 'Completed - Dead letter queue is empty' }
+};
+
+function fmt(n) { return Number(n || 0).toLocaleString('en-US'); }
+
+class Component extends DCLogic {
+  componentDidUpdate(prev) {
+    if (!prev) return;
+    if (prev.state !== this.props.state) {
+      this.setState({ view: undefined, batch: undefined });
+    }
+  }
+
+  renderVals() {
+    const s = this.state || {};
+    const dark = (this.props.theme ?? 'light') === 'dark';
+    const t = dark ? DARK : LIGHT;
+    const prod = (this.props.environment ?? 'production') === 'production';
+    const bar = dark
+      ? { bg: t.surfaceContainer, fg: t.onSurface, line: t.outlineVariant, sep: t.outlineVariant, navOn: t.secondaryContainer, navOnFg: t.onSecondaryContainer }
+      : { bg: t.primary, fg: t.onPrimary, line: t.primary, sep: 'rgba(255,255,255,.4)', navOn: 'rgba(255,255,255,.18)', navOnFg: t.onPrimary };
+    const env = prod
+      ? { label: 'PRODUCTION', name: 'Production', isProd: true, bg: t.errorContainer, fg: t.onErrorContainer }
+      : { label: 'DEVELOPMENT', name: 'Development', isProd: false, bg: t.secondaryContainer, fg: t.onSecondaryContainer };
+    const conn = prod ? 'contoso-prod.servicebus.windows.net' : 'contoso-dev.servicebus.windows.net';
+    const snack = dark
+      ? { bg: LIGHT.surface, fg: LIGHT.onSurface, action: LIGHT.primary }
+      : { bg: LIGHT.onSurface, fg: LIGHT.surface, action: DARK.primary };
+    const stateProp = this.props.state ?? 'configure';
+    const view = s.view ?? stateProp;
+    const isSub = stateProp === 'subscription';
+    const isConfig = view === 'configure' || view === 'subscription';
+    const total = isSub ? 4 : TOTAL;
+
+    const ent = isSub
+      ? { name: 'email', where: 'in topic order-events, on Contoso (' + conn + ')', total: fmt(total) }
+      : { name: 'orders', where: 'on Contoso (' + conn + ')', total: fmt(total) };
+
+    const batch = s.batch ?? '500';
+    const n = /^\d+$/.test(batch.trim()) ? parseInt(batch, 10) : NaN;
+    const batchOk = n >= 1 && n <= 500;
+    const cycles = batchOk ? Math.ceil(total / n) : 0;
+    const cost = batchOk
+      ? { cycles: fmt(cycles), cyclesNote: (cycles === 1 ? 'cycle' : 'cycles') + ' of ' + fmt(n) + ', for ' + fmt(total) + ' messages', requests: fmt(cycles * 2) }
+      : { cycles: 'Not known', cyclesNote: 'until the batch size is a number from 1 to 500', requests: 'Not known' };
+
+    const r = RUNS[view] || RUNS.running;
+    const size = r.peeked || 500;
+    const log = [];
+    for (let b = r.logFrom; b <= r.logTo; b++) {
+      const failedHere = r.failedBatch === b;
+      log.push({
+        batch: '#' + b,
+        text: size + ' peeked, ' + (failedHere ? size - r.failed : size) + ' ok',
+        fail: failedHere ? ', ' + r.failed + ' failed' : '',
+        bg: (b - r.logFrom) % 2 === 0 ? t.surfaceLow : 'transparent'
+      });
+    }
+    const pct = Math.min(100, Math.round((r.success / total) * 100));
+    const tone = {
+      running: { bg: t.surface, fg: t.onSurface, bar: t.primary },
+      done: { bg: t.successContainer, fg: t.onSuccessContainer, bar: t.success },
+      user: { bg: t.warnContainer, fg: t.onWarnContainer, bar: t.outline },
+      fail: { bg: t.errorContainer, fg: t.onErrorContainer, bar: t.error }
+    }[r.kind];
+    const run = {
+      stats: [
+        { label: 'Batch', value: fmt(r.batch), fg: t.onSurface },
+        { label: 'Processed', value: fmt(r.processed), fg: t.primary },
+        { label: 'Success', value: fmt(r.success), fg: t.success },
+        { label: 'Failed', value: fmt(r.failed), fg: r.failed > 0 ? t.error : t.onSurfaceVariant }
+      ],
+      pct, barBg: tone.bar,
+      hasTiming: !!r.timing,
+      status: r.status, statusBg: tone.bg, statusFg: tone.fg,
+      isRunning: r.kind === 'running', isUserStop: r.kind === 'user', isFailStop: r.kind === 'fail', isDone: r.kind === 'done',
+      isOver: r.kind !== 'running',
+      log
+    };
+
+    const backRows = [
+      { name: 'billing/invoices', count: '18' },
+      { name: 'notifications', count: '' },
+      { name: 'orders', count: fmt(TOTAL), on: !isSub },
+      { name: 'orders-archive', count: '52,310' }
+    ].map(x => ({ name: x.name, count: x.count, bg: x.on ? t.secondaryContainer : 'transparent', weight: x.on ? 600 : 400 }));
+    const back = isSub
+      ? { kind: 'Subscription in topic order-events', name: 'email', active: '0', dlq: '4', size: '3.1 KB' }
+      : { kind: 'Queue', name: 'orders', active: '1,204', dlq: fmt(TOTAL), size: '812 MB' };
+
+    return {
+      t, bar, env, conn, snack,
+      isDefault: view === 'configure', isLoading: false, isEmpty: false, isError: false,
+      isConfig, isSub, isRun: !isConfig, ent, run, cost,
+      batch, onBatch: ev => this.setState({ batch: ev.target.value }),
+      batchInvalid: batchOk ? 'false' : 'true',
+      batchBorder: batchOk ? '1px solid ' + t.outline : '2px solid ' + t.error,
+      batchLabelFg: batchOk ? t.onSurfaceVariant : t.error,
+      batchHint: batchOk ? 'Number of messages to process per cycle (1 to 500). The app starts at 10.' : 'Enter a whole number from 1 to 500. Start stays disabled until then.',
+      canStart: batchOk, cannotStart: !batchOk,
+      start: () => this.setState({ view: isSub ? 'subscriptionDone' : 'running' }),
+      stop: () => this.setState({ view: 'stoppedByUser' }),
+      backRows, back,
+      promises: [
+        { title: 'Send first, remove after', text: 'In every cycle the batch is sent to the queue, and only then removed from dead-letter.' },
+        { title: 'A possible duplicate is never sent again', text: 'Sent but not removed: named, kept apart, left out of every retry.' },
+        { title: 'Every failure by sequence number', text: 'While it runs and in the report: which message, which batch, why.' },
+        { title: 'The user can stop at any moment', text: 'Pause and Stop from the dialog, the bell or the queue panel.' }
+      ],
+      liveStats: [
+        { label: 'Read', value: '480,000', fg: t.onSurface },
+        { label: 'Resubmitted', value: '479,988', fg: t.success },
+        { label: 'Failed, not sent', value: '9', fg: t.error },
+        { label: 'Possible duplicate', value: '3', fg: t.error }
+      ],
+      reportStats: [
+        { label: 'Read', value: '700,000', fg: t.onSurface },
+        { label: 'Resubmitted', value: '699,979', fg: t.success },
+        { label: 'Failed, not sent', value: '17', fg: t.error },
+        { label: 'Possible duplicate', value: '4', fg: t.error }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

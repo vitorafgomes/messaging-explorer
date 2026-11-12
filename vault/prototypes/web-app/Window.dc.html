@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The window on each system</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.hov:hover{background-image:linear-gradient(rgba(128,128,128,.16),rgba(128,128,128,.16)) !important}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #ffffff;outline-offset:0;box-shadow:0 0 0 4px #005cbb !important}
+input::placeholder{color:currentColor;opacity:.72}
+@keyframes dc-spin{to{transform:rotate(360deg)}}
+.spin{animation:dc-spin 1s linear infinite}
+@media (prefers-reduced-motion: reduce){.spin{animation:none}}
+</style>
+</helmet>
+<div style="min-height: 3320px; box-sizing: border-box; display: flex; flex-direction: column; background: {{t.surface}}; color: {{t.onSurface}}; font-family: Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 14px; line-height: 20px">
+
+  <div style="display: flex; align-items: center; gap: 8px; height: 28px; box-sizing: border-box; padding: 0 16px; background: {{t.surfaceHigh}}; color: {{t.onSurfaceVariant}}; border-bottom: 1px solid {{t.outlineVariant}}; font-size: 12px; line-height: 16px">
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M4 10h16M10 10v10"></path></svg>
+    <strong style="font-weight: 600; color: {{t.onSurface}}">Design, not built</strong>
+    <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{stripText}}</span>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 40px; padding: 32px 32px 48px">
+
+    <div style="max-width: 820px">
+      <h1 style="margin: 0; font-size: 28px; line-height: 36px; font-weight: 400">The window on each system</h1>
+      <p style="margin: 8px 0 0; color: {{t.onSurfaceVariant}}">The owner's decision of 2026-11-12: the native frame on every platform, and no menu bar inside the window. There is no File, Edit, View, Window or Help row; the first thing in the page is the app toolbar, and it starts with the navigation. The frames below are drawings of system chrome with simple shapes, at reduced height; the last one is at the true minimum size.</p>
+    </div>
+
+    <sc-for list="{{frames}}" as="f" hint-placeholder-count="4">
+      <section aria-label="{{f.label}}" style="display: flex; flex-direction: column; gap: 12px">
+        <div style="max-width: 920px">
+          <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+            <h2 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">{{f.label}}</h2>
+            <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap">{{f.tag}}</span>
+          </div>
+          <p style="margin: 4px 0 0; color: {{t.onSurfaceVariant}}">{{f.sub}}</p>
+        </div>
+
+        <sc-if value="{{f.hasSysMenu}}" hint-placeholder-val="{{false}}">
+          <div style="display: flex; flex-direction: column; gap: 4px; width: 100%; max-width: {{f.maxW}}">
+            <div aria-hidden="true" style="display: flex; align-items: center; gap: 20px; height: 24px; box-sizing: border-box; padding: 0 16px; border: 1px solid {{f.border}}; border-radius: 4px; background: {{f.menuBg}}; color: {{f.menuFg}}; font-size: 13px; line-height: 16px">
+              <strong style="font-weight: 700">{{f.menu0}}</strong>
+              <span>{{f.menu1}}</span>
+              <span>{{f.menu2}}</span>
+              <span>{{f.menu3}}</span>
+            </div>
+            <p style="margin: 0; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">{{f.sysNote}}</p>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{f.hasRuler}}" hint-placeholder-val="{{false}}">
+          <div aria-hidden="true" style="display: flex; align-items: center; gap: 8px; width: 100%; max-width: {{f.maxW}}; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}; font-variant-numeric: tabular-nums">
+            <span style="flex: 1; height: 1px; background: {{t.outline}}"></span>
+            <span>1000 px wide, 700 px high</span>
+            <span style="flex: 1; height: 1px; background: {{t.outline}}"></span>
+          </div>
+        </sc-if>
+
+        <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">{{f.alt}}</span>
+        <div aria-hidden="true" style="position: relative; display: flex; flex-direction: column; width: 100%; max-width: {{f.maxW}}; height: {{f.h}}; box-sizing: border-box; border: 1px solid {{f.border}}; border-radius: {{f.radius}}; overflow: hidden; box-shadow: {{t.shadow}}; background: {{t.surface}}">
+
+          <sc-if value="{{f.isMac}}" hint-placeholder-val="{{false}}">
+            <div style="position: relative; display: flex; align-items: center; flex: none; height: 28px; box-sizing: border-box; padding: 0 12px; border-bottom: 1px solid {{f.border}}; background: {{f.titleBg}}; color: {{f.titleFg}}">
+              <span style="display: flex; align-items: center; gap: 8px; flex: none">
+              <span style="width: 12px; height: 12px; box-sizing: border-box; border: 1px solid rgba(0,0,0,.2); border-radius: 999px; background: #ff5f57"></span>
+              <span style="width: 12px; height: 12px; box-sizing: border-box; border: 1px solid rgba(0,0,0,.2); border-radius: 999px; background: #febc2e"></span>
+              <span style="width: 12px; height: 12px; box-sizing: border-box; border: 1px solid rgba(0,0,0,.2); border-radius: 999px; background: #28c840"></span>
+            </span>
+              <span style="position: absolute; left: 80px; right: 80px; text-align: center; font-size: 13px; line-height: 16px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Messaging Explorer</span>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{f.isCaption}}" hint-placeholder-val="{{true}}">
+            <div style="display: flex; align-items: center; flex: none; height: 32px; box-sizing: border-box; padding: 0 0 0 12px; border-bottom: 1px solid {{f.border}}; background: {{f.titleBg}}; color: {{f.titleFg}}">
+              <span style="flex: none; width: 14px; height: 14px; border-radius: 4px; background: {{t.primary}}"></span>
+              <span style="flex: 1; min-width: 0; padding: 0 8px; text-align: {{f.titleAlign}}; font-size: 12px; line-height: 16px; font-weight: {{f.titleWeight}}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Messaging Explorer</span>
+              <span style="display: flex; align-items: center; justify-content: center; flex: none; width: {{f.capW}}; height: {{f.capH}}; margin: {{f.capM}}; border-radius: {{f.capR}}; background: {{f.capBg}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path></svg></span>
+              <span style="display: flex; align-items: center; justify-content: center; flex: none; width: {{f.capW}}; height: {{f.capH}}; margin: {{f.capM}}; border-radius: {{f.capR}}; background: {{f.capBg}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14"></rect></svg></span>
+              <span style="display: flex; align-items: center; justify-content: center; flex: none; width: {{f.capW}}; height: {{f.capH}}; margin: {{f.capM}}; border-radius: {{f.capR}}; background: {{f.capBg}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5l14 14M19 5L5 19"></path></svg></span>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{f.isTarget}}" hint-placeholder-val="{{true}}">
+            <div style="display: flex; align-items: center; gap: 16px; flex: none; height: 56px; box-sizing: border-box; padding: 0 8px 0 12px; background: {{bar.bg}}; color: {{bar.fg}}; border-bottom: 1px solid {{bar.line}}">
+              <span style="display: flex; align-items: center; gap: 4px; flex: none">
+                <span style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; font-weight: 500">Connections</span>
+                <span style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; background: {{bar.navOn}}; color: {{bar.navOnFg}}; text-decoration: underline; text-underline-offset: 6px; text-decoration-thickness: 2px; font-weight: 700">Entities</span>
+                <span style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; font-weight: 500">Monitoring</span>
+              </span>
+              <span style="flex: none; width: 1px; height: 24px; background: {{bar.sep}}"></span>
+              <span style="display: inline-flex; align-items: center; gap: 6px; flex: none; height: 24px; padding: 0 10px; border-radius: 999px; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap; background: {{env.bg}}; color: {{env.fg}}">
+                <sc-if value="{{env.isProd}}" hint-placeholder-val="{{true}}">
+                  <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
+                </sc-if>
+                {{env.label}}
+              </span>
+              <span style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; font-weight: 500">
+                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="12" cy="12" r="9"></circle><path d="M8 12l3 3 5-6"></path></svg>
+                <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{conn}}</span>
+              </span>
+              <span style="display: flex; align-items: center; gap: 4px; flex: none">
+                <span style="display: flex; align-items: center; justify-content: center; flex: none; width: 40px; height: 40px"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M6 16v-5a6 6 0 1 1 12 0v5l2 2H4zM10 21a2 2 0 0 0 4 0"></path></svg></span>
+                <span style="display: flex; align-items: center; justify-content: center; flex: none; width: 40px; height: 40px"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="12" cy="12" r="9"></circle><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1 1-1.1 1.8M12 17h.01"></path></svg></span>
+                <span style="display: flex; align-items: center; justify-content: center; flex: none; width: 40px; height: 40px"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M4 7h9M19 7h1M4 17h1M11 17h9"></path><circle cx="16" cy="7" r="3"></circle><circle cx="8" cy="17" r="3"></circle></svg></span>
+              </span>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{f.isToday}}" hint-placeholder-val="{{false}}">
+            <div style="position: relative; display: flex; align-items: center; gap: 12px; flex: none; height: 56px; box-sizing: border-box; padding: 0 8px 0 16px; background: {{bar.bg}}; color: {{bar.fg}}; border-bottom: 1px solid {{bar.line}}">
+              <span style="flex: none; font-size: 20px; line-height: 28px; font-weight: 500; white-space: nowrap">Messaging Explorer</span>
+              <span style="flex: none; height: 20px; padding: 0 8px; border-radius: 999px; background: {{bar.navOn}}; font-size: 12px; line-height: 20px; font-variant-numeric: tabular-nums">v2.4.0</span>
+              <span style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; font-weight: 500">
+                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="12" cy="12" r="9"></circle><path d="M8 12l3 3 5-6"></path></svg>
+                <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{conn}}</span>
+              </span>
+              <span style="display: flex; align-items: center; gap: 4px; flex: none">
+                <span style="display: flex; align-items: center; justify-content: center; flex: none; width: 40px; height: 40px"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M6 16v-5a6 6 0 1 1 12 0v5l2 2H4zM10 21a2 2 0 0 0 4 0"></path></svg></span>
+                <span style="display: flex; align-items: center; justify-content: center; flex: none; width: 40px; height: 40px"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="12" cy="12" r="9"></circle><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1 1-1.1 1.8M12 17h.01"></path></svg></span>
+                <span style="display: flex; align-items: center; justify-content: center; flex: none; width: 40px; height: 40px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4"></path></svg></span>
+              </span>
+              <span style="position: absolute; left: 15px; top: 15px; display: flex">
+                <span style="display: flex; align-items: center; gap: 8px; flex: none">
+              <span style="width: 12px; height: 12px; box-sizing: border-box; border: 1px solid rgba(0,0,0,.2); border-radius: 999px; background: #ff5f57"></span>
+              <span style="width: 12px; height: 12px; box-sizing: border-box; border: 1px solid rgba(0,0,0,.2); border-radius: 999px; background: #febc2e"></span>
+              <span style="width: 12px; height: 12px; box-sizing: border-box; border: 1px solid rgba(0,0,0,.2); border-radius: 999px; background: #28c840"></span>
+            </span>
+              </span>
+              <span style="position: absolute; left: 7px; top: 5px; width: 68px; height: 32px; box-sizing: border-box; border: 2px dashed {{f.mark}}; border-radius: 6px"></span>
+            </div>
+          </sc-if>
+
+          <div style="display: flex; flex: 1; min-height: 0">
+            <div style="display: flex; flex-direction: column; gap: 2px; flex: 0 0 {{f.tree}}; min-width: 0; box-sizing: border-box; padding: 12px 8px 16px; background: {{t.surfaceLow}}; border-right: 1px solid {{t.outlineVariant}}">
+              <span style="display: flex; align-items: center; gap: 8px; height: 36px; box-sizing: border-box; margin: 0 4px 4px; padding: 0 10px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurfaceVariant}}"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="11" cy="11" r="6"></circle><path d="M16 16l4 4"></path></svg>Filter by name</span>
+              <span style="display: flex; align-items: center; height: 36px; padding: 0 8px; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: {{t.onSurfaceVariant}}">Queues <span style="margin-left: 8px; font-weight: 400">4</span></span>
+              <span style="display: flex; align-items: center; gap: 8px; min-height: 32px; box-sizing: border-box; padding: 0 8px 0 8px; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}; font-weight: 600; border-radius: 8px"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M4 13l2.5-8h11L20 13v6H4zM4 13h5l1 2h4l1-2h5"></path></svg><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">orders</span><span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border-radius: 999px; background: {{t.surfaceHigh}}; color: {{t.onSurfaceVariant}}; font-size: 12px; line-height: 16px; font-weight: 500; font-variant-numeric: tabular-nums">1,204</span><span style="display: inline-flex; align-items: center; gap: 4px; flex: none; height: 20px; padding: 0 8px 0 6px; border-radius: 999px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}; font-size: 12px; line-height: 16px; font-weight: 700; font-variant-numeric: tabular-nums"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>37</span></span>
+              <span style="display: flex; align-items: center; gap: 8px; min-height: 32px; box-sizing: border-box; padding: 0 8px 0 8px; border-radius: 8px"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M4 13l2.5-8h11L20 13v6H4zM4 13h5l1 2h4l1-2h5"></path></svg><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">billing/invoices</span><span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border-radius: 999px; background: {{t.surfaceHigh}}; color: {{t.onSurfaceVariant}}; font-size: 12px; line-height: 16px; font-weight: 500; font-variant-numeric: tabular-nums">18</span></span>
+              <span style="display: flex; align-items: center; gap: 8px; min-height: 32px; box-sizing: border-box; padding: 0 8px 0 8px; border-radius: 8px"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M4 13l2.5-8h11L20 13v6H4zM4 13h5l1 2h4l1-2h5"></path></svg><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">notifications</span></span>
+              <span style="display: flex; align-items: center; gap: 8px; min-height: 32px; box-sizing: border-box; padding: 0 8px 0 8px; border-radius: 8px"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M4 13l2.5-8h11L20 13v6H4zM4 13h5l1 2h4l1-2h5"></path></svg><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">orders-archive</span><span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border-radius: 999px; background: {{t.surfaceHigh}}; color: {{t.onSurfaceVariant}}; font-size: 12px; line-height: 16px; font-weight: 500; font-variant-numeric: tabular-nums">52,310</span></span>
+              <span style="display: flex; align-items: center; height: 36px; margin-top: 8px; padding: 0 8px; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: {{t.onSurfaceVariant}}">Topics <span style="margin-left: 8px; font-weight: 400">1</span></span>
+              <span style="display: flex; align-items: center; gap: 8px; min-height: 32px; box-sizing: border-box; padding: 0 8px 0 8px; border-radius: 8px"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="5" cy="12" r="2"></circle><circle cx="19" cy="6" r="2"></circle><circle cx="19" cy="18" r="2"></circle><path d="M7 12h4l6-5M11 12l6 5"></path></svg><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">order-events</span></span>
+              <span style="display: flex; align-items: center; gap: 8px; min-height: 32px; box-sizing: border-box; padding: 0 8px 0 32px; border-radius: 8px"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M4 12h11M11 8l4 4-4 4M19 5v14"></path></svg><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">warehouse</span><span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border-radius: 999px; background: {{t.surfaceHigh}}; color: {{t.onSurfaceVariant}}; font-size: 12px; line-height: 16px; font-weight: 500; font-variant-numeric: tabular-nums">12</span></span>
+              <span style="display: flex; align-items: center; gap: 8px; min-height: 32px; box-sizing: border-box; padding: 0 8px 0 32px; border-radius: 8px"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M4 12h11M11 8l4 4-4 4M19 5v14"></path></svg><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">email</span><span style="display: inline-flex; align-items: center; gap: 4px; flex: none; height: 20px; padding: 0 8px 0 6px; border-radius: 999px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}; font-size: 12px; line-height: 16px; font-weight: 700; font-variant-numeric: tabular-nums"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>4</span></span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 16px; flex: 1; min-width: 0; box-sizing: border-box; padding: 20px 24px">
+              <div style="display: flex; align-items: flex-end; gap: 12px 16px; flex-wrap: wrap">
+                <span style="display: flex; flex-direction: column; flex: 1; min-width: 160px">
+                  <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Queue</span>
+                  <span style="font-size: 28px; line-height: 36px">orders</span>
+                </span>
+                <span style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+                  <span style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px 0 16px; border: 0; border-radius: 999px; background: {{t.primary}}; color: {{t.onPrimary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer; cursor: default"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg>View messages</span>
+                  <span style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px 0 16px; border: 0; border-radius: 999px; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer; cursor: default"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M4 20l17-8L4 4v6l10 2-10 2z"></path></svg>Send</span>
+                  <span style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; padding: 0 20px 0 16px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer; cursor: default"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M4 20h4L19 9l-4-4L4 16zM13 7l4 4"></path></svg>Edit</span>
+                </span>
+              </div>
+              <div style="display: flex; gap: 12px; flex-wrap: wrap">
+                <span style="flex: 1 1 0; min-width: 132px; display: flex; flex-direction: column; gap: 2px; box-sizing: border-box; padding: 12px 16px; border-radius: 8px; background: {{t.surfaceLow}}"><span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Active</span><span style="font-size: 28px; line-height: 36px; font-variant-numeric: tabular-nums">1,204</span></span>
+                <span style="flex: 1 1 0; min-width: 132px; display: flex; flex-direction: column; gap: 2px; box-sizing: border-box; padding: 12px 16px; border-radius: 8px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}"><span style="display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 16px"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>Dead-letter</span><span style="font-size: 28px; line-height: 36px; font-variant-numeric: tabular-nums">37</span></span>
+                <span style="flex: 1 1 0; min-width: 132px; display: flex; flex-direction: column; gap: 2px; box-sizing: border-box; padding: 12px 16px; border-radius: 8px; background: {{t.surfaceLow}}"><span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Scheduled</span><span style="font-size: 28px; line-height: 36px; font-variant-numeric: tabular-nums">3</span></span>
+                <span style="flex: 1 1 0; min-width: 132px; display: flex; flex-direction: column; gap: 2px; box-sizing: border-box; padding: 12px 16px; border-radius: 8px; background: {{t.surfaceLow}}"><span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Size</span><span style="font-size: 28px; line-height: 36px; font-variant-numeric: tabular-nums">4.2 MB</span></span>
+              </div>
+              <span style="display: flex; gap: 4px; border-bottom: 1px solid {{t.outlineVariant}}">
+                <span style="display: flex; align-items: center; height: 44px; margin-bottom: -1px; padding: 0 16px; border-bottom: 3px solid {{t.primary}}; color: {{t.primary}}; font-weight: 700">Properties</span>
+                <span style="display: flex; align-items: center; height: 44px; padding: 0 16px; color: {{t.onSurfaceVariant}}; font-weight: 500">Sessions</span>
+              </span>
+              <span style="display: flex; flex-direction: column">
+                <span style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><span style="flex: 0 0 48%; color: {{t.onSurfaceVariant}}">Max Delivery Count</span><span style="flex: 1; min-width: 0">10</span></span>
+                <span style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><span style="flex: 0 0 48%; color: {{t.onSurfaceVariant}}">Lock Duration</span><span style="flex: 1; min-width: 0">1m</span></span>
+                <span style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><span style="flex: 0 0 48%; color: {{t.onSurfaceVariant}}">Message TTL</span><span style="flex: 1; min-width: 0">14d</span></span>
+                <span style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><span style="flex: 0 0 48%; color: {{t.onSurfaceVariant}}">Max Size</span><span style="flex: 1; min-width: 0">1,024 MB</span></span>
+                <span style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><span style="flex: 0 0 48%; color: {{t.onSurfaceVariant}}">Requires Session</span><span style="flex: 1; min-width: 0">Yes</span></span>
+                <span style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><span style="flex: 0 0 48%; color: {{t.onSurfaceVariant}}">Duplicate Detection</span><span style="flex: 1; min-width: 0">Enabled, window 10m</span></span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </sc-for>
+
+    <section aria-label="Where each old menu item went" style="display: flex; flex-direction: column; gap: 12px">
+      <div style="max-width: 920px">
+        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+          <h2 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">Where each old menu item went</h2>
+          <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built</span>
+        </div>
+        <p style="margin: 4px 0 0; color: {{t.onSurfaceVariant}}">Today's native menu has File, View and Help. Every item gets a place in the app or is left to the system; the shortcuts are handled by the page, with Cmd on macOS and Ctrl elsewhere.</p>
+      </div>
+      <table style="width: 100%; border-collapse: collapse">
+        <thead>
+          <tr>
+            <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left; padding-left: 0; width: 24%">Old menu item</th>
+            <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">New place</th>
+            <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left; width: 19%">Shortcut on macOS</th>
+            <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left; padding-right: 0; width: 19%">Shortcut on Windows and Linux</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; padding-left: 0; vertical-align: top"><span style="font-weight: 500">File, Connection</span><br><span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Opens the Connections screen</span></td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top">Connections, the first link of the toolbar. A new connection starts from Add Connection on that screen.</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top"><span style="display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap"><kbd style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid {{t.outline}}; border-bottom-width: 2px; border-radius: 4px; background: {{t.surfaceLow}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px">Cmd</kbd><kbd style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid {{t.outline}}; border-bottom-width: 2px; border-radius: 4px; background: {{t.surfaceLow}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px">N</kbd></span></td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; padding-right: 0; vertical-align: top"><span style="display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap"><kbd style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid {{t.outline}}; border-bottom-width: 2px; border-radius: 4px; background: {{t.surfaceLow}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px">Ctrl</kbd><kbd style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid {{t.outline}}; border-bottom-width: 2px; border-radius: 4px; background: {{t.surfaceLow}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px">N</kbd></span></td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; padding-left: 0; vertical-align: top"><span style="font-weight: 500">File, Clear All Data (Testing)</span><br><span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Today with Ctrl or Cmd, Shift, Delete</span></td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top"><a href="Settings.dc.html" style="color: {{t.primary}}; font-weight: 500">Settings</a>, Data, danger zone: "Clear all data", behind a typed confirmation.</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top; color: {{t.onSurfaceVariant}}">None: the shortcut is removed</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; padding-right: 0; vertical-align: top; color: {{t.onSurfaceVariant}}">None: the shortcut is removed</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; padding-left: 0; vertical-align: top"><span style="font-weight: 500">File, Exit</span><br><span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Today a second Quit on macOS</span></td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top">macOS: Quit in the application menu, the only one. Windows and Linux: Quit in the tray menu; closing the window hides it, as today.</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top"><span style="display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap"><kbd style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid {{t.outline}}; border-bottom-width: 2px; border-radius: 4px; background: {{t.surfaceLow}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px">Cmd</kbd><kbd style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid {{t.outline}}; border-bottom-width: 2px; border-radius: 4px; background: {{t.surfaceLow}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px">Q</kbd></span></td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; padding-right: 0; vertical-align: top; color: {{t.onSurfaceVariant}}">None in the page: Alt F4 belongs to the system and closes the window</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; padding-left: 0; vertical-align: top"><span style="font-weight: 500">View, Toggle Developer Tools</span><br><span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Today F12, in development builds only</span></td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top"><a href="Settings.dc.html" style="color: {{t.primary}}; font-weight: 500">Settings</a>, Developer: "Open developer tools".</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top"><span style="display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap"><kbd style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid {{t.outline}}; border-bottom-width: 2px; border-radius: 4px; background: {{t.surfaceLow}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px">Cmd</kbd><kbd style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid {{t.outline}}; border-bottom-width: 2px; border-radius: 4px; background: {{t.surfaceLow}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px">Option</kbd><kbd style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid {{t.outline}}; border-bottom-width: 2px; border-radius: 4px; background: {{t.surfaceLow}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px">I</kbd></span></td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; padding-right: 0; vertical-align: top"><span style="display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap"><kbd style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid {{t.outline}}; border-bottom-width: 2px; border-radius: 4px; background: {{t.surfaceLow}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px">Ctrl</kbd><kbd style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid {{t.outline}}; border-bottom-width: 2px; border-radius: 4px; background: {{t.surfaceLow}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px">Shift</kbd><kbd style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid {{t.outline}}; border-bottom-width: 2px; border-radius: 4px; background: {{t.surfaceLow}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px">I</kbd></span></td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; padding-left: 0; vertical-align: top"><span style="font-weight: 500">View, Developer Mode</span><br><span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Today the page listens for Ctrl only</span></td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top"><a href="Settings.dc.html" style="color: {{t.primary}}; font-weight: 500">Settings</a>, Developer: "Developer mode".</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top"><span style="display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap"><kbd style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid {{t.outline}}; border-bottom-width: 2px; border-radius: 4px; background: {{t.surfaceLow}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px">Cmd</kbd><kbd style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid {{t.outline}}; border-bottom-width: 2px; border-radius: 4px; background: {{t.surfaceLow}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px">Shift</kbd><kbd style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid {{t.outline}}; border-bottom-width: 2px; border-radius: 4px; background: {{t.surfaceLow}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px">D</kbd></span></td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; padding-right: 0; vertical-align: top"><span style="display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap"><kbd style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid {{t.outline}}; border-bottom-width: 2px; border-radius: 4px; background: {{t.surfaceLow}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px">Ctrl</kbd><kbd style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid {{t.outline}}; border-bottom-width: 2px; border-radius: 4px; background: {{t.surfaceLow}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px">Shift</kbd><kbd style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid {{t.outline}}; border-bottom-width: 2px; border-radius: 4px; background: {{t.surfaceLow}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px">D</kbd></span></td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; padding-left: 0; vertical-align: top"><span style="font-weight: 500">View, Toggle Full Screen</span><br><span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Today F11 on every system</span></td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top">No item in the app. macOS: the zoom button of the title bar and the system shortcut. Windows and Linux: F11, handled by the shell.</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top"><span style="display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap"><kbd style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid {{t.outline}}; border-bottom-width: 2px; border-radius: 4px; background: {{t.surfaceLow}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px">Ctrl</kbd><kbd style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid {{t.outline}}; border-bottom-width: 2px; border-radius: 4px; background: {{t.surfaceLow}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px">Cmd</kbd><kbd style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid {{t.outline}}; border-bottom-width: 2px; border-radius: 4px; background: {{t.surfaceLow}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px">F</kbd></span></td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; padding-right: 0; vertical-align: top"><span style="display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap"><kbd style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid {{t.outline}}; border-bottom-width: 2px; border-radius: 4px; background: {{t.surfaceLow}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px">F11</kbd></span></td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; padding-left: 0; vertical-align: top"><span style="font-weight: 500">Help, About Messaging Explorer</span><br><span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Today a native message box</span></td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top"><a href="Settings.dc.html" style="color: {{t.primary}}; font-weight: 500">Settings</a>, About: version, licence and links. On macOS the application menu keeps its own About item.</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top; color: {{t.onSurfaceVariant}}">None</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; padding-right: 0; vertical-align: top; color: {{t.onSurfaceVariant}}">None</td>
+          </tr>
+        </tbody>
+      </table>
+      <p style="margin: 0; max-width: 920px; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Copy, cut, paste, undo, redo and select all: from the Edit menu of the system menu bar on macOS, where the keyboard shortcuts depend on it; from the system itself on Windows and Linux, where no application menu is set.</p>
+    </section>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Preview"},"state":{"editor":"enum","options":["target","todayMac"],"default":"target","section":"Preview"},"environment":{"editor":"enum","options":["production","development"],"default":"production","section":"Preview"},"$preview":{"width":1280,"height":3320}}'>
+const LIGHT = { surface:'#f9f9ff', surfaceLow:'#f2f3fa', surfaceContainer:'#ecedf4', surfaceHigh:'#e6e8ee',
+  onSurface:'#191c20', onSurfaceVariant:'#43474e', outline:'#73777f', outlineVariant:'#c3c6cf',
+  primary:'#005cbb', onPrimary:'#ffffff', primaryContainer:'#d7e3ff', onPrimaryContainer:'#001b3f',
+  secondaryContainer:'#dae2f9', onSecondaryContainer:'#131c2b',
+  error:'#ba1a1a', onError:'#ffffff', errorContainer:'#ffdad6', onErrorContainer:'#410002',
+  warnContainer:'#ffdea3', onWarnContainer:'#261900', success:'#1b6b32', successContainer:'#b6f2be', onSuccessContainer:'#002108',
+  scrim:'rgba(0,0,0,.45)', shadow:'0 1px 2px rgba(0,0,0,.3), 0 2px 6px 2px rgba(0,0,0,.15)' };
+const DARK = { surface:'#111318', surfaceLow:'#191c20', surfaceContainer:'#1d2024', surfaceHigh:'#282a2f',
+  onSurface:'#e2e2e9', onSurfaceVariant:'#c3c6cf', outline:'#8d9199', outlineVariant:'#43474e',
+  primary:'#abc7ff', onPrimary:'#002f65', primaryContainer:'#00458f', onPrimaryContainer:'#d7e3ff',
+  secondaryContainer:'#3e4759', onSecondaryContainer:'#dae2f9',
+  error:'#ffb4ab', onError:'#690005', errorContainer:'#93000a', onErrorContainer:'#ffdad6',
+  warnContainer:'#5c4300', onWarnContainer:'#ffdea3', success:'#9bd6a4', successContainer:'#00531f', onSuccessContainer:'#b6f2be',
+  scrim:'rgba(0,0,0,.6)', shadow:'0 1px 3px rgba(0,0,0,.6), 0 4px 8px 3px rgba(0,0,0,.3)' };
+
+const CHROME = {
+  light: {
+    mac: { titleBg: '#e9e9eb', titleFg: '#2c2c2e', border: '#b4b4b9', menuBg: '#f6f6f6', menuFg: '#1d1d1f' },
+    win: { titleBg: '#f3f3f3', titleFg: '#1b1b1b', border: '#8a8a8a' },
+    linux: { titleBg: '#e4e4e4', titleFg: '#2e3436', border: '#a8a8a8' }
+  },
+  dark: {
+    mac: { titleBg: '#2c2c2e', titleFg: '#e5e5ea', border: '#545458', menuBg: '#1e1e1f', menuFg: '#f2f2f7' },
+    win: { titleBg: '#202020', titleFg: '#ffffff', border: '#5a5a5a' },
+    linux: { titleBg: '#303030', titleFg: '#f6f5f4', border: '#5e5e5e' }
+  }
+};
+
+const BASE = {
+  tag: 'Design, not built', sub: '', alt: '', hasSysMenu: false, hasRuler: false, isMac: false, isCaption: false, isTarget: true, isToday: false,
+  menu0: '', menu1: '', menu2: '', menu3: '', sysNote: '', menuBg: 'transparent', menuFg: 'inherit', mark: 'transparent',
+  maxW: '1216px', h: '380px', tree: '280px', radius: '8px',
+  titleAlign: 'left', titleWeight: 400, capW: '46px', capH: '31px', capM: '0', capR: '0', capBg: 'transparent'
+};
+
+class Component extends DCLogic {
+  renderVals() {
+    const dark = (this.props.theme ?? 'light') === 'dark';
+    const t = dark ? DARK : LIGHT;
+    const prod = (this.props.environment ?? 'production') === 'production';
+    const bar = dark
+      ? { bg: t.surfaceContainer, fg: t.onSurface, line: t.outlineVariant, sep: t.outlineVariant, navOn: t.secondaryContainer, navOnFg: t.onSecondaryContainer }
+      : { bg: t.primary, fg: t.onPrimary, line: t.primary, sep: 'rgba(255,255,255,.4)', navOn: 'rgba(255,255,255,.18)', navOnFg: t.onPrimary };
+    const env = prod
+      ? { label: 'PRODUCTION', name: 'Production', isProd: true, bg: t.errorContainer, fg: t.onErrorContainer }
+      : { label: 'DEVELOPMENT', name: 'Development', isProd: false, bg: t.secondaryContainer, fg: t.onSecondaryContainer };
+    const conn = prod ? 'contoso-prod.servicebus.windows.net' : 'contoso-dev.servicebus.windows.net';
+    const snack = dark
+      ? { bg: LIGHT.surface, fg: LIGHT.onSurface, action: LIGHT.primary }
+      : { bg: LIGHT.onSurface, fg: LIGHT.surface, action: DARK.primary };
+    const today = (this.props.state ?? 'target') === 'todayMac';
+    const c = dark ? CHROME.dark : CHROME.light;
+
+    const macTarget = Object.assign({}, BASE, c.mac, {
+      label: 'macOS', radius: '10px', isMac: true, hasSysMenu: true,
+      sub: 'The native title bar: the three window buttons, the centred title, and it drags the window. The page declares no drag region and leaves no room for the buttons; the app toolbar starts right below, with the navigation.',
+      menu0: 'Messaging Explorer', menu1: 'Edit', menu2: 'Window',
+      sysNote: 'The system menu bar, at the top of the screen. It belongs to macOS, not to the window. It keeps only the application menu, Edit and Window: macOS delivers copy, paste and select all through Edit, and minimise and zoom through Window.',
+      alt: 'Drawing: a macOS window with a native title bar, three window buttons on the left and the centred title Messaging Explorer; below it the app toolbar with Connections, Entities and Monitoring, the environment chip and the broker name; then the Entities screen.'
+    });
+    const macToday = Object.assign({}, BASE, c.mac, {
+      label: 'macOS today: hidden title bar', tag: 'Inferred from code, not reproduced', radius: '10px',
+      isTarget: false, isToday: true, hasSysMenu: true, mark: t.error,
+      sub: 'The window asks for a hidden title bar with the window buttons at 15, 15. They are drawn over the first letters of the toolbar title (dashed mark), nothing in the page makes room for them, and the page marks no drag region, so the window cannot be moved by its top edge. Navigation is missing too: the side menu is not rendered in the desktop app.',
+      menu0: 'Messaging Explorer', menu1: 'File', menu2: 'View', menu3: 'Help',
+      sysNote: 'The system menu bar today: File, View and Help, with no Edit and no Window menu, so Cmd C, Cmd V, Cmd A, Cmd M and Cmd W may do nothing. Read from the menu template, not seen on a Mac.',
+      alt: 'Drawing: the macOS window of today with no title bar; the three window buttons sit on top of the first letters of the toolbar title Messaging Explorer.'
+    });
+    const win = Object.assign({}, BASE, c.win, {
+      label: 'Windows', isCaption: true,
+      sub: 'The title bar of the system: icon, title and the three caption buttons. No menu row under it: no application menu is set, and copy and paste work without one. Closing the window hides it to the tray, as today; Quit is in the tray menu.',
+      alt: 'Drawing: a Windows window with icon and title on the left of the title bar and minimise, maximise and close on the right; no menu row; then the app toolbar and the Entities screen.'
+    });
+    const linux = Object.assign({}, BASE, c.linux, {
+      label: 'Linux', isCaption: true, radius: '10px', titleAlign: 'center', titleWeight: 700,
+      capW: '24px', capH: '24px', capM: '0 8px 0 0', capR: '999px', capBg: dark ? 'rgba(255,255,255,.12)' : 'rgba(0,0,0,.08)',
+      sub: 'The same as Windows, in whatever frame the desktop draws: a neutral title bar here. No menu row. Closing the window minimises it, as today.',
+      alt: 'Drawing: a Linux window with a neutral title bar, the centred title and three round buttons on the right; no menu row; then the app toolbar and the Entities screen.'
+    });
+    const min = Object.assign({}, BASE, c.win, {
+      label: 'Minimum window size: 1000 by 700', isCaption: true, hasRuler: true, maxW: '1000px', h: '700px', tree: '232px',
+      sub: 'The smallest size the window allows. The tree narrows to 232 px, the broker name shortens with an ellipsis, the buttons and the cards wrap under each other before anything is cut. Nothing scrolls sideways; only the panel scrolls, down.',
+      alt: 'Drawing: the window at 1000 by 700 pixels with a narrower entity tree and the whole queue panel visible without horizontal scrolling.'
+    });
+
+    return {
+      t, bar, env, conn, snack,
+      isDefault: !today, isLoading: false, isEmpty: false, isError: false,
+      stripText: today
+        ? 'The window: the first frame shows macOS as the code builds it today (inferred, not reproduced); the others show the decided target.'
+        : 'The window: the native frame and no menu bar are decided and not built. Today macOS hides the title bar and every platform has a File, View, Help menu.',
+      frames: [today ? macToday : macTarget, win, linux, min]
+    };
+  }
+}
+</script>
+</body>
+</html>

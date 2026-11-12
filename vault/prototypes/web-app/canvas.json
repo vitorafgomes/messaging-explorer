@@ -1,0 +1,184 @@
+{
+  "v": 3,
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-11-12T22:48:00Z"
+  },
+  "title": "Messaging Explorer",
+  "launch": {
+    "view": "canvas"
+  },
+  "pages": [
+    {
+      "id": "app",
+      "name": "The app today"
+    },
+    {
+      "id": "servicebus",
+      "name": "Azure Service Bus"
+    },
+    {
+      "id": "rabbitmq",
+      "name": "RabbitMQ"
+    },
+    {
+      "id": "next",
+      "name": "Next version"
+    },
+    {
+      "id": "system",
+      "name": "Window and components"
+    }
+  ],
+  "boards": {
+    "Main.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 1280,
+      "h": 900,
+      "title": "Entities",
+      "page": "app",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Components.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 1280,
+      "h": 5800,
+      "title": "Components",
+      "page": "system",
+      "expand": "fill"
+    },
+    "Connections.dc.html": {
+      "x": 1360,
+      "y": 0,
+      "w": 1280,
+      "h": 900,
+      "title": "Connections",
+      "page": "app",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Settings.dc.html": {
+      "x": 2720,
+      "y": 0,
+      "w": 1280,
+      "h": 1840,
+      "title": "Settings and updates",
+      "page": "app",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Window.dc.html": {
+      "x": 1360,
+      "y": 0,
+      "w": 1280,
+      "h": 3320,
+      "title": "The window on each system",
+      "page": "system",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Messages.dc.html": {
+      "x": 0,
+      "y": 1960,
+      "w": 1280,
+      "h": 900,
+      "title": "Messages",
+      "page": "app",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Send.dc.html": {
+      "x": 1360,
+      "y": 1960,
+      "w": 1280,
+      "h": 1000,
+      "title": "Send and message tools",
+      "page": "app",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "AutoResubmit.dc.html": {
+      "x": 2720,
+      "y": 1960,
+      "w": 1280,
+      "h": 3260,
+      "title": "Auto resubmit dead-letter",
+      "page": "app",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "EntityAdmin.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 1280,
+      "h": 1300,
+      "title": "Create, edit and status",
+      "page": "servicebus",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Rules.dc.html": {
+      "x": 1360,
+      "y": 0,
+      "w": 1280,
+      "h": 1240,
+      "title": "Subscription rules",
+      "page": "servicebus",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Monitoring.dc.html": {
+      "x": 2720,
+      "y": 0,
+      "w": 1280,
+      "h": 1200,
+      "title": "Monitoring and counts",
+      "page": "servicebus",
+      "expand": "fill",
+      "is_interactive": true
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "Connections.dc.html",
+    "Settings.dc.html",
+    "Messages.dc.html",
+    "Send.dc.html",
+    "AutoResubmit.dc.html",
+    "EntityAdmin.dc.html",
+    "Rules.dc.html",
+    "Monitoring.dc.html",
+    "Components.dc.html",
+    "Window.dc.html"
+  ],
+  "notes": {
+    "app-title": {
+      "x": 0,
+      "y": -240,
+      "text": "Main screens",
+      "kind": "title1",
+      "maxW": 4000,
+      "page": "app"
+    },
+    "system-title": {
+      "x": 0,
+      "y": -240,
+      "text": "Design system",
+      "kind": "title1",
+      "maxW": 2640,
+      "page": "system"
+    },
+    "servicebus-title": {
+      "x": 0,
+      "y": -240,
+      "text": "Azure Service Bus administration",
+      "kind": "title1",
+      "maxW": 4000,
+      "page": "servicebus"
+    }
+  },
+  "designSystems": []
+}

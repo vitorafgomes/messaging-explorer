@@ -1,0 +1,665 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Subscription rules</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.hov:hover{background-image:linear-gradient(rgba(128,128,128,.16),rgba(128,128,128,.16)) !important}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #ffffff;outline-offset:0;box-shadow:0 0 0 4px #005cbb !important}
+input::placeholder{color:currentColor;opacity:.72}
+@keyframes dc-spin{to{transform:rotate(360deg)}}
+.spin{animation:dc-spin 1s linear infinite}
+@media (prefers-reduced-motion: reduce){.spin{animation:none}}
+</style>
+</helmet>
+<div style="min-height: 1240px; box-sizing: border-box; display: flex; flex-direction: column; background: {{t.surface}}; color: {{t.onSurface}}; font-family: Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 14px; line-height: 20px">
+
+  <div style="display: flex; align-items: center; gap: 8px; height: 28px; box-sizing: border-box; padding: 0 16px; background: {{t.surfaceHigh}}; color: {{t.onSurfaceVariant}}; border-bottom: 1px solid {{t.outlineVariant}}; font-size: 12px; line-height: 16px">
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M4 10h16M10 10v10"></path></svg>
+    <strong style="font-weight: 600; color: {{t.onSurface}}; white-space: nowrap">{{strip.status}}</strong>
+    <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{strip.text}}</span>
+  </div>
+
+  <header style="display: flex; align-items: center; gap: 16px; height: 56px; box-sizing: border-box; padding: 0 8px 0 12px; background: {{bar.bg}}; color: {{bar.fg}}; border-bottom: 1px solid {{bar.line}}">
+    <nav aria-label="Main" style="display: flex; align-items: center; gap: 4px">
+      <a href="Connections.dc.html" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none; font-weight: 500">Connections</a>
+      <a href="Main.dc.html" aria-current="page" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; background: {{bar.navOn}}; color: {{bar.navOnFg}}; text-decoration: underline; text-underline-offset: 6px; text-decoration-thickness: 2px; font-weight: 700">Entities</a>
+      <a href="Monitoring.dc.html" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none; font-weight: 500">Monitoring</a>
+    </nav>
+    <span aria-hidden="true" style="flex: none; width: 1px; height: 24px; background: {{bar.sep}}"></span>
+    <span style="display: inline-flex; align-items: center; gap: 6px; flex: none; height: 24px; padding: 0 10px; border-radius: 999px; background: {{env.bg}}; color: {{env.fg}}; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap"><sc-if value="{{env.isProd}}" hint-placeholder-val="{{true}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg></sc-if><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Environment:</span>{{env.label}}</span>
+    <span title="{{conn}}" style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; font-weight: 500">
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="12" cy="12" r="9"></circle><path d="M8 12l3 3 5-6"></path></svg>
+      <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Connected to</span>
+      <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{conn}}</span>
+    </span>
+    <div style="display: flex; align-items: center; gap: 4px">
+      <button type="button" aria-label="Notifications" title="Notifications" class="hov" style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: {{bar.fg}}; font: inherit; cursor: pointer"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16v-5a6 6 0 1 1 12 0v5l2 2H4zM10 21a2 2 0 0 0 4 0"></path></svg></button>
+      <button type="button" aria-label="Help" title="Help" class="hov" style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: {{bar.fg}}; font: inherit; cursor: pointer"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1 1-1.1 1.8M12 17h.01"></path></svg></button>
+      <a href="Settings.dc.html" aria-label="Settings" title="Settings" class="hov" style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h9M19 7h1M4 17h1M11 17h9"></path><circle cx="16" cy="7" r="3"></circle><circle cx="8" cy="17" r="3"></circle></svg></a>
+    </div>
+  </header>
+
+  <div style="position: relative; flex: 1; display: flex; flex-direction: column">
+
+    <div aria-hidden="{{scr.hidden}}" style="position: {{scr.pos}}; inset: 0; overflow: hidden; flex: 1; display: flex">
+
+      <aside aria-label="Entities" style="flex: 0 0 26%; min-width: 264px; max-width: 340px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px; padding: 12px 8px 16px; background: {{t.surfaceLow}}; border-right: 1px solid {{t.outlineVariant}}">
+        <h2 style="margin: 0; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: {{t.onSurfaceVariant}}; padding: 10px 8px">Queues <span style="margin-left: 4px; font-weight: 400; font-variant-numeric: tabular-nums">4</span></h2>
+        <sc-for list="{{treeQueues}}" as="row" hint-placeholder-count="4">
+          <a href="Main.dc.html" class="hov" style="display: flex; align-items: center; gap: 8px; min-height: 32px; box-sizing: border-box; padding: 0 8px 0 {{row.pad}}; border-radius: 8px; background: {{row.bg}}; color: {{row.fg}}; font-weight: {{row.weight}}; text-decoration: none"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M4 13l2.5-8h11L20 13v6H4zM4 13h5l1 2h4l1-2h5"></path></svg><span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{row.name}}</span></a>
+        </sc-for>
+        <h2 style="margin: 0; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: {{t.onSurfaceVariant}}; padding: 18px 8px 10px">Topics <span style="margin-left: 4px; font-weight: 400; font-variant-numeric: tabular-nums">1</span></h2>
+        <a href="Main.dc.html" class="hov" style="display: flex; align-items: center; gap: 8px; min-height: 32px; box-sizing: border-box; padding: 0 8px; border-radius: 8px; color: {{t.onSurface}}; text-decoration: none"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="5" cy="12" r="2"></circle><circle cx="19" cy="6" r="2"></circle><circle cx="19" cy="18" r="2"></circle><path d="M7 12h4l6-5M11 12l6 5"></path></svg><span>order-events</span></a>
+        <sc-for list="{{treeSubs}}" as="row" hint-placeholder-count="2">
+          <a href="Main.dc.html" aria-current="{{row.current}}" class="hov" style="display: flex; align-items: center; gap: 8px; min-height: 32px; box-sizing: border-box; padding: 0 8px 0 {{row.pad}}; border-radius: 8px; background: {{row.bg}}; color: {{row.fg}}; font-weight: {{row.weight}}; text-decoration: none"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M4 12h11M11 8l4 4-4 4M19 5v14"></path></svg><span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{row.name}}</span></a>
+        </sc-for>
+      </aside>
+
+      <main style="flex: 1; min-width: 0; box-sizing: border-box; padding: 20px 24px 32px">
+        <div style="display: flex; flex-direction: column; gap: 20px">
+
+          <div style="display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap">
+            <div style="flex: 1; min-width: 240px">
+              <div style="display: flex; align-items: center; gap: 4px; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">
+                <span>Subscription in topic</span>
+                <a href="Main.dc.html" style="color: {{t.primary}}; font-weight: 500">{{sub.topic}}</a>
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+                <h1 style="margin: 0; font-size: 28px; line-height: 36px; font-weight: 400; overflow-wrap: anywhere">{{sub.name}}</h1>
+                <a href="EntityAdmin.dc.html" aria-label="Status: Active. Change status" title="Change status" class="hov" style="display: inline-flex; align-items: center; gap: 6px; height: 32px; box-sizing: border-box; padding: 0 12px 0 8px; border: 1px solid {{t.outlineVariant}}; border-radius: 999px; color: {{t.onSurface}}; font-size: 12px; line-height: 16px; font-weight: 500; text-decoration: none; white-space: nowrap"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{t.success}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M8 12l3 3 5-6"></path></svg>Active</a>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px">
+              <a href="Messages.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 20px 0 16px; border: 0; background: {{t.primary}}; color: {{t.onPrimary}}; text-decoration: none; cursor: pointer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg>View messages</a>
+              <a href="Send.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 20px 0 16px; border: 0; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}; text-decoration: none; cursor: pointer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l17-8L4 4v6l10 2-10 2z"></path></svg>Send to topic</a>
+              <a href="EntityAdmin.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 20px 0 16px; border: 1px solid {{t.outline}}; background: transparent; color: {{t.primary}}; text-decoration: none; cursor: pointer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16zM13 7l4 4"></path></svg>Edit</a>
+            </div>
+          </div>
+
+          <nav aria-label="Sections of the entity" style="display: flex; gap: 4px; border-bottom: 1px solid {{t.outlineVariant}}">
+            <a href="Main.dc.html" class="hov" style="display: inline-flex; align-items: center; height: 44px; box-sizing: border-box; margin-bottom: -1px; padding: 0 16px; border: 0; background: transparent; font: inherit; font-variant-numeric: tabular-nums; text-decoration: none; cursor: pointer; border-bottom: 3px solid transparent; color: {{t.onSurfaceVariant}}; font-weight: 500">Properties</a>
+            <button type="button" aria-current="true" class="hov" style="display: inline-flex; align-items: center; height: 44px; box-sizing: border-box; margin-bottom: -1px; padding: 0 16px; border: 0; background: transparent; font: inherit; font-variant-numeric: tabular-nums; text-decoration: none; cursor: pointer; border-bottom: 3px solid {{t.primary}}; color: {{t.primary}}; font-weight: 700">{{tabLabel}}</button>
+          </nav>
+
+          <section aria-label="Rules" style="display: flex; flex-direction: column; gap: 12px">
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-height: 32px">
+              <span style="flex: 1; min-width: 200px; color: {{t.onSurfaceVariant}}">A message is delivered when at least one rule matches.</span>
+              <sc-if value="{{canAdd}}" hint-placeholder-val="{{true}}">
+                <button type="button" onClick="{{add}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>Add rule</button>
+              </sc-if>
+            </div>
+
+            <sc-if value="{{isDefault}}" hint-placeholder-val="{{true}}">
+              <div>
+                <table style="width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums">
+                  <thead>
+                    <tr>
+                      <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left; width: 18%">Rule</th>
+                      <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Filter</th>
+                      <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Expression</th>
+                      <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Action</th>
+                      <th scope="col" style="display: {{actCell}}; padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left"><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Actions</span></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+              <tr style="display: {{r0.display}}">
+                <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-weight: 500; overflow-wrap: anywhere">{{r0.name}}</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}"><span style="display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; background: {{t.surfaceHigh}}; color: {{t.onSurfaceVariant}}; font-size: 12px; line-height: 16px; font-weight: 500">{{r0.filter}}</span></td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-family: {{r0.exprFont}}; font-size: {{r0.exprSize}}; overflow-wrap: anywhere">{{r0.expr}}</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-family: {{r0.actionFont}}; font-size: {{r0.actionSize}}; color: {{r0.actionFg}}; overflow-wrap: anywhere">{{r0.action}}</td>
+                <td style="display: {{actCell}}; padding: 2px 0 2px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right; white-space: nowrap">
+                  <span style="display: inline-flex; gap: 4px">
+                    <button type="button" onClick="{{r0.edit}}" aria-label="{{r0.editLabel}}" title="{{r0.editLabel}}" class="hov" style="display: flex; align-items: center; justify-content: center; flex: none; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 999px; background: transparent; font: inherit; cursor: pointer; color: {{t.onSurfaceVariant}}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16zM13 7l4 4"></path></svg></button>
+                    <button type="button" onClick="{{r0.del}}" aria-label="{{r0.delLabel}}" title="{{r0.delLabel}}" class="hov" style="display: flex; align-items: center; justify-content: center; flex: none; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 999px; background: transparent; font: inherit; cursor: pointer; color: {{t.error}}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"></path></svg></button>
+                  </span>
+                </td>
+              </tr>
+              <tr style="display: {{r1.display}}">
+                <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-weight: 500; overflow-wrap: anywhere">{{r1.name}}</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}"><span style="display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; background: {{t.surfaceHigh}}; color: {{t.onSurfaceVariant}}; font-size: 12px; line-height: 16px; font-weight: 500">{{r1.filter}}</span></td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-family: {{r1.exprFont}}; font-size: {{r1.exprSize}}; overflow-wrap: anywhere">{{r1.expr}}</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-family: {{r1.actionFont}}; font-size: {{r1.actionSize}}; color: {{r1.actionFg}}; overflow-wrap: anywhere">{{r1.action}}</td>
+                <td style="display: {{actCell}}; padding: 2px 0 2px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right; white-space: nowrap">
+                  <span style="display: inline-flex; gap: 4px">
+                    <button type="button" onClick="{{r1.edit}}" aria-label="{{r1.editLabel}}" title="{{r1.editLabel}}" class="hov" style="display: flex; align-items: center; justify-content: center; flex: none; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 999px; background: transparent; font: inherit; cursor: pointer; color: {{t.onSurfaceVariant}}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16zM13 7l4 4"></path></svg></button>
+                    <button type="button" onClick="{{r1.del}}" aria-label="{{r1.delLabel}}" title="{{r1.delLabel}}" class="hov" style="display: flex; align-items: center; justify-content: center; flex: none; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 999px; background: transparent; font: inherit; cursor: pointer; color: {{t.error}}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"></path></svg></button>
+                  </span>
+                </td>
+              </tr>
+                  </tbody>
+                </table>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{isEmpty}}" hint-placeholder-val="{{false}}">
+              <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 12px; max-width: 560px; padding-top: 12px">
+                <svg aria-hidden="true" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="{{t.outline}}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h7M4 12h7M4 19h7M15 5l5 3.5L15 12"></path></svg>
+                <h2 style="margin: 0; font-size: 16px; line-height: 24px; font-weight: 500">No rule: this subscription receives no message</h2>
+                <p style="margin: 0; color: {{t.onSurfaceVariant}}">Messages published to {{sub.topic}} are not kept for it until a rule is added.</p>
+                <sc-if value="{{canEdit}}" hint-placeholder-val="{{true}}">
+                  <button type="button" onClick="{{add}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 20px 0 16px; border: 0; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}; text-decoration: none; cursor: pointer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>Add rule</button>
+                </sc-if>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{isError}}" hint-placeholder-val="{{false}}">
+              <section aria-label="Error" style="display: flex; align-items: flex-start; gap: 12px; max-width: 680px; box-sizing: border-box; padding: 16px; border-radius: 8px; background: {{t.errorContainer}}; color: {{t.onErrorContainer}}">
+                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 2px"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
+                <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0">
+                  <h2 style="margin: 0; font-size: 16px; line-height: 24px; font-weight: 500">Could not read the rules</h2>
+                  <p style="margin: 0">The API did not answer. Nothing was changed by reading. The rules of {{sub.name}} are not shown because they were not read; the subscription may well have some.</p>
+                  <button type="button" onClick="{{retry}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; margin-top: 4px; padding: 0 20px 0 16px; border: 1px solid {{t.onErrorContainer}}; border-radius: 999px; background: transparent; color: {{t.onErrorContainer}}; font: inherit; font-weight: 500; cursor: pointer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg>Retry</button>
+                </div>
+              </section>
+            </sc-if>
+          </section>
+
+        </div>
+      </main>
+    </div>
+
+    <sc-if value="{{dialogOpen}}" hint-placeholder-val="{{false}}">
+      <div style="position: relative; flex: 1; display: flex; justify-content: center; align-items: flex-start; box-sizing: border-box; padding: 40px 24px; background: {{t.scrim}}">
+
+        <sc-if value="{{showForm}}" hint-placeholder-val="{{true}}">
+          <div style="display: flex; flex-direction: column; gap: 16px; width: 100%; box-sizing: border-box; padding: 24px; border-radius: 20px; background: {{t.surfaceContainer}}; color: {{t.onSurface}}; box-shadow: {{t.shadow}}; max-width: 720px">
+            <h1 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">{{rf.title}}</h1>
+            <p style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; color: {{t.onSurfaceVariant}}">
+              <span style="display: inline-flex; align-items: center; gap: 6px; flex: none; height: 24px; padding: 0 10px; border-radius: 999px; background: {{env.bg}}; color: {{env.fg}}; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap"><sc-if value="{{env.isProd}}" hint-placeholder-val="{{true}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg></sc-if><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Environment:</span>{{env.label}}</span>
+              <span style="min-width: 0; overflow-wrap: anywhere">Subscription <strong style="font-weight: 600; color: {{t.onSurface}}">{{sub.name}}</strong> in topic <strong style="font-weight: 600; color: {{t.onSurface}}">{{sub.topic}}</strong> on {{connFull}}</span>
+            </p>
+
+            <sc-if value="{{rf.readOnly}}" hint-placeholder-val="{{false}}">
+              <div style="display: flex; flex-direction: column; gap: 16px">
+                <p style="display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 10px 14px; border-radius: 8px; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}">
+                  <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>
+                  <span>This rule holds a property of a value type this app cannot edit, so it is shown read-only. Nothing here can be saved.</span>
+                </p>
+                <dl style="display: flex; flex-direction: column; margin: 0; border-top: 1px solid {{t.outlineVariant}}">
+                  <sc-for list="{{rf.facts}}" as="fx" hint-placeholder-count="5">
+                    <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+                      <dt style="flex: 0 0 28%; color: {{t.onSurfaceVariant}}">{{fx.label}}</dt>
+                      <dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere">{{fx.value}}</dd>
+                    </div>
+                  </sc-for>
+                </dl>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{rf.editable}}" hint-placeholder-val="{{true}}">
+              <div style="display: flex; flex-direction: column; gap: 16px">
+
+                <sc-if value="{{rf.creating}}" hint-placeholder-val="{{true}}">
+                  <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+                    <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{name.labelFg}}">Rule name</span>
+                    <input type="text" value="{{name.value}}" onChange="{{name.on}}" aria-invalid="{{name.invalid}}" autocomplete="off" spellcheck="false" style="height: 40px; box-sizing: border-box; padding: {{name.pad}}; border: {{name.border}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit">
+                    <sc-if value="{{name.hasErr}}" hint-placeholder-val="{{false}}">
+                      <span style="display: flex; align-items: flex-start; gap: 4px; font-size: 12px; line-height: 16px; color: {{t.error}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v6M12 16.5h.01"></path></svg>{{name.err}}</span>
+                    </sc-if>
+                    <sc-if value="{{name.noErr}}" hint-placeholder-val="{{true}}">
+                      <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Letters, digits, dot, dash and underscore. 50 characters at most.</span>
+                    </sc-if>
+                  </label>
+                </sc-if>
+
+                <sc-if value="{{rf.editing}}" hint-placeholder-val="{{false}}">
+                  <div style="display: flex; flex-direction: column; gap: 4px">
+                    <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Rule name</span>
+                    <span style="font-weight: 500; overflow-wrap: anywhere">{{rf.ruleName}}</span>
+                    <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">A rule cannot be renamed. Saving replaces it under the same name.</span>
+                  </div>
+                </sc-if>
+
+                <fieldset style="min-width: 0; margin: 0; padding: 0; border: 0">
+                  <legend style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Filter type</legend>
+                  <div style="display: inline-flex; flex-wrap: wrap; border: 1px solid {{t.outline}}; border-radius: 20px; overflow: hidden">
+                    <sc-for list="{{rf.kinds}}" as="k" hint-placeholder-count="4">
+                      <button type="button" onClick="{{k.pick}}" aria-pressed="{{k.pressed}}" class="hov" style="display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 14px; border: 0; border-left: {{k.sep}}; background: {{k.bg}}; color: {{k.fg}}; font: inherit; font-weight: {{k.weight}}; cursor: pointer">
+                        <sc-if value="{{k.on}}" hint-placeholder-val="{{false}}"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"></path></svg></sc-if>
+                        {{k.label}}
+                      </button>
+                    </sc-for>
+                  </div>
+                </fieldset>
+
+                <sc-if value="{{rf.isSql}}" hint-placeholder-val="{{true}}">
+                  <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+                    <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{sql.labelFg}}">SQL filter</span>
+                    <textarea rows="3" value="{{sql.value}}" onChange="{{sql.on}}" aria-invalid="{{sql.invalid}}" spellcheck="false" style="box-sizing: border-box; padding: 8px 12px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit; resize: vertical; border: {{sql.border}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; line-height: 20px"></textarea>
+                    <sc-if value="{{sql.hasErr}}" hint-placeholder-val="{{false}}">
+                      <span style="display: flex; align-items: flex-start; gap: 4px; font-size: 12px; line-height: 16px; color: {{t.error}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v6M12 16.5h.01"></path></svg>{{sql.err}}</span>
+                    </sc-if>
+                    <sc-if value="{{sql.noErr}}" hint-placeholder-val="{{true}}">
+                      <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Checked by the broker on save. An invalid expression is refused and nothing changes.</span>
+                    </sc-if>
+                  </label>
+                </sc-if>
+
+                <sc-if value="{{rf.isCorr}}" hint-placeholder-val="{{false}}">
+                  <div style="display: flex; flex-direction: column; gap: 12px">
+                    <p style="margin: 0; color: {{t.onSurfaceVariant}}">Every filled field must match. Empty fields are ignored.</p>
+                    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+                      <sc-for list="{{corrFields}}" as="f" hint-placeholder-count="8">
+                        <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+                          <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">{{f.label}}</span>
+                          <input type="text" value="{{f.value}}" onChange="{{f.on}}" autocomplete="off" spellcheck="false" style="height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit">
+                        </label>
+                      </sc-for>
+                    </div>
+                    <h2 style="margin: 0; font-size: 16px; line-height: 24px; font-weight: 500; margin-top: 4px">Application properties</h2>
+                    <sc-for list="{{propRows}}" as="p" hint-placeholder-count="2">
+                      <div style="display: flex; align-items: flex-start; gap: 8px">
+                        <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1">
+                          <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Property name</span>
+                          <input type="text" value="{{p.name}}" onChange="{{p.onName}}" autocomplete="off" spellcheck="false" style="height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">
+                          <sc-if value="{{p.hasNameErr}}" hint-placeholder-val="{{false}}">
+                            <span style="display: flex; align-items: flex-start; gap: 4px; font-size: 12px; line-height: 16px; color: {{t.error}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v6M12 16.5h.01"></path></svg>{{p.nameErr}}</span>
+                          </sc-if>
+                        </label>
+                        <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 0 0 112px">
+                          <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Type</span>
+                          <select onChange="{{p.onType}}" style="height: 40px; box-sizing: border-box; padding: 0 8px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit">
+                            <option value="String" selected="{{p.tString}}">String</option>
+                            <option value="Int64" selected="{{p.tInt64}}">Int64</option>
+                            <option value="Double" selected="{{p.tDouble}}">Double</option>
+                            <option value="Boolean" selected="{{p.tBoolean}}">Boolean</option>
+                          </select>
+                        </label>
+                        <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1">
+                          <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Value</span>
+                          <input type="text" value="{{p.value}}" onChange="{{p.onValue}}" autocomplete="off" spellcheck="false" style="height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">
+                          <sc-if value="{{p.hasValueErr}}" hint-placeholder-val="{{false}}">
+                            <span style="display: flex; align-items: flex-start; gap: 4px; font-size: 12px; line-height: 16px; color: {{t.error}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v6M12 16.5h.01"></path></svg>{{p.valueErr}}</span>
+                          </sc-if>
+                        </label>
+                        <button type="button" onClick="{{p.remove}}" aria-label="{{p.removeLabel}}" title="{{p.removeLabel}}" class="hov" style="display: flex; align-items: center; justify-content: center; flex: none; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 999px; background: transparent; font: inherit; cursor: pointer; margin-top: 22px; color: {{t.onSurfaceVariant}}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+                      </div>
+                    </sc-for>
+                    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+                      <button type="button" onClick="{{addProperty}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>Add property</button>
+                      <sc-if value="{{rf.needsOne}}" hint-placeholder-val="{{false}}">
+                        <span aria-live="polite" style="display: flex; align-items: flex-start; gap: 4px; font-size: 12px; line-height: 16px; color: {{t.error}}; font-size: 14px; line-height: 20px"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v6M12 16.5h.01"></path></svg>A correlation filter needs at least one field or property.</span>
+                      </sc-if>
+                    </div>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{rf.isTrue}}" hint-placeholder-val="{{false}}">
+                  <p style="margin: 0; color: {{t.onSurfaceVariant}}">Every message published to the topic matches this rule.</p>
+                </sc-if>
+                <sc-if value="{{rf.isFalse}}" hint-placeholder-val="{{false}}">
+                  <p style="margin: 0; color: {{t.onSurfaceVariant}}">No message matches this rule.</p>
+                </sc-if>
+
+                <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+                  <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Action (optional)</span>
+                  <textarea rows="2" value="{{action.value}}" onChange="{{action.on}}" spellcheck="false" style="box-sizing: border-box; padding: 8px 12px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit; resize: vertical; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; line-height: 20px"></textarea>
+                </label>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{rf.hasError}}" hint-placeholder-val="{{false}}">
+              <section aria-label="Error" aria-live="polite" style="display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 10px 14px; border-radius: 8px; background: {{t.errorContainer}}; color: {{t.onErrorContainer}}">
+                <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><path d="M8 3h8l5 5v8l-5 5H8l-5-5V8zM12 8v5M12 16.5h.01"></path></svg>
+                <span style="flex: 1; min-width: 0">{{rf.error}}</span>
+              </section>
+            </sc-if>
+
+            <sc-if value="{{rf.readOnly}}" hint-placeholder-val="{{false}}">
+              <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding-top: 8px">
+                <button type="button" onClick="{{close}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 20px; border: 0; background: {{t.primary}}; color: {{t.onPrimary}}; text-decoration: none; cursor: pointer">Close</button>
+              </div>
+            </sc-if>
+            <sc-if value="{{rf.editable}}" hint-placeholder-val="{{true}}">
+              <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding-top: 8px">
+                <button type="button" onClick="{{close}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 12px; border: 0; background: transparent; color: {{t.primary}}; text-decoration: none; cursor: pointer">Cancel</button>
+                <sc-if value="{{rf.canSave}}" hint-placeholder-val="{{false}}">
+                  <button type="button" onClick="{{close}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 20px; border: 0; background: {{t.primary}}; color: {{t.onPrimary}}; text-decoration: none; cursor: pointer">{{rf.saveLabel}}</button>
+                </sc-if>
+                <sc-if value="{{rf.cannotSave}}" hint-placeholder-val="{{true}}">
+                  <button type="button" disabled style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 20px; border: 0; background: {{t.surfaceHigh}}; color: {{t.outline}}">{{rf.saveLabel}}</button>
+                </sc-if>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{showDelete}}" hint-placeholder-val="{{false}}">
+          <div style="display: flex; flex-direction: column; gap: 16px; width: 100%; box-sizing: border-box; padding: 24px; border-radius: 20px; background: {{t.surfaceContainer}}; color: {{t.onSurface}}; box-shadow: {{t.shadow}}; max-width: 560px">
+            <h1 style="display: flex; align-items: center; gap: 10px; margin: 0; font-size: 20px; line-height: 28px; font-weight: 500; overflow-wrap: anywhere"><sc-if value="{{del.isLast}}" hint-placeholder-val="{{false}}"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{t.error}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg></sc-if>{{del.title}}</h1>
+            <p style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; color: {{t.onSurfaceVariant}}">
+              <span style="display: inline-flex; align-items: center; gap: 6px; flex: none; height: 24px; padding: 0 10px; border-radius: 999px; background: {{env.bg}}; color: {{env.fg}}; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap"><sc-if value="{{env.isProd}}" hint-placeholder-val="{{true}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg></sc-if><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Environment:</span>{{env.label}}</span>
+              <span style="min-width: 0; overflow-wrap: anywhere"><strong style="font-weight: 600; color: {{t.onSurface}}">{{sub.name}}</strong> in {{sub.topic}} on {{connFull}}</span>
+            </p>
+            <p style="margin: 0">{{del.before}}<strong style="font-weight: 600">{{sub.name}}</strong>{{del.after}}</p>
+            <dl style="display: flex; flex-direction: column; margin: 0; border-top: 1px solid {{t.outlineVariant}}">
+              <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Rule</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere; font-weight: 500">{{del.rule}}</dd></div>
+              <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Subscription</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere">{{sub.name}}</dd></div>
+              <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Topic</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere">{{sub.topic}}</dd></div>
+              <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Connection</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere">{{connFull}}</dd></div>
+              <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Environment</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere">{{env.name}}</dd></div>
+            </dl>
+            <sc-if value="{{del.isLast}}" hint-placeholder-val="{{false}}">
+              <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+                <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Type the rule name to confirm</span>
+                <input type="text" value="{{del.typed}}" onChange="{{del.onTyped}}" placeholder="{{del.rule}}" autocomplete="off" spellcheck="false" style="height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">
+                <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">The button stays disabled until the name matches exactly.</span>
+              </label>
+            </sc-if>
+            <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding-top: 8px">
+              <button type="button" onClick="{{close}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 12px; border: 0; background: transparent; color: {{t.primary}}; text-decoration: none; cursor: pointer">Cancel</button>
+              <sc-if value="{{del.can}}" hint-placeholder-val="{{true}}">
+                <button type="button" onClick="{{del.confirm}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 20px 0 16px; border: 0; background: {{t.error}}; color: {{t.onError}}; text-decoration: none; cursor: pointer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"></path></svg>Delete rule</button>
+              </sc-if>
+              <sc-if value="{{del.cannot}}" hint-placeholder-val="{{false}}">
+                <button type="button" disabled style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 20px 0 16px; border: 0; background: {{t.surfaceHigh}}; color: {{t.outline}}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"></path></svg>Delete rule</button>
+              </sc-if>
+            </div>
+          </div>
+        </sc-if>
+
+      </div>
+    </sc-if>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Preview"},"state":{"editor":"enum","options":["table","addSql","addCorrelation","addTrueFalse","edit","readOnlyOther","deleteOne","deleteLast","refused","loadFailed","noRule","readOnly"],"default":"table","section":"Preview"},"environment":{"editor":"enum","options":["production","development"],"default":"production","section":"Preview"},"$preview":{"width":1280,"height":1240}}'>
+const LIGHT = { surface:'#f9f9ff', surfaceLow:'#f2f3fa', surfaceContainer:'#ecedf4', surfaceHigh:'#e6e8ee',
+  onSurface:'#191c20', onSurfaceVariant:'#43474e', outline:'#73777f', outlineVariant:'#c3c6cf',
+  primary:'#005cbb', onPrimary:'#ffffff', primaryContainer:'#d7e3ff', onPrimaryContainer:'#001b3f',
+  secondaryContainer:'#dae2f9', onSecondaryContainer:'#131c2b',
+  error:'#ba1a1a', onError:'#ffffff', errorContainer:'#ffdad6', onErrorContainer:'#410002',
+  warnContainer:'#ffdea3', onWarnContainer:'#261900', success:'#1b6b32', successContainer:'#b6f2be', onSuccessContainer:'#002108',
+  scrim:'rgba(0,0,0,.45)', shadow:'0 1px 2px rgba(0,0,0,.3), 0 2px 6px 2px rgba(0,0,0,.15)' };
+const DARK = { surface:'#111318', surfaceLow:'#191c20', surfaceContainer:'#1d2024', surfaceHigh:'#282a2f',
+  onSurface:'#e2e2e9', onSurfaceVariant:'#c3c6cf', outline:'#8d9199', outlineVariant:'#43474e',
+  primary:'#abc7ff', onPrimary:'#002f65', primaryContainer:'#00458f', onPrimaryContainer:'#d7e3ff',
+  secondaryContainer:'#3e4759', onSecondaryContainer:'#dae2f9',
+  error:'#ffb4ab', onError:'#690005', errorContainer:'#93000a', onErrorContainer:'#ffdad6',
+  warnContainer:'#5c4300', onWarnContainer:'#ffdea3', success:'#9bd6a4', successContainer:'#00531f', onSuccessContainer:'#b6f2be',
+  scrim:'rgba(0,0,0,.6)', shadow:'0 1px 3px rgba(0,0,0,.6), 0 4px 8px 3px rgba(0,0,0,.3)' };
+
+function fmt(n) { return Number(n || 0).toLocaleString('en-US'); }
+
+function shared(props) {
+  const dark = (props.theme ?? 'light') === 'dark';
+  const t = dark ? DARK : LIGHT;
+  const prod = (props.environment ?? 'production') === 'production';
+  const bar = dark
+    ? { bg: t.surfaceContainer, fg: t.onSurface, line: t.outlineVariant, sep: t.outlineVariant, navOn: t.secondaryContainer, navOnFg: t.onSecondaryContainer }
+    : { bg: t.primary, fg: t.onPrimary, line: t.primary, sep: 'rgba(255,255,255,.4)', navOn: 'rgba(255,255,255,.18)', navOnFg: t.onPrimary };
+  const env = prod
+    ? { label: 'PRODUCTION', name: 'Production', isProd: true, bg: t.errorContainer, fg: t.onErrorContainer }
+    : { label: 'DEVELOPMENT', name: 'Development', isProd: false, bg: t.secondaryContainer, fg: t.onSecondaryContainer };
+  const conn = prod ? 'contoso-prod.servicebus.windows.net' : 'contoso-dev.servicebus.windows.net';
+  const snack = dark
+    ? { bg: LIGHT.surface, fg: LIGHT.onSurface, action: LIGHT.primary }
+    : { bg: LIGHT.onSurface, fg: LIGHT.surface, action: DARK.primary };
+  return { t, bar, env, conn, connFull: 'Contoso (' + conn + ')', snack, prod };
+}
+
+const MONO = "ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace";
+
+const SYSTEM_FIELDS = [['subject', 'Subject'], ['correlationId', 'Correlation id'], ['messageId', 'Message id'], ['to', 'To'],
+  ['replyTo', 'Reply to'], ['sessionId', 'Session id'], ['replyToSessionId', 'Reply to session id'], ['contentType', 'Content type']];
+const PROPERTY_TYPES = ['String', 'Int64', 'Double', 'Boolean'];
+const KINDS = [['Sql', 'SQL filter'], ['Correlation', 'Correlation filter'], ['True', 'True (every message)'], ['False', 'False (no message)']];
+const FILTER_LABELS = { Sql: 'SQL', Correlation: 'Correlation', True: 'True', False: 'False' };
+
+const RULES = {
+  warehouse: [
+    { name: 'paid-orders', filterType: 'Sql', sqlExpression: "sys.Label = 'OrderPaid' AND region IN ('EU', 'UK')", sqlAction: "SET sys.To = 'warehouse'",
+      correlation: {}, properties: [] },
+    { name: 'returns', filterType: 'Correlation', sqlExpression: '', sqlAction: '',
+      correlation: { subject: 'OrderReturned' }, properties: [{ name: 'returnedAt', type: 'Other', value: '2026-11-10T09:30:00Z' }] }
+  ],
+  email: [
+    { name: 'shipped-orders', filterType: 'Sql', sqlExpression: "sys.Label = 'OrderShipped' AND notify = TRUE", sqlAction: '', correlation: {}, properties: [] }
+  ]
+};
+
+const REFUSED_SQL = "sys.Label = 'OrderPaid' AND region IN ('EU', 'UK'";
+const FORM_VIEWS = ['addSql', 'addCorrelation', 'addTrueFalse', 'edit', 'readOnlyOther', 'refused'];
+const RULE_NAME = /^(?:[A-Za-z0-9._-]{1,50}|\$Default)$/;
+const INT64 = /^-?\d+$/;
+const DOUBLE = /^-?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+const MAX_SQL = 1024;
+const MAX_FIELD = 128;
+
+const VALUE_RULES = {
+  String: { valid: () => true, message: '' },
+  Int64: { valid: v => INT64.test(v) && BigInt(v) >= -(2n ** 63n) && BigInt(v) < 2n ** 63n,
+    message: 'An Int64 is a whole number from -9223372036854775808 to 9223372036854775807.' },
+  Double: { valid: v => DOUBLE.test(v), message: 'A Double is a number such as 2.5 or -1E+20.' },
+  Boolean: { valid: v => v === 'true' || v === 'false', message: 'A Boolean is true or false.' }
+};
+
+const STRIP_TEXT = {
+  table: 'Subscription rules: the Rules tab of a subscription, with Add, Edit and Delete on a broker that declares rule editing.',
+  addSql: 'Add rule, SQL filter: the expression is checked by the broker on save; Add rule stays disabled until the rule has a name and an expression.',
+  addCorrelation: 'Add rule, correlation filter: eight system fields and typed application properties. Empty every field and remove every property to see the rule that it needs at least one.',
+  addTrueFalse: 'Add rule, True or False filter: no expression to write, the dialog says what each one matches.',
+  edit: 'Edit rule: the name is text, Save rule stays disabled until the rule differs from the one read.',
+  readOnlyOther: 'A rule that holds a property of a type the app cannot write opens read-only, with nothing to save.',
+  deleteOne: 'Delete a rule while others remain: a plain confirmation that names the rule, the subscription, the topic, the connection and the environment.',
+  deleteLast: 'Delete the last rule: the subscription then receives nothing, so the rule name is typed to confirm.',
+  refused: 'The broker refused the rule (400): the message is shown in the dialog and the input is kept.',
+  loadFailed: 'The rules could not be read: an error with Retry, never drawn as an empty list.',
+  noRule: 'A subscription with no rule: the empty state says it receives no message and offers Add rule.',
+  readOnly: 'A broker that does not declare rule editing: the same table, with no Add, Edit or Delete.'
+};
+
+function describeFilter(rule) {
+  switch (rule.filterType) {
+    case 'True': return 'Matches every message';
+    case 'False': return 'Matches no message';
+    case 'Correlation': {
+      const fields = SYSTEM_FIELDS.filter(f => rule.correlation[f[0]]).map(f => f[1] + ' = ' + rule.correlation[f[0]]);
+      return [...fields, ...rule.properties.map(p => p.name + ' = ' + p.value)].join(', ');
+    }
+    default: return rule.sqlExpression;
+  }
+}
+
+function emptyDraft(filterType) {
+  const correlation = {};
+  SYSTEM_FIELDS.forEach(f => { correlation[f[0]] = ''; });
+  return { name: '', filterType, sqlExpression: '', sqlAction: '', correlation, properties: [] };
+}
+
+function fromRule(rule) {
+  const draft = emptyDraft(rule.filterType);
+  return { ...draft, name: rule.name, sqlExpression: rule.sqlExpression, sqlAction: rule.sqlAction,
+    correlation: { ...draft.correlation, ...rule.correlation }, properties: rule.properties.map(p => ({ ...p })) };
+}
+
+function ruleErrors(draft) {
+  const errors = {};
+  if (!draft.name) errors.name = 'A name is required.';
+  else if (!RULE_NAME.test(draft.name)) errors.name = 'Use 1 to 50 letters, digits, ".", "-" or "_"; $Default is the only name with "$".';
+  if (draft.sqlAction.length > MAX_SQL) errors.sqlAction = 'The action must be at most ' + MAX_SQL + ' characters.';
+  if (draft.filterType === 'Sql') {
+    if (!draft.sqlExpression) errors.sqlExpression = 'A SQL filter needs an expression.';
+    else if (draft.sqlExpression.length > MAX_SQL) errors.sqlExpression = 'The SQL filter must be at most ' + MAX_SQL + ' characters.';
+  }
+  if (draft.filterType === 'Correlation') {
+    SYSTEM_FIELDS.forEach(f => {
+      if (draft.correlation[f[0]].length > MAX_FIELD) errors['correlation.' + f[0]] = f[1] + ' must be at most ' + MAX_FIELD + ' characters.';
+    });
+    draft.properties.forEach((p, i) => {
+      if (!p.name) errors['properties.' + i + '.name'] = 'A property name is required.';
+      else if (p.name.length > MAX_FIELD) errors['properties.' + i + '.name'] = 'A property name must be at most ' + MAX_FIELD + ' characters.';
+      else if (draft.properties.some((other, j) => j !== i && other.name === p.name)) errors['properties.' + i + '.name'] = 'Another property has this name.';
+      const rule = VALUE_RULES[p.type];
+      if (rule && !rule.valid(p.value)) errors['properties.' + i + '.value'] = rule.message;
+    });
+    if (!draft.properties.length && SYSTEM_FIELDS.every(f => !draft.correlation[f[0]])) {
+      errors.correlation = 'A correlation filter needs at least one field or property.';
+    }
+  }
+  return errors;
+}
+
+function wire(draft) {
+  return JSON.stringify([draft.filterType, draft.filterType === 'Sql' ? draft.sqlExpression : null,
+    draft.filterType === 'Correlation' ? [draft.correlation, draft.properties.map(p => [p.name, p.type, p.value])] : null, draft.sqlAction]);
+}
+
+class Component extends DCLogic {
+  componentDidUpdate(prev) {
+    if (!prev) return;
+    if (prev.state !== this.props.state || prev.environment !== this.props.environment) {
+      this.setState({ view: undefined, draft: undefined, rule: undefined, deleted: undefined, nameTouched: undefined, typed: undefined });
+    }
+  }
+
+  renderVals() {
+    const s = this.state || {};
+    const sh = shared(this.props);
+    const t = sh.t;
+    const stateProp = this.props.state ?? 'table';
+    const view = s.view ?? stateProp;
+    const subName = stateProp === 'deleteLast' || stateProp === 'noRule' ? 'email' : 'warehouse';
+    const deleted = s.deleted || [];
+    const rules = stateProp === 'noRule' ? [] : RULES[subName].filter(r => !deleted.includes(r.name));
+    const canEdit = stateProp !== 'readOnly';
+    const open = (next, extra) => this.setState({ view: next, draft: undefined, nameTouched: false, typed: '', ...(extra || {}) });
+
+    const wanted = s.rule ?? (view === 'readOnlyOther' ? 'returns' : null);
+    const target = rules.find(r => r.name === wanted) || rules[0] || RULES.warehouse[0];
+
+    const creating = view.startsWith('add');
+    const readOnly = !creating && target.properties.some(p => p.type === 'Other');
+    let base;
+    if (view === 'addCorrelation') {
+      base = emptyDraft('Correlation');
+      base.correlation.subject = 'OrderReturned';
+      base.properties = [{ name: 'region', type: 'String', value: 'EU' }, { name: 'notify', type: 'Boolean', value: 'true' }];
+    } else if (creating) {
+      base = emptyDraft(view === 'addTrueFalse' ? 'True' : 'Sql');
+    } else {
+      base = fromRule(target);
+      if (view === 'refused') base.sqlExpression = REFUSED_SQL;
+    }
+    const draft = s.draft || base;
+    const set = patch => this.setState({ draft: { ...draft, ...patch } });
+    const errors = ruleErrors(draft);
+    const changed = creating || wire(draft) !== wire(fromRule(target));
+    const canSave = !readOnly && Object.keys(errors).length === 0 && changed;
+    const boxed = err => (err ? '2px solid ' + t.error : '1px solid ' + t.outline);
+
+    const nameErr = creating && s.nameTouched ? (errors.name || '') : '';
+    const name = {
+      value: draft.name, on: ev => this.setState({ draft: { ...draft, name: ev.target.value }, nameTouched: true }),
+      err: nameErr, hasErr: !!nameErr, noErr: !nameErr, invalid: nameErr ? 'true' : 'false',
+      labelFg: nameErr ? t.error : t.onSurfaceVariant, border: boxed(nameErr), pad: nameErr ? '0 11px' : '0 12px'
+    };
+    const sqlErr = s.draft && errors.sqlExpression ? errors.sqlExpression : '';
+    const sql = {
+      value: draft.sqlExpression, on: ev => set({ sqlExpression: ev.target.value }),
+      err: sqlErr, hasErr: !!sqlErr, noErr: !sqlErr, invalid: sqlErr ? 'true' : 'false',
+      labelFg: sqlErr ? t.error : t.onSurfaceVariant, border: boxed(sqlErr)
+    };
+    const setProperty = (i, patch) => set({ properties: draft.properties.map((p, j) => j === i ? { ...p, ...patch, touched: true } : p) });
+    const propRows = draft.properties.map((p, i) => {
+      const nameError = errors['properties.' + i + '.name'] || '';
+      const valueError = errors['properties.' + i + '.value'] || '';
+      const showName = nameError && (p.name || p.touched) ? nameError : '';
+      const showValue = valueError && (p.value || p.touched) ? valueError : '';
+      const label = 'Remove property ' + (p.name || i + 1);
+      return {
+        name: p.name, value: p.value,
+        tString: p.type === 'String', tInt64: p.type === 'Int64', tDouble: p.type === 'Double', tBoolean: p.type === 'Boolean',
+        onName: ev => setProperty(i, { name: ev.target.value }), onType: ev => setProperty(i, { type: ev.target.value }),
+        onValue: ev => setProperty(i, { value: ev.target.value }),
+        remove: () => set({ properties: draft.properties.filter((_, j) => j !== i) }), removeLabel: label,
+        nameErr: showName, hasNameErr: !!showName, valueErr: showValue, hasValueErr: !!showValue
+      };
+    });
+
+    const rf = {
+      title: creating ? 'Add rule' : readOnly ? 'Rule' : 'Edit rule',
+      readOnly, editable: !readOnly, creating, editing: !creating && !readOnly, ruleName: target.name,
+      kinds: KINDS.map((k, i) => {
+        const on = draft.filterType === k[0];
+        return { label: k[1], on, pressed: on ? 'true' : 'false', bg: on ? t.secondaryContainer : 'transparent',
+          fg: on ? t.onSecondaryContainer : t.onSurface, weight: on ? 600 : 500, sep: i === 0 ? '0' : '1px solid ' + t.outline,
+          pick: () => set({ filterType: k[0] }) };
+      }),
+      isSql: draft.filterType === 'Sql', isCorr: draft.filterType === 'Correlation', isTrue: draft.filterType === 'True', isFalse: draft.filterType === 'False',
+      needsOne: !!errors.correlation,
+      facts: [
+        { label: 'Rule', value: target.name }, { label: 'Filter', value: target.filterType }, { label: 'Expression', value: describeFilter(target) },
+        ...target.properties.map(p => ({ label: 'Property', value: p.name + ' = ' + p.value + ' (' + p.type + ')' })),
+        { label: 'Action', value: target.sqlAction || 'None' }
+      ],
+      error: view === 'refused' ? 'The broker refused this rule. Check the expression.' : '', hasError: view === 'refused',
+      saveLabel: creating ? 'Add rule' : 'Save rule', canSave, cannotSave: !canSave
+    };
+
+    const isLast = view === 'deleteLast';
+    const typed = s.typed || '';
+    const canDelete = !isLast || typed === target.name;
+    const del = {
+      isLast, rule: target.name, title: isLast ? 'Delete the last rule?' : 'Delete rule ' + target.name + '?',
+      before: isLast ? 'With no rule, the subscription ' : 'Messages that only this rule matches stop reaching the subscription ',
+      after: isLast ? ' receives no message at all until a rule is added. Messages published meanwhile are not kept for it.' : '. Its other rules keep working.',
+      typed, onTyped: ev => this.setState({ typed: ev.target.value }), can: canDelete, cannot: !canDelete,
+      confirm: () => this.setState({ deleted: [...deleted, target.name], view: rules.length <= 1 ? 'noRule' : 'table', rule: undefined, typed: '' })
+    };
+
+    const failed = view === 'loadFailed';
+    const empty = !failed && rules.length === 0;
+    const slots = {};
+    for (let i = 0; i < 2; i++) {
+      const r = rules[i];
+      const plain = !r || r.filterType === 'True' || r.filterType === 'False';
+      slots['r' + i] = r ? {
+        display: 'table-row', name: r.name, filter: FILTER_LABELS[r.filterType], expr: describeFilter(r),
+        exprFont: plain ? 'inherit' : MONO, exprSize: plain ? '14px' : '13px',
+        action: r.sqlAction || 'None', actionFont: r.sqlAction ? MONO : 'inherit', actionSize: r.sqlAction ? '13px' : '14px',
+        actionFg: r.sqlAction ? t.onSurface : t.onSurfaceVariant,
+        editLabel: 'Edit rule ' + r.name, delLabel: 'Delete rule ' + r.name,
+        edit: () => open('edit', { rule: r.name }), del: () => open(rules.length === 1 ? 'deleteLast' : 'deleteOne', { rule: r.name })
+      } : { display: 'none', name: '', filter: '', expr: '', exprFont: 'inherit', exprSize: '14px', action: '', actionFont: 'inherit', actionSize: '14px',
+        actionFg: t.onSurface, editLabel: '', delLabel: '', edit: () => {}, del: () => {} };
+    }
+
+    const showForm = FORM_VIEWS.includes(view);
+    const showDelete = view === 'deleteOne' || view === 'deleteLast';
+    const dialogOpen = showForm || showDelete;
+    const treeRow = (rowName, pad) => ({
+      name: rowName, pad, current: rowName === subName ? 'true' : 'false', bg: rowName === subName ? t.secondaryContainer : 'transparent',
+      fg: rowName === subName ? t.onSecondaryContainer : t.onSurface, weight: rowName === subName ? 600 : 400
+    });
+
+    return {
+      ...sh, ...slots,
+      strip: { status: 'Built', text: STRIP_TEXT[view] || STRIP_TEXT.table },
+      isDefault: !failed && !empty, isLoading: false, isEmpty: empty, isError: failed,
+      scr: { pos: dialogOpen ? 'absolute' : 'static', hidden: dialogOpen ? 'true' : 'false' },
+      sub: { name: subName, topic: 'order-events' },
+      tabLabel: failed ? 'Rules' : 'Rules (' + rules.length + ')',
+      canEdit, canAdd: canEdit && !failed && !empty, actCell: canEdit ? 'table-cell' : 'none',
+      add: () => open('addSql', { rule: undefined }), retry: () => open('table'), close: () => open('table', { rule: undefined }),
+      dialogOpen, showForm, showDelete,
+      rf, name, sql, del,
+      action: { value: draft.sqlAction, on: ev => set({ sqlAction: ev.target.value }) },
+      corrFields: SYSTEM_FIELDS.map(f => ({ label: f[1], value: draft.correlation[f[0]], on: ev => set({ correlation: { ...draft.correlation, [f[0]]: ev.target.value } }) })),
+      propRows, addProperty: () => set({ properties: [...draft.properties, { name: '', type: 'String', value: '' }] }),
+      treeQueues: ['orders', 'billing/invoices', 'notifications', 'orders-archive'].map(q => treeRow(q, '8px')),
+      treeSubs: [treeRow('warehouse', '32px'), treeRow('email', '32px')]
+    };
+  }
+}
+</script>
+</body>
+</html>

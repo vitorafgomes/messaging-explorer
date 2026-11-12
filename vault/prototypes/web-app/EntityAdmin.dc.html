@@ -1,0 +1,670 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Create, edit and status</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.hov:hover{background-image:linear-gradient(rgba(128,128,128,.16),rgba(128,128,128,.16)) !important}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #ffffff;outline-offset:0;box-shadow:0 0 0 4px #005cbb !important}
+input::placeholder{color:currentColor;opacity:.72}
+@keyframes dc-spin{to{transform:rotate(360deg)}}
+.spin{animation:dc-spin 1s linear infinite}
+@media (prefers-reduced-motion: reduce){.spin{animation:none}}
+</style>
+</helmet>
+<div style="min-height: 1300px; box-sizing: border-box; display: flex; flex-direction: column; background: {{t.surface}}; color: {{t.onSurface}}; font-family: Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 14px; line-height: 20px">
+
+  <div style="display: flex; align-items: center; gap: 8px; height: 28px; box-sizing: border-box; padding: 0 16px; background: {{t.surfaceHigh}}; color: {{t.onSurfaceVariant}}; border-bottom: 1px solid {{t.outlineVariant}}; font-size: 12px; line-height: 16px">
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M4 10h16M10 10v10"></path></svg>
+    <strong style="font-weight: 600; color: {{t.onSurface}}; white-space: nowrap">{{strip.status}}</strong>
+    <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{strip.text}}</span>
+  </div>
+
+  <header style="display: flex; align-items: center; gap: 16px; height: 56px; box-sizing: border-box; padding: 0 8px 0 12px; background: {{bar.bg}}; color: {{bar.fg}}; border-bottom: 1px solid {{bar.line}}">
+    <nav aria-label="Main" style="display: flex; align-items: center; gap: 4px">
+      <a href="Connections.dc.html" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none; font-weight: 500">Connections</a>
+      <a href="Main.dc.html" aria-current="page" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; background: {{bar.navOn}}; color: {{bar.navOnFg}}; text-decoration: underline; text-underline-offset: 6px; text-decoration-thickness: 2px; font-weight: 700">Entities</a>
+      <a href="Monitoring.dc.html" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none; font-weight: 500">Monitoring</a>
+    </nav>
+    <span aria-hidden="true" style="flex: none; width: 1px; height: 24px; background: {{bar.sep}}"></span>
+    <span style="display: inline-flex; align-items: center; gap: 6px; flex: none; height: 24px; padding: 0 10px; border-radius: 999px; background: {{env.bg}}; color: {{env.fg}}; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap"><sc-if value="{{env.isProd}}" hint-placeholder-val="{{true}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg></sc-if><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Environment:</span>{{env.label}}</span>
+    <span title="{{conn}}" style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; font-weight: 500">
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="12" cy="12" r="9"></circle><path d="M8 12l3 3 5-6"></path></svg>
+      <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Connected to</span>
+      <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{conn}}</span>
+    </span>
+    <div style="display: flex; align-items: center; gap: 4px">
+      <button type="button" aria-label="Notifications" title="Notifications" class="hov" style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: {{bar.fg}}; font: inherit; cursor: pointer"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16v-5a6 6 0 1 1 12 0v5l2 2H4zM10 21a2 2 0 0 0 4 0"></path></svg></button>
+      <button type="button" aria-label="Help" title="Help" class="hov" style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: {{bar.fg}}; font: inherit; cursor: pointer"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1 1-1.1 1.8M12 17h.01"></path></svg></button>
+      <a href="Settings.dc.html" aria-label="Settings" title="Settings" class="hov" style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h9M19 7h1M4 17h1M11 17h9"></path><circle cx="16" cy="7" r="3"></circle><circle cx="8" cy="17" r="3"></circle></svg></a>
+    </div>
+  </header>
+
+  <div style="position: relative; flex: 1; display: flex; flex-direction: column">
+
+    <div aria-hidden="true" style="position: absolute; inset: 0; overflow: hidden; display: flex">
+      <div style="flex: 0 0 26%; min-width: 264px; max-width: 340px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px; padding: 12px 8px 16px; background: {{t.surfaceLow}}; border-right: 1px solid {{t.outlineVariant}}">
+        <div style="margin: 0; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: {{t.onSurfaceVariant}}; padding: 10px 8px">Queues 4</div>
+        <sc-for list="{{bgQueues}}" as="row" hint-placeholder-count="4">
+          <div style="display: flex; align-items: center; min-height: 32px; box-sizing: border-box; padding: 0 8px 0 {{row.pad}}; border-radius: 8px; background: {{row.bg}}; color: {{row.fg}}; font-weight: {{row.weight}}">{{row.name}}</div>
+        </sc-for>
+        <div style="margin: 0; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: {{t.onSurfaceVariant}}; padding: 18px 8px 10px">Topics 1</div>
+        <sc-for list="{{bgTopics}}" as="row" hint-placeholder-count="3">
+          <div style="display: flex; align-items: center; min-height: 32px; box-sizing: border-box; padding: 0 8px 0 {{row.pad}}; border-radius: 8px; background: {{row.bg}}; color: {{row.fg}}; font-weight: {{row.weight}}">{{row.name}}</div>
+        </sc-for>
+      </div>
+      <div style="flex: 1; min-width: 0; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px; padding: 20px 24px">
+        <div>
+          <div style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">{{ent.label}}</div>
+          <div style="margin: 0; font-size: 28px; line-height: 36px; font-weight: 400; overflow-wrap: anywhere">{{ent.name}}</div>
+        </div>
+        <div style="display: flex; gap: 12px">
+          <div style="flex: 1 1 0; height: 92px; border-radius: 8px; background: {{t.surfaceLow}}"></div>
+          <div style="flex: 1 1 0; height: 92px; border-radius: 8px; background: {{t.surfaceLow}}"></div>
+          <div style="flex: 1 1 0; height: 92px; border-radius: 8px; background: {{t.surfaceLow}}"></div>
+          <div style="flex: 1 1 0; height: 92px; border-radius: 8px; background: {{t.surfaceLow}}"></div>
+        </div>
+        <div style="height: 1px; background: {{t.outlineVariant}}"></div>
+      </div>
+    </div>
+
+    <div style="position: relative; flex: 1; display: flex; justify-content: center; align-items: flex-start; box-sizing: border-box; padding: 40px 24px; background: {{t.scrim}}">
+
+      <sc-if value="{{showForm}}" hint-placeholder-val="{{true}}">
+        <div style="display: flex; flex-direction: column; gap: 16px; width: 100%; box-sizing: border-box; padding: 24px; border-radius: 20px; background: {{t.surfaceContainer}}; color: {{t.onSurface}}; box-shadow: {{t.shadow}}; max-width: 720px">
+          <h1 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">{{form.title}}</h1>
+          <p style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; color: {{t.onSurfaceVariant}}">
+            <span style="display: inline-flex; align-items: center; gap: 6px; flex: none; height: 24px; padding: 0 10px; border-radius: 999px; background: {{env.bg}}; color: {{env.fg}}; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap"><sc-if value="{{env.isProd}}" hint-placeholder-val="{{true}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg></sc-if><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Environment:</span>{{env.label}}</span>
+            <span style="min-width: 0; overflow-wrap: anywhere"><strong style="font-weight: 600; color: {{t.onSurface}}">{{form.who}}</strong>{{form.where}}</span>
+          </p>
+
+          <sc-if value="{{isSub}}" hint-placeholder-val="{{false}}">
+            <dl style="display: flex; flex-direction: column; margin: 0; border-top: 1px solid {{t.outlineVariant}}">
+              <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Topic</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere">{{ent.topic}}</dd></div>
+            </dl>
+          </sc-if>
+
+          <sc-if value="{{creating}}" hint-placeholder-val="{{true}}">
+            <div style="display: flex; flex-direction: column; gap: 16px">
+              <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+                <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{name.labelFg}}">{{name.label}}</span>
+                <input type="text" value="{{name.value}}" onChange="{{name.on}}" aria-invalid="{{name.invalid}}" autocomplete="off" spellcheck="false" style="height: 40px; box-sizing: border-box; padding: {{name.pad}}; border: {{name.border}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit">
+                <sc-if value="{{name.hasErr}}" hint-placeholder-val="{{false}}">
+                  <span style="display: flex; align-items: flex-start; gap: 4px; font-size: 12px; line-height: 16px; color: {{t.error}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v6M12 16.5h.01"></path></svg>{{name.err}}</span>
+                </sc-if>
+                <sc-if value="{{name.noErr}}" hint-placeholder-val="{{true}}">
+                  <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">{{name.hint}}</span>
+                </sc-if>
+              </label>
+              <div>
+                <h2 style="margin: 0; font-size: 16px; line-height: 24px; font-weight: 500">Options</h2>
+                <p style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}; margin: 0">Leave a field empty to keep the broker's default.</p>
+              </div>
+            </div>
+          </sc-if>
+
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px">
+            <sc-for list="{{valueFields}}" as="f" hint-placeholder-count="9">
+              <div style="display: flex; flex-direction: column; gap: 4px; min-width: 0; grid-column: {{f.col}}">
+                <sc-if value="{{f.isDuration}}" hint-placeholder-val="{{true}}">
+                  <div style="display: flex; align-items: flex-end; gap: 8px">
+                    <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1">
+                      <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{f.labelFg}}">{{f.label}}</span>
+                      <input type="text" inputmode="numeric" value="{{f.amount}}" onChange="{{f.onAmount}}" aria-invalid="{{f.invalid}}" autocomplete="off" style="height: 40px; box-sizing: border-box; padding: {{f.pad}}; border: {{f.border}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit; font-variant-numeric: tabular-nums">
+                    </label>
+                    <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 0 0 112px">
+                      <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Unit<span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap"> of {{f.label}}</span></span>
+                      <select onChange="{{f.onUnit}}" style="height: 40px; box-sizing: border-box; padding: 0 8px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit">
+                        <option value="seconds" selected="{{f.uSec}}">seconds</option>
+                        <option value="minutes" selected="{{f.uMin}}">minutes</option>
+                        <option value="hours" selected="{{f.uHour}}">hours</option>
+                        <option value="days" selected="{{f.uDay}}">days</option>
+                      </select>
+                    </label>
+                  </div>
+                </sc-if>
+                <sc-if value="{{f.isNumber}}" hint-placeholder-val="{{false}}">
+                  <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+                    <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{f.labelFg}}">{{f.label}}</span>
+                    <input type="text" inputmode="numeric" value="{{f.value}}" onChange="{{f.onValue}}" aria-invalid="{{f.invalid}}" autocomplete="off" style="height: 40px; box-sizing: border-box; padding: {{f.pad}}; border: {{f.border}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit; font-variant-numeric: tabular-nums">
+                  </label>
+                </sc-if>
+                <sc-if value="{{f.isTarget}}" hint-placeholder-val="{{false}}">
+                  <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+                    <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{f.labelFg}}">{{f.label}}</span>
+                    <select onChange="{{f.onValue}}" style="height: 40px; box-sizing: border-box; padding: 0 8px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit">
+                      <option value="" selected="{{f.sNone}}">None</option>
+                      <option value="orders" selected="{{f.sOrders}}" hidden="{{f.hideSelf}}">orders</option>
+                      <option value="billing/invoices" selected="{{f.sBilling}}">billing/invoices</option>
+                      <option value="notifications" selected="{{f.sNotif}}">notifications</option>
+                      <option value="orders-archive" selected="{{f.sArchive}}">orders-archive</option>
+                      <option value="order-events" selected="{{f.sEvents}}">order-events</option>
+                    </select>
+                  </label>
+                </sc-if>
+                <sc-if value="{{f.isText}}" hint-placeholder-val="{{false}}">
+                  <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+                    <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{f.labelFg}}">{{f.label}}</span>
+                    <textarea rows="2" value="{{f.value}}" onChange="{{f.onValue}}" aria-invalid="{{f.invalid}}" style="box-sizing: border-box; padding: 8px 12px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit; resize: vertical"></textarea>
+                  </label>
+                </sc-if>
+                <sc-if value="{{f.hasErr}}" hint-placeholder-val="{{false}}">
+                  <span aria-live="polite" style="display: flex; align-items: flex-start; gap: 4px; font-size: 12px; line-height: 16px; color: {{t.error}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v6M12 16.5h.01"></path></svg>{{f.err}}</span>
+                </sc-if>
+                <sc-if value="{{f.hasHint}}" hint-placeholder-val="{{false}}">
+                  <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">{{f.hint}}</span>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px">
+            <sc-for list="{{flagFields}}" as="f" hint-placeholder-count="5">
+              <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+                <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">{{f.label}}</span>
+                <sc-if value="{{f.isCreate}}" hint-placeholder-val="{{true}}">
+                  <select onChange="{{f.onValue}}" style="height: 40px; box-sizing: border-box; padding: 0 8px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit">
+                    <option value="default" selected="{{f.sDef}}">Broker default</option>
+                    <option value="on" selected="{{f.sOn}}">On</option>
+                    <option value="off" selected="{{f.sOff}}">Off</option>
+                  </select>
+                </sc-if>
+                <sc-if value="{{f.isEdit}}" hint-placeholder-val="{{false}}">
+                  <select onChange="{{f.onValue}}" style="height: 40px; box-sizing: border-box; padding: 0 8px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit">
+                    <option value="on" selected="{{f.sOn}}">On</option>
+                    <option value="off" selected="{{f.sOff}}">Off</option>
+                  </select>
+                </sc-if>
+              </label>
+            </sc-for>
+          </div>
+
+          <sc-if value="{{editing}}" hint-placeholder-val="{{false}}">
+            <section style="display: flex; flex-direction: column; gap: 4px">
+              <h2 style="margin: 0; font-size: 16px; line-height: 24px; font-weight: 500">Fixed at creation</h2>
+              <p style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}; margin: 0 0 4px">These cannot change after the {{ent.kind}} is created.</p>
+              <dl style="display: flex; flex-direction: column; margin: 0; border-top: 1px solid {{t.outlineVariant}}">
+                <sc-for list="{{fixedFacts}}" as="fx" hint-placeholder-count="3">
+                  <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+                    <dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">{{fx.label}}</dt>
+                    <dd style="flex: 1; min-width: 0; margin: 0">{{fx.value}}</dd>
+                  </div>
+                </sc-for>
+              </dl>
+            </section>
+          </sc-if>
+
+          <sc-if value="{{hasChanges}}" hint-placeholder-val="{{false}}">
+            <section aria-live="polite" aria-label="Summary of changes" style="display: flex; align-items: flex-start; gap: 12px; padding: 10px 8px 10px 14px; border-radius: 8px; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}">
+              <div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; padding: 2px 0; font-variant-numeric: tabular-nums">
+                <strong style="font-weight: 600">{{changeCount}}</strong>
+                <sc-for list="{{changes}}" as="c" hint-placeholder-count="2">
+                  <span style="overflow-wrap: anywhere">{{c.text}}</span>
+                </sc-for>
+              </div>
+              <button type="button" onClick="{{undoAll}}" class="hov" style="display: inline-flex; align-items: center; flex: none; height: 36px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: {{t.onSecondaryContainer}}; font: inherit; font-weight: 500; text-decoration: underline; cursor: pointer">Undo all</button>
+            </section>
+          </sc-if>
+
+          <sc-if value="{{showDefaultRuleNote}}" hint-placeholder-val="{{false}}">
+            <p style="display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 10px 14px; border-radius: 8px; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v6M12 7.5h.01"></path></svg>
+              <span>It starts with the default rule and receives every message published to the topic from now on.</span>
+            </p>
+          </sc-if>
+
+          <sc-if value="{{form.hasError}}" hint-placeholder-val="{{false}}">
+            <section aria-label="Error" aria-live="polite" style="display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 10px 14px; border-radius: 8px; background: {{t.errorContainer}}; color: {{t.onErrorContainer}}; align-items: center">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M8 3h8l5 5v8l-5 5H8l-5-5V8zM12 8v5M12 16.5h.01"></path></svg>
+              <span style="flex: 1; min-width: 0">{{form.error}}</span>
+              <sc-if value="{{form.gone}}" hint-placeholder-val="{{false}}">
+                <a href="Main.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 8px; flex: none; height: 36px; box-sizing: border-box; padding: 0 16px 0 12px; border: 1px solid {{t.onErrorContainer}}; border-radius: 999px; color: {{t.onErrorContainer}}; font-weight: 500; text-decoration: none"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg>Refresh</a>
+              </sc-if>
+            </section>
+          </sc-if>
+
+          <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding-top: 8px">
+            <a href="Main.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 12px; border: 0; background: transparent; color: {{t.primary}}; text-decoration: none; cursor: pointer">Cancel</a>
+            <sc-if value="{{form.canCreate}}" hint-placeholder-val="{{false}}">
+              <a href="Main.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 20px; border: 0; background: {{t.primary}}; color: {{t.onPrimary}}; text-decoration: none; cursor: pointer">{{form.saveLabel}}</a>
+            </sc-if>
+            <sc-if value="{{form.canReview}}" hint-placeholder-val="{{false}}">
+              <button type="button" onClick="{{toReview}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 20px; border: 0; background: {{t.primary}}; color: {{t.onPrimary}}; text-decoration: none; cursor: pointer; font-variant-numeric: tabular-nums">{{form.saveLabel}}</button>
+            </sc-if>
+            <sc-if value="{{form.cannotSave}}" hint-placeholder-val="{{true}}">
+              <button type="button" disabled style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 20px; border: 0; background: {{t.surfaceHigh}}; color: {{t.outline}}">{{form.saveLabel}}</button>
+            </sc-if>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{showReview}}" hint-placeholder-val="{{false}}">
+        <div style="display: flex; flex-direction: column; gap: 16px; width: 100%; box-sizing: border-box; padding: 24px; border-radius: 20px; background: {{t.surfaceContainer}}; color: {{t.onSurface}}; box-shadow: {{t.shadow}}; max-width: 640px">
+          <h1 style="display: flex; align-items: center; gap: 10px; margin: 0; font-size: 20px; line-height: 28px; font-weight: 500; overflow-wrap: anywhere"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{t.error}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>Change the {{ent.kind}} {{ent.name}}?</h1>
+          <p style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; color: {{t.onSurfaceVariant}}">
+            <span style="display: inline-flex; align-items: center; gap: 6px; flex: none; height: 24px; padding: 0 10px; border-radius: 999px; background: {{env.bg}}; color: {{env.fg}}; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap"><sc-if value="{{env.isProd}}" hint-placeholder-val="{{true}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg></sc-if><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Environment:</span>{{env.label}}</span>
+            <span style="min-width: 0; overflow-wrap: anywhere"><strong style="font-weight: 600; color: {{t.onSurface}}">{{ent.name}}</strong> on {{connFull}}</span>
+          </p>
+          <p style="margin: 0">The new values apply at once to every sender and receiver of this {{ent.kind}}.</p>
+          <dl style="display: flex; flex-direction: column; margin: 0; border-top: 1px solid {{t.outlineVariant}}">
+            <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">{{ent.label}}</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere; font-weight: 500">{{ent.name}}</dd></div>
+            <sc-if value="{{isSub}}" hint-placeholder-val="{{false}}"><div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Topic</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere">{{ent.topic}}</dd></div></sc-if>
+            <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Connection</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere">{{connFull}}</dd></div>
+            <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Environment</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere">{{env.name}}</dd></div>
+          </dl>
+          <table style="width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums">
+            <thead>
+              <tr><th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Field</th><th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Current value</th><th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">New value</th></tr>
+            </thead>
+            <tbody>
+          <tr style="display: {{rv0.display}}"><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">{{rv0.label}}</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; color: {{t.onSurfaceVariant}}">{{rv0.from}}</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-weight: 500">{{rv0.to}}</td></tr>
+          <tr style="display: {{rv1.display}}"><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">{{rv1.label}}</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; color: {{t.onSurfaceVariant}}">{{rv1.from}}</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-weight: 500">{{rv1.to}}</td></tr>
+          <tr style="display: {{rv2.display}}"><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">{{rv2.label}}</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; color: {{t.onSurfaceVariant}}">{{rv2.from}}</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-weight: 500">{{rv2.to}}</td></tr>
+          <tr style="display: {{rv3.display}}"><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">{{rv3.label}}</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; color: {{t.onSurfaceVariant}}">{{rv3.from}}</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-weight: 500">{{rv3.to}}</td></tr>
+          <tr style="display: {{rv4.display}}"><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">{{rv4.label}}</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; color: {{t.onSurfaceVariant}}">{{rv4.from}}</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-weight: 500">{{rv4.to}}</td></tr>
+          <tr style="display: {{rv5.display}}"><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">{{rv5.label}}</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; color: {{t.onSurfaceVariant}}">{{rv5.from}}</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-weight: 500">{{rv5.to}}</td></tr>
+          <tr style="display: {{rv6.display}}"><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">{{rv6.label}}</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; color: {{t.onSurfaceVariant}}">{{rv6.from}}</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-weight: 500">{{rv6.to}}</td></tr>
+          <tr style="display: {{rv7.display}}"><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">{{rv7.label}}</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; color: {{t.onSurfaceVariant}}">{{rv7.from}}</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-weight: 500">{{rv7.to}}</td></tr>
+          <tr style="display: {{rv8.display}}"><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">{{rv8.label}}</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; color: {{t.onSurfaceVariant}}">{{rv8.from}}</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-weight: 500">{{rv8.to}}</td></tr>
+          <tr style="display: {{rv9.display}}"><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">{{rv9.label}}</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; color: {{t.onSurfaceVariant}}">{{rv9.from}}</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-weight: 500">{{rv9.to}}</td></tr>
+          <tr style="display: {{rv10.display}}"><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">{{rv10.label}}</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; color: {{t.onSurfaceVariant}}">{{rv10.from}}</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-weight: 500">{{rv10.to}}</td></tr>
+            </tbody>
+          </table>
+          <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding-top: 8px">
+            <button type="button" onClick="{{backToEdit}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 12px; border: 0; background: transparent; color: {{t.primary}}; text-decoration: none; cursor: pointer">Back</button>
+            <a href="Main.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 20px; border: 0; background: {{t.primary}}; color: {{t.onPrimary}}; text-decoration: none; cursor: pointer; font-variant-numeric: tabular-nums">{{applyLabel}}</a>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{showChoose}}" hint-placeholder-val="{{false}}">
+        <div style="display: flex; flex-direction: column; gap: 16px; width: 100%; box-sizing: border-box; padding: 24px; border-radius: 20px; background: {{t.surfaceContainer}}; color: {{t.onSurface}}; box-shadow: {{t.shadow}}; max-width: 560px">
+          <h1 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">Change status</h1>
+          <p style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; color: {{t.onSurfaceVariant}}">
+            <span style="display: inline-flex; align-items: center; gap: 6px; flex: none; height: 24px; padding: 0 10px; border-radius: 999px; background: {{env.bg}}; color: {{env.fg}}; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap"><sc-if value="{{env.isProd}}" hint-placeholder-val="{{true}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg></sc-if><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Environment:</span>{{env.label}}</span>
+            <span style="min-width: 0; overflow-wrap: anywhere">{{ent.label}} <strong style="font-weight: 600; color: {{t.onSurface}}">{{ent.name}}</strong> on {{connFull}}, now Active</span>
+          </p>
+          <fieldset style="display: flex; flex-direction: column; gap: 4px; min-width: 0; margin: 0; padding: 0; border: 0">
+            <legend style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Status</legend>
+            <sc-for list="{{statusRows}}" as="o" hint-placeholder-count="4">
+              <label style="display: flex; align-items: flex-start; gap: 12px; padding: 10px 12px; border-radius: 8px; background: {{o.bg}}; cursor: pointer">
+                <input type="radio" name="entity-status" checked="{{o.on}}" onChange="{{o.pick}}" style="flex: none; width: 18px; height: 18px; margin: 1px 0 0; accent-color: {{t.primary}}">
+                <span style="display: flex; flex-direction: column; min-width: 0">
+                  <span style="display: flex; align-items: center; gap: 8px"><strong style="font-weight: 600">{{o.label}}</strong><span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">{{o.now}}</span></span>
+                  <span style="color: {{t.onSurfaceVariant}}">{{o.effect}}</span>
+                </span>
+              </label>
+            </sc-for>
+          </fieldset>
+          <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding-top: 8px">
+            <a href="Main.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 12px; border: 0; background: transparent; color: {{t.primary}}; text-decoration: none; cursor: pointer">Cancel</a>
+            <sc-if value="{{canContinue}}" hint-placeholder-val="{{false}}">
+              <button type="button" onClick="{{toConfirm}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 20px; border: 0; background: {{t.primary}}; color: {{t.onPrimary}}; text-decoration: none; cursor: pointer">Continue</button>
+            </sc-if>
+            <sc-if value="{{cannotContinue}}" hint-placeholder-val="{{true}}">
+              <button type="button" disabled title="Choose a status other than the current one" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 20px; border: 0; background: {{t.surfaceHigh}}; color: {{t.outline}}">Continue</button>
+            </sc-if>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{showConfirm}}" hint-placeholder-val="{{false}}">
+        <div style="display: flex; flex-direction: column; gap: 16px; width: 100%; box-sizing: border-box; padding: 24px; border-radius: 20px; background: {{t.surfaceContainer}}; color: {{t.onSurface}}; box-shadow: {{t.shadow}}; max-width: 560px">
+          <h1 style="display: flex; align-items: center; gap: 10px; margin: 0; font-size: 20px; line-height: 28px; font-weight: 500; overflow-wrap: anywhere"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{t.error}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>{{cf.question}}</h1>
+          <p style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; color: {{t.onSurfaceVariant}}">
+            <span style="display: inline-flex; align-items: center; gap: 6px; flex: none; height: 24px; padding: 0 10px; border-radius: 999px; background: {{env.bg}}; color: {{env.fg}}; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap"><sc-if value="{{env.isProd}}" hint-placeholder-val="{{true}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg></sc-if><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Environment:</span>{{env.label}}</span>
+            <span style="min-width: 0; overflow-wrap: anywhere"><strong style="font-weight: 600; color: {{t.onSurface}}">{{ent.name}}</strong> on {{connFull}}</span>
+          </p>
+          <p style="margin: 0">{{cf.consequence}}</p>
+          <dl style="display: flex; flex-direction: column; margin: 0; border-top: 1px solid {{t.outlineVariant}}">
+            <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">{{ent.label}}</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere; font-weight: 500">{{ent.name}}</dd></div>
+            <sc-if value="{{isSub}}" hint-placeholder-val="{{false}}"><div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Topic</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere">{{ent.topic}}</dd></div></sc-if>
+            <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Connection</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere">{{connFull}}</dd></div>
+            <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Environment</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere">{{env.name}}</dd></div>
+            <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Status</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere; font-weight: 500">{{cf.change}}</dd></div>
+          </dl>
+          <sc-if value="{{cf.needsName}}" hint-placeholder-val="{{true}}">
+            <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+              <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">{{cf.typeLabel}}</span>
+              <input type="text" value="{{cf.typed}}" onChange="{{cf.onTyped}}" placeholder="{{ent.name}}" autocomplete="off" spellcheck="false" style="height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">
+              <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">The button stays disabled until the name matches exactly.</span>
+            </label>
+          </sc-if>
+          <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding-top: 8px">
+            <button type="button" onClick="{{backToChoose}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 12px; border: 0; background: transparent; color: {{t.primary}}; text-decoration: none; cursor: pointer">Back</button>
+            <sc-if value="{{cf.can}}" hint-placeholder-val="{{false}}">
+              <a href="Main.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 20px; border: 0; background: {{t.error}}; color: {{t.onError}}; text-decoration: none; cursor: pointer">{{cf.action}}</a>
+            </sc-if>
+            <sc-if value="{{cf.cannot}}" hint-placeholder-val="{{true}}">
+              <button type="button" disabled style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 20px; border: 0; background: {{t.surfaceHigh}}; color: {{t.outline}}">{{cf.action}}</button>
+            </sc-if>
+          </div>
+        </div>
+      </sc-if>
+
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Preview"},"state":{"editor":"enum","options":["createQueue","createTopic","createSubscription","edit","review","validation","nameExists","status","statusConfirm","failed","gone"],"default":"createQueue","section":"Preview"},"kind":{"editor":"enum","options":["queue","topic","subscription"],"default":"queue","section":"Preview"},"environment":{"editor":"enum","options":["production","development"],"default":"production","section":"Preview"},"$preview":{"width":1280,"height":1300}}'>
+const LIGHT = { surface:'#f9f9ff', surfaceLow:'#f2f3fa', surfaceContainer:'#ecedf4', surfaceHigh:'#e6e8ee',
+  onSurface:'#191c20', onSurfaceVariant:'#43474e', outline:'#73777f', outlineVariant:'#c3c6cf',
+  primary:'#005cbb', onPrimary:'#ffffff', primaryContainer:'#d7e3ff', onPrimaryContainer:'#001b3f',
+  secondaryContainer:'#dae2f9', onSecondaryContainer:'#131c2b',
+  error:'#ba1a1a', onError:'#ffffff', errorContainer:'#ffdad6', onErrorContainer:'#410002',
+  warnContainer:'#ffdea3', onWarnContainer:'#261900', success:'#1b6b32', successContainer:'#b6f2be', onSuccessContainer:'#002108',
+  scrim:'rgba(0,0,0,.45)', shadow:'0 1px 2px rgba(0,0,0,.3), 0 2px 6px 2px rgba(0,0,0,.15)' };
+const DARK = { surface:'#111318', surfaceLow:'#191c20', surfaceContainer:'#1d2024', surfaceHigh:'#282a2f',
+  onSurface:'#e2e2e9', onSurfaceVariant:'#c3c6cf', outline:'#8d9199', outlineVariant:'#43474e',
+  primary:'#abc7ff', onPrimary:'#002f65', primaryContainer:'#00458f', onPrimaryContainer:'#d7e3ff',
+  secondaryContainer:'#3e4759', onSecondaryContainer:'#dae2f9',
+  error:'#ffb4ab', onError:'#690005', errorContainer:'#93000a', onErrorContainer:'#ffdad6',
+  warnContainer:'#5c4300', onWarnContainer:'#ffdea3', success:'#9bd6a4', successContainer:'#00531f', onSuccessContainer:'#b6f2be',
+  scrim:'rgba(0,0,0,.6)', shadow:'0 1px 3px rgba(0,0,0,.6), 0 4px 8px 3px rgba(0,0,0,.3)' };
+
+function fmt(n) { return Number(n || 0).toLocaleString('en-US'); }
+
+function shared(props) {
+  const dark = (props.theme ?? 'light') === 'dark';
+  const t = dark ? DARK : LIGHT;
+  const prod = (props.environment ?? 'production') === 'production';
+  const bar = dark
+    ? { bg: t.surfaceContainer, fg: t.onSurface, line: t.outlineVariant, sep: t.outlineVariant, navOn: t.secondaryContainer, navOnFg: t.onSecondaryContainer }
+    : { bg: t.primary, fg: t.onPrimary, line: t.primary, sep: 'rgba(255,255,255,.4)', navOn: 'rgba(255,255,255,.18)', navOnFg: t.onPrimary };
+  const env = prod
+    ? { label: 'PRODUCTION', name: 'Production', isProd: true, bg: t.errorContainer, fg: t.onErrorContainer }
+    : { label: 'DEVELOPMENT', name: 'Development', isProd: false, bg: t.secondaryContainer, fg: t.onSecondaryContainer };
+  const conn = prod ? 'contoso-prod.servicebus.windows.net' : 'contoso-dev.servicebus.windows.net';
+  const snack = dark
+    ? { bg: LIGHT.surface, fg: LIGHT.onSurface, action: LIGHT.primary }
+    : { bg: LIGHT.onSurface, fg: LIGHT.surface, action: DARK.primary };
+  return { t, bar, env, conn, connFull: 'Contoso (' + conn + ')', snack, prod };
+}
+
+const FIELDS = {
+  lockDuration: ['Lock duration', 'duration'],
+  maxDeliveryCount: ['Max delivery count', 'number'],
+  defaultMessageTimeToLive: ['Message time to live', 'duration'],
+  autoDeleteOnIdle: ['Auto delete on idle', 'duration'],
+  maxSizeInMegabytes: ['Max size in megabytes', 'number'],
+  duplicateDetectionHistoryTimeWindow: ['Duplicate detection window', 'duration'],
+  forwardTo: ['Forward to', 'target'],
+  forwardDeadLetteredMessagesTo: ['Forward dead-lettered messages to', 'target'],
+  userMetadata: ['User metadata', 'text'],
+  requiresSession: ['Requires session', 'flag'],
+  enablePartitioning: ['Partitioning', 'flag'],
+  requiresDuplicateDetection: ['Duplicate detection', 'flag'],
+  deadLetteringOnMessageExpiration: ['Dead-letter a message when it expires', 'flag'],
+  deadLetteringOnFilterEvaluationExceptions: ['Dead-letter on a filter evaluation error', 'flag'],
+  enableBatchedOperations: ['Batched operations', 'flag'],
+  supportOrdering: ['Support ordering', 'flag']
+};
+
+const LAYOUT = {
+  queue: {
+    create: ['lockDuration', 'maxDeliveryCount', 'defaultMessageTimeToLive', 'autoDeleteOnIdle', 'maxSizeInMegabytes',
+      'duplicateDetectionHistoryTimeWindow', 'forwardTo', 'forwardDeadLetteredMessagesTo', 'userMetadata',
+      'requiresSession', 'enablePartitioning', 'requiresDuplicateDetection', 'deadLetteringOnMessageExpiration', 'enableBatchedOperations'],
+    fixed: ['requiresSession', 'enablePartitioning', 'requiresDuplicateDetection']
+  },
+  topic: {
+    create: ['defaultMessageTimeToLive', 'autoDeleteOnIdle', 'maxSizeInMegabytes', 'duplicateDetectionHistoryTimeWindow', 'userMetadata',
+      'enablePartitioning', 'requiresDuplicateDetection', 'enableBatchedOperations', 'supportOrdering'],
+    fixed: ['enablePartitioning', 'requiresDuplicateDetection']
+  },
+  subscription: {
+    create: ['lockDuration', 'maxDeliveryCount', 'defaultMessageTimeToLive', 'autoDeleteOnIdle', 'forwardTo', 'forwardDeadLetteredMessagesTo',
+      'userMetadata', 'requiresSession', 'deadLetteringOnMessageExpiration', 'deadLetteringOnFilterEvaluationExceptions', 'enableBatchedOperations'],
+    fixed: ['requiresSession']
+  }
+};
+
+const RANGES = {
+  lockDuration: { min: 5, max: 300, message: 'Lock duration must be between 5 seconds and 5 minutes.' },
+  maxDeliveryCount: { min: 1, max: 2000, whole: true, message: 'Max delivery count must be between 1 and 2000.' },
+  defaultMessageTimeToLive: { min: 1, max: Infinity, message: 'Message time to live must be at least 1 second.' },
+  autoDeleteOnIdle: { min: 300, max: Infinity, message: 'Auto delete on idle must be at least 5 minutes.' },
+  duplicateDetectionHistoryTimeWindow: { min: 20, max: 7 * 86400, message: 'Duplicate detection window must be between 20 seconds and 7 days.' },
+  maxSizeInMegabytes: { min: 1, max: Infinity, whole: true, message: 'Max size must be a positive whole number of megabytes.' }
+};
+
+const UNITS = ['seconds', 'minutes', 'hours', 'days'];
+const UNIT_SECONDS = { seconds: 1, minutes: 60, hours: 3600, days: 86400 };
+const EMPTY_REQUIRED = 'Enter a value; an empty field cannot be saved.';
+const QUEUE_OR_TOPIC_NAME = /^(?!\/)[A-Za-z0-9._\-/]{1,260}(?<!\/)$/;
+const SUBSCRIPTION_NAME = /^[A-Za-z0-9._-]{1,50}$/;
+
+const D = (a, u) => ({ a: String(a), u });
+const NEVER = { a: '', u: 'minutes' };
+
+const ENTITY = {
+  queue: {
+    label: 'Queue', name: 'orders', topic: '', never: ['autoDeleteOnIdle'],
+    values: { lockDuration: D(1, 'minutes'), maxDeliveryCount: '10', defaultMessageTimeToLive: D(14, 'days'), autoDeleteOnIdle: NEVER,
+      maxSizeInMegabytes: '1024', duplicateDetectionHistoryTimeWindow: D(10, 'minutes'), forwardTo: '', forwardDeadLetteredMessagesTo: '',
+      userMetadata: '', deadLetteringOnMessageExpiration: 'on', enableBatchedOperations: 'on' },
+    fixed: [['Requires session', 'Yes'], ['Partitioning', 'No'], ['Duplicate detection', 'Yes']],
+    edits: { lockDuration: D(5, 'minutes'), maxDeliveryCount: '5' },
+    bad: { lockDuration: D(10, 'minutes') }
+  },
+  topic: {
+    label: 'Topic', name: 'order-events', topic: '', never: ['autoDeleteOnIdle'],
+    values: { defaultMessageTimeToLive: D(14, 'days'), autoDeleteOnIdle: NEVER, maxSizeInMegabytes: '1024',
+      duplicateDetectionHistoryTimeWindow: D(10, 'minutes'), userMetadata: '', enableBatchedOperations: 'on', supportOrdering: 'on' },
+    fixed: [['Partitioning', 'No'], ['Duplicate detection', 'Yes']],
+    edits: { defaultMessageTimeToLive: D(7, 'days'), maxSizeInMegabytes: '2048' },
+    bad: { duplicateDetectionHistoryTimeWindow: D(10, 'days') }
+  },
+  subscription: {
+    label: 'Subscription', name: 'email', topic: 'order-events', never: ['autoDeleteOnIdle'],
+    values: { lockDuration: D(1, 'minutes'), maxDeliveryCount: '10', defaultMessageTimeToLive: D(14, 'days'), autoDeleteOnIdle: NEVER,
+      forwardTo: '', forwardDeadLetteredMessagesTo: '', userMetadata: '', deadLetteringOnMessageExpiration: 'off',
+      deadLetteringOnFilterEvaluationExceptions: 'on', enableBatchedOperations: 'on' },
+    fixed: [['Requires session', 'No']],
+    edits: { lockDuration: D(2, 'minutes'), maxDeliveryCount: '5' },
+    bad: { lockDuration: D(10, 'minutes') }
+  }
+};
+
+const STATUSES = {
+  queue: ['Active', 'SendDisabled', 'ReceiveDisabled', 'Disabled'],
+  topic: ['Active', 'SendDisabled', 'Disabled'],
+  subscription: ['Active', 'ReceiveDisabled', 'Disabled']
+};
+
+const STATUS_TEXT = {
+  Active: { label: 'Active', effect: 'Senders and receivers work.', question: name => 'Set ' + name + ' back to Active?', action: 'Set Active' },
+  SendDisabled: { label: 'Send disabled', effect: 'Senders are refused. Receivers keep draining the messages already there.',
+    question: name => 'Disable sending to ' + name + '?', action: 'Disable sending' },
+  ReceiveDisabled: { label: 'Receive disabled', effect: 'Receivers are refused, in this app too. Senders keep adding messages.',
+    question: name => 'Disable receiving from ' + name + '?', action: 'Disable receiving' },
+  Disabled: { label: 'Disabled', effect: 'Nothing is sent or received: senders and receivers are both refused. Messages stay where they are.',
+    question: name => 'Disable ' + name + '?', action: 'Disable' }
+};
+
+const CREATE_KIND = { createQueue: 'queue', createTopic: 'topic', createSubscription: 'subscription' };
+const FORM_VIEWS = ['createQueue', 'createTopic', 'createSubscription', 'nameExists', 'edit', 'validation', 'failed', 'gone'];
+const PRESET_EDITS = ['edit', 'review', 'failed', 'gone'];
+const REVIEW_SLOTS = 11;
+const CURRENT_STATUS = 'Active';
+
+function seconds(v) { return v.a === '' ? null : Number(v.a) * UNIT_SECONDS[v.u]; }
+
+function describeSeconds(total) {
+  if (total === null) return 'Not set';
+  const unit = [...UNITS].reverse().find(u => total % UNIT_SECONDS[u] === 0) || 'seconds';
+  const amount = total / UNIT_SECONDS[unit];
+  return amount + ' ' + (amount === 1 ? unit.slice(0, -1) : unit);
+}
+
+function rangeError(key, n) {
+  const range = RANGES[key];
+  if (!range) return '';
+  const valid = Number.isFinite(n) && n >= range.min && n <= range.max && (!range.whole || Number.isInteger(n));
+  return valid ? '' : range.message;
+}
+
+function nameError(kind, name) {
+  if (!name) return 'A name is required.';
+  if (kind === 'subscription') return SUBSCRIPTION_NAME.test(name) ? '' : 'Use 1 to 50 letters, digits, ".", "-" or "_".';
+  return QUEUE_OR_TOPIC_NAME.test(name) ? '' : 'Use 1 to 260 letters, digits, ".", "-", "_" or "/", not starting or ending with "/".';
+}
+
+class Component extends DCLogic {
+  componentDidUpdate(prev) {
+    if (!prev) return;
+    if (prev.state !== this.props.state || prev.kind !== this.props.kind || prev.environment !== this.props.environment) {
+      this.setState({ view: undefined, vals: undefined, name: undefined, undone: undefined, choice: undefined, typed: undefined });
+    }
+  }
+
+  renderVals() {
+    const s = this.state || {};
+    const sh = shared(this.props);
+    const t = sh.t;
+    const stateProp = this.props.state ?? 'createQueue';
+    const view = s.view ?? stateProp;
+    const kind = CREATE_KIND[stateProp] || (this.props.kind ?? 'queue');
+    const e = ENTITY[kind];
+    const creating = !!CREATE_KIND[stateProp] || stateProp === 'nameExists';
+    const type = k => FIELDS[k][1];
+
+    const keys = LAYOUT[kind].create.filter(k => creating || !LAYOUT[kind].fixed.includes(k));
+    const blank = k => type(k) === 'duration' ? NEVER : type(k) === 'flag' ? 'default' : '';
+    const initial = {};
+    keys.forEach(k => { initial[k] = creating ? blank(k) : e.values[k]; });
+    const preset = s.undone ? {} : stateProp === 'validation' ? e.bad : PRESET_EDITS.includes(stateProp) ? e.edits : {};
+    const cur = { ...initial, ...preset, ...(s.vals || {}) };
+    const setVal = (k, v) => this.setState({ vals: { ...(s.vals || {}), [k]: v } });
+
+    const norm = (k, v) => type(k) === 'duration' ? seconds(v) : type(k) === 'number' ? (v === '' ? null : Number(v)) : v;
+    const describe = (k, v, isInitial) => {
+      switch (type(k)) {
+        case 'duration': return isInitial && !creating && e.never.includes(k) ? 'Never' : describeSeconds(seconds(v));
+        case 'number': return v === '' ? 'Not set' : String(v);
+        case 'flag': return v === 'default' ? 'Broker default' : v === 'on' ? 'On' : 'Off';
+        case 'target': return v || 'None';
+        default: return v || 'Empty';
+      }
+    };
+    const errorOf = k => {
+      const v = cur[k];
+      if (type(k) === 'duration') return v.a === '' ? (initial[k].a !== '' ? EMPTY_REQUIRED : '') : rangeError(k, seconds(v));
+      if (type(k) === 'number') return v === '' ? (initial[k] !== '' ? EMPTY_REQUIRED : '') : rangeError(k, Number(v));
+      if (k === 'userMetadata') return v.length > 1024 ? 'User metadata must be at most 1024 characters.' : '';
+      return '';
+    };
+
+    const fieldView = k => {
+      const ty = type(k);
+      const v = cur[k];
+      const err = errorOf(k);
+      const hint = ty === 'target' ? 'A queue or topic of this namespace.' : (!creating && e.never.includes(k)) ? 'Now: never. Leave empty to keep it.' : '';
+      return {
+        label: FIELDS[k][0], isDuration: ty === 'duration', isNumber: ty === 'number', isTarget: ty === 'target', isText: ty === 'text',
+        col: ty === 'text' ? '1 / -1' : 'auto',
+        amount: ty === 'duration' ? v.a : '', value: ty === 'duration' ? '' : v,
+        onAmount: ev => setVal(k, { a: ev.target.value, u: v.u }),
+        onUnit: ev => setVal(k, { a: v.a, u: ev.target.value }),
+        onValue: ev => setVal(k, ev.target.value),
+        uSec: v.u === 'seconds', uMin: v.u === 'minutes', uHour: v.u === 'hours', uDay: v.u === 'days',
+        sNone: v === '', sOrders: v === 'orders', sBilling: v === 'billing/invoices', sNotif: v === 'notifications',
+        sArchive: v === 'orders-archive', sEvents: v === 'order-events', hideSelf: !creating && kind === 'queue',
+        isCreate: creating, isEdit: !creating, sDef: v === 'default', sOn: v === 'on', sOff: v === 'off',
+        err, hasErr: !!err, hint, hasHint: !!hint && !err, invalid: err ? 'true' : 'false',
+        labelFg: err ? t.error : t.onSurfaceVariant, border: (err ? '2px solid ' + t.error : '1px solid ' + t.outline), pad: err ? '0 11px' : '0 12px'
+      };
+    };
+    const valueFields = keys.filter(k => type(k) !== 'flag').map(fieldView);
+    const flagFields = keys.filter(k => type(k) === 'flag').map(fieldView);
+
+    const nameValue = s.name ?? (stateProp === 'nameExists' ? e.name : '');
+    const conflict = stateProp === 'nameExists' && nameValue === e.name;
+    const nameRule = nameError(kind, nameValue);
+    const nameErr = conflict ? 'A ' + kind + ' named ' + nameValue + ' already exists in this namespace.' : (s.name !== undefined ? nameRule : '');
+    const name = {
+      label: e.label + ' name', value: nameValue, on: ev => this.setState({ name: ev.target.value }),
+      err: nameErr, hasErr: !!nameErr, noErr: !nameErr, invalid: nameErr ? 'true' : 'false',
+      hint: kind === 'subscription' ? 'Letters, digits, dot, dash and underscore. 50 characters at most.'
+        : 'Letters, digits, dot, dash, underscore and slash. 260 characters at most.',
+      labelFg: nameErr ? t.error : t.onSurfaceVariant, border: (nameErr ? '2px solid ' + t.error : '1px solid ' + t.outline), pad: nameErr ? '0 11px' : '0 12px'
+    };
+
+    const changed = creating ? [] : keys.filter(k => norm(k, cur[k]) !== norm(k, initial[k]))
+      .map(k => ({ label: FIELDS[k][0], from: describe(k, initial[k], true), to: describe(k, cur[k], false) }));
+    const n = changed.length;
+    const plural = n + ' ' + (n === 1 ? 'change' : 'changes');
+    const invalid = keys.some(k => errorOf(k));
+    const ok = creating ? (!nameRule && !conflict && !invalid) : (n > 0 && !invalid);
+
+    const gone = view === 'gone';
+    const formError = view === 'failed' ? 'The broker refused this configuration.'
+      : gone ? 'This ' + kind + ' no longer exists. Refresh to see the entities as they are now.' : '';
+    const form = {
+      title: (creating ? 'Create ' : 'Edit ') + kind,
+      who: creating ? '' : e.name, where: creating ? sh.connFull : ' on ' + sh.connFull,
+      saveLabel: creating ? 'Create ' + kind : n === 0 ? 'Save' : 'Save ' + plural,
+      canCreate: creating && ok, canReview: !creating && ok, cannotSave: !ok,
+      error: formError, hasError: !!formError, gone
+    };
+
+    const slots = {};
+    for (let i = 0; i < REVIEW_SLOTS; i++) {
+      slots['rv' + i] = changed[i] ? { ...changed[i], display: 'table-row' } : { label: '', from: '', to: '', display: 'none' };
+    }
+
+    const choice = s.choice ?? (stateProp === 'statusConfirm' ? 'Disabled' : CURRENT_STATUS);
+    const chosen = STATUS_TEXT[choice];
+    const statusRows = STATUSES[kind].map(id => ({
+      label: STATUS_TEXT[id].label, effect: STATUS_TEXT[id].effect, on: id === choice, now: id === CURRENT_STATUS ? 'Current' : '',
+      bg: id === choice ? t.surfaceHigh : 'transparent', pick: () => this.setState({ choice: id })
+    }));
+    const needsName = choice !== 'Active';
+    const typed = s.typed || '';
+    const canApply = !needsName || typed === e.name;
+    const cf = {
+      question: chosen.question(e.name),
+      consequence: needsName ? chosen.effect + ' It lasts until the status is set back to Active.' : 'Senders and receivers work again at once.',
+      change: STATUS_TEXT[CURRENT_STATUS].label + ' to ' + chosen.label, action: chosen.action,
+      needsName, typeLabel: 'Type the ' + kind + ' name to confirm', typed, onTyped: ev => this.setState({ typed: ev.target.value }),
+      can: canApply, cannot: !canApply
+    };
+
+    const selected = kind === 'queue' ? 'orders' : kind === 'topic' ? 'order-events' : 'email';
+    const bgRow = (rowName, pad) => ({
+      name: rowName, pad, bg: rowName === selected ? t.secondaryContainer : 'transparent',
+      fg: rowName === selected ? t.onSecondaryContainer : t.onSurface, weight: rowName === selected ? 600 : 400
+    });
+
+    return {
+      ...sh, ...slots,
+      strip: { status: 'Built', text: 'Create, edit and status: the dialogs of the Entities screen as the app has them, on a broker that declares entity updates (Azure Service Bus).' },
+      isDefault: true, isLoading: false, isEmpty: false, isError: false,
+      ent: { kind, label: e.label, name: e.name, topic: e.topic },
+      isSub: kind === 'subscription', creating, editing: !creating,
+      showForm: FORM_VIEWS.includes(view), showReview: view === 'review', showChoose: view === 'status', showConfirm: view === 'statusConfirm',
+      form, name, valueFields, flagFields,
+      fixedFacts: e.fixed.map(f => ({ label: f[0], value: f[1] })),
+      hasChanges: !creating && n > 0, changeCount: plural, changes: changed.map(c => ({ text: c.label + ': ' + c.from + ' to ' + c.to })),
+      undoAll: () => this.setState({ undone: true, vals: {} }),
+      showDefaultRuleNote: creating && kind === 'subscription',
+      toReview: () => this.setState({ view: 'review' }), backToEdit: () => this.setState({ view: 'edit' }),
+      applyLabel: 'Apply ' + plural,
+      statusRows, canContinue: choice !== CURRENT_STATUS, cannotContinue: choice === CURRENT_STATUS,
+      toConfirm: () => this.setState({ view: 'statusConfirm', typed: '' }), backToChoose: () => this.setState({ view: 'status' }),
+      cf,
+      bgQueues: ['orders', 'billing/invoices', 'notifications', 'orders-archive'].map(q => bgRow(q, '8px')),
+      bgTopics: [bgRow('order-events', '8px'), bgRow('warehouse', '32px'), bgRow('email', '32px')]
+    };
+  }
+}
+</script>
+</body>
+</html>

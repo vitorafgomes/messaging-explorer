@@ -1,0 +1,763 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Monitoring and counts</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.hov:hover{background-image:linear-gradient(rgba(128,128,128,.16),rgba(128,128,128,.16)) !important}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #ffffff;outline-offset:0;box-shadow:0 0 0 4px #005cbb !important}
+input::placeholder{color:currentColor;opacity:.72}
+@keyframes dc-spin{to{transform:rotate(360deg)}}
+.spin{animation:dc-spin 1s linear infinite}
+@media (prefers-reduced-motion: reduce){.spin{animation:none}}
+</style>
+</helmet>
+<div style="min-height: 1200px; box-sizing: border-box; display: flex; flex-direction: column; background: {{t.surface}}; color: {{t.onSurface}}; font-family: Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 14px; line-height: 20px">
+
+  <div style="display: flex; align-items: center; gap: 8px; height: 28px; box-sizing: border-box; padding: 0 16px; background: {{t.surfaceHigh}}; color: {{t.onSurfaceVariant}}; border-bottom: 1px solid {{t.outlineVariant}}; font-size: 12px; line-height: 16px">
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M4 10h16M10 10v10"></path></svg>
+    <strong style="font-weight: 600; color: {{t.onSurface}}; white-space: nowrap">{{strip.status}}</strong>
+    <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{strip.text}}</span>
+  </div>
+
+  <header style="display: flex; align-items: center; gap: 16px; height: 56px; box-sizing: border-box; padding: 0 8px 0 12px; background: {{bar.bg}}; color: {{bar.fg}}; border-bottom: 1px solid {{bar.line}}">
+    <nav aria-label="Main" style="display: flex; align-items: center; gap: 4px">
+      <a href="Connections.dc.html" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none; font-weight: 500">Connections</a>
+      <a href="Main.dc.html" aria-current="{{navE.cur}}" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; background: {{navE.bg}}; color: {{navE.fg}}; text-decoration: {{navE.deco}}; text-underline-offset: 6px; text-decoration-thickness: 2px; font-weight: {{navE.weight}}">Entities</a>
+      <a href="Monitoring.dc.html" aria-current="{{navM.cur}}" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; background: {{navM.bg}}; color: {{navM.fg}}; text-decoration: {{navM.deco}}; text-underline-offset: 6px; text-decoration-thickness: 2px; font-weight: {{navM.weight}}">Monitoring</a>
+    </nav>
+    <span aria-hidden="true" style="flex: none; width: 1px; height: 24px; background: {{bar.sep}}"></span>
+    <span style="display: inline-flex; align-items: center; gap: 6px; flex: none; height: 24px; padding: 0 10px; border-radius: 999px; background: {{env.bg}}; color: {{env.fg}}; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap"><sc-if value="{{env.isProd}}" hint-placeholder-val="{{true}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg></sc-if><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Environment:</span>{{env.label}}</span>
+    <span title="{{conn}}" style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; font-weight: 500">
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="12" cy="12" r="9"></circle><path d="M8 12l3 3 5-6"></path></svg>
+      <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Connected to</span>
+      <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{conn}}</span>
+    </span>
+    <div style="display: flex; align-items: center; gap: 4px">
+      <button type="button" aria-label="Notifications" title="Notifications" class="hov" style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: {{bar.fg}}; font: inherit; cursor: pointer"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16v-5a6 6 0 1 1 12 0v5l2 2H4zM10 21a2 2 0 0 0 4 0"></path></svg></button>
+      <button type="button" aria-label="Help" title="Help" class="hov" style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: {{bar.fg}}; font: inherit; cursor: pointer"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1 1-1.1 1.8M12 17h.01"></path></svg></button>
+      <a href="Settings.dc.html" aria-label="Settings" title="Settings" class="hov" style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h9M19 7h1M4 17h1M11 17h9"></path><circle cx="16" cy="7" r="3"></circle><circle cx="8" cy="17" r="3"></circle></svg></a>
+    </div>
+  </header>
+
+  <div style="position: relative; flex: 1; display: flex; flex-direction: column">
+
+    <sc-if value="{{showMon}}" hint-placeholder-val="{{true}}">
+      <main style="flex: 1; min-width: 0; box-sizing: border-box; padding: 20px 24px 32px">
+        <div style="display: flex; flex-direction: column; gap: 20px">
+
+          <div style="display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap">
+            <div style="flex: 1; min-width: 240px">
+              <div style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">{{conn}}</div>
+              <h1 style="margin: 0; font-size: 28px; line-height: 36px; font-weight: 400; overflow-wrap: anywhere">Monitoring</h1>
+            </div>
+            <sc-if value="{{hasData}}" hint-placeholder-val="{{true}}">
+              <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+                <span aria-live="polite" style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}; font-variant-numeric: tabular-nums">{{refreshNote}}</span>
+                <button type="button" onClick="{{refresh}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 20px 0 16px; border: 1px solid {{t.outline}}; background: transparent; color: {{t.primary}}; text-decoration: none; cursor: pointer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg>Refresh</button>
+              </div>
+            </sc-if>
+          </div>
+
+          <sc-if value="{{hasData}}" hint-placeholder-val="{{true}}">
+            <nav aria-label="Monitoring views" style="display: flex; align-items: center; gap: 4px; border-bottom: 1px solid {{t.outlineVariant}}">
+              <button type="button" onClick="{{toToday}}" aria-current="{{tabToday.current}}" class="hov" style="display: inline-flex; align-items: center; height: 44px; box-sizing: border-box; margin-bottom: -1px; padding: 0 16px; border: 0; background: transparent; font: inherit; font-variant-numeric: tabular-nums; text-decoration: none; cursor: pointer; border-bottom: 3px solid {{tabToday.line}}; color: {{tabToday.fg}}; font-weight: {{tabToday.weight}}">Overview</button>
+              <button type="button" onClick="{{toCounts}}" aria-current="{{tabCounts.current}}" class="hov" style="display: inline-flex; align-items: center; height: 44px; box-sizing: border-box; margin-bottom: -1px; padding: 0 16px; border: 0; background: transparent; font: inherit; font-variant-numeric: tabular-nums; text-decoration: none; cursor: pointer; gap: 8px; border-bottom: 3px solid {{tabCounts.line}}; color: {{tabCounts.fg}}; font-weight: {{tabCounts.weight}}">All entities<span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built</span></button>
+            </nav>
+          </sc-if>
+
+          <sc-if value="{{isDefault}}" hint-placeholder-val="{{true}}">
+            <div style="display: flex; flex-direction: column; gap: 20px">
+              <div style="display: flex; gap: 12px; flex-wrap: wrap">
+                <div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 0; min-width: 132px; box-sizing: border-box; padding: 12px 16px; border-radius: 8px; background: {{t.surfaceLow}}">
+                  <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Active</span>
+                  <span style="font-size: 28px; line-height: 36px; font-variant-numeric: tabular-nums">53,544</span>
+                  <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}; font-variant-numeric: tabular-nums">+36 since the last poll</span>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 0; min-width: 132px; box-sizing: border-box; padding: 12px 16px; border-radius: 8px; background: {{t.surfaceLow}}; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}">
+                  <span style="display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 16px"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>Dead-letter</span>
+                  <span style="font-size: 28px; line-height: 36px; font-variant-numeric: tabular-nums">41</span>
+                  <span style="font-size: 12px; line-height: 16px; font-variant-numeric: tabular-nums">+2 since the last poll</span>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 0; min-width: 132px; box-sizing: border-box; padding: 12px 16px; border-radius: 8px; background: {{t.surfaceLow}}">
+                  <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Transfer</span>
+                  <span style="font-size: 28px; line-height: 36px; font-variant-numeric: tabular-nums">0</span>
+                  <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">On their way to another entity</span>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 0; min-width: 132px; box-sizing: border-box; padding: 12px 16px; border-radius: 8px; background: {{t.surfaceLow}}">
+                  <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Monitored entities</span>
+                  <span style="font-size: 28px; line-height: 36px; font-variant-numeric: tabular-nums">6</span>
+                  <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}; font-variant-numeric: tabular-nums">4 queues, 2 subscriptions</span>
+                </div>
+              </div>
+
+              <section style="display: flex; flex-direction: column; gap: 8px">
+                <h2 style="margin: 0; font-size: 16px; line-height: 24px; font-weight: 500">Message trend, last 20 polls</h2>
+                <div style="display: flex; gap: 12px; flex-wrap: wrap">
+              <figure style="display: flex; flex-direction: column; gap: 8px; flex: 1 1 320px; min-width: 0; box-sizing: border-box; margin: 0; padding: 12px 16px; border-radius: 8px; background: {{t.surfaceLow}}">
+                <figcaption style="display: flex; align-items: baseline; gap: 8px">
+                  <span style="flex: 1; font-weight: 500">Active</span>
+                  <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}; font-variant-numeric: tabular-nums">53,180 to 53,544</span>
+                </figcaption>
+                <svg role="img" aria-label="Active messages over the last 20 polls, rising from 53,180 to 53,544" width="100%" height="96" viewBox="0 0 380 96" preserveAspectRatio="none" style="display: block">
+                  <path d="M0 8H380M0 48H380M0 88H380" fill="none" stroke="{{t.outlineVariant}}" stroke-width="1" vector-effect="non-scaling-stroke"></path>
+                  <polygon points="0,96 0,88.0 20,84.5 40,81.0 60,82.7 80,74.8 100,70.0 120,71.5 140,63.8 160,57.7 180,59.4 200,52.4 220,46.0 240,47.3 260,40.1 280,35.3 300,30.6 320,31.7 340,23.8 360,15.9 380,8.0 380,96" fill="{{t.primary}}" fill-opacity=".12"></polygon>
+                  <polyline points="0,88.0 20,84.5 40,81.0 60,82.7 80,74.8 100,70.0 120,71.5 140,63.8 160,57.7 180,59.4 200,52.4 220,46.0 240,47.3 260,40.1 280,35.3 300,30.6 320,31.7 340,23.8 360,15.9 380,8.0" fill="none" stroke="{{t.primary}}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"></polyline>
+                </svg>
+                <div style="display: flex; justify-content: space-between; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}; font-variant-numeric: tabular-nums"><span>13:53:00</span><span>14:02:30</span></div>
+              </figure>
+              <figure style="display: flex; flex-direction: column; gap: 8px; flex: 1 1 320px; min-width: 0; box-sizing: border-box; margin: 0; padding: 12px 16px; border-radius: 8px; background: {{t.surfaceLow}}">
+                <figcaption style="display: flex; align-items: baseline; gap: 8px">
+                  <span style="flex: 1; font-weight: 500">Dead-letter</span>
+                  <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}; font-variant-numeric: tabular-nums">35 to 41</span>
+                </figcaption>
+                <svg role="img" aria-label="Dead-letter messages over the last 20 polls, rising from 35 to 41" width="100%" height="96" viewBox="0 0 380 96" preserveAspectRatio="none" style="display: block">
+                  <path d="M0 8H380M0 48H380M0 88H380" fill="none" stroke="{{t.outlineVariant}}" stroke-width="1" vector-effect="non-scaling-stroke"></path>
+                  <polygon points="0,96 0,88.0 20,88.0 40,88.0 60,74.7 80,74.7 100,74.7 120,74.7 140,61.3 160,61.3 180,61.3 200,48.0 220,48.0 240,48.0 260,48.0 280,34.7 300,34.7 320,34.7 340,34.7 360,34.7 380,8.0 380,96" fill="{{t.primary}}" fill-opacity=".12"></polygon>
+                  <polyline points="0,88.0 20,88.0 40,88.0 60,74.7 80,74.7 100,74.7 120,74.7 140,61.3 160,61.3 180,61.3 200,48.0 220,48.0 240,48.0 260,48.0 280,34.7 300,34.7 320,34.7 340,34.7 360,34.7 380,8.0" fill="none" stroke="{{t.primary}}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"></polyline>
+                </svg>
+                <div style="display: flex; justify-content: space-between; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}; font-variant-numeric: tabular-nums"><span>13:53:00</span><span>14:02:30</span></div>
+              </figure>
+                </div>
+              </section>
+
+              <section style="display: flex; flex-direction: column; gap: 4px">
+                <h2 style="margin: 0; font-size: 16px; line-height: 24px; font-weight: 500; font-variant-numeric: tabular-nums">Queues (4)</h2>
+                <table style="width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums">
+                  <thead>
+                    <tr><th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Name</th><th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: right">Active</th><th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: right">Dead-letter</th><th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: right">Transfer</th><th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: right">Scheduled</th><th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: right">Change</th></tr>
+                  </thead>
+                  <tbody>
+                  <tr><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-weight: 500">orders</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">1,204</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right"><span style="display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px 0 6px; border-radius: 999px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}; font-size: 12px; line-height: 16px; font-weight: 700"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>37</span></td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">0</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">3</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">+24</td></tr>
+                  <tr><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-weight: 500">billing/invoices</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">18</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">0</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">0</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">0</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">-2</td></tr>
+                  <tr><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-weight: 500">notifications</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">0</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">0</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">0</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">0</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right; color: {{t.onSurfaceVariant}}">0</td></tr>
+                  <tr><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-weight: 500">orders-archive</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">52,310</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">0</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">0</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">0</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">+14</td></tr>
+                  </tbody>
+                </table>
+              </section>
+
+              <section style="display: flex; flex-direction: column; gap: 4px">
+                <h2 style="margin: 0; font-size: 16px; line-height: 24px; font-weight: 500; font-variant-numeric: tabular-nums">Subscriptions (2)</h2>
+                <table style="width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums">
+                  <thead>
+                    <tr><th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Topic / Subscription</th><th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: right">Active</th><th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: right">Dead-letter</th><th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: right">Transfer</th><th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: right">Change</th></tr>
+                  </thead>
+                  <tbody>
+                  <tr><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-weight: 500"><span style="font-weight: 400; color: {{t.onSurfaceVariant}}">order-events / </span>warehouse</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">12</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">0</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">0</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right; color: {{t.onSurfaceVariant}}">0</td></tr>
+                  <tr><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-weight: 500"><span style="font-weight: 400; color: {{t.onSurfaceVariant}}">order-events / </span>email</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">0</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right"><span style="display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px 0 6px; border-radius: 999px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}; font-size: 12px; line-height: 16px; font-weight: 700"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>4</span></td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">0</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right; color: {{t.onSurfaceVariant}}">0</td></tr>
+                  </tbody>
+                </table>
+                <p style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}; margin: 8px 0 0">Change is the difference in active messages since the last poll.</p>
+              </section>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{showCounts}}" hint-placeholder-val="{{false}}">
+            <div style="display: flex; flex-direction: column; gap: 16px">
+              <div style="display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap">
+                <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1 1 240px; max-width: 320px">
+                  <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Filter by name</span>
+                  <span style="display: flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; padding: 0 10px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurfaceVariant}}">
+                    <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="11" cy="11" r="6"></circle><path d="M16 16l4 4"></path></svg>
+                    <input type="text" value="{{cv.filter}}" onChange="{{cv.onFilter}}" placeholder="Part of a name" autocomplete="off" style="flex: 1; min-width: 0; height: 32px; padding: 0; border: 0; background: transparent; color: {{t.onSurface}}; font: inherit">
+                  </span>
+                </label>
+                <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 0 0 200px">
+                  <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Dead-letter threshold</span>
+                  <input type="text" inputmode="numeric" value="{{cv.threshold}}" onChange="{{cv.onThreshold}}" autocomplete="off" style="height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit; font-variant-numeric: tabular-nums">
+                  <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">A row above it is marked.</span>
+                </label>
+                <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 0 0 200px">
+                  <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Refresh every</span>
+                  <select style="height: 40px; box-sizing: border-box; padding: 0 8px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit">
+                    <option>30 seconds</option>
+                    <option>1 minute</option>
+                    <option>5 minutes</option>
+                  </select>
+                  <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">30 seconds is the floor.</span>
+                </label>
+              </div>
+              <p aria-live="polite" style="margin: 0; color: {{t.onSurfaceVariant}}; font-variant-numeric: tabular-nums">{{cv.summary}}</p>
+              <table style="width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums">
+                <thead>
+                  <tr>
+                    <th scope="col" aria-sort="{{hd.name.sort}}" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left"><button type="button" onClick="{{hd.name.pick}}" class="hov" style="display: inline-flex; align-items: center; gap: 4px; min-height: 32px; margin: -8px 0; padding: 0; border: 0; background: transparent; color: {{hd.name.fg}}; font: inherit; font-weight: {{hd.name.weight}}; cursor: pointer">Name<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="display: {{hd.name.arrow}}; transform: {{hd.name.rot}}"><path d="M12 19V5M6 11l6-6 6 6"></path></svg></button></th>
+                    <th scope="col" aria-sort="{{hd.kind.sort}}" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left"><button type="button" onClick="{{hd.kind.pick}}" class="hov" style="display: inline-flex; align-items: center; gap: 4px; min-height: 32px; margin: -8px 0; padding: 0; border: 0; background: transparent; color: {{hd.kind.fg}}; font: inherit; font-weight: {{hd.kind.weight}}; cursor: pointer">Kind<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="display: {{hd.kind.arrow}}; transform: {{hd.kind.rot}}"><path d="M12 19V5M6 11l6-6 6 6"></path></svg></button></th>
+                    <th scope="col" aria-sort="{{hd.active.sort}}" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: right"><button type="button" onClick="{{hd.active.pick}}" class="hov" style="display: inline-flex; align-items: center; gap: 4px; min-height: 32px; margin: -8px 0; padding: 0; border: 0; background: transparent; color: {{hd.active.fg}}; font: inherit; font-weight: {{hd.active.weight}}; cursor: pointer">Active<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="display: {{hd.active.arrow}}; transform: {{hd.active.rot}}"><path d="M12 19V5M6 11l6-6 6 6"></path></svg></button></th>
+                    <th scope="col" aria-sort="{{hd.dlq.sort}}" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: right"><button type="button" onClick="{{hd.dlq.pick}}" class="hov" style="display: inline-flex; align-items: center; gap: 4px; min-height: 32px; margin: -8px 0; padding: 0; border: 0; background: transparent; color: {{hd.dlq.fg}}; font: inherit; font-weight: {{hd.dlq.weight}}; cursor: pointer">Dead-letter<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="display: {{hd.dlq.arrow}}; transform: {{hd.dlq.rot}}"><path d="M12 19V5M6 11l6-6 6 6"></path></svg></button></th>
+                    <th scope="col" aria-sort="{{hd.scheduled.sort}}" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: right"><button type="button" onClick="{{hd.scheduled.pick}}" class="hov" style="display: inline-flex; align-items: center; gap: 4px; min-height: 32px; margin: -8px 0; padding: 0; border: 0; background: transparent; color: {{hd.scheduled.fg}}; font: inherit; font-weight: {{hd.scheduled.weight}}; cursor: pointer">Scheduled<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="display: {{hd.scheduled.arrow}}; transform: {{hd.scheduled.rot}}"><path d="M12 19V5M6 11l6-6 6 6"></path></svg></button></th>
+                    <th scope="col" aria-sort="{{hd.transfer.sort}}" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: right"><button type="button" onClick="{{hd.transfer.pick}}" class="hov" style="display: inline-flex; align-items: center; gap: 4px; min-height: 32px; margin: -8px 0; padding: 0; border: 0; background: transparent; color: {{hd.transfer.fg}}; font: inherit; font-weight: {{hd.transfer.weight}}; cursor: pointer">Transfer dead-letter<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="display: {{hd.transfer.arrow}}; transform: {{hd.transfer.rot}}"><path d="M12 19V5M6 11l6-6 6 6"></path></svg></button></th>
+                    <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: right"><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr style="display: {{c0.display}}">
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}"><a href="Main.dc.html" style="display: inline-flex; align-items: center; min-height: 32px; margin: -6px 0; color: {{t.primary}}; font-weight: 500">{{c0.name}}</a><span style="color: {{t.onSurfaceVariant}}">{{c0.parent}}</span></td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">{{c0.kind}}</td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">{{c0.active}}</td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right"><span style="display: {{c0.plain}}">{{c0.dlq}}</span><span style="display: {{c0.mark}}; align-items: center; gap: 4px; height: 20px; padding: 0 8px 0 6px; border-radius: 999px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}; font-size: 12px; line-height: 16px; font-weight: 700"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>{{c0.dlq}}<span style="margin-left: 2px; font-weight: 500">over threshold</span></span></td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right; color: {{c0.schedFg}}">{{c0.scheduled}}</td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">{{c0.transfer}}</td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right; white-space: nowrap"><a href="AutoResubmit.dc.html" aria-label="{{c0.autoLabel}}" style="display: {{c0.auto}}; align-items: center; gap: 6px; min-height: 32px; margin: -6px 0; color: {{t.primary}}; font-weight: 500">Auto resubmit<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></td>
+                  </tr>
+                  <tr style="display: {{c1.display}}">
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}"><a href="Main.dc.html" style="display: inline-flex; align-items: center; min-height: 32px; margin: -6px 0; color: {{t.primary}}; font-weight: 500">{{c1.name}}</a><span style="color: {{t.onSurfaceVariant}}">{{c1.parent}}</span></td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">{{c1.kind}}</td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">{{c1.active}}</td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right"><span style="display: {{c1.plain}}">{{c1.dlq}}</span><span style="display: {{c1.mark}}; align-items: center; gap: 4px; height: 20px; padding: 0 8px 0 6px; border-radius: 999px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}; font-size: 12px; line-height: 16px; font-weight: 700"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>{{c1.dlq}}<span style="margin-left: 2px; font-weight: 500">over threshold</span></span></td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right; color: {{c1.schedFg}}">{{c1.scheduled}}</td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">{{c1.transfer}}</td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right; white-space: nowrap"><a href="AutoResubmit.dc.html" aria-label="{{c1.autoLabel}}" style="display: {{c1.auto}}; align-items: center; gap: 6px; min-height: 32px; margin: -6px 0; color: {{t.primary}}; font-weight: 500">Auto resubmit<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></td>
+                  </tr>
+                  <tr style="display: {{c2.display}}">
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}"><a href="Main.dc.html" style="display: inline-flex; align-items: center; min-height: 32px; margin: -6px 0; color: {{t.primary}}; font-weight: 500">{{c2.name}}</a><span style="color: {{t.onSurfaceVariant}}">{{c2.parent}}</span></td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">{{c2.kind}}</td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">{{c2.active}}</td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right"><span style="display: {{c2.plain}}">{{c2.dlq}}</span><span style="display: {{c2.mark}}; align-items: center; gap: 4px; height: 20px; padding: 0 8px 0 6px; border-radius: 999px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}; font-size: 12px; line-height: 16px; font-weight: 700"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>{{c2.dlq}}<span style="margin-left: 2px; font-weight: 500">over threshold</span></span></td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right; color: {{c2.schedFg}}">{{c2.scheduled}}</td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">{{c2.transfer}}</td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right; white-space: nowrap"><a href="AutoResubmit.dc.html" aria-label="{{c2.autoLabel}}" style="display: {{c2.auto}}; align-items: center; gap: 6px; min-height: 32px; margin: -6px 0; color: {{t.primary}}; font-weight: 500">Auto resubmit<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></td>
+                  </tr>
+                  <tr style="display: {{c3.display}}">
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}"><a href="Main.dc.html" style="display: inline-flex; align-items: center; min-height: 32px; margin: -6px 0; color: {{t.primary}}; font-weight: 500">{{c3.name}}</a><span style="color: {{t.onSurfaceVariant}}">{{c3.parent}}</span></td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">{{c3.kind}}</td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">{{c3.active}}</td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right"><span style="display: {{c3.plain}}">{{c3.dlq}}</span><span style="display: {{c3.mark}}; align-items: center; gap: 4px; height: 20px; padding: 0 8px 0 6px; border-radius: 999px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}; font-size: 12px; line-height: 16px; font-weight: 700"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>{{c3.dlq}}<span style="margin-left: 2px; font-weight: 500">over threshold</span></span></td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right; color: {{c3.schedFg}}">{{c3.scheduled}}</td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">{{c3.transfer}}</td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right; white-space: nowrap"><a href="AutoResubmit.dc.html" aria-label="{{c3.autoLabel}}" style="display: {{c3.auto}}; align-items: center; gap: 6px; min-height: 32px; margin: -6px 0; color: {{t.primary}}; font-weight: 500">Auto resubmit<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></td>
+                  </tr>
+                  <tr style="display: {{c4.display}}">
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}"><a href="Main.dc.html" style="display: inline-flex; align-items: center; min-height: 32px; margin: -6px 0; color: {{t.primary}}; font-weight: 500">{{c4.name}}</a><span style="color: {{t.onSurfaceVariant}}">{{c4.parent}}</span></td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">{{c4.kind}}</td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">{{c4.active}}</td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right"><span style="display: {{c4.plain}}">{{c4.dlq}}</span><span style="display: {{c4.mark}}; align-items: center; gap: 4px; height: 20px; padding: 0 8px 0 6px; border-radius: 999px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}; font-size: 12px; line-height: 16px; font-weight: 700"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>{{c4.dlq}}<span style="margin-left: 2px; font-weight: 500">over threshold</span></span></td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right; color: {{c4.schedFg}}">{{c4.scheduled}}</td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">{{c4.transfer}}</td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right; white-space: nowrap"><a href="AutoResubmit.dc.html" aria-label="{{c4.autoLabel}}" style="display: {{c4.auto}}; align-items: center; gap: 6px; min-height: 32px; margin: -6px 0; color: {{t.primary}}; font-weight: 500">Auto resubmit<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></td>
+                  </tr>
+                  <tr style="display: {{c5.display}}">
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}"><a href="Main.dc.html" style="display: inline-flex; align-items: center; min-height: 32px; margin: -6px 0; color: {{t.primary}}; font-weight: 500">{{c5.name}}</a><span style="color: {{t.onSurfaceVariant}}">{{c5.parent}}</span></td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">{{c5.kind}}</td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">{{c5.active}}</td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right"><span style="display: {{c5.plain}}">{{c5.dlq}}</span><span style="display: {{c5.mark}}; align-items: center; gap: 4px; height: 20px; padding: 0 8px 0 6px; border-radius: 999px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}; font-size: 12px; line-height: 16px; font-weight: 700"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>{{c5.dlq}}<span style="margin-left: 2px; font-weight: 500">over threshold</span></span></td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right; color: {{c5.schedFg}}">{{c5.scheduled}}</td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">{{c5.transfer}}</td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right; white-space: nowrap"><a href="AutoResubmit.dc.html" aria-label="{{c5.autoLabel}}" style="display: {{c5.auto}}; align-items: center; gap: 6px; min-height: 32px; margin: -6px 0; color: {{t.primary}}; font-weight: 500">Auto resubmit<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a></td>
+                  </tr>
+                </tbody>
+              </table>
+              <p style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}; margin: 0">A name opens the entity. Auto resubmit is offered where dead-letter messages wait. A subscription has no scheduled count.</p>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{isLoading}}" hint-placeholder-val="{{false}}">
+            <div style="display: flex; flex-direction: column; gap: 20px">
+              <p aria-live="polite" style="display: flex; align-items: center; gap: 12px; margin: 0; color: {{t.onSurfaceVariant}}">
+                <svg aria-hidden="true" class="spin" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="{{t.primary}}" stroke-width="2.4" stroke-linecap="round" style="flex: none"><path d="M12 3a9 9 0 1 0 9 9"></path></svg>
+                <span>Loading the monitoring data from {{conn}}</span>
+              </p>
+              <div aria-hidden="true" style="display: flex; gap: 12px">
+                <div style="flex: 1 1 0; height: 92px; border-radius: 8px; background: {{t.surfaceLow}}"></div>
+                <div style="flex: 1 1 0; height: 92px; border-radius: 8px; background: {{t.surfaceLow}}"></div>
+                <div style="flex: 1 1 0; height: 92px; border-radius: 8px; background: {{t.surfaceLow}}"></div>
+                <div style="flex: 1 1 0; height: 92px; border-radius: 8px; background: {{t.surfaceLow}}"></div>
+              </div>
+              <div aria-hidden="true" style="display: flex; flex-direction: column; gap: 12px; max-width: 560px">
+                <div style="height: 12px; border-radius: 4px; background: {{t.surfaceContainer}}"></div>
+                <div style="height: 12px; width: 82%; border-radius: 4px; background: {{t.surfaceContainer}}"></div>
+                <div style="height: 12px; width: 64%; border-radius: 4px; background: {{t.surfaceContainer}}"></div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{isEmpty}}" hint-placeholder-val="{{false}}">
+            <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 12px; max-width: 520px; padding-top: 24px">
+              <svg aria-hidden="true" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="{{t.outline}}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V4M4 20h16M8 16l4-5 3 3 5-7"></path></svg>
+              <h2 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">Nothing to monitor in this namespace</h2>
+              <p style="margin: 0; color: {{t.onSurfaceVariant}}">{{conn}} answered and holds no queue and no subscription. Counts appear here once an entity exists.</p>
+              <a href="Main.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 20px 0 16px; border: 0; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}; text-decoration: none; cursor: pointer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>Create one in Entities</a>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{isError}}" hint-placeholder-val="{{false}}">
+            <section aria-label="Error" style="display: flex; align-items: flex-start; gap: 12px; max-width: 680px; box-sizing: border-box; padding: 16px; border-radius: 8px; background: {{t.errorContainer}}; color: {{t.onErrorContainer}}">
+              <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 2px"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
+              <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0">
+                <h2 style="margin: 0; font-size: 16px; line-height: 24px; font-weight: 500">Could not load the monitoring data</h2>
+                <p style="margin: 0">The request to {{conn}} timed out after 30 seconds. Nothing is shown because nothing was read, and nothing on the broker was changed.</p>
+                <button type="button" onClick="{{toToday}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; margin-top: 4px; padding: 0 20px 0 16px; border: 1px solid {{t.onErrorContainer}}; border-radius: 999px; background: transparent; color: {{t.onErrorContainer}}; font: inherit; font-weight: 500; cursor: pointer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg>Retry</button>
+              </div>
+            </section>
+          </sc-if>
+
+        </div>
+      </main>
+    </sc-if>
+
+    <sc-if value="{{showEnt}}" hint-placeholder-val="{{false}}">
+      <div aria-hidden="{{scr.hidden}}" style="position: {{scr.pos}}; inset: 0; overflow: hidden; flex: 1; display: flex">
+
+        <aside aria-label="Entities" style="flex: 0 0 26%; min-width: 264px; max-width: 340px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px; padding: 12px 8px 16px; background: {{t.surfaceLow}}; border-right: 1px solid {{t.outlineVariant}}">
+          <h2 style="margin: 0; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: {{t.onSurfaceVariant}}; padding: 10px 8px">Queues <span style="margin-left: 4px; font-weight: 400; font-variant-numeric: tabular-nums">4</span></h2>
+          <sc-for list="{{treeQueues}}" as="row" hint-placeholder-count="4">
+            <a href="Main.dc.html" aria-current="{{row.current}}" class="hov" style="display: flex; align-items: center; gap: 8px; min-height: 32px; box-sizing: border-box; padding: 0 8px 0 {{row.pad}}; border-radius: 8px; background: {{row.bg}}; color: {{row.fg}}; font-weight: {{row.weight}}; text-decoration: none"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M4 13l2.5-8h11L20 13v6H4zM4 13h5l1 2h4l1-2h5"></path></svg><span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{row.name}}</span></a>
+          </sc-for>
+          <h2 style="margin: 0; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: {{t.onSurfaceVariant}}; padding: 18px 8px 10px">Topics <span style="margin-left: 4px; font-weight: 400; font-variant-numeric: tabular-nums">1</span></h2>
+          <a href="Main.dc.html" class="hov" style="display: flex; align-items: center; gap: 8px; min-height: 32px; box-sizing: border-box; padding: 0 8px; border-radius: 8px; color: {{t.onSurface}}; text-decoration: none"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="5" cy="12" r="2"></circle><circle cx="19" cy="6" r="2"></circle><circle cx="19" cy="18" r="2"></circle><path d="M7 12h4l6-5M11 12l6 5"></path></svg><span>order-events</span></a>
+          <a href="Main.dc.html" class="hov" style="display: flex; align-items: center; gap: 8px; min-height: 32px; box-sizing: border-box; padding: 0 8px 0 32px; border-radius: 8px; color: {{t.onSurface}}; text-decoration: none"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M4 12h11M11 8l4 4-4 4M19 5v14"></path></svg><span>warehouse</span></a>
+          <a href="Main.dc.html" class="hov" style="display: flex; align-items: center; gap: 8px; min-height: 32px; box-sizing: border-box; padding: 0 8px 0 32px; border-radius: 8px; color: {{t.onSurface}}; text-decoration: none"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M4 12h11M11 8l4 4-4 4M19 5v14"></path></svg><span>email</span></a>
+        </aside>
+
+        <main style="flex: 1; min-width: 0; box-sizing: border-box; padding: 20px 24px 32px">
+
+          <sc-if value="{{showSelect}}" hint-placeholder-val="{{false}}">
+            <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 12px; max-width: 520px; padding-top: 24px">
+              <h1 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">Select an entity</h1>
+              <p style="margin: 0; color: {{t.onSurfaceVariant}}">Choose a queue, topic or subscription from the tree to see its counts, its properties and its messages.</p>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{showSessions}}" hint-placeholder-val="{{true}}">
+            <div style="display: flex; flex-direction: column; gap: 20px">
+              <div>
+                <div style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Queue</div>
+                <h1 style="margin: 0; font-size: 28px; line-height: 36px; font-weight: 400; overflow-wrap: anywhere">orders</h1>
+              </div>
+
+              <nav aria-label="Sections of the entity" style="display: flex; gap: 4px; border-bottom: 1px solid {{t.outlineVariant}}">
+                <a href="Main.dc.html" class="hov" style="display: inline-flex; align-items: center; height: 44px; box-sizing: border-box; margin-bottom: -1px; padding: 0 16px; border: 0; background: transparent; font: inherit; font-variant-numeric: tabular-nums; text-decoration: none; cursor: pointer; border-bottom: 3px solid transparent; color: {{t.onSurfaceVariant}}; font-weight: 500">Properties</a>
+                <button type="button" aria-current="true" class="hov" style="display: inline-flex; align-items: center; height: 44px; box-sizing: border-box; margin-bottom: -1px; padding: 0 16px; border: 0; background: transparent; font: inherit; font-variant-numeric: tabular-nums; text-decoration: none; cursor: pointer; border-bottom: 3px solid {{t.primary}}; color: {{t.primary}}; font-weight: 700">Sessions</button>
+              </nav>
+
+              <p style="display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 10px 14px; border-radius: 8px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}">
+                <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
+                <span><strong style="font-weight: 600">Listing sessions locks each one briefly.</strong> The broker cannot list sessions without accepting them: each one is locked, read and released at once, and a consumer that wants it waits for that moment. The listing stops after 10 seconds and shows only the sessions it could lock.</span>
+              </p>
+
+              <div style="display: flex; align-items: flex-start; gap: 32px; flex-wrap: wrap">
+
+                <section aria-label="Sessions" style="display: flex; flex-direction: column; gap: 8px; flex: 1 1 380px; min-width: 0">
+                  <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-height: 32px">
+                    <span style="flex: 1; min-width: 160px; color: {{t.onSurfaceVariant}}; font-variant-numeric: tabular-nums">2 sessions listed at 14:02:30</span>
+                    <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap">Built for a subscription, not for a queue</span>
+                    <button type="button" onClick="{{listAgain}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg>List again</button>
+                  </div>
+                  <table style="width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums">
+                    <thead>
+                      <tr><th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Session ID</th><th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Lock Status</th><th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">State</th></tr>
+                    </thead>
+                    <tbody>
+                      <tr style="background: {{sess0.bg}}">
+                        <td style="padding: 2px 12px; border-bottom: 1px solid {{t.outlineVariant}}"><button type="button" onClick="{{sess0.pick}}" aria-current="{{sess0.current}}" style="min-height: 32px; padding: 0; border: 0; background: transparent; color: {{t.primary}}; font: inherit; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; font-weight: {{sess0.weight}}; text-decoration: underline; cursor: pointer">{{sess0.id}}</button></td>
+                        <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">{{sess0.lock}}</td>
+                        <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">{{sess0.state}}</td>
+                      </tr>
+                      <tr style="background: {{sess1.bg}}">
+                        <td style="padding: 2px 12px; border-bottom: 1px solid {{t.outlineVariant}}"><button type="button" onClick="{{sess1.pick}}" aria-current="{{sess1.current}}" style="min-height: 32px; padding: 0; border: 0; background: transparent; color: {{t.primary}}; font: inherit; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; font-weight: {{sess1.weight}}; text-decoration: underline; cursor: pointer">{{sess1.id}}</button></td>
+                        <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">{{sess1.lock}}</td>
+                        <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">{{sess1.state}}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </section>
+
+                <section aria-label="Selected session" style="display: flex; flex-direction: column; gap: 16px; flex: 1.4 1 440px; min-width: 0">
+                  <dl style="display: flex; flex-direction: column; margin: 0; border-top: 1px solid {{t.outlineVariant}}">
+                    <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Session ID</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">{{sd.id}}</dd></div>
+                    <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Lock Status</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere">{{sd.lock}}</dd></div>
+                  </dl>
+
+                  <div style="display: flex; flex-direction: column; gap: 8px">
+                    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-height: 32px">
+                      <h2 style="margin: 0; font-size: 16px; line-height: 24px; font-weight: 500; flex: 1">Session State</h2>
+                      <sc-if value="{{sd.canStartEdit}}" hint-placeholder-val="{{true}}">
+                        <span style="display: inline-flex; align-items: center; gap: 8px">
+                          <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built</span>
+                          <button type="button" onClick="{{startEdit}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16zM13 7l4 4"></path></svg>Edit state</button>
+                        </span>
+                      </sc-if>
+                    </div>
+                    <sc-if value="{{sd.showState}}" hint-placeholder-val="{{true}}">
+                      <pre style="margin: 0; padding: 10px 12px; border-radius: 8px; background: {{t.surfaceContainer}}; color: {{t.onSurface}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; line-height: 20px; white-space: pre-wrap; overflow-wrap: anywhere">{{sd.state}}</pre>
+                    </sc-if>
+                    <sc-if value="{{sd.showNoState}}" hint-placeholder-val="{{false}}">
+                      <p style="margin: 0; color: {{t.onSurfaceVariant}}">No state data</p>
+                    </sc-if>
+                    <sc-if value="{{sd.editing}}" hint-placeholder-val="{{false}}">
+                      <div style="display: flex; flex-direction: column; gap: 8px">
+                        <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+                          <span style="display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">New state<span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built</span></span>
+                          <textarea rows="6" value="{{sd.draft}}" onChange="{{onDraft}}" spellcheck="false" style="box-sizing: border-box; padding: 8px 12px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit; resize: vertical; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; line-height: 20px"></textarea>
+                          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">The consuming application reads this the next time it accepts the session.</span>
+                        </label>
+                        <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px">
+                          <button type="button" onClick="{{cancelEdit}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 12px; border: 0; background: transparent; color: {{t.primary}}; text-decoration: none; cursor: pointer">Cancel</button>
+                          <sc-if value="{{sd.canReview}}" hint-placeholder-val="{{true}}">
+                            <button type="button" onClick="{{toConfirm}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 20px; border: 0; background: {{t.primary}}; color: {{t.onPrimary}}; text-decoration: none; cursor: pointer">Review change</button>
+                          </sc-if>
+                          <sc-if value="{{sd.cannotReview}}" hint-placeholder-val="{{false}}">
+                            <button type="button" disabled title="The new state is the same as the current one" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 20px; border: 0; background: {{t.surfaceHigh}}; color: {{t.outline}}">Review change</button>
+                          </sc-if>
+                        </div>
+                      </div>
+                    </sc-if>
+                  </div>
+
+                  <div style="display: flex; flex-direction: column; gap: 8px">
+                    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+                      <h2 style="margin: 0; font-size: 16px; line-height: 24px; font-weight: 500; flex: 1">Messages of this session</h2>
+                      <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built</span>
+                    </div>
+                    <table style="width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums">
+                      <thead>
+                        <tr><th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: right">Sequence</th><th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Message ID</th><th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Enqueued (UTC)</th><th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: right">Size</th></tr>
+                      </thead>
+                      <tbody>
+                      <tr style="display: {{m0.display}}"><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">{{m0.seq}}</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">{{m0.id}}</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">{{m0.at}}</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">{{m0.size}}</td></tr>
+                      <tr style="display: {{m1.display}}"><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">{{m1.seq}}</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">{{m1.id}}</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">{{m1.at}}</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">{{m1.size}}</td></tr>
+                      <tr style="display: {{m2.display}}"><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">{{m2.seq}}</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">{{m2.id}}</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">{{m2.at}}</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">{{m2.size}}</td></tr>
+                      </tbody>
+                    </table>
+                    <p style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}; margin: 0">Peeked, not received: nothing leaves the queue, and the session lock taken to read is released at once.</p>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </sc-if>
+
+        </main>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{dialogOpen}}" hint-placeholder-val="{{false}}">
+      <div style="position: relative; flex: 1; display: flex; justify-content: center; align-items: flex-start; box-sizing: border-box; padding: 40px 24px; background: {{t.scrim}}; gap: 24px; flex-wrap: wrap">
+
+        <sc-if value="{{showConfirm}}" hint-placeholder-val="{{false}}">
+          <div style="display: flex; flex-direction: column; gap: 16px; width: 100%; box-sizing: border-box; padding: 24px; border-radius: 20px; background: {{t.surfaceContainer}}; color: {{t.onSurface}}; box-shadow: {{t.shadow}}; max-width: 720px">
+            <h1 style="display: flex; align-items: center; gap: 10px; margin: 0; font-size: 20px; line-height: 28px; font-weight: 500; overflow-wrap: anywhere"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{t.error}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>Write the state of session {{sd.id}}?<span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built</span></h1>
+            <p style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; color: {{t.onSurfaceVariant}}">
+              <span style="display: inline-flex; align-items: center; gap: 6px; flex: none; height: 24px; padding: 0 10px; border-radius: 999px; background: {{env.bg}}; color: {{env.fg}}; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap"><sc-if value="{{env.isProd}}" hint-placeholder-val="{{true}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg></sc-if><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Environment:</span>{{env.label}}</span>
+              <span style="min-width: 0; overflow-wrap: anywhere"><strong style="font-weight: 600; color: {{t.onSurface}}">orders</strong> on {{connFull}}</span>
+            </p>
+            <p style="margin: 0">Writing session state changes what the consuming application reads next for this session. The write locks the session for a moment.</p>
+            <dl style="display: flex; flex-direction: column; margin: 0; border-top: 1px solid {{t.outlineVariant}}">
+              <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Session ID</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">{{sd.id}}</dd></div>
+              <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Queue</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere; font-weight: 500">orders</dd></div>
+              <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Connection</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere">{{connFull}}</dd></div>
+              <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Environment</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere">{{env.name}}</dd></div>
+            </dl>
+            <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px">
+              <div style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+                <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Current state</span>
+                <pre style="margin: 0; padding: 10px 12px; border-radius: 8px; background: {{t.surfaceContainer}}; color: {{t.onSurface}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; line-height: 20px; white-space: pre-wrap; overflow-wrap: anywhere; background: {{t.surface}}">{{sd.stateOrNone}}</pre>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+                <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">New state</span>
+                <pre style="margin: 0; padding: 10px 12px; border-radius: 8px; background: {{t.surfaceContainer}}; color: {{t.onSurface}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; line-height: 20px; white-space: pre-wrap; overflow-wrap: anywhere; background: {{t.surface}}">{{sd.draftOrNone}}</pre>
+              </div>
+            </div>
+            <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding-top: 8px">
+              <button type="button" onClick="{{backToEdit}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 12px; border: 0; background: transparent; color: {{t.primary}}; text-decoration: none; cursor: pointer">Back</button>
+              <button type="button" onClick="{{writeState}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 20px; border: 0; background: {{t.primary}}; color: {{t.onPrimary}}; text-decoration: none; cursor: pointer">Write state</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{showDefs}}" hint-placeholder-val="{{false}}">
+          <div style="display: flex; flex-direction: column; gap: 16px; width: 100%; box-sizing: border-box; padding: 24px; border-radius: 20px; background: {{t.surfaceContainer}}; color: {{t.onSurface}}; box-shadow: {{t.shadow}}; flex: 1 1 340px; max-width: 420px">
+            <h1 style="display: flex; align-items: center; gap: 10px; margin: 0; font-size: 20px; line-height: 28px; font-weight: 500; overflow-wrap: anywhere">Export definitions<span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built</span></h1>
+            <p style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; color: {{t.onSurfaceVariant}}">
+              <span style="display: inline-flex; align-items: center; gap: 6px; flex: none; height: 24px; padding: 0 10px; border-radius: 999px; background: {{env.bg}}; color: {{env.fg}}; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap"><sc-if value="{{env.isProd}}" hint-placeholder-val="{{true}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg></sc-if><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Environment:</span>{{env.label}}</span>
+              <span style="min-width: 0; overflow-wrap: anywhere">From {{connFull}}</span>
+            </p>
+            <p style="margin: 0">Writes every queue, topic, subscription and rule of this namespace, with its full configuration, to one versioned JSON file.</p>
+            <dl style="display: flex; flex-direction: column; margin: 0; border-top: 1px solid {{t.outlineVariant}}">
+              <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Queues</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere">4</dd></div>
+              <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Topics</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere">1</dd></div>
+              <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Subscriptions</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere">2</dd></div>
+              <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Rules</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere">3</dd></div>
+              <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Messages</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere">Not included</dd></div>
+              <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Secrets</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere">None: an entity definition holds no secret</dd></div>
+            </dl>
+            <p style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}; margin: 0">This is the slowest read in the app: every entity, and the rules of every subscription. It shows its progress and can be cancelled.</p>
+            <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding-top: 8px">
+              <a href="Main.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 12px; border: 0; background: transparent; color: {{t.primary}}; text-decoration: none; cursor: pointer">Cancel</a>
+              <button type="button" onClick="{{noop}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 20px 0 16px; border: 0; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}; text-decoration: none; cursor: pointer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"></path></svg>Export to a file</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{showDefs}}" hint-placeholder-val="{{false}}">
+          <div style="display: flex; flex-direction: column; gap: 16px; width: 100%; box-sizing: border-box; padding: 24px; border-radius: 20px; background: {{t.surfaceContainer}}; color: {{t.onSurface}}; box-shadow: {{t.shadow}}; flex: 2 1 520px; max-width: 760px">
+            <h1 style="display: flex; align-items: center; gap: 10px; margin: 0; font-size: 20px; line-height: 28px; font-weight: 500; overflow-wrap: anywhere">Import definitions<span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built</span></h1>
+            <p style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; color: {{t.onSurfaceVariant}}">
+              <span style="display: inline-flex; align-items: center; gap: 6px; flex: none; height: 24px; padding: 0 10px; border-radius: 999px; background: {{env.bg}}; color: {{env.fg}}; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap"><sc-if value="{{env.isProd}}" hint-placeholder-val="{{true}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg></sc-if><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Environment:</span>{{env.label}}</span>
+              <span style="min-width: 0; overflow-wrap: anywhere">Into {{connFull}}</span>
+            </p>
+            <div style="display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 14px; border-radius: 8px; background: {{t.surface}}">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M6 3h8l4 4v14H6zM14 3v4h4"></path></svg>
+              <span style="flex: 1; min-width: 0; overflow-wrap: anywhere"><strong style="font-weight: 600">{{defs.file}}</strong> <span style="color: {{t.onSurfaceVariant}}">exported from {{defs.source}}: 4 queues, 1 topic, 2 subscriptions, 3 rules</span></span>
+              <button type="button" onClick="{{noop}}" class="hov" style="display: inline-flex; align-items: center; flex: none; height: 36px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; cursor: pointer">Choose another file</button>
+            </div>
+            <div>
+              <h2 style="margin: 0; font-size: 16px; line-height: 24px; font-weight: 500">Dry run</h2>
+              <p style="margin: 0; color: {{t.onSurfaceVariant}}">Nothing has been created yet. This is what the import would do.</p>
+            </div>
+            <table style="width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums">
+              <thead>
+                <tr><th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Entity</th><th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Kind</th><th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Result</th><th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Detail</th></tr>
+              </thead>
+              <tbody>
+                <tr><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-weight: 500">orders</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">Queue</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; white-space: nowrap"><span style="display: inline-flex; align-items: center; gap: 4px; color: {{t.onSurfaceVariant}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M8 12l3 3 5-6"></path></svg>Already exists</span></td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; color: {{t.onSurfaceVariant}}">Same definition. Left as it is.</td></tr>
+                <tr><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-weight: 500">billing/invoices</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">Queue</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; white-space: nowrap"><span style="display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px 0 6px; border-radius: 999px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}; font-size: 12px; line-height: 16px; font-weight: 700"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>Exists and differs</span></td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; color: {{t.onSurfaceVariant}}">Max delivery count is 5 here and 10 in the file. Left as it is.</td></tr>
+                <tr><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-weight: 500">notifications</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">Queue</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; white-space: nowrap"><span style="display: inline-flex; align-items: center; gap: 4px; color: {{t.onSurfaceVariant}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M8 12l3 3 5-6"></path></svg>Already exists</span></td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; color: {{t.onSurfaceVariant}}">Same definition. Left as it is.</td></tr>
+                <tr><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-weight: 500">orders-archive</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">Queue</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; white-space: nowrap"><span style="display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px 0 6px; border-radius: 999px; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}; font-size: 12px; line-height: 16px; font-weight: 700"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>Would be created</span></td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; color: {{t.onSurfaceVariant}}">With the configuration in the file.</td></tr>
+                <tr><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-weight: 500">order-events</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">Topic</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; white-space: nowrap"><span style="display: inline-flex; align-items: center; gap: 4px; color: {{t.onSurfaceVariant}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M8 12l3 3 5-6"></path></svg>Already exists</span></td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; color: {{t.onSurfaceVariant}}">Same definition. Left as it is.</td></tr>
+                <tr><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-weight: 500">warehouse<span style="font-weight: 400; color: {{t.onSurfaceVariant}}"> in order-events</span></td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">Subscription</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; white-space: nowrap"><span style="display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px 0 6px; border-radius: 999px; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}; font-size: 12px; line-height: 16px; font-weight: 700"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>Would be created</span></td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; color: {{t.onSurfaceVariant}}">With its 2 rules.</td></tr>
+                <tr><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-weight: 500">email<span style="font-weight: 400; color: {{t.onSurfaceVariant}}"> in order-events</span></td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">Subscription</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; white-space: nowrap"><span style="display: inline-flex; align-items: center; gap: 4px; color: {{t.onSurfaceVariant}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M8 12l3 3 5-6"></path></svg>Already exists</span></td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; color: {{t.onSurfaceVariant}}">Same definition and the same rule. Left as it is.</td></tr>
+              </tbody>
+            </table>
+            <p style="display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 10px 14px; border-radius: 8px; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v6M12 7.5h.01"></path></svg>
+              <span style="font-variant-numeric: tabular-nums"><strong style="font-weight: 600">Import only creates.</strong> 2 entities would be created. 4 already exist and 1 exists and differs: these 5 stay exactly as they are. Nothing is updated and nothing is deleted.</span>
+            </p>
+            <dl style="display: flex; flex-direction: column; margin: 0; border-top: 1px solid {{t.outlineVariant}}">
+              <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Connection</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere">{{connFull}}</dd></div>
+              <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Environment</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere">{{env.name}}</dd></div>
+              <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Would be created</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere; font-weight: 500">Queue orders-archive, subscription warehouse in order-events with 2 rules</dd></div>
+            </dl>
+            <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+              <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Type the namespace to confirm</span>
+              <input type="text" value="{{defs.typed}}" onChange="{{defs.onTyped}}" placeholder="{{conn}}" autocomplete="off" spellcheck="false" style="height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">
+              <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">The button stays disabled until the name matches exactly.</span>
+            </label>
+            <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding-top: 8px">
+              <a href="Main.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 12px; border: 0; background: transparent; color: {{t.primary}}; text-decoration: none; cursor: pointer">Cancel</a>
+              <sc-if value="{{defs.can}}" hint-placeholder-val="{{false}}">
+                <a href="Main.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 20px 0 16px; border: 0; background: {{t.primary}}; color: {{t.onPrimary}}; text-decoration: none; cursor: pointer; font-variant-numeric: tabular-nums"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V5M7 9l5-5 5 5M5 20h14"></path></svg>Create 2 entities</a>
+              </sc-if>
+              <sc-if value="{{defs.cannot}}" hint-placeholder-val="{{true}}">
+                <button type="button" disabled style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; padding: 0 20px 0 16px; border: 0; background: {{t.surfaceHigh}}; color: {{t.outline}}; font-variant-numeric: tabular-nums"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V5M7 9l5-5 5 5M5 20h14"></path></svg>Create 2 entities</button>
+              </sc-if>
+            </div>
+          </div>
+        </sc-if>
+
+      </div>
+    </sc-if>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Preview"},"state":{"editor":"enum","options":["today","counts","sessions","sessionsConfirm","definitions","loading","empty","error"],"default":"today","section":"Preview"},"environment":{"editor":"enum","options":["production","development"],"default":"production","section":"Preview"},"$preview":{"width":1280,"height":1200}}'>
+const LIGHT = { surface:'#f9f9ff', surfaceLow:'#f2f3fa', surfaceContainer:'#ecedf4', surfaceHigh:'#e6e8ee',
+  onSurface:'#191c20', onSurfaceVariant:'#43474e', outline:'#73777f', outlineVariant:'#c3c6cf',
+  primary:'#005cbb', onPrimary:'#ffffff', primaryContainer:'#d7e3ff', onPrimaryContainer:'#001b3f',
+  secondaryContainer:'#dae2f9', onSecondaryContainer:'#131c2b',
+  error:'#ba1a1a', onError:'#ffffff', errorContainer:'#ffdad6', onErrorContainer:'#410002',
+  warnContainer:'#ffdea3', onWarnContainer:'#261900', success:'#1b6b32', successContainer:'#b6f2be', onSuccessContainer:'#002108',
+  scrim:'rgba(0,0,0,.45)', shadow:'0 1px 2px rgba(0,0,0,.3), 0 2px 6px 2px rgba(0,0,0,.15)' };
+const DARK = { surface:'#111318', surfaceLow:'#191c20', surfaceContainer:'#1d2024', surfaceHigh:'#282a2f',
+  onSurface:'#e2e2e9', onSurfaceVariant:'#c3c6cf', outline:'#8d9199', outlineVariant:'#43474e',
+  primary:'#abc7ff', onPrimary:'#002f65', primaryContainer:'#00458f', onPrimaryContainer:'#d7e3ff',
+  secondaryContainer:'#3e4759', onSecondaryContainer:'#dae2f9',
+  error:'#ffb4ab', onError:'#690005', errorContainer:'#93000a', onErrorContainer:'#ffdad6',
+  warnContainer:'#5c4300', onWarnContainer:'#ffdea3', success:'#9bd6a4', successContainer:'#00531f', onSuccessContainer:'#b6f2be',
+  scrim:'rgba(0,0,0,.6)', shadow:'0 1px 3px rgba(0,0,0,.6), 0 4px 8px 3px rgba(0,0,0,.3)' };
+
+function fmt(n) { return Number(n || 0).toLocaleString('en-US'); }
+
+function shared(props) {
+  const dark = (props.theme ?? 'light') === 'dark';
+  const t = dark ? DARK : LIGHT;
+  const prod = (props.environment ?? 'production') === 'production';
+  const bar = dark
+    ? { bg: t.surfaceContainer, fg: t.onSurface, line: t.outlineVariant, sep: t.outlineVariant, navOn: t.secondaryContainer, navOnFg: t.onSecondaryContainer }
+    : { bg: t.primary, fg: t.onPrimary, line: t.primary, sep: 'rgba(255,255,255,.4)', navOn: 'rgba(255,255,255,.18)', navOnFg: t.onPrimary };
+  const env = prod
+    ? { label: 'PRODUCTION', name: 'Production', isProd: true, bg: t.errorContainer, fg: t.onErrorContainer }
+    : { label: 'DEVELOPMENT', name: 'Development', isProd: false, bg: t.secondaryContainer, fg: t.onSecondaryContainer };
+  const conn = prod ? 'contoso-prod.servicebus.windows.net' : 'contoso-dev.servicebus.windows.net';
+  const snack = dark
+    ? { bg: LIGHT.surface, fg: LIGHT.onSurface, action: LIGHT.primary }
+    : { bg: LIGHT.onSurface, fg: LIGHT.surface, action: DARK.primary };
+  return { t, bar, env, conn, connFull: 'Contoso (' + conn + ')', snack, prod };
+}
+
+const COUNTS = [
+  { name: 'orders', parent: '', kind: 'Queue', active: 1204, dlq: 700000, scheduled: 3, transfer: 2 },
+  { name: 'billing/invoices', parent: '', kind: 'Queue', active: 18, dlq: 0, scheduled: 0, transfer: 0 },
+  { name: 'notifications', parent: '', kind: 'Queue', active: 0, dlq: 0, scheduled: 0, transfer: 0 },
+  { name: 'orders-archive', parent: '', kind: 'Queue', active: 52310, dlq: 0, scheduled: 0, transfer: 0 },
+  { name: 'warehouse', parent: 'order-events', kind: 'Subscription', active: 12, dlq: 0, scheduled: null, transfer: 0 },
+  { name: 'email', parent: 'order-events', kind: 'Subscription', active: 0, dlq: 4, scheduled: null, transfer: 0 }
+];
+const COLUMNS = ['name', 'kind', 'active', 'dlq', 'scheduled', 'transfer'];
+const TEXT_COLUMNS = ['name', 'kind'];
+
+const STATE_1042 = '{\n  "step": "awaiting-payment",\n  "orderId": "SAMPLE-1042",\n  "attempt": 2\n}';
+const NEW_STATE_1042 = '{\n  "step": "payment-received",\n  "orderId": "SAMPLE-1042",\n  "attempt": 2\n}';
+const SESSIONS = [
+  { id: 'customer-1042', lock: 'Unlocked', state: STATE_1042,
+    messages: [['88,121', 'SAMPLE-1042-1', 'Nov 12, 2026, 1:58:07 PM', '412 B'], ['88,134', 'SAMPLE-1042-2', 'Nov 12, 2026, 1:59:40 PM', '398 B'],
+      ['88,150', 'SAMPLE-1042-3', 'Nov 12, 2026, 2:01:12 PM', '431 B']] },
+  { id: 'customer-2718', lock: 'Locked until Nov 12, 2026, 2:10:00 PM', state: '',
+    messages: [['88,142', 'SAMPLE-2718-1', 'Nov 12, 2026, 2:00:25 PM', '377 B']] }
+];
+
+const MON_VIEWS = ['today', 'counts', 'loading', 'empty', 'error'];
+const BUILT_TODAY = 'Built, layout to migrate';
+const NOT_BUILT = 'Design, not built';
+const STRIP = {
+  today: [BUILT_TODAY, 'Monitoring: the app does this today, the screen does not look like this yet. In the desktop app the screen cannot be reached today: nothing in the window leads to it.'],
+  loading: [BUILT_TODAY, 'Monitoring while the first snapshot loads. The screen cannot be reached in the desktop app today.'],
+  empty: [BUILT_TODAY, 'Monitoring of a namespace with no entity: today the app shows four zero cards and no table. The screen cannot be reached in the desktop app today.'],
+  error: [BUILT_TODAY, 'Monitoring when the snapshot cannot be read: an error with Retry. The screen cannot be reached in the desktop app today.'],
+  counts: [NOT_BUILT, 'Counts of every entity in one table: planned. Today the poll is fixed at 30 seconds and nothing sorts, filters, marks a threshold or opens the entity.'],
+  sessions: [NOT_BUILT, 'Sessions on a queue, the messages of one session and the state editor: planned. Built today: a subscription lists its sessions (locked or has state) and shows the state read-only.'],
+  sessionsConfirm: [NOT_BUILT, 'Writing session state: planned. The confirmation shows the current state beside the new one before anything is written.'],
+  definitions: [NOT_BUILT, 'Export and import of entity definitions: planned, opened from the header of the entities tree. Import only creates, after a dry run.']
+};
+
+class Component extends DCLogic {
+  componentDidUpdate(prev) {
+    if (!prev) return;
+    if (prev.state !== this.props.state || prev.environment !== this.props.environment) {
+      this.setState({ view: undefined, sort: undefined, filter: undefined, threshold: undefined, session: undefined, editing: undefined,
+        draft: undefined, written: undefined, typed: undefined });
+    }
+  }
+
+  renderVals() {
+    const s = this.state || {};
+    const sh = shared(this.props);
+    const { t, bar } = sh;
+    const stateProp = this.props.state ?? 'today';
+    const view = s.view ?? stateProp;
+    const showMon = MON_VIEWS.includes(view);
+
+    const navLink = on => on
+      ? { bg: bar.navOn, fg: bar.navOnFg, deco: 'underline', weight: 700, cur: 'page' }
+      : { bg: 'transparent', fg: bar.fg, deco: 'none', weight: 500, cur: 'false' };
+    const tab = on => ({ current: on ? 'true' : 'false', line: on ? t.primary : 'transparent', fg: on ? t.primary : t.onSurfaceVariant, weight: on ? 700 : 500 });
+
+    const sort = s.sort || { col: 'dlq', dir: 'desc' };
+    const hd = {};
+    COLUMNS.forEach(col => {
+      const on = sort.col === col;
+      hd[col] = {
+        sort: on ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none',
+        fg: on ? t.onSurface : t.onSurfaceVariant, weight: on ? 700 : 500,
+        arrow: on ? 'inline' : 'none', rot: on && sort.dir === 'desc' ? 'rotate(180deg)' : 'none',
+        pick: () => this.setState({ sort: { col, dir: on ? (sort.dir === 'asc' ? 'desc' : 'asc') : (TEXT_COLUMNS.includes(col) ? 'asc' : 'desc') } })
+      };
+    });
+    const filter = s.filter || '';
+    const thresholdText = s.threshold ?? '100';
+    const threshold = /^\d+$/.test(thresholdText.trim()) ? Number(thresholdText) : null;
+    const needle = filter.trim().toLowerCase();
+    const rows = COUNTS.filter(r => !needle || r.name.toLowerCase().includes(needle) || r.parent.toLowerCase().includes(needle))
+      .sort((a, b) => {
+        const x = a[sort.col] ?? -1;
+        const y = b[sort.col] ?? -1;
+        const order = typeof x === 'string' ? x.localeCompare(y) : x - y;
+        return sort.dir === 'asc' ? order : -order;
+      });
+    const isOver = r => threshold !== null && r.dlq > threshold;
+    const slots = {};
+    for (let i = 0; i < COUNTS.length; i++) {
+      const r = rows[i];
+      slots['c' + i] = r ? {
+        display: 'table-row', name: r.name, parent: r.parent ? ' in ' + r.parent : '', kind: r.kind,
+        active: fmt(r.active), dlq: fmt(r.dlq), plain: isOver(r) ? 'none' : 'inline', mark: isOver(r) ? 'inline-flex' : 'none',
+        scheduled: r.scheduled === null ? 'Not counted' : fmt(r.scheduled), schedFg: r.scheduled === null ? t.onSurfaceVariant : t.onSurface,
+        transfer: fmt(r.transfer), auto: r.dlq > 0 ? 'inline-flex' : 'none',
+        autoLabel: 'Auto resubmit the ' + fmt(r.dlq) + ' dead-letter messages of ' + r.name
+      } : { display: 'none', name: '', parent: '', kind: '', active: '', dlq: '', plain: 'none', mark: 'none', scheduled: '', schedFg: t.onSurface,
+        transfer: '', auto: 'none', autoLabel: '' };
+    }
+    const over = rows.filter(isOver).length;
+    const shown = rows.length === COUNTS.length ? COUNTS.length + ' entities.' : rows.length + ' of ' + COUNTS.length + ' entities match the filter.';
+    const cv = {
+      filter, onFilter: ev => this.setState({ filter: ev.target.value }),
+      threshold: thresholdText, onThreshold: ev => this.setState({ threshold: ev.target.value }),
+      summary: shown + ' ' + (threshold === null ? 'Enter a whole number as the threshold to mark rows.'
+        : over + ' over the dead-letter threshold of ' + fmt(threshold) + '.')
+    };
+
+    const written = s.written || {};
+    const index = s.session ?? 0;
+    const session = SESSIONS[index];
+    const current = written[session.id] ?? session.state;
+    const editing = s.editing ?? (stateProp === 'sessionsConfirm');
+    const draft = s.draft ?? (stateProp === 'sessionsConfirm' && index === 0 && !written[session.id] ? NEW_STATE_1042 : current);
+    const sessionSlots = {};
+    SESSIONS.forEach((x, i) => {
+      const on = i === index;
+      sessionSlots['sess' + i] = {
+        id: x.id, lock: x.lock.startsWith('Locked') ? 'Locked' : 'Unlocked', state: (written[x.id] ?? x.state) ? 'Has state' : 'No state',
+        bg: on ? t.secondaryContainer : 'transparent', weight: on ? 700 : 500, current: on ? 'true' : 'false',
+        pick: () => this.setState({ session: i, editing: false, draft: undefined, view: 'sessions' })
+      };
+    });
+    for (let i = 0; i < 3; i++) {
+      const m = session.messages[i];
+      sessionSlots['m' + i] = m ? { display: 'table-row', seq: m[0], id: m[1], at: m[2], size: m[3] } : { display: 'none', seq: '', id: '', at: '', size: '' };
+    }
+    const sd = {
+      id: session.id, lock: session.lock, state: current, stateOrNone: current || 'No state data', draft, draftOrNone: draft || 'No state data',
+      showState: !!current, showNoState: !current, editing, canStartEdit: !editing,
+      canReview: draft !== current, cannotReview: draft === current
+    };
+
+    const typed = s.typed || '';
+    const defs = {
+      file: sh.prod ? 'contoso-dev.definitions.json' : 'contoso-prod.definitions.json',
+      source: sh.prod ? 'contoso-dev.servicebus.windows.net' : 'contoso-prod.servicebus.windows.net',
+      typed, onTyped: ev => this.setState({ typed: ev.target.value }), can: typed === sh.conn, cannot: typed !== sh.conn
+    };
+
+    const showConfirm = view === 'sessionsConfirm';
+    const showDefs = view === 'definitions';
+    const dialogOpen = showConfirm || showDefs;
+    const strip = STRIP[view] || STRIP.today;
+
+    return {
+      ...sh, ...slots, ...sessionSlots,
+      strip: { status: strip[0], text: strip[1] },
+      navM: navLink(showMon), navE: navLink(!showMon),
+      showMon, showEnt: !showMon,
+      isDefault: view === 'today', isLoading: view === 'loading', isEmpty: view === 'empty', isError: view === 'error',
+      showCounts: view === 'counts', hasData: view === 'today' || view === 'counts',
+      tabToday: tab(view === 'today'), tabCounts: tab(view === 'counts'),
+      toToday: () => this.setState({ view: 'today' }), toCounts: () => this.setState({ view: 'counts' }),
+      refresh: () => this.setState({ view }), noop: () => {},
+      refreshNote: view === 'today' ? 'Last update 14:02:30. Refreshes every 30 seconds.' : 'Last update 14:02:30.',
+      hd, cv,
+      scr: { pos: dialogOpen ? 'absolute' : 'static', hidden: dialogOpen ? 'true' : 'false' },
+      showSessions: !showMon && !showDefs, showSelect: showDefs,
+      sd, listAgain: () => this.setState({ view: 'sessions' }),
+      startEdit: () => this.setState({ editing: true, draft: undefined }), cancelEdit: () => this.setState({ editing: false, draft: undefined }),
+      onDraft: ev => this.setState({ draft: ev.target.value, editing: true }),
+      toConfirm: () => this.setState({ view: 'sessionsConfirm', editing: true, draft }),
+      backToEdit: () => this.setState({ view: 'sessions', editing: true, draft }),
+      writeState: () => this.setState({ written: { ...written, [session.id]: draft }, view: 'sessions', editing: false, draft: undefined }),
+      dialogOpen, showConfirm, showDefs, defs,
+      treeQueues: ['orders', 'billing/invoices', 'notifications', 'orders-archive'].map(q => {
+        const on = q === 'orders' && !showDefs;
+        return { name: q, pad: '8px', current: on ? 'true' : 'false', bg: on ? t.secondaryContainer : 'transparent',
+          fg: on ? t.onSecondaryContainer : t.onSurface, weight: on ? 600 : 400 };
+      })
+    };
+  }
+}
+</script>
+</body>
+</html>

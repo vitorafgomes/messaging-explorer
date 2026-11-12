@@ -1,0 +1,764 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Messages</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.hov:hover{background-image:linear-gradient(rgba(128,128,128,.16),rgba(128,128,128,.16)) !important}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #ffffff;outline-offset:0;box-shadow:0 0 0 4px #005cbb !important}
+input::placeholder{color:currentColor;opacity:.72}
+@keyframes dc-spin{to{transform:rotate(360deg)}}
+.spin{animation:dc-spin 1s linear infinite}
+@media (prefers-reduced-motion: reduce){.spin{animation:none}}
+</style>
+</helmet>
+<div style="min-height: 900px; box-sizing: border-box; display: flex; flex-direction: column; background: {{t.surface}}; color: {{t.onSurface}}; font-family: Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 14px; line-height: 20px">
+
+  <div style="display: flex; align-items: center; gap: 8px; height: 28px; box-sizing: border-box; padding: 0 16px; background: {{t.surfaceHigh}}; color: {{t.onSurfaceVariant}}; border-bottom: 1px solid {{t.outlineVariant}}; font-size: 12px; line-height: 16px">
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M4 10h16M10 10v10"></path></svg>
+    <strong style="font-weight: 600; color: {{t.onSurface}}">Built, layout to migrate</strong>
+    <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Messages: the app does all of this today, on main or on the branch that adds transfer dead-letter, message state and Cancel scheduled. Two parts of the detail pane are tagged as not built.</span>
+  </div>
+
+  <header style="display: flex; align-items: center; gap: 16px; height: 56px; box-sizing: border-box; padding: 0 8px 0 12px; background: {{bar.bg}}; color: {{bar.fg}}; border-bottom: 1px solid {{bar.line}}">
+    <nav aria-label="Main" style="display: flex; align-items: center; gap: 4px">
+      <a href="Connections.dc.html" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none; font-weight: 500">Connections</a>
+      <a href="Main.dc.html" aria-current="page" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; background: {{bar.navOn}}; color: {{bar.navOnFg}}; text-decoration: underline; text-underline-offset: 6px; text-decoration-thickness: 2px; font-weight: 700">Entities</a>
+      <a href="Monitoring.dc.html" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none; font-weight: 500">Monitoring</a>
+    </nav>
+    <span aria-hidden="true" style="flex: none; width: 1px; height: 24px; background: {{bar.sep}}"></span>
+    <span style="display: inline-flex; align-items: center; gap: 6px; flex: none; height: 24px; padding: 0 10px; border-radius: 999px; background: {{env.bg}}; color: {{env.fg}}; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap">
+      <sc-if value="{{env.isProd}}" hint-placeholder-val="{{true}}">
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
+      </sc-if>
+      <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Environment:</span>
+      {{env.label}}
+    </span>
+    <span title="{{conn}}" style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; font-weight: 500">
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="12" cy="12" r="9"></circle><path d="M8 12l3 3 5-6"></path></svg>
+      <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Connected to</span>
+      <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{conn}}</span>
+    </span>
+    <div style="display: flex; align-items: center; gap: 4px">
+      <button type="button" aria-label="Notifications: 1 subscription with dead-letter messages" title="Notifications" class="hov" style="position: relative; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: {{bar.fg}}; font: inherit; cursor: pointer">
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16v-5a6 6 0 1 1 12 0v5l2 2H4zM10 21a2 2 0 0 0 4 0"></path></svg>
+        <span aria-hidden="true" style="position: absolute; top: 4px; right: 2px; min-width: 16px; height: 16px; box-sizing: border-box; padding: 0 4px; border-radius: 999px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}; font-size: 11px; line-height: 16px; font-weight: 700; font-variant-numeric: tabular-nums; text-align: center">1</span>
+      </button>
+      <button type="button" aria-label="Help" title="Help" class="hov" style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: {{bar.fg}}; font: inherit; cursor: pointer">
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1 1-1.1 1.8M12 17h.01"></path></svg>
+      </button>
+      <a href="Settings.dc.html" aria-label="Settings" title="Settings" class="hov" style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none">
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h9M19 7h1M4 17h1M11 17h9"></path><circle cx="16" cy="7" r="3"></circle><circle cx="8" cy="17" r="3"></circle></svg>
+      </a>
+    </div>
+  </header>
+
+  <div style="position: relative; display: flex; flex: 1; min-height: 816px">
+    <div aria-hidden="true" style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: flex; overflow: hidden">
+      <div style="flex: 0 0 26%; min-width: 264px; max-width: 340px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px; padding: 12px 8px; background: {{t.surfaceLow}}; border-right: 1px solid {{t.outlineVariant}}">
+        <div style="height: 36px; margin: 0 4px 8px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}"></div>
+        <div style="padding: 10px 8px; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: {{t.onSurfaceVariant}}">Queues</div>
+        <sc-for list="{{backRows}}" as="row" hint-placeholder-count="4">
+          <div style="display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 8px; border-radius: 8px; background: {{row.bg}}; font-weight: {{row.weight}}"><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{row.name}}</span><span style="font-size: 12px; line-height: 16px; font-variant-numeric: tabular-nums">{{row.count}}</span></div>
+        </sc-for>
+      </div>
+      <div style="flex: 1; min-width: 0; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px; padding: 20px 24px">
+        <div>
+          <div style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">{{back.kind}}</div>
+          <div style="font-size: 28px; line-height: 36px">{{back.name}}</div>
+        </div>
+        <div style="display: flex; gap: 12px">
+          <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; box-sizing: border-box; padding: 12px 16px; border-radius: 8px; flex: 1 1 0; background: {{t.surfaceLow}}"><span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Active</span><span style="font-size: 28px; line-height: 36px; font-variant-numeric: tabular-nums">{{back.active}}</span></div>
+          <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; box-sizing: border-box; padding: 12px 16px; border-radius: 8px; flex: 1 1 0; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}"><span style="font-size: 12px; line-height: 16px">Dead-letter</span><span style="font-size: 28px; line-height: 36px; font-variant-numeric: tabular-nums">{{back.dlq}}</span></div>
+          <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0; box-sizing: border-box; padding: 12px 16px; border-radius: 8px; flex: 1 1 0; background: {{t.surfaceLow}}"><span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Size</span><span style="font-size: 28px; line-height: 36px; font-variant-numeric: tabular-nums">{{back.size}}</span></div>
+        </div>
+      </div>
+    </div>
+    <div style="position: relative; display: flex; flex: 1; min-width: 0; justify-content: center; align-items: flex-start; box-sizing: border-box; padding: 16px 24px; background: {{t.scrim}}">
+      <section aria-label="Messages of orders" style="display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 1200px; box-sizing: border-box; padding: 20px 24px 16px; border-radius: 20px; background: {{t.surfaceContainer}}; color: {{t.onSurface}}; box-shadow: {{t.shadow}}">
+
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+          <div style="display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 240px">
+            <h1 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">Messages: orders</h1>
+            <p style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; color: {{t.onSurfaceVariant}}">
+              <span style="display: inline-flex; align-items: center; gap: 6px; flex: none; height: 24px; padding: 0 10px; border-radius: 999px; background: {{env.bg}}; color: {{env.fg}}; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap"><sc-if value="{{env.isProd}}" hint-placeholder-val="{{true}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg></sc-if>{{env.label}}</span>
+              <span style="min-width: 0; overflow-wrap: anywhere"><strong style="font-weight: 600; color: {{t.onSurface}}">orders</strong> on Contoso ({{conn}})</span>
+            </p>
+          </div>
+          <a href="Send.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 20px 0 16px; border: 0; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M4 20l17-8L4 4v6l10 2-10 2z"></path></svg>Send</a>
+          <a href="Main.dc.html" aria-label="Close messages" title="Close" class="hov" style="display: flex; align-items: center; justify-content: center; flex: none; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: {{t.onSurfaceVariant}}; font: inherit; text-decoration: none; cursor: pointer"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M6 6l12 12M18 6L6 18"></path></svg></a>
+        </div>
+
+        <nav aria-label="Sub-queues of orders" style="display: flex; gap: 4px; border-bottom: 1px solid {{t.outlineVariant}}">
+          <sc-for list="{{tabs}}" as="tab" hint-placeholder-count="3">
+            <button type="button" onClick="{{tab.pick}}" aria-current="{{tab.current}}" class="hov" style="display: flex; align-items: center; gap: 8px; height: 44px; margin-bottom: -1px; padding: 0 16px; border: 0; border-bottom: 3px solid {{tab.line}}; background: transparent; color: {{tab.fg}}; font: inherit; font-weight: {{tab.weight}}; cursor: pointer">
+              {{tab.label}}
+              <span style="display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px; border-radius: 999px; background: {{tab.badgeBg}}; color: {{tab.badgeFg}}; font-size: 12px; line-height: 16px; font-weight: 700; font-variant-numeric: tabular-nums">{{tab.count}}</span>
+            </button>
+          </sc-for>
+        </nav>
+
+        <sc-if value="{{isTdl}}" hint-placeholder-val="{{false}}">
+          <p style="margin: 0; color: {{t.onSurfaceVariant}}">Messages this queue could not forward to another entity. They can be resubmitted to the queue or deleted.</p>
+        </sc-if>
+
+        <div style="display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap">
+          <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+            <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Count</span>
+            <input type="text" inputmode="numeric" value="{{count}}" onChange="{{onCount}}" autocomplete="off" style="height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit; width: 72px; font-variant-numeric: tabular-nums">
+          </label>
+          <div style="display: flex; align-items: flex-end; gap: 8px; flex: 1; min-width: 260px">
+            <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1">
+              <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Quick search</span>
+              <span style="display: flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurfaceVariant}}">
+                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="11" cy="11" r="6"></circle><path d="M16 16l4 4"></path></svg>
+                <input type="text" value="{{q}}" onChange="{{onQ}}" placeholder="Search in any field..." autocomplete="off" style="flex: 1; min-width: 0; height: 32px; padding: 0; border: 0; background: transparent; color: {{t.onSurface}}; font: inherit">
+              </span>
+            </label>
+            <button type="button" onClick="{{toggleRegex}}" aria-pressed="{{regexPressed}}" aria-label="Regular expression" title="Toggle regex search mode" class="hov" style="display: inline-flex; align-items: center; gap: 6px; height: 40px; box-sizing: border-box; padding: 0 14px; border: 1px solid {{t.outline}}; border-radius: 999px; background: {{regexBg}}; color: {{regexFg}}; font: inherit; font-weight: 500; white-space: nowrap; cursor: pointer">
+              <sc-if value="{{regexOn}}" hint-placeholder-val="{{false}}">
+                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 12l5 5 9-10"></path></svg>
+              </sc-if>
+              Regex
+            </button>
+          </div>
+          <sc-if value="{{isActiveTab}}" hint-placeholder-val="{{true}}">
+            <div style="display: flex; align-items: flex-end; gap: 8px">
+              <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+                <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Show</span>
+                <select value="{{show}}" onChange="{{onShow}}" style="height: 40px; box-sizing: border-box; padding: 0 8px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit">
+                  <option value="All">All</option>
+                  <option value="Scheduled">Scheduled</option>
+                </select>
+              </label>
+              <span style="display: flex; align-items: center; height: 40px; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}; font-variant-numeric: tabular-nums; white-space: nowrap">{{scheduledText}}</span>
+            </div>
+          </sc-if>
+          <sc-if value="{{hasAdvanced}}" hint-placeholder-val="{{true}}">
+            <button type="button" onClick="{{toggleAdv}}" aria-expanded="{{advExpanded}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 12px; border: 0; background: transparent; color: {{t.primary}}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M4 6h16M7 12h10M10 18h4"></path></svg>Advanced Filters</button>
+          </sc-if>
+          <button type="button" onClick="{{refresh}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 20px 0 16px; border: 1px solid {{t.outline}}; background: transparent; color: {{t.primary}}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg>Refresh</button>
+          <sc-if value="{{isDlTab}}" hint-placeholder-val="{{false}}">
+            <a href="AutoResubmit.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 20px 0 16px; border: 0; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg>Auto resubmit</a>
+          </sc-if>
+        </div>
+
+        <sc-if value="{{advOpen}}" hint-placeholder-val="{{false}}">
+          <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-height: 56px; box-sizing: border-box; padding: 8px 12px; border: 1px solid {{t.outlineVariant}}; border-radius: 8px; background: {{t.surface}}">
+            <span style="flex: 1; min-width: 200px"><strong style="font-weight: 600">No filters applied.</strong> <span style="color: {{t.onSurfaceVariant}}">Click "Add Filter" to create a new filter condition: a property, an operator and a value.</span></span>
+            <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 6px; height: 32px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; background: transparent; color: {{t.primary}}"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 5v14M5 12h14"></path></svg>Add Filter</button>
+          </div>
+        </sc-if>
+
+        <div style="display: flex; gap: 16px; height: {{paneH}}">
+
+          <sc-if value="{{isList}}" hint-placeholder-val="{{true}}">
+            <div style="display: flex; flex-direction: column; flex: 0 0 46%; min-width: 0; border: 1px solid {{t.outlineVariant}}; border-radius: 8px; background: {{t.surface}}; overflow: hidden">
+              <div style="display: flex; align-items: center; gap: 12px; flex: none; min-height: 40px; padding: 0 12px 0 0; border-bottom: 1px solid {{t.outline}}">
+                <label style="display: flex; align-items: center; gap: 0; min-height: 40px; cursor: pointer">
+                  <span style="display: flex; align-items: center; justify-content: center; width: 40px"><input type="checkbox" checked="{{allChecked}}" onChange="{{toggleAll}}" style="width: 18px; height: 18px; flex: none; margin: 0; accent-color: {{t.primary}}"></span>
+                  <span style="font-weight: 500; font-variant-numeric: tabular-nums">{{selectAllLabel}}</span>
+                </label>
+                <span style="flex: 1; min-width: 0; text-align: right; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}; font-variant-numeric: tabular-nums">{{filterSummary}}</span>
+              </div>
+              <sc-if value="{{hasRows}}" hint-placeholder-val="{{true}}">
+                <ul style="flex: 1; min-height: 0; margin: 0; padding: 0; list-style: none; overflow: auto">
+                  <sc-for list="{{rows}}" as="row" hint-placeholder-count="8">
+                    <li style="display: flex; align-items: stretch; border-bottom: 1px solid {{t.outlineVariant}}; background: {{row.bg}}; color: {{row.fg}}; box-shadow: {{row.mark}}">
+                      <label style="display: flex; align-items: center; justify-content: center; flex: none; width: 40px; cursor: pointer">
+                        <input type="checkbox" checked="{{row.checked}}" onChange="{{row.toggle}}" aria-label="{{row.checkLabel}}" style="width: 18px; height: 18px; flex: none; margin: 0; accent-color: {{t.primary}}">
+                      </label>
+                      <button type="button" onClick="{{row.open}}" aria-current="{{row.current}}" class="hov" style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; padding: 8px 12px 8px 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer">
+                        <span style="display: flex; align-items: center; gap: 8px; min-width: 0">
+                          <span style="font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; font-weight: 600">{{row.seq}}</span>
+                          <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: {{row.mainWeight}}">{{row.main}}</span>
+                          <sc-if value="{{row.hasChip}}" hint-placeholder-val="{{false}}">
+                            <span style="display: inline-flex; align-items: center; gap: 4px; flex: none; height: 20px; padding: 0 8px 0 6px; border-radius: 999px; background: {{t.primaryContainer}}; color: {{t.onPrimaryContainer}}; font-size: 12px; line-height: 16px; font-weight: 500"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>{{row.chip}}</span>
+                          </sc-if>
+                          <span style="flex: none; font-size: 12px; line-height: 16px; font-variant-numeric: tabular-nums; white-space: nowrap">{{row.time}}</span>
+                        </span>
+                        <span style="font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{row.preview}}</span>
+                      </button>
+                    </li>
+                  </sc-for>
+                </ul>
+              </sc-if>
+              <sc-if value="{{noMatch}}" hint-placeholder-val="{{false}}">
+                <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 24px 20px">
+                  <span style="display: flex; color: {{t.outline}}"><svg aria-hidden="true" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="11" cy="11" r="6"></circle><path d="M16 16l4 4"></path></svg></span>
+                  <h2 style="margin: 0; font-size: 16px; line-height: 24px; font-weight: 500">No messages match your filter</h2>
+                  <button type="button" onClick="{{clearFilters}}" class="hov" style="display: inline-flex; align-items: center; gap: 6px; height: 32px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; background: transparent; color: {{t.primary}}">Clear all</button>
+                </div>
+              </sc-if>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{isList}}" hint-placeholder-val="{{true}}">
+            <div style="flex: 1; min-width: 0; box-sizing: border-box; padding: 16px; border: 1px solid {{t.outlineVariant}}; border-radius: 8px; background: {{t.surface}}; overflow: auto">
+              <sc-if value="{{noOpen}}" hint-placeholder-val="{{false}}">
+                <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 8px 4px">
+                  <span style="display: flex; color: {{t.outline}}"><svg aria-hidden="true" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg></span>
+                  <h2 style="margin: 0; font-size: 16px; line-height: 24px; font-weight: 500">Select a message to see its details</h2>
+                  <p style="margin: 0; color: {{t.onSurfaceVariant}}">Click a row to read its properties and body. Tick rows to act on several at once.</p>
+                </div>
+              </sc-if>
+              <sc-if value="{{hasOpen}}" hint-placeholder-val="{{true}}">
+                <div style="display: flex; flex-direction: column; gap: 14px">
+                  <div style="display: flex; align-items: center; gap: 8px">
+                    <h2 style="flex: 1; min-width: 0; margin: 0; font-size: 16px; line-height: 24px; font-weight: 500">Message Details</h2>
+                    <button type="button" onClick="{{closeDetail}}" aria-label="Close message details" title="Close message details" class="hov" style="display: flex; align-items: center; justify-content: center; flex: none; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: {{t.onSurfaceVariant}}; font: inherit; cursor: pointer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+                  </div>
+                  <dl style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0">
+                    <sc-for list="{{detail.fields}}" as="f" hint-placeholder-count="14">
+                      <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+                        <dt style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">{{f.k}}</dt>
+                        <dd style="margin: 0; font-weight: 500; font-variant-numeric: tabular-nums; overflow-wrap: anywhere">{{f.v}}</dd>
+                      </div>
+                    </sc-for>
+                  </dl>
+                  <sc-if value="{{detail.isDeferred}}" hint-placeholder-val="{{false}}">
+                    <p style="display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 10px 14px; border-radius: 8px; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v6M12 7.5h.01"></path></svg><span>This app cannot receive a deferred message.</span></p>
+                  </sc-if>
+                  <sc-if value="{{detail.isDl}}" hint-placeholder-val="{{false}}">
+                    <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px; border: 1px dashed {{t.outline}}; border-radius: 8px; align-items: stretch">
+                      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+                        <strong style="flex: 1; min-width: 160px; font-weight: 600">Why it was dead-lettered</strong>
+                        <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; letter-spacing: 0; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built</span>
+                      </div>
+                      <dl style="display: flex; flex-direction: column; gap: 6px; margin: 0">
+                        <div style="display: flex; gap: 16px">
+                          <dt style="flex: 0 0 38%; color: {{t.onSurfaceVariant}}">Dead Letter Reason</dt>
+                          <dd style="flex: 1; min-width: 0; margin: 0; font-weight: 500; overflow-wrap: anywhere">{{detail.reason}}</dd>
+                        </div>
+                        <div style="display: flex; gap: 16px">
+                          <dt style="flex: 0 0 38%; color: {{t.onSurfaceVariant}}">Dead Letter Error Description</dt>
+                          <dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere">{{detail.description}}</dd>
+                        </div>
+                      </dl>
+                      <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">The reason is on the row today. The detail pane does not show the reason or the description yet.</span>
+                    </div>
+                  </sc-if>
+                  <div style="display: flex; flex-direction: column; gap: 6px">
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+                      <h3 style="flex: 1; min-width: 80px; margin: 0; font-size: 16px; line-height: 24px; font-weight: 500">Body</h3>
+                      <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; letter-spacing: 0; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built</span>
+                      <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 6px; height: 32px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; background: transparent; color: {{t.primary}}; border-style: dashed"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15V5a1 1 0 0 1 1-1h10"></path></svg>Copy body</button>
+                    </div>
+                    <pre style="margin: 0; padding: 10px 12px; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; line-height: 20px; white-space: pre-wrap; overflow-wrap: anywhere; background: {{t.surfaceContainer}}">{{detail.body}}</pre>
+                  </div>
+                  <sc-if value="{{detail.hasProps}}" hint-placeholder-val="{{true}}">
+                    <div style="display: flex; flex-direction: column; gap: 6px">
+                      <h3 style="margin: 0; font-size: 16px; line-height: 24px; font-weight: 500">Application Properties</h3>
+                      <dl style="display: flex; flex-direction: column; margin: 0; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; line-height: 20px">
+                        <sc-for list="{{detail.props}}" as="p" hint-placeholder-count="2">
+                          <div style="display: flex; gap: 8px; padding: 4px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+                            <dt style="flex: 0 0 32%; color: {{t.onSurfaceVariant}}; overflow-wrap: anywhere">{{p.k}}:</dt>
+                            <dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere">{{p.v}}</dd>
+                          </div>
+                        </sc-for>
+                      </dl>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{detail.canResubmit}}" hint-placeholder-val="{{false}}">
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 4px">
+                      <a href="Send.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 20px 0 16px; border: 1px solid {{t.outline}}; background: transparent; color: {{t.primary}}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M4 20h4L19 9l-4-4L4 16zM13 7l4 4"></path></svg>Edit &amp; Resubmit</a>
+                      <button type="button" onClick="{{openProgress}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 20px 0 16px; border: 0; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg>Resubmit</button>
+                    </div>
+                  </sc-if>
+                </div>
+              </sc-if>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{isLoading}}" hint-placeholder-val="{{false}}">
+            <div style="display: flex; flex-direction: column; gap: 16px; flex: 1; min-width: 0; box-sizing: border-box; padding: 20px; border: 1px solid {{t.outlineVariant}}; border-radius: 8px; background: {{t.surface}}">
+              <p aria-live="polite" style="display: flex; align-items: center; gap: 12px; margin: 0; color: {{t.onSurfaceVariant}}">
+                <span style="display: flex; color: {{t.primary}}"><svg aria-hidden="true" class="spin" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" style="flex: none"><path d="M12 3a9 9 0 1 0 9 9"></path></svg></span>
+                <span>Loading the {{tabNoun}} messages of orders from {{conn}}</span>
+              </p>
+              <div aria-hidden="true" style="display: flex; flex-direction: column; gap: 10px">
+                <div style="height: 44px; border-radius: 8px; background: {{t.surfaceLow}}"></div>
+                <div style="height: 44px; border-radius: 8px; background: {{t.surfaceLow}}"></div>
+                <div style="height: 44px; border-radius: 8px; background: {{t.surfaceLow}}"></div>
+                <div style="height: 44px; border-radius: 8px; background: {{t.surfaceLow}}"></div>
+                <div style="height: 44px; width: 82%; border-radius: 8px; background: {{t.surfaceLow}}"></div>
+                <div style="height: 44px; width: 64%; border-radius: 8px; background: {{t.surfaceLow}}"></div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{isEmpty}}" hint-placeholder-val="{{false}}">
+            <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 12px; flex: 1; min-width: 0; box-sizing: border-box; padding: 32px 24px; border: 1px solid {{t.outlineVariant}}; border-radius: 8px; background: {{t.surface}}">
+              <span style="display: flex; color: {{t.outline}}"><svg aria-hidden="true" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="12" cy="12" r="9"></circle><path d="M8 12l3 3 5-6"></path></svg></span>
+              <h2 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">{{emptyTitle}}</h2>
+              <p style="margin: 0; max-width: 520px; color: {{t.onSurfaceVariant}}">The queue answered and holds none. Nothing is hidden by a filter: the count asked for was {{count}} and the broker returned 0.</p>
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+                <a href="Send.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 20px 0 16px; border: 0; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M4 20l17-8L4 4v6l10 2-10 2z"></path></svg>Send a message</a>
+                <button type="button" onClick="{{retry}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 12px; border: 0; background: transparent; color: {{t.primary}}">Refresh</button>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{isError}}" hint-placeholder-val="{{false}}">
+            <div style="flex: 1; min-width: 0">
+              <section aria-label="Error" style="display: flex; align-items: flex-start; gap: 12px; max-width: 720px; box-sizing: border-box; padding: 16px; border-radius: 8px; background: {{t.errorContainer}}; color: {{t.onErrorContainer}}">
+                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 2px"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
+                <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0">
+                  <h2 style="margin: 0; font-size: 16px; line-height: 24px; font-weight: 500">Failed to load messages</h2>
+                  <p style="margin: 0">The request to {{conn}} timed out after 30 seconds. No message is shown because none was read, and nothing on the broker was changed.</p>
+                  <button type="button" onClick="{{retry}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; margin-top: 4px; padding: 0 20px 0 16px; border: 1px solid {{t.onErrorContainer}}; border-radius: 999px; background: transparent; color: {{t.onErrorContainer}}; font: inherit; font-weight: 500; cursor: pointer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg>Retry</button>
+                </div>
+              </section>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{isDisabled}}" hint-placeholder-val="{{false}}">
+            <div style="flex: 1; min-width: 0">
+              <section aria-label="Entity disabled" style="display: flex; align-items: flex-start; gap: 12px; max-width: 720px; box-sizing: border-box; padding: 16px; border-radius: 8px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}">
+                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 2px"><circle cx="12" cy="12" r="9"></circle><path d="M6 6l12 12"></path></svg>
+                <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0">
+                  <h2 style="margin: 0; font-size: 16px; line-height: 24px; font-weight: 500">The entity is disabled for this operation.</h2>
+                  <p style="margin: 0">The broker refused to read from orders because of the status of the queue. No message was read and nothing was changed. This is not an empty queue and not a lost connection: change the status, then load again.</p>
+                  <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px">
+                    <a href="EntityAdmin.dc.html" class="hov" style="display: inline-flex; align-items: center; height: 40px; padding: 0 20px; border: 1px solid {{t.onWarnContainer}}; border-radius: 999px; color: {{t.onWarnContainer}}; font-weight: 500; text-decoration: none">Change status</a>
+                    <button type="button" onClick="{{retry}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: {{t.onWarnContainer}}; font: inherit; font-weight: 500; cursor: pointer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg>Load again</button>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </sc-if>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-height: 56px; box-sizing: border-box; padding: 8px 8px 8px 16px; border-radius: 8px; background: {{selBg}}; color: {{selFg}}">
+          <sc-if value="{{noSel}}" hint-placeholder-val="{{false}}">
+            <span style="color: {{t.onSurfaceVariant}}">No message selected. Tick rows to resubmit, move, compare, export or delete them.</span>
+          </sc-if>
+          <sc-if value="{{hasSel}}" hint-placeholder-val="{{true}}">
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex: 1; min-width: 0">
+              <span aria-live="polite" style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 240px; font-variant-numeric: tabular-nums">
+                <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="12" cy="12" r="9"></circle><path d="M8 12l3 3 5-6"></path></svg>
+                <span><strong style="font-weight: 700">{{sel.count}}</strong> {{sel.detail}}</span>
+              </span>
+              <sc-if value="{{sel.showResubmit}}" hint-placeholder-val="{{false}}">
+                <button type="button" onClick="{{openProgress}}" title="Resubmit selected messages to main queue" class="hov" style="display: inline-flex; align-items: center; gap: 6px; height: 32px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; background: transparent; color: {{t.primary}}; border-color: {{selFg}}; color: {{selFg}}"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg>Resubmit</button>
+              </sc-if>
+              <sc-if value="{{sel.showMove}}" hint-placeholder-val="{{true}}">
+                <a href="Send.dc.html" title="Move selected messages to another queue" class="hov" style="display: inline-flex; align-items: center; gap: 6px; height: 32px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; background: transparent; color: {{t.primary}}; border-color: {{selFg}}; color: {{selFg}}"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M4 8h14M14 4l4 4-4 4M20 16H6M10 12l-4 4 4 4"></path></svg>Move</a>
+              </sc-if>
+              <sc-if value="{{sel.showCompare}}" hint-placeholder-val="{{false}}">
+                <a href="Send.dc.html" title="Compare the two selected messages side by side" class="hov" style="display: inline-flex; align-items: center; gap: 6px; height: 32px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; background: transparent; color: {{t.primary}}; border-color: {{selFg}}; color: {{selFg}}"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M9 4H5v16h4M15 4h4v16h-4M12 2v20"></path></svg>Compare</a>
+              </sc-if>
+              <a href="Send.dc.html" title="Export selected messages" class="hov" style="display: inline-flex; align-items: center; gap: 6px; height: 32px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; background: transparent; color: {{t.primary}}; border-color: {{selFg}}; color: {{selFg}}"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"></path></svg>Export</a>
+              <sc-if value="{{sel.cancelOk}}" hint-placeholder-val="{{false}}">
+                <button type="button" onClick="{{openCancel}}" title="Delete the selected scheduled messages before they are delivered" class="hov" style="display: inline-flex; align-items: center; gap: 6px; height: 32px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; background: transparent; color: {{t.primary}}; border-color: {{t.error}}; color: {{t.error}}">Cancel scheduled</button>
+              </sc-if>
+              <sc-if value="{{sel.cancelBlocked}}" hint-placeholder-val="{{true}}">
+                <button type="button" aria-disabled="true" aria-describedby="cancel-scheduled-reason" title="{{sel.cancelReason}}" style="display: inline-flex; align-items: center; gap: 6px; height: 32px; box-sizing: border-box; padding: 0 16px 0 12px; border: 1px solid {{t.outlineVariant}}; border-radius: 999px; background: transparent; color: {{t.outline}}; font: inherit; font-weight: 500; white-space: nowrap; border-color: {{t.outline}}; color: {{t.onSurfaceVariant}}; cursor: default">Cancel scheduled</button>
+              </sc-if>
+              <button type="button" onClick="{{clearSel}}" title="Clear selection" class="hov" style="display: inline-flex; align-items: center; gap: 6px; height: 32px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 10px; border: 0; background: transparent; color: {{t.primary}}; color: {{selFg}}">Clear</button>
+              <span aria-hidden="true" style="flex: none; width: 1px; height: 24px; margin: 0 4px; background: {{t.outline}}"></span>
+              <button type="button" title="Delete selected messages" class="hov" style="display: inline-flex; align-items: center; gap: 6px; height: 32px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 10px; border: 0; background: transparent; color: {{t.primary}}; color: {{t.error}}; font-variant-numeric: tabular-nums"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"></path></svg>Delete {{sel.count}}</button>
+            </div>
+          </sc-if>
+          <sc-if value="{{sel.cancelBlocked}}" hint-placeholder-val="{{true}}">
+            <span id="cancel-scheduled-reason" style="flex: 1 1 100%; font-size: 12px; line-height: 16px; font-variant-numeric: tabular-nums">Cancel scheduled is off: {{sel.cancelReason}}</span>
+          </sc-if>
+        </div>
+      </section>
+    </div>
+
+    <sc-if value="{{isCancel}}" hint-placeholder-val="{{false}}">
+      <div style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: flex; justify-content: center; align-items: flex-start; box-sizing: border-box; padding: 96px 24px 24px; background: {{t.scrim}}">
+        <section aria-label="Confirm cancel scheduled" style="display: flex; flex-direction: column; gap: 16px; width: 100%; box-sizing: border-box; padding: 24px; border-radius: 20px; background: {{t.surfaceContainer}}; color: {{t.onSurface}}; box-shadow: {{t.shadow}}; max-width: 560px">
+          <h2 style="display: flex; align-items: center; gap: 10px; margin: 0; font-size: 20px; line-height: 28px; font-weight: 500; font-variant-numeric: tabular-nums">
+            <span style="display: flex; color: {{t.error}}"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg></span>
+            {{cancel.title}}
+          </h2>
+          <p style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; color: {{t.onSurfaceVariant}}">
+            <span style="display: inline-flex; align-items: center; gap: 6px; flex: none; height: 24px; padding: 0 10px; border-radius: 999px; background: {{env.bg}}; color: {{env.fg}}; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap"><sc-if value="{{env.isProd}}" hint-placeholder-val="{{true}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg></sc-if>{{env.label}}</span>
+            <span style="min-width: 0; overflow-wrap: anywhere"><strong style="font-weight: 600; color: {{t.onSurface}}">orders</strong> on Contoso ({{conn}})</span>
+          </p>
+          <p style="margin: 0">{{cancel.consequence}}</p>
+          <dl style="display: flex; flex-direction: column; margin: 0; border-top: 1px solid {{t.outlineVariant}}">
+            <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+              <dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Queue</dt>
+              <dd style="flex: 1; min-width: 0; margin: 0; font-weight: 500">orders</dd>
+            </div>
+            <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+              <dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Connection</dt>
+              <dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere">{{conn}}</dd>
+            </div>
+            <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+              <dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Environment</dt>
+              <dd style="flex: 1; min-width: 0; margin: 0">{{env.name}}</dd>
+            </div>
+            <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+              <dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Messages</dt>
+              <dd style="flex: 1; min-width: 0; margin: 0; font-variant-numeric: tabular-nums">{{cancel.messages}}</dd>
+            </div>
+          </dl>
+          <sc-if value="{{cancel.needsTyped}}" hint-placeholder-val="{{true}}">
+            <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+              <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Type the queue name to confirm</span>
+              <input type="text" value="{{typed}}" onChange="{{onTyped}}" placeholder="orders" autocomplete="off" spellcheck="false" style="height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">
+              <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">The button stays disabled until the name matches exactly.</span>
+            </label>
+          </sc-if>
+          <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 8px">
+            <button type="button" onClick="{{closeOverlay}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 12px; border: 0; background: transparent; color: {{t.primary}}">{{cancel.keep}}</button>
+            <sc-if value="{{cancel.locked}}" hint-placeholder-val="{{true}}">
+              <button type="button" disabled style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; padding: 0 20px 0 16px; border: 0; border-radius: 999px; background: {{t.surfaceHigh}}; color: {{t.outline}}; font: inherit; font-weight: 500; white-space: nowrap; font-variant-numeric: tabular-nums"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"></path></svg>{{cancel.confirm}}</button>
+            </sc-if>
+            <sc-if value="{{cancel.ready}}" hint-placeholder-val="{{false}}">
+              <button type="button" onClick="{{confirmCancel}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 20px 0 16px; border: 0; background: {{t.error}}; color: {{t.onError}}; font-variant-numeric: tabular-nums"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"></path></svg>{{cancel.confirm}}</button>
+            </sc-if>
+          </div>
+        </section>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{isProgress}}" hint-placeholder-val="{{false}}">
+      <div style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: flex; justify-content: center; align-items: flex-start; box-sizing: border-box; padding: 128px 24px 24px; background: {{t.scrim}}">
+        <section aria-label="Resubmit Messages" style="display: flex; flex-direction: column; gap: 16px; width: 100%; box-sizing: border-box; padding: 24px; border-radius: 20px; background: {{t.surfaceContainer}}; color: {{t.onSurface}}; box-shadow: {{t.shadow}}; max-width: 560px">
+          <h2 style="display: flex; align-items: center; gap: 10px; margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">
+            <span style="display: flex; color: {{t.primary}}"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg></span>
+            Resubmit Messages
+          </h2>
+          <p style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; color: {{t.onSurfaceVariant}}">
+            <span style="display: inline-flex; align-items: center; gap: 6px; flex: none; height: 24px; padding: 0 10px; border-radius: 999px; background: {{env.bg}}; color: {{env.fg}}; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap"><sc-if value="{{env.isProd}}" hint-placeholder-val="{{true}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg></sc-if>{{env.label}}</span>
+            <span style="min-width: 0; overflow-wrap: anywhere"><strong style="font-weight: 600; color: {{t.onSurface}}">orders</strong> on Contoso ({{conn}})</span>
+          </p>
+          <p style="margin: 0; font-variant-numeric: tabular-nums">{{progress.description}}</p>
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            <span aria-live="polite" style="display: flex; align-items: center; gap: 10px; font-variant-numeric: tabular-nums">
+              <span style="display: flex; color: {{t.primary}}"><svg aria-hidden="true" class="spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" style="flex: none"><path d="M12 3a9 9 0 1 0 9 9"></path></svg></span>
+              {{progress.processing}}
+            </span>
+            <div aria-hidden="true" style="display: flex; height: 8px; border-radius: 999px; background: {{t.surfaceHigh}}; overflow: hidden">
+              <div style="flex: 0 0 18%"></div>
+              <div style="flex: 0 0 36%; border-radius: 999px; background: {{t.primary}}"></div>
+            </div>
+            <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Starting operation...</span>
+          </div>
+          <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 8px">
+            <button type="button" onClick="{{closeOverlay}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 20px 0 16px; border: 0; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}">Cancel</button>
+          </div>
+        </section>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{isResults}}" hint-placeholder-val="{{false}}">
+      <div style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: flex; justify-content: center; align-items: flex-start; box-sizing: border-box; padding: 48px 24px 24px; background: {{t.scrim}}">
+        <section aria-label="Resubmit Results" style="display: flex; flex-direction: column; gap: 16px; width: 100%; box-sizing: border-box; padding: 24px; border-radius: 20px; background: {{t.surfaceContainer}}; color: {{t.onSurface}}; box-shadow: {{t.shadow}}; max-width: 720px">
+          <h2 style="display: flex; align-items: center; gap: 10px; margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">
+            <span style="display: flex; color: {{t.primary}}"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg></span>
+            Resubmit Results
+          </h2>
+          <p style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; color: {{t.onSurfaceVariant}}">
+            <span style="display: inline-flex; align-items: center; gap: 6px; flex: none; height: 24px; padding: 0 10px; border-radius: 999px; background: {{env.bg}}; color: {{env.fg}}; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap"><sc-if value="{{env.isProd}}" hint-placeholder-val="{{true}}"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg></sc-if>{{env.label}}</span>
+            <span style="min-width: 0; overflow-wrap: anywhere"><strong style="font-weight: 600; color: {{t.onSurface}}">orders</strong> on Contoso ({{conn}})</span>
+          </p>
+          <p style="margin: 0">Attempted to resubmit 5 dead letter messages from orders.</p>
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+            <div style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 8px; background: {{t.surface}}">
+              <span style="display: flex; color: {{t.success}}"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="12" cy="12" r="9"></circle><path d="M8 12l3 3 5-6"></path></svg></span>
+              <span style="display: flex; flex-direction: column"><span style="font-size: 24px; line-height: 32px; font-weight: 500; font-variant-numeric: tabular-nums">3</span><span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Successful</span></span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 8px; background: {{t.surface}}">
+              <span style="display: flex; color: {{t.error}}"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M8 3h8l5 5v8l-5 5H8l-5-5V8zM12 8v5M12 16.5h.01"></path></svg></span>
+              <span style="display: flex; flex-direction: column"><span style="font-size: 24px; line-height: 32px; font-weight: 500; font-variant-numeric: tabular-nums">2</span><span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Failed</span></span>
+            </div>
+          </div>
+          <p style="display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 10px 14px; border-radius: 8px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg><span><strong style="font-weight: 600">Partial Success:</strong> Some messages failed to process. See details below.</span></p>
+          <table style="width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums">
+            <caption style="padding: 0 0 4px; font-weight: 500; text-align: left">Failed Messages (2)</caption>
+            <thead>
+              <tr>
+                <th scope="col" style="padding: 8px 12px 8px 0; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Sequence Number</th>
+                <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Result</th>
+                <th scope="col" style="padding: 8px 0 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Error</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="padding: 8px 12px 8px 0; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">48211872</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top; font-weight: 600; white-space: nowrap">Failed</td>
+                <td style="padding: 8px 0 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top">Not found within scan window</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 12px 8px 0; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">48211874</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top"><span style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px 2px 6px; border-radius: 999px; background: {{t.errorContainer}}; color: {{t.onErrorContainer}}; font-size: 12px; line-height: 16px; font-weight: 700"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>Possible duplicate - do not retry</span></td>
+                <td style="padding: 8px 0 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; vertical-align: top">Message was resubmitted but could not be removed from the dead-letter queue and may be duplicated on retry: The lock supplied is invalid.</td>
+              </tr>
+            </tbody>
+          </table>
+          <p style="display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 10px 14px; border-radius: 8px; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v6M12 7.5h.01"></path></svg><span><strong style="font-weight: 600">Tip:</strong> You can retry the failed messages by clicking the Retry button below. Retry takes 48211872 only: a possible duplicate is never sent again.</span></p>
+          <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 8px">
+            <button type="button" onClick="{{openProgress}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 20px 0 16px; border: 1px solid {{t.outline}}; background: transparent; color: {{t.primary}}; font-variant-numeric: tabular-nums"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg>Retry Failed (1)</button>
+            <button type="button" onClick="{{closeOverlay}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; border-radius: 999px; font: inherit; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; padding: 0 20px 0 16px; border: 0; background: {{t.primary}}; color: {{t.onPrimary}}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 12l5 5 9-10"></path></svg>Close</button>
+          </div>
+        </section>
+      </div>
+    </sc-if>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Preview"},"state":{"editor":"enum","options":["active","deadLetter","transferDeadLetter","scheduledFilter","cancelConfirm","detail","progress","results","loading","empty","error","disabled"],"default":"active","section":"Preview"},"environment":{"editor":"enum","options":["production","development"],"default":"production","section":"Preview"},"$preview":{"width":1280,"height":900}}'>
+const LIGHT = { surface:'#f9f9ff', surfaceLow:'#f2f3fa', surfaceContainer:'#ecedf4', surfaceHigh:'#e6e8ee',
+  onSurface:'#191c20', onSurfaceVariant:'#43474e', outline:'#73777f', outlineVariant:'#c3c6cf',
+  primary:'#005cbb', onPrimary:'#ffffff', primaryContainer:'#d7e3ff', onPrimaryContainer:'#001b3f',
+  secondaryContainer:'#dae2f9', onSecondaryContainer:'#131c2b',
+  error:'#ba1a1a', onError:'#ffffff', errorContainer:'#ffdad6', onErrorContainer:'#410002',
+  warnContainer:'#ffdea3', onWarnContainer:'#261900', success:'#1b6b32', successContainer:'#b6f2be', onSuccessContainer:'#002108',
+  scrim:'rgba(0,0,0,.45)', shadow:'0 1px 2px rgba(0,0,0,.3), 0 2px 6px 2px rgba(0,0,0,.15)' };
+const DARK = { surface:'#111318', surfaceLow:'#191c20', surfaceContainer:'#1d2024', surfaceHigh:'#282a2f',
+  onSurface:'#e2e2e9', onSurfaceVariant:'#c3c6cf', outline:'#8d9199', outlineVariant:'#43474e',
+  primary:'#abc7ff', onPrimary:'#002f65', primaryContainer:'#00458f', onPrimaryContainer:'#d7e3ff',
+  secondaryContainer:'#3e4759', onSecondaryContainer:'#dae2f9',
+  error:'#ffb4ab', onError:'#690005', errorContainer:'#93000a', onErrorContainer:'#ffdad6',
+  warnContainer:'#5c4300', onWarnContainer:'#ffdea3', success:'#9bd6a4', successContainer:'#00531f', onSuccessContainer:'#b6f2be',
+  scrim:'rgba(0,0,0,.6)', shadow:'0 1px 3px rgba(0,0,0,.6), 0 4px 8px 3px rgba(0,0,0,.3)' };
+
+const QUEUE = 'orders';
+const TOTALS = { active: 1204, dl: 37, tdl: 2 };
+const STATUSES = ['paid', 'shipped', 'returned', 'paid'];
+const SUBJECTS = ['OrderPaid', 'OrderShipped', 'OrderReturned', 'OrderPaid'];
+const REGIONS = ['EU', 'UK', 'EU', 'US'];
+
+function fmt(n) { return Number(n || 0).toLocaleString('en-US'); }
+function pad(n) { return String(n).padStart(2, '0'); }
+
+function sample(i, base, day, shortDay) {
+  const minute = 20 + i;
+  const second = (i * 7) % 60;
+  const body = JSON.stringify({ orderId: 'SAMPLE-' + (1042 + i), status: STATUSES[i % 4], total: Number((129.9 + i * 7.35).toFixed(2)), currency: 'EUR' }, null, 2);
+  return {
+    seq: base + i,
+    id: 'SAMPLE-' + (0x2f6c10 + i * 0x1f3).toString(16),
+    corr: 'SAMPLE-' + (1042 + i),
+    subject: SUBJECTS[i % 4],
+    session: 'customer-' + (1042 + (i % 3)),
+    time: shortDay + ', 1:' + pad(minute) + ' PM',
+    medium: day + ', 1:' + pad(minute) + ':' + pad(second) + ' PM',
+    expires: 'Nov 26, 2026, 1:' + pad(minute) + ':' + pad(second) + ' PM',
+    size: body.length + 164,
+    props: [{ k: 'region', v: REGIONS[i % 4] }, { k: 'notify', v: i % 2 === 0 ? 'true' : 'false' }],
+    body, state: 'Active', deliveryCount: 0, sched: '-', reason: '', description: ''
+  };
+}
+
+const ACTIVE = Array.from({ length: 20 }, (_, i) => {
+  const m = sample(i, 48213400, 'Nov 12, 2026', '11/12/26');
+  if (i === 5 || i === 13) { m.state = 'Scheduled'; m.sched = i === 5 ? 'Nov 13, 2026, 9:00:00 AM' : 'Nov 14, 2026, 9:00:00 AM'; }
+  if (i === 9) m.state = 'Deferred';
+  return m;
+});
+const DEAD = Array.from({ length: 20 }, (_, i) => {
+  const m = sample(i, 48211870, 'Nov 11, 2026', '11/11/26');
+  const ttl = i % 4 === 3;
+  m.reason = ttl ? 'TTLExpiredException' : 'MaxDeliveryCountExceeded';
+  m.description = ttl ? 'The message expired and was dead lettered.' : 'Message could not be consumed after 10 delivery attempts.';
+  m.deliveryCount = ttl ? 1 : 10;
+  return m;
+});
+const TRANSFER = Array.from({ length: 2 }, (_, i) => {
+  const m = sample(i, 48209011, 'Nov 10, 2026', '11/10/26');
+  m.reason = 'Unknown';
+  return m;
+});
+const LISTS = { active: ACTIVE, dl: DEAD, tdl: TRANSFER };
+const VIEW_TAB = { deadLetter: 'dl', progress: 'dl', results: 'dl', transferDeadLetter: 'tdl' };
+const WHERE = { active: 'queue', dl: 'dead-letter queue', tdl: 'transfer dead-letter queue' };
+const NOUN = { active: 'active', dl: 'dead letter', tdl: 'transfer dead-letter' };
+const EMPTY_TITLE = { active: 'No active messages', dl: 'No dead letter messages', tdl: 'No transfer dead-letter messages' };
+
+function defaultSelection(view, tab) {
+  if (tab === 'active') {
+    if (view === 'active') return ACTIVE.slice(0, 3).map(m => m.seq);
+    if (view === 'scheduledFilter' || view === 'cancelConfirm') return ACTIVE.filter(m => m.state === 'Scheduled').map(m => m.seq);
+    return [];
+  }
+  if (tab === 'dl') return ['deadLetter', 'progress', 'results'].includes(view) ? DEAD.slice(0, 5).map(m => m.seq) : [];
+  return view === 'transferDeadLetter' ? [TRANSFER[0].seq] : [];
+}
+
+function defaultOpen(view, tab) {
+  if (view === 'detail' && tab === 'active') return ACTIVE[5].seq;
+  if (view === 'deadLetter' && tab === 'dl') return DEAD[0].seq;
+  return null;
+}
+
+class Component extends DCLogic {
+  componentDidUpdate(prev) {
+    if (!prev) return;
+    if (prev.state !== this.props.state) {
+      this.setState({ view: undefined, tab: undefined, sel: undefined, open: undefined, overlay: undefined, show: undefined, q: undefined, typed: undefined, adv: undefined });
+    }
+  }
+
+  renderVals() {
+    const s = this.state || {};
+    const dark = (this.props.theme ?? 'light') === 'dark';
+    const t = dark ? DARK : LIGHT;
+    const prod = (this.props.environment ?? 'production') === 'production';
+    const bar = dark
+      ? { bg: t.surfaceContainer, fg: t.onSurface, line: t.outlineVariant, sep: t.outlineVariant, navOn: t.secondaryContainer, navOnFg: t.onSecondaryContainer }
+      : { bg: t.primary, fg: t.onPrimary, line: t.primary, sep: 'rgba(255,255,255,.4)', navOn: 'rgba(255,255,255,.18)', navOnFg: t.onPrimary };
+    const env = prod
+      ? { label: 'PRODUCTION', name: 'Production', isProd: true, bg: t.errorContainer, fg: t.onErrorContainer }
+      : { label: 'DEVELOPMENT', name: 'Development', isProd: false, bg: t.secondaryContainer, fg: t.onSecondaryContainer };
+    const conn = prod ? 'contoso-prod.servicebus.windows.net' : 'contoso-dev.servicebus.windows.net';
+    const snack = dark
+      ? { bg: LIGHT.surface, fg: LIGHT.onSurface, action: LIGHT.primary }
+      : { bg: LIGHT.onSurface, fg: LIGHT.surface, action: DARK.primary };
+    const stateProp = this.props.state ?? 'active';
+    const view = s.view ?? stateProp;
+    const tab = s.tab ?? (VIEW_TAB[view] || 'active');
+    const base = ['loading', 'empty', 'error', 'disabled'].includes(view) ? view : 'list';
+    const loaded = base === 'list' ? LISTS[tab] : [];
+    const totals = base === 'empty' ? { active: 0, dl: 0, tdl: 0 } : TOTALS;
+
+    const show = tab === 'active' ? (s.show ?? (['scheduledFilter', 'cancelConfirm'].includes(view) ? 'Scheduled' : 'All')) : 'All';
+    const q = s.q || '';
+    const needle = q.trim().toLowerCase();
+    const shown = loaded
+      .filter(m => show === 'All' || m.state === show)
+      .filter(m => !needle || (m.id + ' ' + m.seq + ' ' + m.reason + ' ' + m.body).toLowerCase().includes(needle));
+
+    const selMap = s.sel || {};
+    const selected = selMap[tab] ?? defaultSelection(view, tab);
+    const setSel = list => this.setState({ sel: Object.assign({}, selMap, { [tab]: list }) });
+    const openSeq = s.open !== undefined ? s.open : defaultOpen(view, tab);
+    const opened = loaded.find(m => m.seq === openSeq) || null;
+
+    const rows = shown.map(m => {
+      const checked = selected.includes(m.seq);
+      const on = opened === m;
+      const chip = m.state === 'Scheduled' || m.state === 'Deferred';
+      return {
+        seq: '#' + m.seq, main: tab === 'active' ? m.id : m.reason, mainWeight: tab === 'active' ? 400 : 600,
+        hasChip: chip, chip: chip ? m.state : '', time: m.time, preview: m.body.replace(/\s+/g, ' '),
+        checked, checkLabel: 'Select ' + m.seq, current: on ? 'true' : 'false',
+        bg: checked ? t.secondaryContainer : 'transparent', fg: checked ? t.onSecondaryContainer : t.onSurface,
+        mark: on ? 'inset 3px 0 0 ' + t.primary : 'none',
+        toggle: () => setSel(checked ? selected.filter(n => n !== m.seq) : selected.concat(m.seq)),
+        open: () => this.setState({ open: m.seq })
+      };
+    });
+    const shownSeqs = shown.map(m => m.seq);
+    const allChecked = shown.length > 0 && shownSeqs.every(n => selected.includes(n));
+
+    const count = selected.length;
+    const scheduledSeqs = ACTIVE.filter(m => m.state === 'Scheduled').map(m => m.seq);
+    const notScheduled = selected.filter(n => !scheduledSeqs.includes(n)).length;
+    const offerCancel = tab === 'active' && count > 0;
+    const cancelReason = notScheduled === 0 ? ''
+      : 'Only scheduled messages can be cancelled; ' + notScheduled + ' of the ' + count + ' selected ' + (notScheduled === 1 ? 'is' : 'are') + ' not scheduled.';
+    const sel = {
+      count: fmt(count),
+      detail: 'selected of ' + loaded.length + ' loaded, ' + fmt(totals[tab]) + ' in the ' + WHERE[tab],
+      showResubmit: tab !== 'active', showMove: tab !== 'tdl', showCompare: count === 2 && tab !== 'tdl',
+      cancelOk: offerCancel && !cancelReason, cancelBlocked: offerCancel && !!cancelReason, cancelReason
+    };
+
+    const noun = count === 1 ? 'message' : 'messages';
+    const typed = s.typed || '';
+    const needsTyped = count > 1;
+    const ready = !needsTyped || typed === QUEUE;
+    const cancel = {
+      title: 'Cancel ' + count + ' scheduled ' + noun + '?',
+      consequence: 'The ' + noun + ' ' + (count === 1 ? 'is' : 'are') + ' deleted before ' + (count === 1 ? 'it is' : 'they are') + ' ever delivered. This cannot be undone; export ' + (count === 1 ? 'it' : 'them') + ' first to keep a copy.',
+      messages: count + ' scheduled' + (count === 1 ? ': ' + selected[0] : ''),
+      keep: 'Keep ' + (count === 1 ? 'it' : 'them'),
+      confirm: 'Cancel ' + count + ' scheduled ' + noun,
+      needsTyped, ready, locked: !ready
+    };
+
+    const overlay = s.overlay !== undefined ? s.overlay : (['cancelConfirm', 'progress', 'results'].includes(view) ? view : null);
+    const progressCount = count || 1;
+    const progress = {
+      description: 'Resubmitting ' + progressCount + ' ' + NOUN[tab === 'tdl' ? 'tdl' : 'dl'] + ' ' + (progressCount === 1 ? 'message' : 'messages') + ' from ' + QUEUE + '...',
+      processing: 'Processing ' + progressCount + ' ' + (progressCount === 1 ? 'message' : 'messages') + '...'
+    };
+
+    const detail = opened
+      ? {
+          fields: [
+            ['Message ID', opened.id], ['Sequence Number', String(opened.seq)], ['Correlation ID', opened.corr],
+            ['Content Type', 'application/json'], ['Enqueued Time', opened.medium], ['Delivery Count', String(opened.deliveryCount)]
+          ].concat(opened.state !== 'Active' ? [['State', opened.state]] : []).concat([
+            ['Size', fmt(opened.size) + ' bytes'], ['Session ID', opened.session], ['Subject', opened.subject],
+            ['To', '-'], ['Reply To', '-'], ['Scheduled Time', opened.sched], ['Expires At', opened.expires]
+          ]).map(p => ({ k: p[0], v: p[1] })),
+          isDeferred: opened.state === 'Deferred', isDl: tab === 'dl',
+          reason: opened.reason, description: opened.description,
+          body: opened.body, props: opened.props, hasProps: opened.props.length > 0, canResubmit: tab === 'dl'
+        }
+      : { fields: [], isDeferred: false, isDl: false, reason: '', description: '', body: '', props: [], hasProps: false, canResubmit: false };
+
+    const adv = !!s.adv && tab !== 'tdl' && base === 'list';
+    const tabDefs = [['active', 'Active Messages'], ['dl', 'Dead Letter'], ['tdl', 'Transfer dead-letter']];
+    const tabs = tabDefs.map(d => {
+      const on = d[0] === tab;
+      const alert = d[0] === 'dl' && totals.dl > 0;
+      return {
+        label: d[1], count: fmt(totals[d[0]]), current: on ? 'true' : 'false',
+        fg: on ? t.primary : t.onSurfaceVariant, line: on ? t.primary : 'transparent', weight: on ? 700 : 500,
+        badgeBg: alert ? t.warnContainer : t.surfaceHigh, badgeFg: alert ? t.onWarnContainer : t.onSurfaceVariant,
+        pick: () => this.setState({ tab: d[0], view: base === 'list' ? view : 'active', open: null, overlay: null, show: undefined, q: undefined, adv: undefined })
+      };
+    });
+    const filtered = show !== 'All' || !!needle;
+    const scheduledLoaded = loaded.filter(m => m.state === 'Scheduled').length;
+    const regex = !!s.regex;
+    const paneH = (470 - (tab === 'tdl' ? 32 : 0) - (adv ? 68 : 0) - (sel.cancelBlocked ? 20 : 0)) + 'px';
+
+    return {
+      t, bar, env, conn, snack,
+      isDefault: base === 'list', isLoading: base === 'loading', isEmpty: base === 'empty', isError: base === 'error', isDisabled: base === 'disabled',
+      isList: base === 'list', tabs, isActiveTab: tab === 'active', isDlTab: tab === 'dl', isTdl: tab === 'tdl',
+      tabNoun: NOUN[tab], emptyTitle: EMPTY_TITLE[tab],
+      count: s.count ?? '20', onCount: ev => this.setState({ count: ev.target.value }),
+      q, onQ: ev => this.setState({ q: ev.target.value }),
+      regexOn: regex, regexPressed: regex ? 'true' : 'false', regexBg: regex ? t.secondaryContainer : 'transparent', regexFg: regex ? t.onSecondaryContainer : t.onSurface,
+      toggleRegex: () => this.setState({ regex: !regex }),
+      show, onShow: ev => this.setState({ show: ev.target.value }),
+      scheduledText: scheduledLoaded + ' scheduled of ' + loaded.length + ' loaded',
+      hasAdvanced: tab !== 'tdl', advOpen: adv, advExpanded: adv ? 'true' : 'false', toggleAdv: () => this.setState({ adv: !s.adv }),
+      paneH,
+      rows, hasRows: rows.length > 0, noMatch: base === 'list' && rows.length === 0,
+      allChecked, selectAllLabel: 'Select All (' + shown.length + ')',
+      toggleAll: () => setSel(allChecked ? selected.filter(n => !shownSeqs.includes(n)) : Array.from(new Set(selected.concat(shownSeqs)))),
+      filterSummary: filtered ? 'Showing ' + shown.length + ' of ' + loaded.length + ' messages' : '',
+      clearFilters: () => this.setState({ show: 'All', q: '' }),
+      hasOpen: !!opened, noOpen: !opened, detail, closeDetail: () => this.setState({ open: null }),
+      hasSel: count > 0, noSel: count === 0, sel,
+      selBg: count > 0 ? t.secondaryContainer : t.surface, selFg: count > 0 ? t.onSecondaryContainer : t.onSurface,
+      clearSel: () => setSel([]),
+      isCancel: overlay === 'cancelConfirm' && count > 0, isProgress: overlay === 'progress', isResults: overlay === 'results',
+      cancel, progress, typed, onTyped: ev => this.setState({ typed: ev.target.value }),
+      openCancel: () => this.setState({ overlay: 'cancelConfirm', typed: '' }),
+      openProgress: () => this.setState({ overlay: 'progress' }),
+      closeOverlay: () => this.setState({ overlay: null }),
+      confirmCancel: () => this.setState({ overlay: null, typed: '', sel: Object.assign({}, selMap, { [tab]: [] }) }),
+      retry: () => this.setState({ view: 'active', tab, overlay: null }),
+      refresh: () => this.setState({ overlay: null }),
+      backRows: [
+        { name: 'billing/invoices', count: '18' },
+        { name: 'notifications', count: '' },
+        { name: 'orders', count: '1,204', on: true },
+        { name: 'orders-archive', count: '52,310' }
+      ].map(x => ({ name: x.name, count: x.count, bg: x.on ? t.secondaryContainer : 'transparent', weight: x.on ? 600 : 400 })),
+      back: { kind: 'Queue', name: 'orders', active: '1,204', dlq: '37', size: '4.2 MB' }
+    };
+  }
+}
+</script>
+</body>
+</html>

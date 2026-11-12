@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Settings and updates</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.hov:hover{background-image:linear-gradient(rgba(128,128,128,.16),rgba(128,128,128,.16)) !important}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #ffffff;outline-offset:0;box-shadow:0 0 0 4px #005cbb !important}
+input::placeholder{color:currentColor;opacity:.72}
+@keyframes dc-spin{to{transform:rotate(360deg)}}
+.spin{animation:dc-spin 1s linear infinite}
+@media (prefers-reduced-motion: reduce){.spin{animation:none}}
+</style>
+</helmet>
+<div style="position: relative; min-height: 1840px; box-sizing: border-box; display: flex; flex-direction: column; background: {{t.surface}}; color: {{t.onSurface}}; font-family: Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 14px; line-height: 20px">
+
+  <div style="display: flex; align-items: center; gap: 8px; height: 28px; box-sizing: border-box; padding: 0 16px; background: {{t.surfaceHigh}}; color: {{t.onSurfaceVariant}}; border-bottom: 1px solid {{t.outlineVariant}}; font-size: 12px; line-height: 16px">
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M4 10h16M10 10v10"></path></svg>
+    <strong style="font-weight: 600; color: {{t.onSurface}}">Design, not built</strong>
+    <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Settings: there is no such screen today. Each row says whether its function exists (Built, and where it lives now) or is proposed.</span>
+  </div>
+
+  <header style="display: flex; align-items: center; gap: 16px; height: 56px; box-sizing: border-box; padding: 0 8px 0 12px; background: {{bar.bg}}; color: {{bar.fg}}; border-bottom: 1px solid {{bar.line}}">
+    <nav aria-label="Main" style="display: flex; align-items: center; gap: 4px">
+      <a href="Connections.dc.html" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none; font-weight: 500">Connections</a>
+      <a href="Main.dc.html" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none; font-weight: 500">Entities</a>
+      <a href="Monitoring.dc.html" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none; font-weight: 500">Monitoring</a>
+    </nav>
+    <span aria-hidden="true" style="flex: none; width: 1px; height: 24px; background: {{bar.sep}}"></span>
+    <sc-if value="{{hasConn}}" hint-placeholder-val="{{true}}">
+      <div style="display: flex; align-items: center; gap: 16px; flex: 1; min-width: 0">
+        <span style="display: inline-flex; align-items: center; gap: 6px; flex: none; height: 24px; padding: 0 10px; border-radius: 999px; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap; background: {{env.bg}}; color: {{env.fg}}">
+          <sc-if value="{{env.isProd}}" hint-placeholder-val="{{true}}">
+            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
+          </sc-if>
+          <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Environment:</span>
+          {{env.label}}
+        </span>
+        <span title="{{conn}}" style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; font-weight: 500">
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="12" cy="12" r="9"></circle><path d="M8 12l3 3 5-6"></path></svg>
+          <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Connected to</span>
+          <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{conn}}</span>
+        </span>
+      </div>
+    </sc-if>
+    <sc-if value="{{noConn}}" hint-placeholder-val="{{false}}">
+      <div style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; font-weight: 500">
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="12" cy="12" r="9"></circle><path d="M9 9l6 6M15 9l-6 6"></path></svg>
+        <span>Disconnected</span>
+      </div>
+    </sc-if>
+    <div style="display: flex; align-items: center; gap: 4px">
+      <button type="button" aria-label="Notifications" title="Notifications" class="hov" style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: {{bar.fg}}; font: inherit; cursor: pointer">
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M6 16v-5a6 6 0 1 1 12 0v5l2 2H4zM10 21a2 2 0 0 0 4 0"></path></svg>
+      </button>
+      <button type="button" aria-label="Help" title="Help" class="hov" style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: {{bar.fg}}; font: inherit; cursor: pointer">
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="12" cy="12" r="9"></circle><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1 1-1.1 1.8M12 17h.01"></path></svg>
+      </button>
+      <a href="Settings.dc.html" aria-current="page" aria-label="Settings" title="Settings" class="hov" style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 999px; background: {{bar.navOn}}; color: {{bar.navOnFg}}; text-decoration: none">
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M4 7h9M19 7h1M4 17h1M11 17h9"></path><circle cx="16" cy="7" r="3"></circle><circle cx="8" cy="17" r="3"></circle></svg>
+      </a>
+    </div>
+  </header>
+
+  <main style="flex: 1; width: 100%; max-width: 1080px; min-width: 0; box-sizing: border-box; padding: 20px 24px 32px">
+    <div style="padding-bottom: 20px">
+      <h1 style="margin: 0; font-size: 28px; line-height: 36px; font-weight: 400">Settings</h1>
+      <p style="margin: 0; color: {{t.onSurfaceVariant}}">What the theme button, the version label and the File, View and Help menus held. The window has no menu bar, so it all lives here.</p>
+    </div>
+
+    <section aria-label="Appearance" style="display: flex; gap: 16px 32px; flex-wrap: wrap; padding: 24px 0; border-top: 1px solid {{t.outlineVariant}}">
+      <div style="flex: 0 0 200px">
+        <h2 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">Appearance</h2>
+      </div>
+      <div style="display: flex; flex-direction: column; flex: 1 1 520px; min-width: 0">
+        <div style="display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; min-height: 48px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+          <span style="flex: 0 0 168px; font-weight: 500">Theme</span>
+          <div style="display: inline-flex; border: 1px solid {{t.outline}}; border-radius: 999px; overflow: hidden">
+            <sc-for list="{{themeOpts}}" as="o" hint-placeholder-count="3">
+              <button type="button" onClick="{{o.pick}}" aria-pressed="{{o.pressed}}" class="hov" style="display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 16px 0 {{o.pad}}; border: 0; border-left: {{o.line}}; background: {{o.bg}}; color: {{o.fg}}; font: inherit; font-weight: {{o.weight}}; cursor: pointer">
+                <sc-if value="{{o.on}}" hint-placeholder-val="{{false}}">
+                  <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 12l5 5 9-10"></path></svg>
+                </sc-if>
+                {{o.label}}
+              </button>
+            </sc-for>
+          </div>
+          <span style="flex: 1"></span>
+          <span style="display: inline-flex; align-items: center; gap: 4px; flex: none; height: 20px; padding: 0 8px 0 6px; border: 1px solid {{t.outlineVariant}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 12l5 5 9-10"></path></svg>Built: light and dark, a toolbar button today</span>
+          <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built: System as a choice</span>
+        </div>
+        <p style="margin: 8px 0 0; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">System follows the light or dark setting of this computer and changes with it. Today the app reads that setting once, until the first click on the theme button.</p>
+      </div>
+    </section>
+
+    <section aria-label="Updates" style="display: flex; gap: 16px 32px; flex-wrap: wrap; padding: 24px 0; border-top: 1px solid {{t.outlineVariant}}">
+      <div style="flex: 0 0 200px">
+        <h2 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">Updates</h2>
+        <p style="margin: 4px 0 0; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Nothing downloads or installs without a click.</p>
+      </div>
+      <div style="display: flex; flex-direction: column; flex: 1 1 520px; min-width: 0">
+        <div style="display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; min-height: 48px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+          <span style="flex: 0 0 168px; font-weight: 500">Current version</span>
+          <span style="font-variant-numeric: tabular-nums">2.4.0</span>
+          <span style="flex: 1"></span>
+          <span style="display: inline-flex; align-items: center; gap: 4px; flex: none; height: 20px; padding: 0 8px 0 6px; border: 1px solid {{t.outlineVariant}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 12l5 5 9-10"></path></svg>Built: the version label on the toolbar</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; min-height: 48px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+          <span style="flex: 0 0 168px; font-weight: 500">Channel</span>
+          <div style="display: inline-flex; border: 1px solid {{t.outline}}; border-radius: 999px; overflow: hidden">
+            <sc-for list="{{channelOpts}}" as="o" hint-placeholder-count="3">
+              <button type="button" onClick="{{o.pick}}" aria-pressed="{{o.pressed}}" class="hov" style="display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 16px 0 {{o.pad}}; border: 0; border-left: {{o.line}}; background: {{o.bg}}; color: {{o.fg}}; font: inherit; font-weight: {{o.weight}}; cursor: pointer">
+                <sc-if value="{{o.on}}" hint-placeholder-val="{{false}}">
+                  <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 12l5 5 9-10"></path></svg>
+                </sc-if>
+                {{o.label}}
+              </button>
+            </sc-for>
+          </div>
+          <span style="flex: 1"></span>
+          <span style="display: inline-flex; align-items: center; gap: 4px; flex: none; height: 20px; padding: 0 8px 0 6px; border: 1px solid {{t.outlineVariant}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 12l5 5 9-10"></path></svg>Built: a menu behind the version label</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; min-height: 48px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+          <span style="flex: 0 0 168px; font-weight: 500">Last check</span>
+          <span style="font-variant-numeric: tabular-nums">Nov 12, 2026, 1:58:31 PM</span>
+          <button type="button" onClick="{{checkNow}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg>Check now</button>
+          <span style="flex: 1"></span>
+          <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built: the time, and Check now outside a failure</span>
+        </div>
+        <p style="margin: 8px 0 0; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Checked 5 seconds after the app starts, then every 4 hours. Beta also receives pre-releases; going back to Stable never downgrades, you stay on the beta until a newer stable version is out.</p>
+
+        <sc-if value="{{upToDate}}" hint-placeholder-val="{{true}}">
+          <div aria-live="polite" style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 16px; padding: 16px; border-radius: 8px; background: {{t.surfaceLow}}">
+            <h3 style="display: flex; align-items: center; gap: 8px; margin: 0; font-size: 16px; line-height: 24px; font-weight: 500">
+              <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="{{t.success}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="12" cy="12" r="9"></circle><path d="M8 12l3 3 5-6"></path></svg>
+              You are up to date
+            </h3>
+            <p style="margin: 0; color: {{t.onSurfaceVariant}}">2.4.0 is the newest version on the {{channelName}} channel.</p>
+            <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built: today nothing says so</span>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{available}}" hint-placeholder-val="{{false}}">
+          <div aria-live="polite" style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 16px; padding: 16px; border-radius: 8px; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}">
+            <h3 style="display: flex; align-items: center; gap: 8px; margin: 0; font-size: 16px; line-height: 24px; font-weight: 500"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"></path></svg>Version 2.5.0 is available</h3>
+            <p style="margin: 0">You have 2.4.0. Nothing is downloaded until you choose Download.</p>
+            <div style="display: flex; flex-direction: column; gap: 4px; width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}">
+              <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Release notes of 2.5.0 (sample text)</span>
+              <ul style="display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0 0 0 20px">
+                <li>Rules tab for subscriptions</li>
+                <li>The entity tree stays fast on a large namespace</li>
+                <li>Fix: the download bar no longer covers the toolbar</li>
+              </ul>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 4px">
+              <button type="button" onClick="{{startDownload}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px 0 16px; border: 0; border-radius: 999px; background: {{t.primary}}; color: {{t.onPrimary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"></path></svg>Download</button>
+              <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer; color: {{t.onSecondaryContainer}}; text-decoration: underline">Open the release page<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"></path></svg></button>
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap">
+              <span style="display: inline-flex; align-items: center; gap: 4px; flex: none; height: 20px; padding: 0 8px 0 6px; border: 1px solid {{t.outlineVariant}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap; color: {{t.onSecondaryContainer}}; border-color: {{t.outline}}"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 12l5 5 9-10"></path></svg>Built: the toolbar button "Update v2.5.0"</span>
+              <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap; color: {{t.onSecondaryContainer}}">Design, not built: the release notes on screen</span>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{downloading}}" hint-placeholder-val="{{false}}">
+          <div aria-live="polite" style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 16px; padding: 16px; border-radius: 8px; background: {{t.surfaceLow}}">
+            <h3 style="display: flex; align-items: center; gap: 8px; margin: 0; font-size: 16px; line-height: 24px; font-weight: 500">
+              <svg aria-hidden="true" class="spin" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="{{t.primary}}" stroke-width="2.4" stroke-linecap="round" style="flex: none"><path d="M12 3a9 9 0 1 0 9 9"></path></svg>
+              Downloading version 2.5.0
+            </h3>
+            <div style="display: flex; align-items: center; gap: 12px; width: 100%">
+              <div aria-hidden="true" style="flex: 1; height: 8px; border-radius: 999px; background: {{t.surfaceHigh}}; overflow: hidden">
+                <div style="width: 42%; height: 8px; border-radius: 999px; background: {{t.primary}}"></div>
+              </div>
+              <span style="flex: none; font-weight: 500; font-variant-numeric: tabular-nums">42%</span>
+            </div>
+            <p style="margin: 0; color: {{t.onSurfaceVariant}}">You can keep working. The app does not restart on its own.</p>
+            <span style="display: inline-flex; align-items: center; gap: 4px; flex: none; height: 20px; padding: 0 8px 0 6px; border: 1px solid {{t.outlineVariant}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 12l5 5 9-10"></path></svg>Built: a percent on the toolbar and a bar under it</span>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ready}}" hint-placeholder-val="{{false}}">
+          <div aria-live="polite" style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 16px; padding: 16px; border-radius: 8px; background: {{t.successContainer}}; color: {{t.onSuccessContainer}}">
+            <h3 style="display: flex; align-items: center; gap: 8px; margin: 0; font-size: 16px; line-height: 24px; font-weight: 500"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="12" cy="12" r="9"></circle><path d="M8 12l3 3 5-6"></path></svg>Version 2.5.0 is ready to install</h3>
+            <p style="margin: 0">Restart now, or keep working: it installs the next time you quit the app.</p>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 4px">
+              <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px 0 16px; border: 0; border-radius: 999px; background: {{t.primary}}; color: {{t.onPrimary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg>Restart to Update</button>
+            </div>
+            <span style="display: inline-flex; align-items: center; gap: 4px; flex: none; height: 20px; padding: 0 8px 0 6px; border: 1px solid {{t.outlineVariant}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap; color: {{t.onSuccessContainer}}; border-color: {{t.outline}}"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 12l5 5 9-10"></path></svg>Built: the toolbar button "Restart to Update"</span>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{failed}}" hint-placeholder-val="{{false}}">
+          <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 16px">
+            <section aria-label="Error" style="display: flex; align-items: flex-start; gap: 12px; width: 100%; box-sizing: border-box; padding: 16px; border-radius: 8px; background: {{t.errorContainer}}; color: {{t.onErrorContainer}}">
+              <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 2px"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
+              <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0">
+                <h3 style="margin: 0; font-size: 16px; line-height: 24px; font-weight: 500">The update to 2.5.0 was not downloaded</h3>
+                <p style="margin: 0">The download stopped at 42 percent: the connection was reset (sample reason, as the updater reports it). You are still on 2.4.0 and nothing was installed.</p>
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px">
+                  <button type="button" onClick="{{retryUpdate}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px 0 16px; border: 1px solid {{t.onErrorContainer}}; border-radius: 999px; background: transparent; color: {{t.onErrorContainer}}; font: inherit; font-weight: 500; cursor: pointer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg>Retry</button>
+                  <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: {{t.onErrorContainer}}; font: inherit; font-weight: 500; text-decoration: underline; cursor: pointer">Open the release page of 2.5.0<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"></path></svg></button>
+                </div>
+              </div>
+            </section>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap">
+              <span style="display: inline-flex; align-items: center; gap: 4px; flex: none; height: 20px; padding: 0 8px 0 6px; border: 1px solid {{t.outlineVariant}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 12l5 5 9-10"></path></svg>Built: one icon with the tooltip "Update check failed. Click to retry."</span>
+              <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built: the reason and the link</span>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{cannot}}" hint-placeholder-val="{{false}}">
+          <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 16px">
+            <div style="display: flex; align-items: flex-start; gap: 12px; width: 100%; box-sizing: border-box; padding: 16px; border-radius: 8px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}">
+              <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 2px"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v6M12 7.5h.01"></path></svg>
+              <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0">
+                <h3 style="margin: 0; font-size: 16px; line-height: 24px; font-weight: 500">Version 2.5.0 is available, and this package cannot update itself</h3>
+                <ul style="display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0 0 0 20px">
+                  <li><strong style="font-weight: 600">macOS:</strong> the build is not signed, and macOS installs an update only into a signed app.</li>
+                  <li><strong style="font-weight: 600">Windows, portable build:</strong> there is no installed copy to replace; the file you run is the app.</li>
+                </ul>
+                <p style="margin: 0">Download the new version and replace this copy. Your connections stay: they live in the data folder, not in the app.</p>
+                <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; margin-top: 4px; padding: 0 16px 0 20px; border: 1px solid {{t.onWarnContainer}}; border-radius: 999px; background: transparent; color: {{t.onWarnContainer}}; font: inherit; font-weight: 500; cursor: pointer">Open the download page<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"></path></svg></button>
+              </div>
+            </div>
+            <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built: today these packages offer Download and Restart to Update, which most likely fail (inferred from code, not reproduced)</span>
+          </div>
+        </sc-if>
+      </div>
+    </section>
+
+    <section aria-label="Data" style="display: flex; gap: 16px 32px; flex-wrap: wrap; padding: 24px 0; border-top: 1px solid {{t.outlineVariant}}">
+      <div style="flex: 0 0 200px">
+        <h2 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">Data</h2>
+        <p style="margin: 4px 0 0; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Everything the app saves is on this computer.</p>
+      </div>
+      <div style="display: flex; flex-direction: column; flex: 1 1 520px; min-width: 0">
+        <div style="display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; min-height: 48px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}; align-items: flex-start">
+          <span style="flex: 0 0 168px; font-weight: 500; padding-top: 6px">Connections file</span>
+          <div style="display: flex; flex-direction: column; gap: 4px; flex: 1 1 320px; min-width: 0; padding-top: 6px">
+            <span style="font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; overflow-wrap: anywhere">~/.config/Messaging Explorer/data/workspace.json</span>
+            <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Sample path on Linux: the file is data/workspace.json in the user data folder of the app.</span>
+            <span><strong style="font-weight: 600">Plain text, secrets included.</strong> Connection strings, passwords and client secrets in it are not encrypted. Protect it like a password file.</span>
+          </div>
+          <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M3 6h6l2 2h10v11H3z"></path></svg>Show in folder</button>
+          <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; min-height: 48px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+          <span style="flex: 0 0 168px; font-weight: 500">Move connections</span>
+          <a href="Connections.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"></path></svg>Export</a>
+          <a href="Connections.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 16V5M7 9l5-5 5 5M5 20h14"></path></svg>Import</a>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">An export masks the secrets unless you ask for them.</span>
+          <span style="flex: 1"></span>
+          <span style="display: inline-flex; align-items: center; gap: 4px; flex: none; height: 20px; padding: 0 8px 0 6px; border: 1px solid {{t.outlineVariant}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 12l5 5 9-10"></path></svg>Built: on the Connections screen</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 16px; padding: 16px; border: 1px solid {{t.error}}; border-radius: 8px">
+          <h3 style="display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; line-height: 20px; font-weight: 600; color: {{t.error}}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>Danger zone</h3>
+          <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+            <div style="flex: 1 1 320px; min-width: 0">
+              <div style="font-weight: 500">Clear all data</div>
+              <div style="color: {{t.onSurfaceVariant}}">Deletes every saved connection, client and environment from this computer. No broker is touched. It cannot be undone.</div>
+            </div>
+            <button type="button" onClick="{{openClear}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: {{t.error}}; font: inherit; font-weight: 500; white-space: nowrap; cursor: pointer; border: 1px solid {{t.error}}; padding: 0 20px 0 16px"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"></path></svg>Clear all data</button>
+          </div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap">
+            <span style="display: inline-flex; align-items: center; gap: 4px; flex: none; height: 20px; padding: 0 8px 0 6px; border: 1px solid {{t.outlineVariant}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 12l5 5 9-10"></path></svg>Built: File, Clear All Data (Testing), with a shortcut and a browser confirm</span>
+            <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built: the typed confirmation; the menu item and its shortcut go</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section aria-label="Developer" style="display: flex; gap: 16px 32px; flex-wrap: wrap; padding: 24px 0; border-top: 1px solid {{t.outlineVariant}}">
+      <div style="flex: 0 0 200px">
+        <h2 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">Developer</h2>
+      </div>
+      <div style="display: flex; flex-direction: column; flex: 1 1 520px; min-width: 0">
+        <div style="display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; min-height: 48px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+          <span style="flex: 0 0 168px; font-weight: 500">Developer mode</span>
+          <label style="display: flex; align-items: center; gap: 10px; min-height: 32px; cursor: pointer">
+            <input type="checkbox" checked="{{devMode}}" onChange="{{toggleDev}}" style="width: 18px; height: 18px; margin: 0; accent-color: {{t.primary}}">
+            <span>Show the Debug button on the Connections screen</span>
+          </label>
+          <span style="display: inline-flex; align-items: center; gap: 4px"><kbd style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid {{t.outline}}; border-bottom-width: 2px; border-radius: 4px; background: {{t.surfaceLow}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px">Ctrl</kbd><kbd style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid {{t.outline}}; border-bottom-width: 2px; border-radius: 4px; background: {{t.surfaceLow}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px">Shift</kbd><kbd style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid {{t.outline}}; border-bottom-width: 2px; border-radius: 4px; background: {{t.surfaceLow}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px">D</kbd></span>
+          <span style="flex: 1"></span>
+          <span style="display: inline-flex; align-items: center; gap: 4px; flex: none; height: 20px; padding: 0 8px 0 6px; border: 1px solid {{t.outlineVariant}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 12l5 5 9-10"></path></svg>Built: View, Developer Mode</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; min-height: 48px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+          <span style="flex: 0 0 168px; font-weight: 500">Developer tools</span>
+          <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer">Open developer tools</button>
+          <span style="flex: 1"></span>
+          <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built in a released build; View, Toggle Developer Tools in a development build today</span>
+        </div>
+        <p style="margin: 8px 0 0; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">The developer tools show every request the page makes to the local API, with its key. Close them before you share your screen.</p>
+      </div>
+    </section>
+
+    <section aria-label="About" style="display: flex; gap: 16px 32px; flex-wrap: wrap; padding: 24px 0; border-top: 1px solid {{t.outlineVariant}}">
+      <div style="flex: 0 0 200px">
+        <h2 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">About</h2>
+      </div>
+      <div style="display: flex; flex-direction: column; flex: 1 1 520px; min-width: 0">
+        <div style="display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; padding-bottom: 8px">
+          <div style="flex: 1 1 320px; min-width: 0">
+            <div style="font-size: 20px; line-height: 28px; font-weight: 500">Messaging Explorer</div>
+            <div style="color: {{t.onSurfaceVariant}}">A universal multi-platform messaging management tool.</div>
+          </div>
+          <span style="display: inline-flex; align-items: center; gap: 4px; flex: none; height: 20px; padding: 0 8px 0 6px; border: 1px solid {{t.outlineVariant}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 12l5 5 9-10"></path></svg>Built as a native message box: Help, About</span>
+        </div>
+        <dl style="display: flex; flex-direction: column; margin: 0; border-top: 1px solid {{t.outlineVariant}}">
+          <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 168px; color: {{t.onSurfaceVariant}}">Version</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums">2.4.0, {{channelName}} channel</dd></div>
+          <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 168px; color: {{t.onSurfaceVariant}}">Licence</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere">MIT, open source</dd></div>
+          <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 168px; color: {{t.onSurfaceVariant}}">Built with</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere">Angular, Electron and .NET</dd></div>
+        </dl>
+        <div style="display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; min-height: 48px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+          <span style="flex: 0 0 168px; font-weight: 500">Project</span>
+          <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer">Repository<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"></path></svg></button>
+          <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer">Changelog<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"></path></svg></button>
+          <span style="flex: 1"></span>
+          <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; min-height: 48px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+          <span style="flex: 0 0 168px; font-weight: 500">Feedback</span>
+          <button type="button" onClick="{{openBug}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M8 9a4 4 0 0 1 8 0v6a4 4 0 0 1-8 0zM4 13h4M16 13h4M5 7l3 2M19 7l-3 2M5 20l3-3M19 20l-3-3"></path></svg>Report a bug</button>
+          <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer">Suggest a feature</button>
+          <span style="flex: 1"></span>
+          <span style="display: inline-flex; align-items: center; gap: 4px; flex: none; height: 20px; padding: 0 8px 0 6px; border: 1px solid {{t.outlineVariant}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 12l5 5 9-10"></path></svg>Built: the Help button on the toolbar</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; min-height: 48px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+          <span style="flex: 0 0 168px; font-weight: 500">Security</span>
+          <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer">Report a security problem privately<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"></path></svg></button>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">A private report to the maintainers, never a public issue.</span>
+          <span style="flex: 1"></span>
+          <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built</span>
+        </div>
+        <p style="margin: 8px 0 0; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Links open in your browser.</p>
+      </div>
+    </section>
+  </main>
+
+  <sc-if value="{{showDialog}}" hint-placeholder-val="{{false}}">
+    <div style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 3; display: flex; justify-content: center; align-items: flex-start; box-sizing: border-box; padding: 96px 24px 24px; background: {{t.scrim}}">
+
+      <sc-if value="{{dlgBug}}" hint-placeholder-val="{{false}}">
+        <section aria-label="Report a Bug" style="display: flex; flex-direction: column; gap: 16px; width: 100%; box-sizing: border-box; padding: 24px; border-radius: 20px; background: {{t.surfaceContainer}}; color: {{t.onSurface}}; box-shadow: {{t.shadow}}; max-width: 640px">
+          <h2 style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0; font-size: 20px; line-height: 28px; font-weight: 500"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M8 9a4 4 0 0 1 8 0v6a4 4 0 0 1-8 0zM4 13h4M16 13h4M5 7l3 2M19 7l-3 2M5 20l3-3M19 20l-3-3"></path></svg>Report a Bug</h2>
+          <p style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; color: {{t.onSurfaceVariant}}">Nothing is sent from the app. Submit opens a new GitHub issue in your browser with the text below filled in; you read it, change it and submit it there.</p>
+          <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+            <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Title</span>
+            <input type="text" placeholder="Brief description of the issue" autocomplete="off" style="height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit">
+          </label>
+          <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+            <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Description</span>
+            <textarea rows="4" placeholder="What happened? What did you expect? Steps to reproduce..." style="box-sizing: border-box; padding: 8px 12px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit; resize: vertical"></textarea>
+          </label>
+          <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+            <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Your name (optional)</span>
+            <input type="text" placeholder="Anonymous" autocomplete="off" style="height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit">
+            <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Published with the issue. Leave it empty to add no name.</span>
+          </label>
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+              <h3 style="flex: 1; margin: 0; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">What is included, besides what you type</h3>
+              <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built: this preview</span>
+            </div>
+            <pre style="margin: 0; padding: 10px 12px; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; line-height: 20px; white-space: pre-wrap; overflow-wrap: anywhere">{{bugPreview}}</pre>
+            <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">The version, the platform and the errors the app caught in this session (1 here, sample). No connection, no namespace, no message body.</span>
+          </div>
+          <p style="display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 10px 14px; border-radius: 8px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}">
+            <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
+            <span><strong style="font-weight: 600">The issue is public.</strong> Do not paste a connection string, a password or a message body into it.</span>
+          </p>
+          <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 8px">
+            <button type="button" onClick="{{closeDialog}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer">Cancel</button>
+            <button type="button" onClick="{{closeDialog}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px 0 16px; border: 0; border-radius: 999px; background: {{t.primary}}; color: {{t.onPrimary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer; padding: 0 16px 0 20px">Submit Bug Report<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"></path></svg></button>
+          </div>
+        </section>
+      </sc-if>
+
+      <sc-if value="{{dlgClear}}" hint-placeholder-val="{{false}}">
+        <section aria-label="Clear all data" style="display: flex; flex-direction: column; gap: 16px; width: 100%; box-sizing: border-box; padding: 24px; border-radius: 20px; background: {{t.surfaceContainer}}; color: {{t.onSurface}}; box-shadow: {{t.shadow}}; max-width: 560px">
+          <h2 style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">
+            <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{t.error}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
+            Clear all data?
+          </h2>
+          <p style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; color: {{t.onSurfaceVariant}}">
+            <span style="display: inline-flex; align-items: center; gap: 6px; flex: none; height: 24px; padding: 0 10px; border-radius: 999px; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap; background: {{env.bg}}; color: {{env.fg}}">
+              <sc-if value="{{env.isProd}}" hint-placeholder-val="{{true}}">
+                <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
+              </sc-if>
+              {{env.label}}
+            </span>
+            <span style="min-width: 0; overflow-wrap: anywhere">Connected now to <strong style="font-weight: 600; color: {{t.onSurface}}">{{conn}}</strong>; the app disconnects first.</span>
+          </p>
+          <p style="margin: 0">This deletes every saved connection, client and environment from this computer, with the secrets stored in them. No broker is touched. It cannot be undone.</p>
+          <dl style="display: flex; flex-direction: column; margin: 0; border-top: 1px solid {{t.outlineVariant}}">
+            <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Connections</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums">3, read now</dd></div>
+            <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Clients and environments</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums">1 client, 2 environments</dd></div>
+            <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">File</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">data/workspace.json</dd></div>
+          </dl>
+          <p style="margin: 0; color: {{t.onSurfaceVariant}}">To keep a copy, <a href="Connections.dc.html" style="color: {{t.primary}}; font-weight: 500">export the connections first</a>.</p>
+          <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+            <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Type clear all data to confirm</span>
+            <input type="text" value="{{typed}}" onChange="{{onTyped}}" placeholder="clear all data" autocomplete="off" spellcheck="false" style="height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">
+            <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">The button stays disabled until the words match exactly.</span>
+          </label>
+          <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 8px">
+            <button type="button" onClick="{{closeDialog}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer">Cancel</button>
+            <sc-if value="{{cannotClear}}" hint-placeholder-val="{{true}}">
+              <button type="button" disabled style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px 0 16px; border: 0; border-radius: 999px; background: {{t.surfaceHigh}}; color: {{t.outline}}; font: inherit; font-weight: 500"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"></path></svg>Clear all data</button>
+            </sc-if>
+            <sc-if value="{{canClear}}" hint-placeholder-val="{{false}}">
+              <button type="button" onClick="{{closeDialog}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px 0 16px; border: 0; border-radius: 999px; background: {{t.error}}; color: {{t.onError}}; font: inherit; font-weight: 500; white-space: nowrap; cursor: pointer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"></path></svg>Clear all data</button>
+            </sc-if>
+          </div>
+        </section>
+      </sc-if>
+
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Preview"},"state":{"editor":"enum","options":["upToDate","available","downloading","ready","failed","cannotSelfUpdate","bugReport","clearConfirm"],"default":"upToDate","section":"Preview"},"environment":{"editor":"enum","options":["production","development"],"default":"production","section":"Preview"},"$preview":{"width":1280,"height":1840}}'>
+const LIGHT = { surface:'#f9f9ff', surfaceLow:'#f2f3fa', surfaceContainer:'#ecedf4', surfaceHigh:'#e6e8ee',
+  onSurface:'#191c20', onSurfaceVariant:'#43474e', outline:'#73777f', outlineVariant:'#c3c6cf',
+  primary:'#005cbb', onPrimary:'#ffffff', primaryContainer:'#d7e3ff', onPrimaryContainer:'#001b3f',
+  secondaryContainer:'#dae2f9', onSecondaryContainer:'#131c2b',
+  error:'#ba1a1a', onError:'#ffffff', errorContainer:'#ffdad6', onErrorContainer:'#410002',
+  warnContainer:'#ffdea3', onWarnContainer:'#261900', success:'#1b6b32', successContainer:'#b6f2be', onSuccessContainer:'#002108',
+  scrim:'rgba(0,0,0,.45)', shadow:'0 1px 2px rgba(0,0,0,.3), 0 2px 6px 2px rgba(0,0,0,.15)' };
+const DARK = { surface:'#111318', surfaceLow:'#191c20', surfaceContainer:'#1d2024', surfaceHigh:'#282a2f',
+  onSurface:'#e2e2e9', onSurfaceVariant:'#c3c6cf', outline:'#8d9199', outlineVariant:'#43474e',
+  primary:'#abc7ff', onPrimary:'#002f65', primaryContainer:'#00458f', onPrimaryContainer:'#d7e3ff',
+  secondaryContainer:'#3e4759', onSecondaryContainer:'#dae2f9',
+  error:'#ffb4ab', onError:'#690005', errorContainer:'#93000a', onErrorContainer:'#ffdad6',
+  warnContainer:'#5c4300', onWarnContainer:'#ffdea3', success:'#9bd6a4', successContainer:'#00531f', onSuccessContainer:'#b6f2be',
+  scrim:'rgba(0,0,0,.6)', shadow:'0 1px 3px rgba(0,0,0,.6), 0 4px 8px 3px rgba(0,0,0,.3)' };
+
+const UPDATE_STATES = ['upToDate', 'available', 'downloading', 'ready', 'failed', 'cannotSelfUpdate'];
+const CLEAR_WORDS = 'clear all data';
+
+class Component extends DCLogic {
+  componentDidUpdate(prev) {
+    if (!prev) return;
+    if (prev.state !== this.props.state) this.setState({ upd: undefined, dlg: undefined, typed: undefined });
+    if (prev.theme !== this.props.theme) this.setState({ themeSel: undefined });
+  }
+
+  renderVals() {
+    const s = this.state || {};
+    const themeSel = s.themeSel ?? 'system';
+    const dark = themeSel === 'system' ? (this.props.theme ?? 'light') === 'dark' : themeSel === 'dark';
+    const t = dark ? DARK : LIGHT;
+    const prod = (this.props.environment ?? 'production') === 'production';
+    const bar = dark
+      ? { bg: t.surfaceContainer, fg: t.onSurface, line: t.outlineVariant, sep: t.outlineVariant, navOn: t.secondaryContainer, navOnFg: t.onSecondaryContainer }
+      : { bg: t.primary, fg: t.onPrimary, line: t.primary, sep: 'rgba(255,255,255,.4)', navOn: 'rgba(255,255,255,.18)', navOnFg: t.onPrimary };
+    const env = prod
+      ? { label: 'PRODUCTION', name: 'Production', isProd: true, bg: t.errorContainer, fg: t.onErrorContainer }
+      : { label: 'DEVELOPMENT', name: 'Development', isProd: false, bg: t.secondaryContainer, fg: t.onSecondaryContainer };
+    const conn = prod ? 'contoso-prod.servicebus.windows.net' : 'contoso-dev.servicebus.windows.net';
+    const snack = dark
+      ? { bg: LIGHT.surface, fg: LIGHT.onSurface, action: LIGHT.primary }
+      : { bg: LIGHT.onSurface, fg: LIGHT.surface, action: DARK.primary };
+
+    const stateProp = this.props.state ?? 'upToDate';
+    const upd = s.upd ?? (UPDATE_STATES.includes(stateProp) ? stateProp : 'upToDate');
+    const dlg = s.dlg ?? (stateProp === 'bugReport' ? 'bug' : stateProp === 'clearConfirm' ? 'clear' : 'none');
+
+    const seg = (options, current, pick) => options.map((o, i) => {
+      const on = o[0] === current;
+      return {
+        label: o[1], on, pressed: on ? 'true' : 'false', pad: on ? '12px' : '16px',
+        line: i === 0 ? '0' : '1px solid ' + t.outline,
+        bg: on ? t.secondaryContainer : 'transparent', fg: on ? t.onSecondaryContainer : t.onSurface, weight: on ? 600 : 500,
+        pick: () => pick(o[0])
+      };
+    });
+    const channel = s.channel ?? 'latest';
+    const typed = s.typed ?? '';
+    const canClear = typed.trim() === CLEAR_WORDS;
+    const devMode = !!s.dev;
+
+    return {
+      t, bar, env, conn, snack,
+      hasConn: true, noConn: false,
+      isDefault: upd === 'upToDate' && dlg === 'none', isLoading: upd === 'downloading', isEmpty: false, isError: upd === 'failed',
+      themeOpts: seg([['system', 'System'], ['light', 'Light'], ['dark', 'Dark']], themeSel, v => this.setState({ themeSel: v })),
+      channelOpts: seg([['latest', 'Stable'], ['beta', 'Beta']], channel, v => this.setState({ channel: v })),
+      channelName: channel === 'beta' ? 'Beta' : 'Stable',
+      upToDate: upd === 'upToDate', available: upd === 'available', downloading: upd === 'downloading', ready: upd === 'ready',
+      failed: upd === 'failed', cannot: upd === 'cannotSelfUpdate',
+      checkNow: () => this.setState({ upd: undefined }),
+      startDownload: () => this.setState({ upd: 'downloading' }),
+      retryUpdate: () => this.setState({ upd: 'downloading' }),
+      devMode, toggleDev: () => this.setState({ dev: !devMode }),
+      showDialog: dlg !== 'none', dlgBug: dlg === 'bug', dlgClear: dlg === 'clear',
+      openBug: () => this.setState({ dlg: 'bug' }),
+      openClear: () => this.setState({ dlg: 'clear', typed: '' }),
+      closeDialog: () => this.setState({ dlg: 'none', typed: '' }),
+      typed, onTyped: ev => this.setState({ typed: ev.target.value }), canClear, cannotClear: !canClear,
+      bugPreview: '(your description)\n\n---\n**Version:** 2.4.0\n**Platform:** linux\n**Reporter:** (your name, if you give one)\n\n**Errors:**\n[1:58:31 PM] The request to the local API timed out after 30 seconds'
+    };
+  }
+}
+</script>
+</body>
+</html>

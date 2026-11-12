@@ -1,0 +1,806 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Components</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.hov:hover{background-image:linear-gradient(rgba(128,128,128,.16),rgba(128,128,128,.16)) !important}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #ffffff;outline-offset:0;box-shadow:0 0 0 4px #005cbb !important}
+input::placeholder{color:currentColor;opacity:.72}
+@keyframes dc-spin{to{transform:rotate(360deg)}}
+.spin{animation:dc-spin 1s linear infinite}
+@media (prefers-reduced-motion: reduce){.spin{animation:none}}
+</style>
+</helmet>
+<div style="min-height: 5800px; box-sizing: border-box; display: flex; flex-direction: column; background: {{t.surface}}; color: {{t.onSurface}}; font-family: Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 14px; line-height: 20px">
+
+  <div style="display: flex; align-items: center; gap: 8px; height: 28px; box-sizing: border-box; padding: 0 16px; background: {{t.surfaceHigh}}; color: {{t.onSurfaceVariant}}; border-bottom: 1px solid {{t.outlineVariant}}; font-size: 12px; line-height: 16px">
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M4 10h16M10 10v10"></path></svg>
+    <strong style="font-weight: 600; color: {{t.onSurface}}">Design, not built</strong>
+    <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Components: a reference sheet, not a screen of the app. Every artboard copies its parts from here.</span>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 48px; padding: 32px 32px 48px">
+
+    <div style="max-width: 760px">
+      <h1 style="margin: 0; font-size: 28px; line-height: 36px; font-weight: 400">Messaging Explorer components</h1>
+      <p style="margin: 8px 0 0; color: {{t.onSurfaceVariant}}">One system for every screen: Material 3 tokens from the app theme, one accent, the error colour only for what destroys or fails. Each group names its parts and says when to use them. Sample data is invented.</p>
+    </div>
+
+    <section style="display: flex; flex-direction: column; gap: 16px">
+      <div>
+        <h2 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">Colour tokens</h2>
+        <p style="margin: 0; color: {{t.onSurfaceVariant}}">Use a token by name, never a hex value. Containers carry their own "on" colour for text; scrim dims the screen behind a dialog; shadow lifts menus and dialogs.</p>
+      </div>
+      <h3 style="margin: 0; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: {{t.onSurfaceVariant}}">Light theme</h3>
+      <div style="display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 12px">
+        <sc-for list="{{lightSwatches}}" as="sw" hint-placeholder-count="23">
+          <div style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+            <div style="height: 44px; border-radius: 8px; border: 1px solid {{t.outlineVariant}}; background: {{sw.hex}}"></div>
+            <span style="font-size: 12px; line-height: 16px; font-weight: 500; overflow-wrap: anywhere">{{sw.name}}</span>
+            <span style="font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">{{sw.hex}}</span>
+          </div>
+        </sc-for>
+      </div>
+      <h3 style="margin: 8px 0 0; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: {{t.onSurfaceVariant}}">Dark theme</h3>
+      <div style="display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 12px">
+        <sc-for list="{{darkSwatches}}" as="sw" hint-placeholder-count="23">
+          <div style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+            <div style="height: 44px; border-radius: 8px; border: 1px solid {{t.outlineVariant}}; background: {{sw.hex}}"></div>
+            <span style="font-size: 12px; line-height: 16px; font-weight: 500; overflow-wrap: anywhere">{{sw.name}}</span>
+            <span style="font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">{{sw.hex}}</span>
+          </div>
+        </sc-for>
+      </div>
+      <p style="margin: 0; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">scrim: rgba(0,0,0,.45) light, rgba(0,0,0,.6) dark. shadow: two soft layers, stronger in dark. The toolbar is primary with onPrimary in light, surfaceContainer with onSurface in dark.</p>
+    </section>
+
+    <div style="display: flex; gap: 48px; flex-wrap: wrap">
+      <section style="display: flex; flex-direction: column; gap: 16px; flex: 1 1 520px; min-width: 0">
+        <div>
+          <h2 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">Type scale</h2>
+          <p style="margin: 0; color: {{t.onSurfaceVariant}}">Use size and weight for hierarchy before any box or rule. Numbers are tabular everywhere.</p>
+        </div>
+        <div style="display: flex; flex-direction: column">
+          <div style="display: flex; align-items: baseline; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+            <span style="flex: 1; min-width: 0; font-size: 28px; line-height: 36px; font-weight: 400">orders</span>
+            <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Title large, 28 / 36, regular: the entity or screen name</span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+            <span style="flex: 1; min-width: 0; font-size: 20px; line-height: 28px; font-weight: 500">Purge active messages?</span>
+            <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Title, 20 / 28, medium: dialogs, sections</span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+            <span style="flex: 1; min-width: 0; font-size: 16px; line-height: 24px; font-weight: 500">Could not load the queue</span>
+            <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Subtitle, 16 / 24, medium: state and message titles</span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+            <span style="flex: 1; min-width: 0">The request timed out after 30 seconds.</span>
+            <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Body, 14 / 20, regular: everything else</span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+            <span style="flex: 1; min-width: 0; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Max Delivery Count</span>
+            <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Label, 12 / 16, medium: field labels, captions, column heads</span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+            <span style="flex: 1; min-width: 0; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: {{t.onSurfaceVariant}}">Queues</span>
+            <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Overline, 12 / 16, semibold, capitals: tree sections only</span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+            <span style="flex: 1; min-width: 0; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; line-height: 20px">sys.Label = 'OrderPaid'</span>
+            <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Code, 13 / 20, monospace: bodies, ids, expressions</span>
+          </div>
+        </div>
+      </section>
+
+      <section style="display: flex; flex-direction: column; gap: 16px; flex: 1 1 520px; min-width: 0">
+        <div>
+          <h2 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">Spacing and radius</h2>
+          <p style="margin: 0; color: {{t.onSurfaceVariant}}">Use multiples of 4 px. Radius says what a thing is: 4 a tag, 8 a card or field, 20 a dialog, full a chip or button.</p>
+        </div>
+        <div style="display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 6px"><div style="width: 4px; height: 4px; background: {{t.primary}}"></div><span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">4</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 6px"><div style="width: 8px; height: 8px; background: {{t.primary}}"></div><span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">8</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 6px"><div style="width: 12px; height: 12px; background: {{t.primary}}"></div><span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">12</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 6px"><div style="width: 16px; height: 16px; background: {{t.primary}}"></div><span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">16</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 6px"><div style="width: 20px; height: 20px; background: {{t.primary}}"></div><span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">20</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 6px"><div style="width: 24px; height: 24px; background: {{t.primary}}"></div><span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">24</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 6px"><div style="width: 32px; height: 32px; background: {{t.primary}}"></div><span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">32</span></div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 6px"><div style="width: 48px; height: 48px; background: {{t.primary}}"></div><span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">48</span></div>
+        </div>
+        <p style="margin: 0; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">8 inside a control, 12 between cards, 16 inside a card, 20 between the blocks of a panel, 24 at the edge of a panel, 48 between groups on a long page.</p>
+        <div style="display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap">
+          <div style="display: flex; flex-direction: column; gap: 6px"><div style="width: 88px; height: 56px; border: 1px solid {{t.outline}}; border-radius: 4px; background: {{t.surfaceLow}}"></div><span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">4: tag, key, tooltip</span></div>
+          <div style="display: flex; flex-direction: column; gap: 6px"><div style="width: 88px; height: 56px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surfaceLow}}"></div><span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">8: card, field, menu</span></div>
+          <div style="display: flex; flex-direction: column; gap: 6px"><div style="width: 88px; height: 56px; border: 1px solid {{t.outline}}; border-radius: 20px; background: {{t.surfaceLow}}"></div><span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">20: dialog</span></div>
+          <div style="display: flex; flex-direction: column; gap: 6px"><div style="width: 88px; height: 56px; border: 1px solid {{t.outline}}; border-radius: 999px; background: {{t.surfaceLow}}"></div><span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Full: chip, button</span></div>
+        </div>
+        <p style="margin: 0; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Targets: 32 px at least for any control, 40 px for the primary actions of a screen and for dialog actions.</p>
+      </section>
+    </div>
+
+    <section style="display: flex; flex-direction: column; gap: 16px">
+      <div>
+        <h2 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">Toolbar, navigation link, environment chip</h2>
+        <p style="margin: 0; color: {{t.onSurfaceVariant}}">Use the toolbar unchanged at the top of every screen: navigation first, then the environment and the broker, then the three icon buttons. The environment chip also opens every confirmation.</p>
+      </div>
+      <header style="display: flex; align-items: center; gap: 16px; height: 56px; box-sizing: border-box; padding: 0 8px 0 12px; background: {{bar.bg}}; color: {{bar.fg}}; border-bottom: 1px solid {{bar.line}}">
+        <nav aria-label="Main" style="display: flex; align-items: center; gap: 4px">
+          <a href="Connections.dc.html" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none; font-weight: 500">Connections</a>
+          <a href="Main.dc.html" aria-current="page" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; background: {{bar.navOn}}; color: {{bar.navOnFg}}; text-decoration: underline; text-underline-offset: 6px; text-decoration-thickness: 2px; font-weight: 700">Entities</a>
+          <a href="Monitoring.dc.html" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none; font-weight: 500">Monitoring</a>
+        </nav>
+        <span aria-hidden="true" style="flex: none; width: 1px; height: 24px; background: {{bar.sep}}"></span>
+        <span style="display: inline-flex; align-items: center; gap: 6px; flex: none; height: 24px; padding: 0 10px; border-radius: 999px; background: {{t.errorContainer}}; color: {{t.onErrorContainer}}; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap">
+          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
+          PRODUCTION
+        </span>
+        <span style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; font-weight: 500">
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="12" cy="12" r="9"></circle><path d="M8 12l3 3 5-6"></path></svg>
+          <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">contoso-prod.servicebus.windows.net</span>
+        </span>
+        <div style="display: flex; align-items: center; gap: 4px">
+          <button type="button" aria-label="Notifications" title="Notifications" class="hov" style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: {{bar.fg}}; font: inherit; cursor: pointer">
+            <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16v-5a6 6 0 1 1 12 0v5l2 2H4zM10 21a2 2 0 0 0 4 0"></path></svg>
+          </button>
+          <button type="button" aria-label="Help" title="Help" class="hov" style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: {{bar.fg}}; font: inherit; cursor: pointer">
+            <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1 1-1.1 1.8M12 17h.01"></path></svg>
+          </button>
+          <a href="Settings.dc.html" aria-label="Settings" title="Settings" class="hov" style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none">
+            <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h9M19 7h1M4 17h1M11 17h9"></path><circle cx="16" cy="7" r="3"></circle><circle cx="8" cy="17" r="3"></circle></svg>
+          </a>
+        </div>
+      </header>
+      <div style="display: flex; align-items: flex-start; gap: 32px; flex-wrap: wrap">
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <div style="display: flex; align-items: center; gap: 4px; padding: 8px; border-radius: 8px; background: {{bar.bg}}">
+            <span style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; color: {{bar.fg}}; font-weight: 500">Default</span>
+            <span style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; background: {{bar.hover}}; color: {{bar.fg}}; font-weight: 500">Hover</span>
+            <span style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; background: {{bar.navOn}}; color: {{bar.navOnFg}}; text-decoration: underline; text-underline-offset: 6px; text-decoration-thickness: 2px; font-weight: 700">Current</span>
+          </div>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Navigation link: default, hover, current (fill, underline, bold and aria-current)</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <div style="display: flex; align-items: center; gap: 12px; min-height: 56px">
+            <span style="display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 999px; background: {{t.errorContainer}}; color: {{t.onErrorContainer}}; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap">
+              <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
+              PRODUCTION
+            </span>
+            <span style="display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap">DEVELOPMENT</span>
+          </div>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Environment chip: production (error container, warning icon), development (calm container)</span>
+        </div>
+      </div>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 16px">
+      <div>
+        <h2 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">Chips, badges and tags</h2>
+        <p style="margin: 0; color: {{t.onSurfaceVariant}}">Use a chip for a state that has a name, a badge for a count beside a name, a tag for a classification. Each carries text, and an icon where the state matters.</p>
+      </div>
+      <div style="display: flex; align-items: flex-start; gap: 40px; flex-wrap: wrap">
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+            <span style="display: inline-flex; align-items: center; gap: 6px; height: 32px; box-sizing: border-box; padding: 0 12px 0 8px; border: 1px solid {{t.outlineVariant}}; border-radius: 999px; font-size: 12px; line-height: 16px; font-weight: 500; white-space: nowrap">
+              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{t.success}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M8 12l3 3 5-6"></path></svg>
+              Active
+            </span>
+            <span style="display: inline-flex; align-items: center; gap: 6px; height: 32px; box-sizing: border-box; padding: 0 12px 0 8px; border-radius: 999px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}; font-size: 12px; line-height: 16px; font-weight: 500; white-space: nowrap">
+              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M8 12h8"></path></svg>
+              Send disabled
+            </span>
+            <span style="display: inline-flex; align-items: center; gap: 6px; height: 32px; box-sizing: border-box; padding: 0 12px 0 8px; border-radius: 999px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}; font-size: 12px; line-height: 16px; font-weight: 500; white-space: nowrap">
+              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M10 9v6M14 9v6"></path></svg>
+              Receive disabled
+            </span>
+            <span style="display: inline-flex; align-items: center; gap: 6px; height: 32px; box-sizing: border-box; padding: 0 12px 0 8px; border-radius: 999px; background: {{t.errorContainer}}; color: {{t.onErrorContainer}}; font-size: 12px; line-height: 16px; font-weight: 500; white-space: nowrap">
+              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M6 6l12 12"></path></svg>
+              Disabled
+            </span>
+          </div>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Status chip: Active, Send disabled, Receive disabled, Disabled. In a panel header it is a link to the status dialog.</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <div style="display: flex; align-items: center; gap: 8px; min-height: 32px">
+            <span style="display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; background: {{t.surfaceHigh}}; color: {{t.onSurfaceVariant}}; font-size: 12px; line-height: 16px; font-weight: 500; font-variant-numeric: tabular-nums">1,204</span>
+            <span style="display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px 0 6px; border-radius: 999px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}; font-size: 12px; line-height: 16px; font-weight: 700; font-variant-numeric: tabular-nums"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>37</span>
+          </div>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Count badge: active, dead-letter. Hidden at zero; a hidden text names the count.</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <div style="display: flex; align-items: center; gap: 8px; min-height: 32px">
+            <span style="display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; background: {{t.surfaceHigh}}; color: {{t.onSurfaceVariant}}; font-size: 12px; line-height: 16px; font-weight: 500">SQL</span>
+            <span style="display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; background: {{t.surfaceHigh}}; color: {{t.onSurfaceVariant}}; font-size: 12px; line-height: 16px; font-weight: 500">Correlation</span>
+            <span style="display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; background: {{t.surfaceHigh}}; color: {{t.onSurfaceVariant}}; font-size: 12px; line-height: 16px; font-weight: 500">True</span>
+            <span style="display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; background: {{t.surfaceHigh}}; color: {{t.onSurfaceVariant}}; font-size: 12px; line-height: 16px; font-weight: 500">False</span>
+          </div>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Filter-kind chip: SQL, Correlation, True, False. One neutral style, the word carries it.</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <div style="display: flex; align-items: center; gap: 8px; min-height: 32px">
+            <span style="display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Design, not built</span>
+          </div>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Proposal tag: beside any part the app lacks, on a screen that is otherwise built.</span>
+        </div>
+      </div>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 16px">
+      <div>
+        <h2 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">Buttons</h2>
+        <p style="margin: 0; color: {{t.onSurfaceVariant}}">Use one filled button per screen or dialog, tonal for the second action, outlined for the rest, text for cancel and inline actions. Destructive buttons live only in a confirmation or apart from routine actions.</p>
+      </div>
+      <div style="display: flex; align-items: flex-start; gap: 24px; flex-wrap: wrap">
+        <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px">
+          <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px 0 16px; border: 0; border-radius: 999px; background: {{t.primary}}; color: {{t.onPrimary}}; font: inherit; font-weight: 500; white-space: nowrap; cursor: pointer">
+            <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            View messages
+          </button>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Filled</span>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px">
+          <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px 0 16px; border: 0; border-radius: 999px; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}; font: inherit; font-weight: 500; white-space: nowrap; cursor: pointer">
+            <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l17-8L4 4v6l10 2-10 2z"></path></svg>
+            Send
+          </button>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Tonal</span>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px">
+          <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; padding: 0 20px 0 16px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; white-space: nowrap; cursor: pointer">
+            <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16zM13 7l4 4"></path></svg>
+            Edit
+          </button>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Outlined</span>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px">
+          <button type="button" class="hov" style="display: inline-flex; align-items: center; height: 40px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; white-space: nowrap; cursor: pointer">Cancel</button>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Text</span>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px">
+          <button type="button" aria-label="More actions" title="More actions" class="hov" style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: {{t.onSurfaceVariant}}; font: inherit; cursor: pointer">
+            <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="12" cy="19" r="2"></circle></svg>
+          </button>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Icon, with aria-label and title</span>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px">
+          <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; white-space: nowrap; cursor: pointer">
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>
+            Add rule
+          </button>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Small, 32 px: inside a tab or a row</span>
+        </div>
+      </div>
+      <div style="display: flex; align-items: flex-start; gap: 24px; flex-wrap: wrap">
+        <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px">
+          <div style="display: flex; align-items: center; gap: 12px; padding: 4px">
+            <button type="button" style="display: inline-flex; align-items: center; height: 40px; padding: 0 20px; border: 0; border-radius: 999px; background: {{t.primary}}; color: {{t.onPrimary}}; font: inherit; font-weight: 500; white-space: nowrap; outline: 2px solid #ffffff; box-shadow: 0 0 0 4px #005cbb; cursor: pointer">Save</button>
+            <button type="button" style="display: inline-flex; align-items: center; height: 40px; box-sizing: border-box; padding: 0 20px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; white-space: nowrap; outline: 2px solid #ffffff; box-shadow: 0 0 0 4px #005cbb; cursor: pointer">Edit</button>
+          </div>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Focus: a white and blue double ring, visible on every surface of both themes</span>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px">
+          <div style="display: flex; align-items: center; gap: 12px; padding: 4px">
+            <button type="button" disabled style="display: inline-flex; align-items: center; height: 40px; padding: 0 20px; border: 0; border-radius: 999px; background: {{t.surfaceHigh}}; color: {{t.outline}}; font: inherit; font-weight: 500; white-space: nowrap">Save</button>
+            <button type="button" disabled style="display: inline-flex; align-items: center; height: 40px; box-sizing: border-box; padding: 0 20px; border: 1px solid {{t.outlineVariant}}; border-radius: 999px; background: transparent; color: {{t.outline}}; font: inherit; font-weight: 500; white-space: nowrap">Edit</button>
+            <button type="button" disabled aria-label="More actions" style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: {{t.outline}}; font: inherit">
+              <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="12" cy="19" r="2"></circle></svg>
+            </button>
+          </div>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Disabled: say why beside it or in a tooltip</span>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px">
+          <div style="display: flex; align-items: center; gap: 12px; padding: 4px">
+            <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px 0 16px; border: 0; border-radius: 999px; background: {{t.error}}; color: {{t.onError}}; font: inherit; font-weight: 500; white-space: nowrap; cursor: pointer">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"></path></svg>
+              Purge 1,204 messages
+            </button>
+            <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: {{t.error}}; font: inherit; font-weight: 500; white-space: nowrap; cursor: pointer">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"></path></svg>
+              Delete 3
+            </button>
+          </div>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Destructive: filled error in a confirmation, text error at the end of a bar. Icon, and a label that says what and how many.</span>
+        </div>
+      </div>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 16px">
+      <div>
+        <h2 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">Form controls</h2>
+        <p style="margin: 0; color: {{t.onSurfaceVariant}}">Use an input only for what can be saved; a value with no save path is text. Every field has a visible label, and an error says what to change, beside the field.</p>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px">
+        <div style="display: flex; flex-direction: column; gap: 8px; min-width: 0">
+          <label style="display: flex; flex-direction: column; gap: 4px">
+            <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Queue name</span>
+            <input type="text" placeholder="orders" autocomplete="off" style="height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit">
+            <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Letters, digits, dot, dash, underscore and slash.</span>
+          </label>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Text field, empty, with hint</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px; min-width: 0">
+          <label style="display: flex; flex-direction: column; gap: 4px">
+            <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Max delivery count</span>
+            <input type="text" inputmode="numeric" value="10" autocomplete="off" style="height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit; font-variant-numeric: tabular-nums">
+          </label>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Text field, filled</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px; min-width: 0">
+          <label style="display: flex; flex-direction: column; gap: 4px">
+            <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.error}}">Max size in megabytes</span>
+            <input type="text" inputmode="numeric" value="0" aria-invalid="true" autocomplete="off" style="height: 40px; box-sizing: border-box; padding: 0 11px; border: 2px solid {{t.error}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit; font-variant-numeric: tabular-nums">
+            <span style="display: flex; align-items: flex-start; gap: 4px; font-size: 12px; line-height: 16px; color: {{t.error}}">
+              <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v6M12 16.5h.01"></path></svg>
+              Enter a value; an empty field cannot be saved.
+            </span>
+          </label>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Text field, error with message</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px; min-width: 0">
+          <div style="display: flex; flex-direction: column; gap: 4px">
+            <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Requires session</span>
+            <span style="display: flex; align-items: center; min-height: 40px">Yes</span>
+            <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Fixed at creation.</span>
+          </div>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Read-only value as text, never a disabled input</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px; min-width: 0">
+          <label style="display: flex; flex-direction: column; gap: 4px">
+            <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Forward to</span>
+            <select style="height: 40px; box-sizing: border-box; padding: 0 8px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit">
+              <option>None</option>
+              <option>orders-archive</option>
+              <option>notifications</option>
+              <option>order-events</option>
+            </select>
+            <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">A queue or topic of this namespace.</span>
+          </label>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Select</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px; min-width: 0">
+          <label style="display: flex; flex-direction: column; gap: 4px">
+            <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Batched operations</span>
+            <select style="height: 40px; box-sizing: border-box; padding: 0 8px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit">
+              <option>Broker default</option>
+              <option>On</option>
+              <option>Off</option>
+            </select>
+          </label>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Three-way select: Broker default, On, Off. For a flag that may stay unset.</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px; min-width: 0">
+          <div style="display: flex; flex-direction: column">
+            <label style="display: flex; align-items: center; gap: 10px; min-height: 32px; cursor: pointer">
+              <input type="checkbox" checked style="width: 18px; height: 18px; margin: 0; accent-color: {{t.primary}}">
+              <span>Regular expression</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 10px; min-height: 32px; cursor: pointer">
+              <input type="checkbox" style="width: 18px; height: 18px; margin: 0; accent-color: {{t.primary}}">
+              <span>Include secrets in the file</span>
+            </label>
+          </div>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Checkbox: checked, unchecked. The label is part of the target.</span>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0">
+          <div style="display: inline-flex; border: 1px solid {{t.outline}}; border-radius: 999px; overflow: hidden">
+            <button type="button" aria-pressed="true" class="hov" style="display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 16px 0 12px; border: 0; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}; font: inherit; font-weight: 600; font-variant-numeric: tabular-nums; cursor: pointer">
+              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"></path></svg>
+              Active (1,204)
+            </button>
+            <button type="button" aria-pressed="false" class="hov" style="display: inline-flex; align-items: center; height: 38px; padding: 0 16px; border: 0; border-left: 1px solid {{t.outline}}; background: transparent; color: {{t.onSurface}}; font: inherit; font-weight: 500; font-variant-numeric: tabular-nums; cursor: pointer">Dead-letter (37)</button>
+          </div>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Segmented toggle: two or three views of the same list. The pressed one has a fill, a check and aria-pressed.</span>
+        </div>
+      </div>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 16px">
+      <div>
+        <h2 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">Tabs, cards, definition grid</h2>
+        <p style="margin: 0; color: {{t.onSurfaceVariant}}">Use tabs for the sections of one entity, a card for one number worth a glance, the definition grid for properties that are read and not edited.</p>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <nav aria-label="Sections, example" style="display: flex; gap: 4px; border-bottom: 1px solid {{t.outlineVariant}}">
+          <button type="button" aria-current="true" class="hov" style="height: 44px; margin-bottom: -1px; padding: 0 16px; border: 0; border-bottom: 3px solid {{t.primary}}; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 700; cursor: pointer">Properties</button>
+          <button type="button" aria-current="false" class="hov" style="height: 44px; margin-bottom: -1px; padding: 0 16px; border: 0; border-bottom: 3px solid transparent; background: transparent; color: {{t.onSurfaceVariant}}; font: inherit; font-weight: 500; cursor: pointer">Sessions</button>
+          <button type="button" aria-current="false" class="hov" style="height: 44px; margin-bottom: -1px; padding: 0 16px; border: 0; border-bottom: 3px solid transparent; background: transparent; color: {{t.onSurfaceVariant}}; font: inherit; font-weight: 500; font-variant-numeric: tabular-nums; cursor: pointer">Rules (2)</button>
+          <button type="button" disabled title="RabbitMQ does not offer sessions" style="height: 44px; margin-bottom: -1px; padding: 0 16px; border: 0; border-bottom: 3px solid transparent; background: transparent; color: {{t.outline}}; font: inherit; font-weight: 500">Sessions</button>
+        </nav>
+        <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Tabs: current (line, colour and bold), default, with a count, disabled with its reason in a tooltip. A tab the broker lacks is disabled, never missing.</span>
+      </div>
+      <div style="display: flex; gap: 48px; flex-wrap: wrap">
+        <div style="display: flex; flex-direction: column; gap: 8px; flex: 1 1 420px; min-width: 0">
+          <div style="display: flex; gap: 12px">
+            <div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 0; min-width: 0; box-sizing: border-box; padding: 12px 16px; border-radius: 8px; background: {{t.surfaceLow}}">
+              <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Active</span>
+              <span style="font-size: 28px; line-height: 36px; font-variant-numeric: tabular-nums">1,204</span>
+              <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Open the active messages</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 0; min-width: 0; box-sizing: border-box; padding: 12px 16px; border-radius: 8px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}">
+              <span style="display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 16px">
+                <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
+                Dead-letter
+              </span>
+              <span style="font-size: 28px; line-height: 36px; font-variant-numeric: tabular-nums">37</span>
+              <span style="font-size: 12px; line-height: 16px">Open to resubmit or delete</span>
+            </div>
+          </div>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Card: metric, warning metric (above zero only). A card that opens something is a link; no border, no shadow.</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px; flex: 1 1 420px; min-width: 0">
+          <dl style="display: flex; flex-direction: column; margin: 0">
+            <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+              <dt style="flex: 0 0 48%; color: {{t.onSurfaceVariant}}">Lock Duration</dt>
+              <dd style="flex: 1; min-width: 0; margin: 0; font-variant-numeric: tabular-nums">1m</dd>
+            </div>
+            <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+              <dt style="flex: 0 0 48%; color: {{t.onSurfaceVariant}}">Duplicate Detection</dt>
+              <dd style="flex: 1; min-width: 0; margin: 0; font-variant-numeric: tabular-nums">Enabled, window 10m</dd>
+            </div>
+            <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+              <dt style="flex: 0 0 48%; color: {{t.onSurfaceVariant}}">Forward To</dt>
+              <dd style="flex: 1; min-width: 0; margin: 0; color: {{t.onSurfaceVariant}}">Not set</dd>
+            </div>
+          </dl>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Definition grid row: label, value, value not set. Two such lists side by side fill a panel.</span>
+        </div>
+      </div>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 16px">
+      <div>
+        <h2 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">Table</h2>
+        <p style="margin: 0; color: {{t.onSurfaceVariant}}">Use a table for anything compared row to row. Numbers are right aligned, tabular and thousands separated; a selected row has its checkbox ticked as well as its fill.</p>
+      </div>
+      <table style="width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums">
+        <thead>
+          <tr>
+            <th scope="col" style="width: 40px; padding: 8px 0; border-bottom: 1px solid {{t.outline}}; text-align: left"><input type="checkbox" aria-label="Select all 4 entities" style="width: 18px; height: 18px; margin: 0 0 0 8px; accent-color: {{t.primary}}"></th>
+            <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Name</th>
+            <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Kind</th>
+            <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: right">Active</th>
+            <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: right">Dead-letter</th>
+            <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: right">Size</th>
+            <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><input type="checkbox" aria-label="Select orders" style="width: 18px; height: 18px; margin: 0 0 0 8px; accent-color: {{t.primary}}"></td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-weight: 500">orders</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">Queue</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">1,204</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">37</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">4.2 MB</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">Active</td>
+          </tr>
+          <tr style="background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}">
+            <td style="padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><input type="checkbox" checked aria-label="Select billing/invoices" style="width: 18px; height: 18px; margin: 0 0 0 8px; accent-color: {{t.primary}}"></td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-weight: 500">billing/invoices</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">Queue</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">18</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">0</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">61.4 KB</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">Active</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><input type="checkbox" aria-label="Select orders-archive" style="width: 18px; height: 18px; margin: 0 0 0 8px; accent-color: {{t.primary}}"></td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-weight: 500">orders-archive</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">Queue</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">52,310</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">0</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">188.07 MB</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">Active</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><input type="checkbox" aria-label="Select email" style="width: 18px; height: 18px; margin: 0 0 0 8px; accent-color: {{t.primary}}"></td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-weight: 500">email <span style="font-weight: 400; color: {{t.onSurfaceVariant}}">in order-events</span></td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">Subscription</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">0</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">4</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">3.1 KB</td>
+            <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">Active</td>
+          </tr>
+        </tbody>
+      </table>
+      <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Table: header (label style, stronger rule), row, selected row, numeric columns. Rows are written out in the markup: the canvas loop element cannot sit inside a table.</span>
+    </section>
+
+    <div style="display: flex; gap: 48px; flex-wrap: wrap">
+      <section style="display: flex; flex-direction: column; gap: 16px; flex: 1 1 420px; min-width: 0">
+        <div>
+          <h2 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">Tree row</h2>
+          <p style="margin: 0; color: {{t.onSurfaceVariant}}">Use in the entities tree only. A row is one button; its badges are part of its name for assistive technology.</p>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 2px; max-width: 320px; padding: 8px; border-radius: 8px; background: {{t.surfaceLow}}">
+          <div style="display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 0 0 8px">
+            <span style="flex: 1; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: {{t.onSurfaceVariant}}">Queues <span style="margin-left: 4px; font-weight: 400; font-variant-numeric: tabular-nums">4</span></span>
+            <button type="button" aria-label="Create queue" title="Create queue" class="hov" style="display: flex; align-items: center; justify-content: center; flex: none; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: {{t.onSurfaceVariant}}; font: inherit; cursor: pointer">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>
+            </button>
+          </div>
+          <button type="button" aria-current="false" class="hov" style="display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; box-sizing: border-box; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; color: {{t.onSurface}}; font: inherit; text-align: left; cursor: pointer">
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M4 13l2.5-8h11L20 13v6H4zM4 13h5l1 2h4l1-2h5"></path></svg>
+            <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">notifications</span>
+          </button>
+          <button type="button" aria-current="true" class="hov" style="display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; box-sizing: border-box; padding: 0 8px; border: 0; border-radius: 8px; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}; font: inherit; font-weight: 600; text-align: left; cursor: pointer">
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M4 13l2.5-8h11L20 13v6H4zM4 13h5l1 2h4l1-2h5"></path></svg>
+            <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">orders</span>
+            <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border-radius: 999px; background: {{t.surfaceHigh}}; color: {{t.onSurfaceVariant}}; font-size: 12px; line-height: 16px; font-weight: 500; font-variant-numeric: tabular-nums"><span aria-hidden="true">1,204</span><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">, 1,204 active messages</span></span>
+            <span style="display: inline-flex; align-items: center; gap: 4px; flex: none; height: 20px; padding: 0 8px 0 6px; border-radius: 999px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}; font-size: 12px; line-height: 16px; font-weight: 700; font-variant-numeric: tabular-nums"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg><span aria-hidden="true">37</span><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">, 37 dead-letter messages</span></span>
+          </button>
+          <button type="button" aria-current="false" class="hov" style="display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; box-sizing: border-box; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; color: {{t.onSurface}}; font: inherit; text-align: left; cursor: pointer">
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="5" cy="12" r="2"></circle><circle cx="19" cy="6" r="2"></circle><circle cx="19" cy="18" r="2"></circle><path d="M7 12h4l6-5M11 12l6 5"></path></svg>
+            <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">order-events</span>
+          </button>
+          <button type="button" aria-current="false" class="hov" style="display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; box-sizing: border-box; padding: 0 8px 0 32px; border: 0; border-radius: 8px; background: transparent; color: {{t.onSurface}}; font: inherit; text-align: left; cursor: pointer">
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M4 12h11M11 8l4 4-4 4M19 5v14"></path></svg>
+            <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">warehouse</span>
+            <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border-radius: 999px; background: {{t.surfaceHigh}}; color: {{t.onSurfaceVariant}}; font-size: 12px; line-height: 16px; font-weight: 500; font-variant-numeric: tabular-nums"><span aria-hidden="true">12</span><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">, 12 active messages</span></span>
+          </button>
+        </div>
+        <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Section head with count and create button; tree row: default, selected (fill, bold, aria-current), with badges, child of a topic (24 px indent). Icons: queue, topic, subscription.</span>
+      </section>
+
+      <section style="display: flex; flex-direction: column; gap: 16px; flex: 1 1 420px; min-width: 0">
+        <div>
+          <h2 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">Menu</h2>
+          <p style="margin: 0; color: {{t.onSurfaceVariant}}">Use behind the More actions button for everything that is not the two main actions. What destroys sits last, under a rule and the words "Cannot be undone".</p>
+        </div>
+        <div style="display: flex; flex-direction: column; align-self: flex-start; min-width: 280px; box-sizing: border-box; padding: 8px 0; border-radius: 8px; background: {{t.surfaceContainer}}; box-shadow: {{t.shadow}}">
+          <button type="button" class="hov" style="display: flex; align-items: center; gap: 12px; width: 100%; min-height: 40px; box-sizing: border-box; padding: 0 16px; border: 0; background: transparent; color: {{t.onSurface}}; font: inherit; text-align: left; cursor: pointer"><span style="flex: 1">Import messages</span></button>
+          <button type="button" class="hov" style="display: flex; align-items: center; gap: 12px; width: 100%; min-height: 40px; box-sizing: border-box; padding: 0 16px; border: 0; background: transparent; color: {{t.onSurface}}; font: inherit; text-align: left; cursor: pointer"><span style="flex: 1">Resubmit dead-letter</span><span style="font-size: 12px; line-height: 16px; font-variant-numeric: tabular-nums">37</span></button>
+          <button type="button" disabled style="display: flex; align-items: center; gap: 12px; width: 100%; min-height: 40px; box-sizing: border-box; padding: 0 16px; border: 0; background: transparent; color: {{t.outline}}; font: inherit; text-align: left"><span style="flex: 1">Export definitions</span></button>
+          <div aria-hidden="true" style="height: 1px; margin: 8px 0; background: {{t.outlineVariant}}"></div>
+          <div style="padding: 4px 16px; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Cannot be undone</div>
+          <button type="button" class="hov" style="display: flex; align-items: center; gap: 12px; width: 100%; min-height: 40px; box-sizing: border-box; padding: 0 16px; border: 0; background: transparent; color: {{t.error}}; font: inherit; font-weight: 500; text-align: left; cursor: pointer">
+            <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"></path></svg>
+            <span style="flex: 1">Purge active messages</span><span style="font-size: 12px; line-height: 16px; font-variant-numeric: tabular-nums">1,204</span>
+          </button>
+          <button type="button" class="hov" style="display: flex; align-items: center; gap: 12px; width: 100%; min-height: 40px; box-sizing: border-box; padding: 0 16px; border: 0; background: transparent; color: {{t.error}}; font: inherit; font-weight: 500; text-align: left; cursor: pointer">
+            <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"></path></svg>
+            <span style="flex: 1">Delete queue</span>
+          </button>
+        </div>
+        <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Menu: item, item with count, disabled item, rule, destructive section (error colour, icon, text).</span>
+      </section>
+    </div>
+
+    <section style="display: flex; flex-direction: column; gap: 16px">
+      <div>
+        <h2 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">Dialog shell and destructive confirmation</h2>
+        <p style="margin: 0; color: {{t.onSurfaceVariant}}">Use the shell for every dialog: title, then the context header that names the environment and the connection, then content, then actions at the right. A destructive or disruptive action adds the facts and the typed name.</p>
+      </div>
+      <div style="display: flex; align-items: flex-start; gap: 24px; flex-wrap: wrap; padding: 32px 24px; background: {{t.scrim}}">
+        <div style="display: flex; flex-direction: column; gap: 16px; flex: 1 1 420px; min-width: 0; max-width: 560px; box-sizing: border-box; padding: 24px; border-radius: 20px; background: {{t.surfaceContainer}}; color: {{t.onSurface}}; box-shadow: {{t.shadow}}">
+          <h3 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">Edit queue</h3>
+          <p style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; color: {{t.onSurfaceVariant}}">
+            <span style="display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 999px; background: {{t.errorContainer}}; color: {{t.onErrorContainer}}; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap">
+              <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
+              PRODUCTION
+            </span>
+            <span style="min-width: 0; overflow-wrap: anywhere"><strong style="font-weight: 600; color: {{t.onSurface}}">orders</strong> on Contoso (contoso-prod.servicebus.windows.net)</span>
+          </p>
+          <div style="display: flex; flex-direction: column; gap: 12px">
+            <label style="display: flex; flex-direction: column; gap: 4px">
+              <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Max delivery count</span>
+              <input type="text" inputmode="numeric" value="10" autocomplete="off" style="height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit; font-variant-numeric: tabular-nums">
+            </label>
+            <p style="margin: 0; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Content: fields, facts or a table. It scrolls; the title and the actions do not.</p>
+          </div>
+          <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding-top: 8px">
+            <button type="button" class="hov" style="display: inline-flex; align-items: center; height: 40px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; cursor: pointer">Cancel</button>
+            <button type="button" class="hov" style="display: inline-flex; align-items: center; height: 40px; padding: 0 20px; border: 0; border-radius: 999px; background: {{t.primary}}; color: {{t.onPrimary}}; font: inherit; font-weight: 500; cursor: pointer">Review changes</button>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 16px; flex: 1 1 420px; min-width: 0; max-width: 560px; box-sizing: border-box; padding: 24px; border-radius: 20px; background: {{t.surfaceContainer}}; color: {{t.onSurface}}; box-shadow: {{t.shadow}}">
+          <h3 style="display: flex; align-items: center; gap: 10px; margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">
+            <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{t.error}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
+            Purge active messages?
+          </h3>
+          <p style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; color: {{t.onSurfaceVariant}}">
+            <span style="display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 999px; background: {{t.errorContainer}}; color: {{t.onErrorContainer}}; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap">
+              <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
+              PRODUCTION
+            </span>
+            <span style="min-width: 0; overflow-wrap: anywhere"><strong style="font-weight: 600; color: {{t.onSurface}}">orders</strong> on Contoso (contoso-prod.servicebus.windows.net)</span>
+          </p>
+          <p style="margin: 0">This deletes every active message in the queue. It cannot be undone.</p>
+          <dl style="display: flex; flex-direction: column; margin: 0; border-top: 1px solid {{t.outlineVariant}}">
+            <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+              <dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Queue</dt>
+              <dd style="flex: 1; min-width: 0; margin: 0; font-weight: 500">orders</dd>
+            </div>
+            <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+              <dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Connection</dt>
+              <dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere">contoso-prod.servicebus.windows.net</dd>
+            </div>
+            <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+              <dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Environment</dt>
+              <dd style="flex: 1; min-width: 0; margin: 0">Production</dd>
+            </div>
+            <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+              <dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Messages</dt>
+              <dd style="flex: 1; min-width: 0; margin: 0; font-variant-numeric: tabular-nums">1,204 active now</dd>
+            </div>
+          </dl>
+          <label style="display: flex; flex-direction: column; gap: 4px">
+            <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Type the queue name to confirm</span>
+            <input type="text" placeholder="orders" autocomplete="off" spellcheck="false" style="height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">
+            <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">The button stays disabled until the name matches exactly.</span>
+          </label>
+          <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding-top: 8px">
+            <button type="button" class="hov" style="display: inline-flex; align-items: center; height: 40px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; cursor: pointer">Cancel</button>
+            <button type="button" disabled style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px 0 16px; border: 0; border-radius: 999px; background: {{t.surfaceHigh}}; color: {{t.outline}}; font: inherit; font-weight: 500; font-variant-numeric: tabular-nums">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"></path></svg>
+              Purge 1,204 messages
+            </button>
+          </div>
+        </div>
+      </div>
+      <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Left, dialog shell: title, context header (environment chip, entity, connection), content, actions. Right, confirmation with typed name: warning title, context header, what happens, the facts with the count read now, the typed name, a button that says what and how many. Cancel is always the text button on the left of the pair.</span>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 16px">
+      <div>
+        <h2 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">Inline messages</h2>
+        <p style="margin: 0; color: {{t.onSurfaceVariant}}">Use inside a panel or dialog, next to what it is about, when the text must stay on screen. Each kind has its own icon; the first words say what happened.</p>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+        <p style="display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 10px 14px; border-radius: 8px; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}">
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v6M12 7.5h.01"></path></svg>
+          <span><strong style="font-weight: 600">Info.</strong> Operations are at-least-once: a message that was sent and could not be removed from its source is reported as a possible duplicate.</span>
+        </p>
+        <p style="display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 10px 14px; border-radius: 8px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}">
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
+          <span><strong style="font-weight: 600">Warning.</strong> A resubmit from this subscription publishes to the topic order-events, so every subscription receives the message again.</span>
+        </p>
+        <p style="display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 10px 14px; border-radius: 8px; background: {{t.errorContainer}}; color: {{t.onErrorContainer}}">
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><path d="M8 3h8l5 5v8l-5 5H8l-5-5V8zM12 8v5M12 16.5h.01"></path></svg>
+          <span><strong style="font-weight: 600">Error.</strong> The queue was not saved: the broker refused a lock duration above 5 minutes. Nothing was changed.</span>
+        </p>
+        <p style="display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 10px 14px; border-radius: 8px; background: {{t.successContainer}}; color: {{t.onSuccessContainer}}">
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><circle cx="12" cy="12" r="9"></circle><path d="M8 12l3 3 5-6"></path></svg>
+          <span><strong style="font-weight: 600">Success.</strong> 37 messages were resubmitted to orders. None failed, none may be duplicated.</span>
+        </p>
+      </div>
+      <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Inline message: info, warning, error, success. No border, no stripe: the container colour, the icon and the first word.</span>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 16px">
+      <div>
+        <h2 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">Empty, loading and error states</h2>
+        <p style="margin: 0; color: {{t.onSurfaceVariant}}">Use one of the three wherever content would be, and never one for another: empty says what to do next, loading says what is being read, error says what failed and offers Retry.</p>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+        <div style="display: flex; flex-direction: column; gap: 8px; min-width: 0">
+          <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 12px; min-height: 216px; box-sizing: border-box; padding: 20px; border: 1px solid {{t.outlineVariant}}; border-radius: 8px">
+            <svg aria-hidden="true" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="{{t.outline}}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13l2.5-8h11L20 13v6H4zM4 13h5l1 2h4l1-2h5"></path></svg>
+            <h3 style="margin: 0; font-size: 16px; line-height: 24px; font-weight: 500">No queues in this namespace</h3>
+            <p style="margin: 0; color: {{t.onSurfaceVariant}}">The namespace answered and holds no queue.</p>
+            <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px 0 16px; border: 0; border-radius: 999px; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}; font: inherit; font-weight: 500; cursor: pointer">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>
+              Create queue
+            </button>
+          </div>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Empty state: icon, what is true, the next step</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px; min-width: 0">
+          <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 12px; min-height: 216px; box-sizing: border-box; padding: 20px; border: 1px solid {{t.outlineVariant}}; border-radius: 8px">
+            <p aria-live="polite" style="display: flex; align-items: center; gap: 12px; margin: 0; color: {{t.onSurfaceVariant}}">
+              <svg aria-hidden="true" class="spin" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="{{t.primary}}" stroke-width="2.4" stroke-linecap="round" style="flex: none"><path d="M12 3a9 9 0 1 0 9 9"></path></svg>
+              <span>Loading the queue from contoso-prod.servicebus.windows.net</span>
+            </p>
+            <div aria-hidden="true" style="display: flex; flex-direction: column; gap: 12px; width: 100%">
+              <div style="height: 12px; border-radius: 4px; background: {{t.surfaceContainer}}"></div>
+              <div style="height: 12px; width: 82%; border-radius: 4px; background: {{t.surfaceContainer}}"></div>
+              <div style="height: 12px; width: 64%; border-radius: 4px; background: {{t.surfaceContainer}}"></div>
+            </div>
+          </div>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Loading state: spinner, what is being read and from where, placeholders in the shape of the content</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px; min-width: 0">
+          <div style="display: flex; align-items: flex-start; gap: 12px; min-height: 216px; box-sizing: border-box; padding: 16px; border-radius: 8px; background: {{t.errorContainer}}; color: {{t.onErrorContainer}}">
+            <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 2px"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
+            <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0">
+              <h3 style="margin: 0; font-size: 16px; line-height: 24px; font-weight: 500">Could not load the queues</h3>
+              <p style="margin: 0">The broker refused the credentials. Nothing is shown because nothing was read.</p>
+              <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; margin-top: 4px; padding: 0 20px 0 16px; border: 1px solid {{t.onErrorContainer}}; border-radius: 999px; background: transparent; color: {{t.onErrorContainer}}; font: inherit; font-weight: 500; cursor: pointer">
+                <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg>
+                Retry
+              </button>
+            </div>
+          </div>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Error state: what failed, what that means for the data, Retry</span>
+        </div>
+      </div>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 16px">
+      <div>
+        <h2 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">Snackbar, tooltip, keyboard key, monospace block</h2>
+        <p style="margin: 0; color: {{t.onSurfaceVariant}}">Use a snackbar for the result of an action that needs no decision, a tooltip to name an icon button or explain a disabled control, a key for a shortcut, the monospace block for anything a broker wrote.</p>
+      </div>
+      <div style="display: flex; align-items: flex-start; gap: 40px; flex-wrap: wrap">
+        <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px">
+          <div style="display: flex; align-items: center; gap: 16px; min-height: 48px; box-sizing: border-box; padding: 4px 8px 4px 16px; border-radius: 8px; background: {{snack.bg}}; color: {{snack.fg}}; box-shadow: {{t.shadow}}">
+            <span>Queue orders-archive created</span>
+            <button type="button" class="hov" style="display: inline-flex; align-items: center; height: 36px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: {{snack.action}}; font: inherit; font-weight: 500; cursor: pointer">Open</button>
+          </div>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Snackbar: one sentence, one optional action. Never for an error that needs reading.</span>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px">
+            <button type="button" aria-label="Refresh entities" class="hov" style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: {{t.onSurfaceVariant}}; font: inherit; cursor: pointer">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg>
+            </button>
+            <span style="padding: 4px 8px; border-radius: 4px; background: {{snack.bg}}; color: {{snack.fg}}; font-size: 12px; line-height: 16px">Refresh entities</span>
+          </div>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Tooltip: repeats the aria-label of an icon button</span>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px">
+          <div style="display: flex; align-items: center; gap: 6px; min-height: 36px">
+            <kbd style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid {{t.outline}}; border-bottom-width: 2px; border-radius: 4px; background: {{t.surfaceLow}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px">Ctrl</kbd>
+            <kbd style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid {{t.outline}}; border-bottom-width: 2px; border-radius: 4px; background: {{t.surfaceLow}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px">R</kbd>
+            <span style="color: {{t.onSurfaceVariant}}">Refresh</span>
+          </div>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Keyboard key: Cmd in place of Ctrl on macOS</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px; flex: 1 1 360px; min-width: 0">
+          <pre style="margin: 0; padding: 10px 12px; border-radius: 8px; background: {{t.surfaceContainer}}; color: {{t.onSurface}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; line-height: 20px; white-space: pre-wrap; overflow-wrap: anywhere">{{sampleBody}}</pre>
+          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Monospace block: message bodies, filter expressions, session state. One font stack on every platform; it wraps, it never scrolls sideways.</span>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Preview"},"$preview":{"width":1280,"height":5800}}'>
+const LIGHT = { surface:'#f9f9ff', surfaceLow:'#f2f3fa', surfaceContainer:'#ecedf4', surfaceHigh:'#e6e8ee',
+  onSurface:'#191c20', onSurfaceVariant:'#43474e', outline:'#73777f', outlineVariant:'#c3c6cf',
+  primary:'#005cbb', onPrimary:'#ffffff', primaryContainer:'#d7e3ff', onPrimaryContainer:'#001b3f',
+  secondaryContainer:'#dae2f9', onSecondaryContainer:'#131c2b',
+  error:'#ba1a1a', onError:'#ffffff', errorContainer:'#ffdad6', onErrorContainer:'#410002',
+  warnContainer:'#ffdea3', onWarnContainer:'#261900', success:'#1b6b32', successContainer:'#b6f2be', onSuccessContainer:'#002108',
+  scrim:'rgba(0,0,0,.45)', shadow:'0 1px 2px rgba(0,0,0,.3), 0 2px 6px 2px rgba(0,0,0,.15)' };
+const DARK = { surface:'#111318', surfaceLow:'#191c20', surfaceContainer:'#1d2024', surfaceHigh:'#282a2f',
+  onSurface:'#e2e2e9', onSurfaceVariant:'#c3c6cf', outline:'#8d9199', outlineVariant:'#43474e',
+  primary:'#abc7ff', onPrimary:'#002f65', primaryContainer:'#00458f', onPrimaryContainer:'#d7e3ff',
+  secondaryContainer:'#3e4759', onSecondaryContainer:'#dae2f9',
+  error:'#ffb4ab', onError:'#690005', errorContainer:'#93000a', onErrorContainer:'#ffdad6',
+  warnContainer:'#5c4300', onWarnContainer:'#ffdea3', success:'#9bd6a4', successContainer:'#00531f', onSuccessContainer:'#b6f2be',
+  scrim:'rgba(0,0,0,.6)', shadow:'0 1px 3px rgba(0,0,0,.6), 0 4px 8px 3px rgba(0,0,0,.3)' };
+
+const SWATCH_NAMES = ['surface', 'surfaceLow', 'surfaceContainer', 'surfaceHigh', 'onSurface', 'onSurfaceVariant', 'outline', 'outlineVariant',
+  'primary', 'onPrimary', 'primaryContainer', 'onPrimaryContainer', 'secondaryContainer', 'onSecondaryContainer',
+  'error', 'onError', 'errorContainer', 'onErrorContainer', 'warnContainer', 'onWarnContainer', 'success', 'successContainer', 'onSuccessContainer'];
+
+class Component extends DCLogic {
+  renderVals() {
+    const dark = (this.props.theme ?? 'light') === 'dark';
+    const t = dark ? DARK : LIGHT;
+    const bar = dark
+      ? { bg: t.surfaceContainer, fg: t.onSurface, line: t.outlineVariant, sep: t.outlineVariant, navOn: t.secondaryContainer, navOnFg: t.onSecondaryContainer, hover: 'rgba(226,226,233,.08)' }
+      : { bg: t.primary, fg: t.onPrimary, line: t.primary, sep: 'rgba(255,255,255,.4)', navOn: 'rgba(255,255,255,.18)', navOnFg: t.onPrimary, hover: 'rgba(255,255,255,.1)' };
+    const snack = dark
+      ? { bg: LIGHT.surface, fg: LIGHT.onSurface, action: LIGHT.primary }
+      : { bg: LIGHT.onSurface, fg: LIGHT.surface, action: DARK.primary };
+    return {
+      t, bar, snack,
+      sampleBody: '{\n  "orderId": "SAMPLE-1042",\n  "status": "paid",\n  "total": 129.90\n}',
+      lightSwatches: SWATCH_NAMES.map(name => ({ name, hex: LIGHT[name] })),
+      darkSwatches: SWATCH_NAMES.map(name => ({ name, hex: DARK[name] }))
+    };
+  }
+}
+</script>
+</body>
+</html>
