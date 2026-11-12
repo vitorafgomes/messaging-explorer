@@ -1,0 +1,43 @@
+{
+  "UserConfig": {
+    "Namespaces": [
+      {
+        "Name": "sbemulatorns",
+        "Queues": [
+          {
+            "Name": "orders",
+            "Properties": {
+              "DeadLetteringOnMessageExpiration": true,
+              "DefaultMessageTimeToLive": "PT1H",
+              "LockDuration": "PT30S",
+              "MaxDeliveryCount": 3,
+              "RequiresDuplicateDetection": false,
+              "RequiresSession": false
+            }
+          },
+          {
+            "Name": "billing/invoices",
+            "Properties": {
+              "DefaultMessageTimeToLive": "PT1H",
+              "LockDuration": "PT1M",
+              "MaxDeliveryCount": 10,
+              "RequiresSession": true
+            }
+          },
+          { "Name": "notifications", "Properties": { "MaxDeliveryCount": 5 } }
+        ],
+        "Topics": [
+          {
+            "Name": "order-events",
+            "Properties": { "DefaultMessageTimeToLive": "PT1H", "RequiresDuplicateDetection": false },
+            "Subscriptions": [
+              { "Name": "warehouse", "Properties": { "LockDuration": "PT1M", "MaxDeliveryCount": 3, "DeadLetteringOnMessageExpiration": true } },
+              { "Name": "email", "Properties": { "MaxDeliveryCount": 2 } }
+            ]
+          }
+        ]
+      }
+    ],
+    "Logging": { "Type": "File" }
+  }
+}
