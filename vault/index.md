@@ -78,7 +78,9 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 ## Roadmap
 
 - [[pages/roadmap/product-backlog|Product backlog]] - The features the owner asked for that are not built yet, checked against the code.
+- [[pages/roadmap/azure-service-bus-administration|Azure Service Bus: administer the entity]] - What exists and what to build, per layer, for twelve capabilities: edit entities, rules, status, definitions export, counts, sessions, scheduled and deferred messages, transfer dead-letter, batch send.
 - [[pages/roadmap/ui-material-migration|UI: finish the move to Angular Material]] - End-to-end tests with screenshots first, then the queue panel at the subscription's level, safer destructive actions, Material screen by screen, and Bootstrap removed.
+- [[pages/roadmap/ui-review-2026-11|UI review, November 2026]] - The macOS window findings (inferred from code), the prioritized list of what to improve per screen, and where the prototype departs from the UI convention.
 - [[pages/roadmap/tests-of-everything|Tests of everything]] - Four phases: the providers against real brokers in Docker, every controller, the web app where it acts on messages, the packaged app.
 - [[pages/roadmap/code-audit-2026-11|Code audit, November 2026]] - The line-by-line bug hunt of the back end and the front end: findings by area and severity, improvements, and where to start.
 - [[pages/roadmap/improvement-plan|Improvement plan]] - The order of work in seven phases: land what is open, gates that tell the truth, message and secret safety, a release that works on three systems, dependencies, the API boundary, tests and structure.

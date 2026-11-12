@@ -32,7 +32,7 @@ No dates are set; the owner sets them.
 
 ## Status
 
-- **As of 2026-11-12:** the convention is written and the target layout is drawn in `vault/prototypes/web-app/` (five artboards, light and dark, with screenshots); nothing is built in the application. Phase 0 waits for the Azure emulator fixture of [[pages/roadmap/tests-of-everything]] Phase 1, which gives a broker with data to point the app at.
+- **As of 2026-11-12:** the convention is written and the target layout is drawn in `vault/prototypes/web-app/` (38 artboards since the review of [[pages/roadmap/ui-review-2026-11]], light and dark, with screenshots); nothing is built in the application. Phase 0 waits for the Azure emulator fixture of [[pages/roadmap/tests-of-everything]] Phase 1, which gives a broker with data to point the app at.
 
 ## Phases
 
