@@ -1,8 +1,8 @@
 ---
 title: "Bulk operations are at-least-once"
-version: "1.0"
+version: "1.1"
 date: 2026-11-12
-changes: "Founded from the code on 2026-11-12"
+changes: "v1.1 (2026-11-12): the RabbitMQ exception names the three loss modes reproduced in a container and cites the tests that pin them. v1.0 founded from the code"
 page_type: invariant
 status: active
 description: "A bulk delete, resubmit, move or purge never loses a message silently: send first, complete after; a message sent but not removed from its source is reported as a possible duplicate; failures are reported per sequence number; scans are bounded; the caller's token stops the batch."
@@ -63,7 +63,7 @@ Version 2.3.0 fixed dead-letter bulk delete and resubmit losing and duplicating 
 
 None is intended; each is recorded on [[pages/services/core]] with its citations and tracked in [[pages/roadmap/followups]].
 
-- **The RabbitMQ provider does the opposite order.** Its bulk delete, resubmit and move consume through the management API with `ack_requeue_false` (`src/ServiceBusExplorer.Core/Providers/RabbitMQ/RabbitMQProvider.cs:669`) and republish afterwards, so a failed republish loses the message; it never reads the cancellation token. It has no tests. Until that is fixed this invariant holds for Azure only, and a change to the RabbitMQ bulk paths must move them toward it.
+- **The RabbitMQ provider does the opposite order, and loses messages three ways.** Its bulk delete, resubmit and move consume through the management API with `ack_requeue_false` (`src/ServiceBusExplorer.Core/Providers/RabbitMQ/RabbitMQProvider.cs:669`) and republish afterwards; it never reads the cancellation token. Each loss was reproduced against a broker in a container on 2026-11-12, and the test pins today's behaviour as a defect: a republish that reaches no queue is reported as success and the message is gone (`src/ServiceBusExplorer.IntegrationTests/RabbitMQProviderDefectTests.cs:153`); a response that fails to parse, as it does for a message published with no properties, throws after every message up to the highest selected position was already consumed, the unselected ones included (`src/ServiceBusExplorer.IntegrationTests/RabbitMQProviderDefectTests.cs:188`); a republish the broker refuses, as for another user's `user_id`, loses the message already consumed (`src/ServiceBusExplorer.IntegrationTests/RabbitMQProviderDefectTests.cs:317`). Until that is fixed this invariant holds for Azure only. The decision recorded on [[pages/roadmap/code-audit-2026-11]] is to turn these operations off for RabbitMQ and rebuild them over AMQP.
 - **A send that fails partway through a cycle** leaves the messages already sent reported as not found; a retry duplicates them without the duplicate warning.
 - **The single-message resubmit** sends first and returns silently when the original is not found again.
 - **Single receive and single resubmit actions ignore the request token** ([[pages/services/api]]).

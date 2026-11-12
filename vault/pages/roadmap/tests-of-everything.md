@@ -33,13 +33,13 @@ No dates are set; the owner sets them. Done when each phase's success criteria c
 
 ## Status
 
-- **As of 2026-11-12:** Phase 1 planned; it starts when the lane that encodes names in URLs closes, because two builds cannot share the tree.
-- **Next milestone:** Phase 1.
+- **As of 2026-11-12:** Phase 1 in progress. The RabbitMQ half landed: `src/ServiceBusExplorer.IntegrationTests` with 27 tests against a RabbitMQ container, its own CI job, and fifteen RabbitMQ audit entries reproduced and pinned by `Defect_` tests.
+- **Next milestone:** the Azure Service Bus emulator half of Phase 1.
 
 ## Phases
 
 ### Phase 1 - Providers against real brokers
-- **Status:** not started
+- **Status:** in progress. RabbitMQ done on 2026-11-12: the fixture starts `rabbitmq:4.3.7-management` through Testcontainers.RabbitMq 4.16.0, ten baseline tests cover connect, test connection, queues, topics, subscriptions, send, peek, receive and purge, sixteen `Defect_` tests pin the reproduced audit entries, the run fails without Docker, three consecutive runs were green, and the `integration` CI job runs it apart from the unit gate ([[pages/conventions/testing]]). Not done for RabbitMQ: the working path of bulk resubmit and move (today they are reached only through their defects). Not started: the Azure Service Bus emulator.
 - **Scope:** the project `src/ServiceBusExplorer.IntegrationTests` with container fixtures for RabbitMQ (management plugin) and the Azure Service Bus emulator. For each provider: connect and test connection, list and read entities, send, peek, receive, purge, the dead-letter path, and the bulk delete, resubmit and move. Then one `Defect_` test for each broker-dependent entry of [[pages/roadmap/code-audit-2026-11]] that the container can reproduce.
 - **Success criteria:** the run starts its own containers and passes locally and in CI; each PLAUSIBLE broker-dependent entry of the audit is rewritten as CONFIRMED or removed as refuted, with the test named; what the emulator cannot do is listed on [[pages/conventions/testing]].
 

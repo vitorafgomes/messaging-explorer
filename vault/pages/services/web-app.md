@@ -152,7 +152,7 @@ Components: `advanced-filter-panel`, `bulk-actions-toolbar`, `bulk-operation-pro
 - 22 `*.spec.ts` files exist under `web-app/src`.
 - `npm test` is `ng test` (`web-app/package.json:25`). `angular.json` sets the `@angular/build:unit-test` builder with no `runner` option (`web-app/angular.json:90`); the builder schema defaults `runner` to `vitest`, `runnerConfig` to `false` and `include` to `**/*.spec.ts` (`web-app/node_modules/@angular/build/src/builders/unit-test/schema.json:19`, `web-app/node_modules/@angular/build/src/builders/unit-test/schema.json:25`, `web-app/node_modules/@angular/build/src/builders/unit-test/schema.json:45`). Run on 2026-11-12, after the names-in-URLs fix, `npm test -- --watch=false` executes all 22 files: 540 tests pass and 8 are skipped (three `describe.skip` blocks for the refresh variants in `web-app/src/app/core/services/metrics.service.spec.ts:295`).
 - Plain `npx vitest` is not a way to run these tests: without the Angular builder there is no compiler, so components with signal inputs or `templateUrl` fail. A `vitest.config.ts` that listed 11 files for that mode was removed on 2026-11-12; the builder never read it.
-- CI: the web job runs `npm ci`, the tests and `npm run build` (`.github/workflows/ci.yml:85`, `.github/workflows/ci.yml:91`, `.github/workflows/ci.yml:97`). No lint step; `web-app/package.json` has no `lint` script. See [[pages/conventions/testing]].
+- CI: the web job runs `npm ci`, the tests and `npm run build` (`.github/workflows/ci.yml:109`, `.github/workflows/ci.yml:115`, `.github/workflows/ci.yml:121`). No lint step; `web-app/package.json` has no `lint` script. See [[pages/conventions/testing]].
 
 ## Hot spots
 

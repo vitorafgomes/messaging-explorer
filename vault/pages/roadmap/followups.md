@@ -21,7 +21,7 @@ Each entry carries its date. This page is a tracker: `version` changes only when
 
 ## P1 - can lose a message or expose a secret
 
-- **2026-11-12 - RabbitMQ bulk delete, resubmit and move consume before they republish.** A failed republish loses the message; the cancellation token is never read; `MoveMessagesAsync` ignores the subscription. Breach of [[pages/invariants/bulk-operations-are-at-least-once]]. No tests. [[pages/services/core]]
+- **2026-11-12 - RabbitMQ bulk delete, resubmit and move consume before they republish.** Reproduced in a container on 2026-11-12: an unrouted republish reported as success, a whole batch consumed and then lost on a parse failure, a refused republish. The cancellation token is never read; `MoveMessagesAsync` ignores the subscription. Breach of [[pages/invariants/bulk-operations-are-at-least-once]], pinned by `Defect_` tests in the integration project. [[pages/services/core]]
 - **2026-11-12 - The consolidation migration still writes `workspace.json` directly**, not through the atomic save. [[pages/services/core]]
 - **2026-11-12 - A send that fails partway through a resubmit or move cycle** leaves the sent messages reported as not found; a retry duplicates them with no warning. Read from the code, no test. [[pages/services/core]]
 - **2026-11-12 - The single-message resubmit returns silently when the original is not found after the send.** [[pages/services/core]]
@@ -60,7 +60,7 @@ What the pipeline cannot check yet ([[pages/conventions/tooling]], [[pages/conve
 - **2026-11-12 - No lint or format script for the web app**, in CI or locally.
 - **2026-11-12 - No warnings-as-errors, no analyzers, no `.editorconfig`, no format gate, no `global.json`.** Adopting a `Directory.Build.props` with warnings as errors is a change to the product build; one PR, through the pipeline.
 - **2026-11-12 - No architecture test for Rule F**; a vendor `using` outside a provider folder fails nothing.
-- **2026-11-12 - No test for most controllers, the RabbitMQ provider, `FileWorkspaceManager` in isolation, or the Electron shell.**
+- **2026-11-12 - No test for most controllers or for the Electron shell's wiring**; the Azure provider has no integration test yet. [[pages/roadmap/tests-of-everything]]
 - **2026-11-12 - The pipeline skill has no `evals/`.**
 
 ## Release and dependencies
