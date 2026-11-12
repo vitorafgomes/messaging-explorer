@@ -202,7 +202,7 @@ Inferred from the code, not reproduced on a Mac. The window buttons drawn over t
 
 ### 29. macOS target
 
-The same shell with an 84 px inset for the window buttons, the toolbar as the drag region, the buttons centred on the toolbar, Edit and Window menus, Cmd in the shortcut hints.
+The same shell in a standard macOS window: the native title bar holds the window buttons and drags the window, so the page needs no layout of its own for the Mac. No File, Edit, View, Window or Help row is drawn in the window; the system menu bar keeps only the application menu, Edit and Window, which macOS needs for copy and paste. Cmd in the shortcut hints.
 
 ![macOS target](./screens/29-mac.png)
 
@@ -210,7 +210,7 @@ The same shell with an 84 px inset for the window buttons, the toolbar as the dr
 
 ### 30. Windows and Linux
 
-The native frame stays and the toolbar drops the brand the title bar already shows. The menu gains Edit.
+The native frame stays, the toolbar drops the brand the title bar already shows, and there is no menu bar at all: no File, Edit, View or Help row, and none that appears on Alt. What the menu held is in the app (a new connection on the Connections screen, About and the developer tools in Settings); the testing item that cleared all data is removed.
 
 ![Windows and Linux](./screens/30-win.png)
 
