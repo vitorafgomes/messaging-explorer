@@ -30,8 +30,8 @@ reliability: high
 | What | Command | State on 2026-11-12 |
 |---|---|---|
 | Core | `dotnet test src/ServiceBusExplorer.Core.Tests` | 70 passed, 0 skipped |
-| Api | `dotnet test src/ServiceBusExplorer.Api.Tests` | 28 passed, 0 skipped |
-| Web | `npm test -- --watch=false` in `web-app/` | 21 files: 519 passed, 8 skipped |
+| Api | `dotnet test src/ServiceBusExplorer.Api.Tests` | 49 passed, 0 skipped |
+| Web | `npm test -- --watch=false` in `web-app/` | 22 files: 540 passed, 8 skipped |
 | Electron shell helpers | `npm run test:electron` in `web-app/` (`node --test`) | 10 passed, 0 skipped |
 | Build | `dotnet build ServiceBusExplorer.slnx` | 0 warnings, 0 errors |
 
@@ -53,7 +53,7 @@ Plain `npx vitest` is not a second way to run them. It has no Angular compiler, 
 
 - **Core seams for the Azure provider.** The bulk operations are tested through internal `*Core` methods against fake receivers and senders (`src/ServiceBusExplorer.Core.Tests/Providers/Azure/AzureServiceBusProviderBatchTests.cs:63`); `InternalsVisibleTo` opens them (`src/ServiceBusExplorer.Core/ServiceBusExplorer.Core.csproj:10`). This is the model for a new bulk path: order of calls and the result per sequence number, never "complete was called".
 - **Whole-API tests.** `WebApplicationFactory` with a seeded workspace (`src/ServiceBusExplorer.Api.Tests/ApiFactory.cs:38`) for the key middleware, CORS and masking.
-- **No live broker.** No test connects to Azure or RabbitMQ, and none may. A reproduction against a real broker is manual, on a broker the owner named, and never a destructive operation.
+- **No real broker.** No test connects to a broker it did not start. Since [[pages/decisions/0002-integration-tests-against-brokers-in-docker]] the providers are also tested against RabbitMQ and the Azure Service Bus emulator in containers the run starts, in a project of its own, outside the fast gate ([[pages/roadmap/tests-of-everything]]). A reproduction against a real broker is manual, on a broker the owner named, and never a destructive operation.
 - **One failing-call test per external boundary (Rule I).** A new call to a broker SDK, the RabbitMQ management API, Azure Monitor, the filesystem or a subprocess ships one test where it fails and asserts what the caller does. `src/ServiceBusExplorer.Core.Tests/Providers/Azure/AzureServiceBusProviderBatchTests.cs:250` is the shape.
 - **A guard ships with the input that fires it** ([[pages/invariants/a-guard-must-be-able-to-fire]]).
 

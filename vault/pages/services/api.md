@@ -3,7 +3,7 @@ title: "Api"
 version: "1.0"
 date: 2026-11-12
 updated: 2026-11-12
-changes: "one exception handler answers a constant 500 in every environment; every 500 body is {message}; import never returns an exception message; the Host filter and the API_SECRET fail-fast are pinned by tests; four Known gaps closed; ErrorBodyTests and BoundaryGuardTests added"
+changes: "2026-11-12: entity names in the path are decoded once from the raw target by RawTargetRouteValuesAttribute; EntityNameRoutingTests added. Earlier: one exception handler answers a constant 500 in every environment; every 500 body is {message}; import never returns an exception message; the Host filter and the API_SECRET fail-fast are pinned by tests; four Known gaps closed; ErrorBodyTests and BoundaryGuardTests added"
 page_type: service
 status: active
 description: "ASP.NET Core host that exposes the Core library to the desktop UI as a loopback-only, API-key-guarded REST API over one process-wide active broker connection."
@@ -106,6 +106,14 @@ Consequences:
 - `Connect` creates and connects the new provider before the swap (`.../ConnectionsController.cs:240-243`); if creation throws, the previous provider stays active and the caller gets 500.
 - `GetStatus` falls back to the legacy `IServiceBusService` when no provider is set (`.../ConnectionsController.cs:326-332`).
 
+### Entity names in the path
+
+An entity, topic, subscription or session name is one path segment, sent percent-encoded by the web app ([[pages/services/web-app]]). Kestrel decodes every escape in the path except `%2F`, so by default the route value of `/api/queues/a%2Fmessages` is the literal `a%2Fmessages`, while `%25`, `%23`, `%3F` and `%20` are decoded: a raw `a%252Fb` and a raw `a%2Fb` both reach the action as `a%2Fb`. Decoding the route value again would turn the first into `a/b`, so the route value alone cannot be fixed.
+
+`RawTargetRouteValuesAttribute` (`src/ServiceBusExplorer.Api/Controllers/RawTargetRouteValuesAttribute.cs:16`), a resource filter on `QueuesController`, `TopicsController`, `SessionsController` and `MetricsController` (`src/ServiceBusExplorer.Api/Controllers/QueuesController.cs:7`), runs before model binding and replaces each whole-segment route value with the matching segment of the raw request target, decoded once (`src/ServiceBusExplorer.Api/Controllers/RawTargetRouteValuesAttribute.cs:59`): `a%2Fmessages` reaches the provider as `a/messages`, `a%252Fb` as `a%2Fb`, `50%25off` as `50%off`. It replaces a value only when the raw target is an origin-form path with as many segments as the route pattern (`:47`) and the raw segment decodes, `%2F` kept, to the value routing produced (`:57`); otherwise, for example a raw target with dot segments that Kestrel normalised, the routed value is left as it was. Routes are unchanged. `ConnectionsController` and `ConnectionGroupsController` carry ids, not names, and do not use it.
+
+Pinned through Kestrel (`WebApplicationFactory.UseKestrel`) by `src/ServiceBusExplorer.Api.Tests/EntityNameRoutingTests.cs`: deleting the queue `a/messages` calls `DeleteQueueAsync("a/messages")` and nothing else (`:98`); purging `orders#1` calls `PurgeMessagesAsync("orders#1")` and nothing else (`:106`); eight queue names on six queue operations (`:122`), a topic and subscription with `/` (`:144`), a session id with `/` and a space (`:162`) and the three metrics routes (`:176`) reach the provider or the metrics service unchanged; the fallback branches are driven directly (`:197`, `:210`).
+
 ### Cancellation
 
 Only the bulk and destructive actions pass `HttpContext.RequestAborted` to the provider: purge, delete-batch, move-batch and resubmit-batch, for example `src/ServiceBusExplorer.Api/Controllers/QueuesController.cs:207`, `:226`, `:245`, `:264`, `:283`, `:302`, `:321` and `src/ServiceBusExplorer.Api/Controllers/TopicsController.cs:244`, `:263`, `:282`, `:301`, `:320`, `:339`, `:358`. A client abort therefore cancels the Core loop between batches ([[pages/invariants/bulk-operations-are-at-least-once]]: messages already moved or completed before the abort stay done). Not cancellable from the request: search, peek, receive (`src/ServiceBusExplorer.Api/Controllers/QueuesController.cs:175`), send, single resubmit (`:188`) and entity create/delete. `MetricsController` is the only one that model-binds a `CancellationToken` parameter (`src/ServiceBusExplorer.Api/Controllers/MetricsController.cs:34`).
@@ -161,7 +169,7 @@ Two layers, one body. Most actions catch `Exception`, log it and return a consta
 
 ## Testing footprint
 
-`src/ServiceBusExplorer.Api.Tests/` has nine files, 28 test cases.
+`src/ServiceBusExplorer.Api.Tests/` has ten files, 49 test cases.
 
 - `ApiFactory.cs` boots `WebApplicationFactory<Program>` with a fixed 32-character secret, a temp `SERVICEBUS_DATA_PATH` and `ASPNETCORE_URLS=http://127.0.0.1:0` in Development (`src/ServiceBusExplorer.Api.Tests/ApiFactory.cs:20-39`). Because `ASPNETCORE_URLS` is always set, the `ListenLocalhost` branch at `Program.cs:86` is never exercised.
 - `AuthMiddlewareTests.cs`: no key 401, wrong key 401, right key 200, `/health` public (`:12`, `:20`, `:29`, `:38`).
@@ -172,7 +180,8 @@ Two layers, one body. Most actions catch `Exception`, log it and return a consta
 - `Usings.cs` sets `DisableTestParallelization` because tests share process-wide environment variables, which `ApiFactory` writes (`src/ServiceBusExplorer.Api.Tests/Usings.cs:3-4`, `src/ServiceBusExplorer.Api.Tests/ApiFactory.cs:27-30`).
 - `ErrorBodyTests.cs`: a corrupt `workspace.json` under GET by id answers 500 with exactly `{"message":"An internal error occurred."}` as JSON and no exception text, under Development and Production (`src/ServiceBusExplorer.Api.Tests/ErrorBodyTests.cs:51`); an `ArgumentException` on import never reaches the client (`:69`); a provider failure caught in Queues, Topics and Sessions answers the same body (`:94`), through a fake `IProviderFactory`, `POST {id}/connect` and `POST disconnect` to reset the static slot.
 - `BoundaryGuardTests.cs`: a foreign `Host` answers 400 and `127.0.0.1` answers 200 (`src/ServiceBusExplorer.Api.Tests/BoundaryGuardTests.cs:15`); the built API started as a child process exits with code 1 when `API_SECRET` is unset or 31 characters long (`:29`).
-- **No test beyond the error body above:** `QueuesController`, `TopicsController`, `SessionsController`. **No test at all:** `ConnectionGroupsController`, `MonitoringController`, `MonitoringBackgroundService`/`MonitoringStore`, port resolution, the loopback binding. Bulk endpoints are exercised only at Core level (`src/ServiceBusExplorer.Core.Tests/Providers/Azure/AzureServiceBusProviderBatchTests.cs`). See [[pages/conventions/testing]].
+- `EntityNameRoutingTests.cs`: which provider or metrics method each route calls, and with which name, for names with `/`, `#`, `?`, `%` and a space; see Entity names in the path.
+- **No test beyond the error body and the names above:** `QueuesController`, `TopicsController`, `SessionsController`. **No test at all:** `ConnectionGroupsController`, `MonitoringController`, `MonitoringBackgroundService`/`MonitoringStore`, port resolution, the loopback binding. Bulk endpoints are exercised only at Core level (`src/ServiceBusExplorer.Core.Tests/Providers/Azure/AzureServiceBusProviderBatchTests.cs`). See [[pages/conventions/testing]].
 
 ## History
 
@@ -188,7 +197,7 @@ This page states how the module works now; dated changes will live in `pages/his
 - Receive (destructive) and single resubmit ignore the request token: `src/ServiceBusExplorer.Api/Controllers/QueuesController.cs:175`, `:188`.
 - Monitoring polls every 30 s with one `GetSubscriptionsAsync` per topic whether or not anyone is looking, ignores the stopping token for broker calls, and keeps a reference to the last (possibly disposed) provider: `src/ServiceBusExplorer.Api/Monitoring/MonitoringBackgroundService.cs:10`, `:33`, `:52-70`.
 - Legacy `IServiceBusService` is still registered and consulted by `status`, `disconnect` and `clear-all`: `src/ServiceBusExplorer.Api/Program.cs:117`, `src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs:294`, `:326`.
-- Untested controllers listed under Testing footprint; the largest surface (queues, topics) has only its 500 body pinned.
+- Untested controllers listed under Testing footprint; the largest surface (queues, topics) has only its 500 body and the name each route hands the provider pinned.
 
 ## Related
 

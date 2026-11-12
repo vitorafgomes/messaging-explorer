@@ -129,7 +129,6 @@ Read at commit `0369fc4`. The controllers were being edited the same day (error 
 
 ### P1
 
-- **Deleting a queue whose name ends in `/messages` or `/deadletter` purges a different queue** (PLAUSIBLE; confirm on the emulator). Every `{name}` is one path segment and the web app never encodes names. Service Bus names may contain `/`: the URL the UI builds to delete a queue named `a/messages` is `DELETE /api/queues/a/messages`, which is the purge route of queue `a`. More generally, entities with `/`, spaces, `#`, `?` or `%` in the name get 404s or truncated URLs on every operation. `src/ServiceBusExplorer.Api/Controllers/QueuesController.cs`, `TopicsController.cs`, `SessionsController.cs`; the callers in `web-app/src/app/core/services/`. Fix: encode path segments in the UI, test `%2F` end to end, and make sure no delete-entity URL can equal a purge route.
 - **Receive completes one by one after receiving up to 1000 messages**; a failure partway leaves the earlier ones deleted and never returned. Same root as the Azure entry above, reached from `QueuesController` and `TopicsController`.
 - **A resubmit from a subscription's dead-letter queue publishes to the topic**, so every subscription whose filter matches receives a copy, including ones that already processed the original. The code comment says it is intended; the UI does not say so. Needs an owner decision: a warning with a confirmation, or a per-subscription route.
 
@@ -160,7 +159,7 @@ Read at commit `0369fc4`. The controllers were being edited the same day (error 
 
 ### Improvements
 
-- A route-table test that fails when two actions can match one method and URL, and one `%2F` test.
+- A route-table test that fails when two actions can match one method and URL.
 - `DeleteBatchRequest.All` deletes whatever the broker holds at that moment; an optional expected count would refuse when the queue grew since the screen loaded.
 - Reject a request with more than one `X-Api-Key` value.
 - `status` exposes which saved connection is active; a failed connect keeps and reports the previous target.
@@ -177,7 +176,6 @@ The key middleware (only `OPTIONS` and `/health` bypass it; `/healthz`, `//healt
 
 ### P1
 
-- **A queue name with `#` or `?` turns a purge into a delete of another queue** (CONFIRMED in code; the effect needs such a name). Names are interpolated raw into the URL (`web-app/src/app/core/services/queue.service.ts:35`, the same in `topic.service.ts`; nothing in `web-app/src/app` calls `encodeURIComponent`). For a queue named `orders#1`, the purge request is `DELETE /api/queues/orders#1/messages`; the browser drops the fragment and the server receives `DELETE /api/queues/orders`, which deletes the queue `orders`. The confirmation said "purge". This is the front-end half of the API entry on names with `/`. Fix: encode every segment in one helper in `ApiService`.
 - **After switching connection, the entities screen still shows the previous connection's queue with Purge, Send and View enabled** (`web-app/src/app/features/entities/entities-tree.component.ts:670`, `web-app/src/app/core/services/entity-selection.service.ts:67`). The selection is cleared only on disconnect, and the actions go by name to the new connection. Production and staging often share queue names, and the confirmation names neither the entity nor the connection. Fix: clear the selection whenever a connect succeeds or the target changes.
 - **The JSON tree in `message-body-editor` allows script injection from a message body** (latent: nothing imports the component today). It builds HTML with `bypassSecurityTrustHtml` and puts the raw JSON key inside an attribute, with an escape that leaves quotes alone (`web-app/src/app/shared/components/message-body-editor/message-body-editor.component.ts:1027`). A key containing a quote adds an event handler. Script in the renderer can read the API secret and export the stored connections with their secrets. Fix: delete the component, or build the tree with DOM nodes, before anything uses it.
 
@@ -222,7 +220,7 @@ The highlight pipe (escape, then wrap, and a plain string so Angular still sanit
 
 ## Web app: core services and the messages feature
 
-`view-messages-dialog.component.ts` was read in full. Entries already given above (unencoded names, the selection surviving a connection switch, the enqueued-time filter, RabbitMQ rows with no sequence number) are not repeated.
+`view-messages-dialog.component.ts` was read in full. Entries already given above (the selection surviving a connection switch, the enqueued-time filter, RabbitMQ rows with no sequence number) are not repeated.
 
 ### P1
 
@@ -268,14 +266,13 @@ The highlight pipe (escape, then wrap, and a plain string so Angular still sanit
 
 ## Where to start
 
-Counted across the five areas: about 118 findings, 17 of them P1. The same few roots explain many of them, so the order is by root, not by count.
+Counted across the five areas at the time of the audit: about 118 findings, 17 of them P1. Entries leave this page as their fixes land; the first to go, on 2026-11-12, were the unencoded names in URLs. The same few roots explain many of them, so the order is by root, not by count.
 
-1. **Names in URLs.** Encode every path segment in the web app and test it end to end. One helper closes three P1 entries (a purge that deletes another queue, a delete that purges another queue, entities that cannot be opened).
-2. **Which connection, which entity.** Clear the selection on every connect; name the entity and the connection in every destructive confirmation; show the environment in the header.
-3. **"All" means the entity, not the page.** Fix the stored flag and the retry of possible duplicates in the messages dialog; stop the continuous resubmit on a failure.
-4. **RabbitMQ.** Turn the bulk operations and the single resubmit off behind a capability flag, then fix peek, the listing that breaks on a TTL argument and the channel that dies on a missing dead-letter queue. Rebuild the bulk operations over AMQP afterwards.
-5. **Azure message safety.** Duplicate detection on the target, per-abandon and per-cycle cleanup, any exception becoming a partial result; extract the shared scan loop first.
-6. **Things that are simply broken.** Custom properties on send, queue details showing defaults, durations in days, the numeric provider enum, connect that does not connect, the enqueued-time filter.
-7. **Dead and mock code.** Delete `message-body-editor` (it carries a script-injection path), `metrics-dashboard`, the mock metrics fallback and the `.backup` file.
+1. **Which connection, which entity.** Clear the selection on every connect; name the entity and the connection in every destructive confirmation; show the environment in the header.
+2. **"All" means the entity, not the page.** Fix the stored flag and the retry of possible duplicates in the messages dialog; stop the continuous resubmit on a failure.
+3. **RabbitMQ.** Turn the bulk operations and the single resubmit off behind a capability flag, then fix peek, the listing that breaks on a TTL argument and the channel that dies on a missing dead-letter queue. Rebuild the bulk operations over AMQP afterwards.
+4. **Azure message safety.** Duplicate detection on the target, per-abandon and per-cycle cleanup, any exception becoming a partial result; extract the shared scan loop first.
+5. **Things that are simply broken.** Custom properties on send, queue details showing defaults, durations in days, the numeric provider enum, connect that does not connect, the enqueued-time filter.
+6. **Dead and mock code.** Delete `message-body-editor` (it carries a script-injection path), `metrics-dashboard`, the mock metrics fallback and the `.backup` file.
 
 Owner decisions this audit raised: a resubmit from a subscription's dead-letter queue reaching every subscription; selective delete and move on active entities, which cannot be made free of side effects; metrics tied to one configured namespace.

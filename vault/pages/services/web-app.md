@@ -3,7 +3,7 @@ title: "Web App"
 version: "1.0"
 date: 2026-11-12
 updated: 2026-11-12
-changes: "Founded from the code on 2026-11-12"
+changes: "2026-11-12: every value in an API path goes through apiPath, encoded once; a name of . or .. recorded as a gap. Founded from the code on 2026-11-12"
 page_type: service
 status: active
 description: "Angular 21 single-page UI that talks to the local .NET API through one ApiService, in a plain browser or inside the Electron shell."
@@ -17,6 +17,7 @@ source:
   - web-app/src/environments/environment.ts
   - web-app/src/environments/environment.prod.ts
   - web-app/src/app/core/services/api.service.ts
+  - web-app/src/app/core/services/api-path.ts
   - web-app/src/app/core/services/bulk-operations.service.ts
   - web-app/src/app/core/services/queue.service.ts
   - web-app/src/app/core/services/provider.service.ts
@@ -99,12 +100,13 @@ flowchart LR
 - Secret: stored in memory, attached as `X-Api-Key` on every verb via `getHeaders()` (`web-app/src/app/core/services/api.service.ts:65`). If the secret call throws it is logged and requests go out without the header (`web-app/src/app/core/services/api.service.ts:59`), so the API answers 401.
 - Plain browser (no Electron): `ready` stays null, requests are sent immediately with no `X-Api-Key` (`web-app/src/app/core/services/api.service.ts:72`). The API requires the key on everything except `/health` and answers 401 otherwise (`src/ServiceBusExplorer.Api/Program.cs:198`, `src/ServiceBusExplorer.Api/Program.cs:204`), and refuses to start without `API_SECRET` (`src/ServiceBusExplorer.Api/Program.cs:36`). So a browser tab pointed at a running API cannot call it; see [[pages/invariants/local-authenticated-api]].
 - GET requests append a `_t=Date.now()` cache buster (`web-app/src/app/core/services/api.service.ts:78`).
+- **Names in a path are encoded once, by one helper.** Every endpoint that carries a value is written as an `apiPath` tagged template (`web-app/src/app/core/services/api-path.ts:7`): each interpolated value, an entity, topic, subscription or session name, a connection or group id, a sequence number or a query value, goes through `encodeURIComponent`, and the literal parts stay as written. A queue named `a/messages` is deleted with `DELETE queues/a%2Fmessages`, never the purge route of `a`; a purge of `orders#1` is `DELETE queues/orders%231/messages`, never a request for `orders`. No other code encodes, so nothing is encoded twice (`50%off` becomes `50%25off`). An `undefined` or `null` value throws instead of writing the text into the URL (`web-app/src/app/core/services/api-path.ts:11`). Endpoints with no value stay plain strings. The API decodes each segment once on its side ([[pages/services/api]]). Pinned by `web-app/src/app/core/services/api-path.spec.ts:4` and the "names in the URL" specs of the queue, topic, session and metrics services (`web-app/src/app/core/services/queue.service.spec.ts:64`, `web-app/src/app/core/services/topic.service.spec.ts:55`, `web-app/src/app/core/services/session.service.spec.ts:130`, `web-app/src/app/core/services/metrics.service.spec.ts:294`).
 
 ### Bulk operations
 
 - `BulkOperationsService` is selection state only: two `BehaviorSubject` tab states (active, deadletter) keyed by sequence number (`web-app/src/app/core/services/bulk-operations.service.ts:45`). It does no batching, no progress and no HTTP.
-- The operations live in `ViewMessagesDialogComponent`: resubmit (`web-app/src/app/features/messages/view-messages-dialog.component.ts:1285`), delete (`web-app/src/app/features/messages/view-messages-dialog.component.ts:1791`), move (`web-app/src/app/features/messages/view-messages-dialog.component.ts:1991`). Each sends one request carrying all selected sequence numbers (`web-app/src/app/core/services/queue.service.ts:130`, `web-app/src/app/core/services/queue.service.ts:143`, `web-app/src/app/core/services/queue.service.ts:156`). The client does not chunk; batching is the server's job.
-- Delete on a whole tab sends `all: true` with an empty list and the server drains (`web-app/src/app/features/messages/view-messages-dialog.component.ts:1787`, `web-app/src/app/core/services/queue.service.ts:143`).
+- The operations live in `ViewMessagesDialogComponent`: resubmit (`web-app/src/app/features/messages/view-messages-dialog.component.ts:1285`), delete (`web-app/src/app/features/messages/view-messages-dialog.component.ts:1791`), move (`web-app/src/app/features/messages/view-messages-dialog.component.ts:1991`). Each sends one request carrying all selected sequence numbers (`web-app/src/app/core/services/queue.service.ts:131`, `web-app/src/app/core/services/queue.service.ts:144`, `web-app/src/app/core/services/queue.service.ts:157`). The client does not chunk; batching is the server's job.
+- Delete on a whole tab sends `all: true` with an empty list and the server drains (`web-app/src/app/features/messages/view-messages-dialog.component.ts:1787`, `web-app/src/app/core/services/queue.service.ts:144`).
 - Progress is not incremental: `updateProgress` is called once, with the final result (`web-app/src/app/features/messages/view-messages-dialog.component.ts:1322`).
 - Cancel: the progress dialog emits `cancelRequested$` (`web-app/src/app/shared/components/bulk-operation-progress-dialog/bulk-operation-progress-dialog.component.ts:380`); the parent pipes the in-flight observable through `takeUntil`, which aborts the XHR (`web-app/src/app/features/messages/view-messages-dialog.component.ts:1306`, `web-app/src/app/features/messages/view-messages-dialog.component.ts:1314`). The API passes `HttpContext.RequestAborted` to the provider (`src/ServiceBusExplorer.Api/Controllers/QueuesController.cs:207`).
 - After an abort: the success handler is skipped, no results dialog opens, the entity message list and counters are not reloaded, and the progress dialog stays open in a "cancelled" state with a Close button (`web-app/src/app/features/messages/view-messages-dialog.component.ts:1318`, `web-app/src/app/shared/components/bulk-operation-progress-dialog/bulk-operation-progress-dialog.component.ts:124`). The dialog itself warns that messages already processed server-side may have been affected; delivery is at-least-once, see [[pages/invariants/bulk-operations-are-at-least-once]].
@@ -116,7 +118,7 @@ flowchart LR
 ## core/
 
 - `models/`: DTO interfaces mirroring the API (connection, connection-group, message, queue, topic, metrics, monitoring, session, filter, provider, tree-node) and the provider component contract (`web-app/src/app/core/models/provider-component.interface.ts:55`).
-- `services/`: `api` (above); `connection`, `connection-group`, `queue`, `topic`, `session`, `monitoring`, `metrics`, `provider` (all thin `ApiService` wrappers); `bulk-operations` (selection); `message-search`, `advanced-message-filter` (client-side filtering, filter presets in localStorage under prefix `advanced-filter-`, `web-app/src/app/core/services/advanced-message-filter.service.ts:19`); `message-export` (CSV/JSON/XLSX), `message-import`; `message-template` (localStorage key `explorer-messages-templates`, `web-app/src/app/core/services/message-template.service.ts:6`); `theme` (key `app-theme`, `web-app/src/app/core/services/theme.service.ts:8`); `dev-settings` (key `dev-mode`); `dead-letter-notification`, `entity-selection`, `tree-data-builder`, `logger` (silent in production builds, `web-app/src/app/core/services/logger.service.ts:12`).
+- `services/`: `api` and `api-path` (above); `connection`, `connection-group`, `queue`, `topic`, `session`, `monitoring`, `metrics`, `provider` (all thin `ApiService` wrappers); `bulk-operations` (selection); `message-search`, `advanced-message-filter` (client-side filtering, filter presets in localStorage under prefix `advanced-filter-`, `web-app/src/app/core/services/advanced-message-filter.service.ts:19`); `message-export` (CSV/JSON/XLSX), `message-import`; `message-template` (localStorage key `explorer-messages-templates`, `web-app/src/app/core/services/message-template.service.ts:6`); `theme` (key `app-theme`, `web-app/src/app/core/services/theme.service.ts:8`); `dev-settings` (key `dev-mode`); `dead-letter-notification`, `entity-selection`, `tree-data-builder`, `logger` (silent in production builds, `web-app/src/app/core/services/logger.service.ts:12`).
 
 ## features/
 
@@ -132,7 +134,7 @@ flowchart LR
 - `ProviderShellComponent` resolves the class and calls `createComponent` (`web-app/src/app/features/entities/provider-shell.component.ts:173`, `web-app/src/app/features/entities/provider-shell.component.ts:183`).
 - But the shell is not used: the `entities` route renders `<app-entity-details>` directly (`web-app/src/app/features/entities/entities-container.component.ts:20`), and a grep of `src/app` finds no `app-provider-shell` outside doc comments. The registry, shell and both provider components are therefore unreachable at runtime; the 3022-line `EntityDetailsComponent` handles both brokers. See [[pages/invariants/provider-boundaries]].
 - `kafka/` holds three empty folders (`.gitkeep`) and a barrel containing only a TODO comment (`web-app/src/app/providers/kafka/index.ts:4`). No Kafka component, no `ProviderType.Kafka` in the frontend enum (`web-app/src/app/core/models/provider.model.ts:5`), and none in the backend enum (`src/ServiceBusExplorer.Core/Providers/ProviderType.cs:6`): there is no backend provider.
-- `ProviderService` falls back to hard-coded default capabilities when the API call fails and lists only Azure and RabbitMQ (`web-app/src/app/core/services/provider.service.ts:218`).
+- `ProviderService` falls back to hard-coded default capabilities when the API call fails and lists only Azure and RabbitMQ (`web-app/src/app/core/services/provider.service.ts:219`).
 
 ### docs/ADDING_PROVIDERS.md versus the code
 
@@ -147,8 +149,8 @@ Components: `advanced-filter-panel`, `bulk-actions-toolbar`, `bulk-operation-pro
 
 ## Tests
 
-- 21 `*.spec.ts` files exist under `web-app/src`.
-- `npm test` is `ng test` (`web-app/package.json:25`). `angular.json` sets the `@angular/build:unit-test` builder with no `runner` option (`web-app/angular.json:90`); the builder schema defaults `runner` to `vitest`, `runnerConfig` to `false` and `include` to `**/*.spec.ts` (`web-app/node_modules/@angular/build/src/builders/unit-test/schema.json:19`, `web-app/node_modules/@angular/build/src/builders/unit-test/schema.json:25`, `web-app/node_modules/@angular/build/src/builders/unit-test/schema.json:45`). Run on 2026-11-12, `npm test -- --watch=false` executes all 21 files: 519 tests pass and 8 are skipped (three `describe.skip` blocks for the refresh variants in `web-app/src/app/core/services/metrics.service.spec.ts:295`).
+- 22 `*.spec.ts` files exist under `web-app/src`.
+- `npm test` is `ng test` (`web-app/package.json:25`). `angular.json` sets the `@angular/build:unit-test` builder with no `runner` option (`web-app/angular.json:90`); the builder schema defaults `runner` to `vitest`, `runnerConfig` to `false` and `include` to `**/*.spec.ts` (`web-app/node_modules/@angular/build/src/builders/unit-test/schema.json:19`, `web-app/node_modules/@angular/build/src/builders/unit-test/schema.json:25`, `web-app/node_modules/@angular/build/src/builders/unit-test/schema.json:45`). Run on 2026-11-12, after the names-in-URLs fix, `npm test -- --watch=false` executes all 22 files: 540 tests pass and 8 are skipped (three `describe.skip` blocks for the refresh variants in `web-app/src/app/core/services/metrics.service.spec.ts:295`).
 - Plain `npx vitest` is not a way to run these tests: without the Angular builder there is no compiler, so components with signal inputs or `templateUrl` fail. A `vitest.config.ts` that listed 11 files for that mode was removed on 2026-11-12; the builder never read it.
 - CI: the web job runs `npm ci`, the tests and `npm run build` (`.github/workflows/ci.yml:85`, `.github/workflows/ci.yml:91`, `.github/workflows/ci.yml:97`). No lint step; `web-app/package.json` has no `lint` script. See [[pages/conventions/testing]].
 
@@ -174,6 +176,7 @@ Components: `advanced-filter-panel`, `bulk-actions-toolbar`, `bulk-operation-pro
 - After a cancel the message list and counters are not refreshed: `web-app/src/app/features/messages/view-messages-dialog.component.ts:1318`.
 - If `getApiSecret()` fails the app silently sends unauthenticated requests: `web-app/src/app/core/services/api.service.ts:59`.
 - `ProviderShellComponent` silently renders nothing when no component is registered (TODO in code): `web-app/src/app/features/entities/provider-shell.component.ts:176`.
+- A name that is exactly `.` or `..` cannot be sent as a path segment: `encodeURIComponent` leaves dots alone and the browser's URL parser resolves `.`, `..` and their `%2E` forms as dot segments. Azure names cannot take that form; RabbitMQ names can, and deleting a subscription named `..` under topic `t` would become `DELETE /api/topics/t/` and delete the topic (read from the URL standard and the route table, not executed). `apiPath` does not refuse such a value today: `web-app/src/app/core/services/api-path.ts:7`.
 - Preload exposes `onNewConnection` and nothing consumes or sends it: `web-app/electron/preload.js:20`. `clear-all-data` does have a consumer, through the generic `electron.on` bridge (`web-app/src/app/features/connections/connections.component.ts:439`); the founding survey missed it (corrected 2026-11-12). That listener is added on every visit to the page and never removed.
 
 ## Related

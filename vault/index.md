@@ -63,10 +63,12 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 
 ## Decisions
 
+- [[pages/decisions/0002-integration-tests-against-brokers-in-docker|ADR 0002 - Integration tests against brokers in Docker]] *(accepted)* - A third test project that starts RabbitMQ and the Azure Service Bus emulator in containers; a test never talks to a broker it did not start.
 - [[pages/decisions/0001-in-repo-vault-and-agent-harness|ADR 0001 - In-repo vault and agent harness]] *(accepted)* - Why the documentation and the harness live in the repo, and where the ten rules came from.
 
 ## Roadmap
 
+- [[pages/roadmap/tests-of-everything|Tests of everything]] - Four phases: the providers against real brokers in Docker, every controller, the web app where it acts on messages, the packaged app.
 - [[pages/roadmap/code-audit-2026-11|Code audit, November 2026]] - The line-by-line bug hunt of the back end and the front end: findings by area and severity, improvements, and where to start.
 - [[pages/roadmap/improvement-plan|Improvement plan]] - The order of work in seven phases: land what is open, gates that tell the truth, message and secret safety, a release that works on three systems, dependencies, the API boundary, tests and structure.
 - [[pages/roadmap/followups|Follow-ups]] - The tracker of known gaps, by risk, and the owner decisions pending.

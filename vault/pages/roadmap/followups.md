@@ -37,6 +37,7 @@ Each entry carries its date. This page is a tracker: `version` changes only when
 
 ## P2 - correctness and lifecycle
 
+- **2026-11-12 - An entity named exactly `.` or `..` cannot be addressed**: the browser resolves it as a dot segment even when encoded, so deleting a subscription `..` under a topic would reach the topic's own route. Read from the URL standard and the route table, not run; RabbitMQ allows such names, Azure does not. [[pages/services/web-app]]
 - **2026-11-12 - One static provider slot for the whole API process**, swapped and disposed while calls may be in flight; the monitoring service keeps a reference to a provider that may be disposed. [[pages/services/api]]
 - **2026-11-12 - `import-full` is not atomic.** [[pages/services/api]]
 - **2026-11-12 - Changing only the auth type, tenant, namespace or client secret skips the connection test on save.** [[pages/services/api]]

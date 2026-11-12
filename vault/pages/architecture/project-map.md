@@ -74,7 +74,7 @@ The vendor SDKs (`Azure.*`, `RabbitMQ.Client`) are referenced by Core only; Api 
 
 - **Core.Tests** (`src/ServiceBusExplorer.Core.Tests/`): the Azure bulk cores against mocked receivers and senders, `AzureCredentialFactory`, `AzureServiceBusProvider` connect paths, `AzureMonitorMetricsService`, the RabbitMQ session stubs, `SessionInfo`, and since 2026-11-12 `FileWorkspaceManager` (`src/ServiceBusExplorer.Core.Tests/Services/FileWorkspaceManagerTests.cs:65`: the merge on save and import, the masked save return, an unreadable file, the atomic write). Not covered directly: `ProviderFactory`, `RabbitMQProvider` (beyond sessions), `RabbitMQManagementClient`, `RabbitMQPatternDetector`, `ServiceBusService`.
 - **Api.Tests** (`src/ServiceBusExplorer.Api.Tests/`): masking of connections on read, export and the save response (`ConnectionMaskingTests.cs`), API key middleware (`AuthMiddlewareTests.cs`), CORS (`CorsTests.cs`), the metrics controller with 503 when unconfigured (`MetricsControllerTests.cs`). `FileWorkspaceManager` also runs here, through `IConnectionManager` (`src/ServiceBusExplorer.Api.Tests/ApiFactory.cs:42`). The queue, topic, session, group and monitoring controllers have no test file.
-- **web-app**: 21 `*.spec.ts` files under `web-app/src`, run by the Angular `unit-test` builder (`web-app/angular.json:90`, `web-app/angular.json:91`) with Vitest (`web-app/package.json`, `vitest` ^4.0.8, script `test`). See [[pages/services/web-app]].
+- **web-app**: 22 `*.spec.ts` files under `web-app/src`, run by the Angular `unit-test` builder (`web-app/angular.json:90`, `web-app/angular.json:91`) with Vitest (`web-app/package.json`, `vitest` ^4.0.8, script `test`). See [[pages/services/web-app]].
 
 ## Non-.NET parts
 
