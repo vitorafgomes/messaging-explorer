@@ -1,19 +1,35 @@
-import {Component, OnInit, OnDestroy, inject, WritableSignal, signal} from '@angular/core';
+import {Component, OnInit, OnDestroy, inject, WritableSignal, signal, computed} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatDialog } from '@angular/material/dialog';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import {finalize, Subject} from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { TreeNode } from '../../core/models';
 import { TreeDataBuilderService, EntitySelectionService, ConnectionService, LoggerService, DeadLetterNotificationService } from '../../core/services';
+import { ProviderService } from '../../core/services/provider.service';
+import { EntityFormDialogComponent, EntityFormDialogData } from './entity-form-dialog.component';
 
 @Component({
   selector: 'app-entities-tree',
   standalone: true,
   imports: [
     CommonModule,
-    MatSnackBarModule
+    MatSnackBarModule,
+    MatButtonModule,
+    MatIconModule,
+    MatTooltipModule
   ],
   template: `
+    <ng-template #createAction let-node>
+      @if (canCreate() && createLabel(node); as label) {
+        <button mat-icon-button type="button" class="create-btn" [attr.aria-label]="label" [matTooltip]="label" (click)="openCreate(node, $event)">
+          <mat-icon>add</mat-icon>
+        </button>
+      }
+    </ng-template>
     <div class="tree-container">
       <div class="tree-header">
         <div class="header-content">
@@ -73,6 +89,7 @@ import { TreeDataBuilderService, EntitySelectionService, ConnectionService, Logg
                       <i class="fa-solid fa-hashtag count-icon"></i>
                       {{ node.children?.length || 0 }}
                     </span>
+                    <ng-container *ngTemplateOutlet="createAction; context: { $implicit: node }" />
                   }
                   @if (node.type === 'topic' && node.data) {
                     @let topicData = $any(node.data);
@@ -112,6 +129,7 @@ import { TreeDataBuilderService, EntitySelectionService, ConnectionService, Logg
                               </div>
                             }
                           }
+                          <ng-container *ngTemplateOutlet="createAction; context: { $implicit: child }" />
                         </div>
                         @if (isExpanded(child) && child.children) {
                           <div class="tree-children">
@@ -205,6 +223,7 @@ import { TreeDataBuilderService, EntitySelectionService, ConnectionService, Logg
                             }
                           </div>
                         }
+                        <ng-container *ngTemplateOutlet="createAction; context: { $implicit: child }" />
                         </div>
                       }
                     }
@@ -222,6 +241,7 @@ import { TreeDataBuilderService, EntitySelectionService, ConnectionService, Logg
                        [class.fa-rss]="node.type === 'subscription'"></i>
                   </div>
                   <span class="node-name">{{ node.name }}</span>
+                  <ng-container *ngTemplateOutlet="createAction; context: { $implicit: node }" />
                   @if (node.type === 'queue' && node.data) {
                     @let queueData = $any(node.data);
                     <div class="node-badges">
@@ -523,6 +543,21 @@ import { TreeDataBuilderService, EntitySelectionService, ConnectionService, Logg
       cursor: pointer;
     }
 
+    .create-btn {
+      --mat-icon-button-state-layer-size: 24px;
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      margin-left: 4px;
+      flex-shrink: 0;
+
+      mat-icon {
+        font-size: 1.125rem;
+        width: 18px;
+        height: 18px;
+      }
+    }
+
     .node-badges {
       display: flex;
       gap: 4px;
@@ -656,7 +691,12 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
   private connectionService = inject(ConnectionService);
   private logger = inject(LoggerService);
   private notificationService = inject(DeadLetterNotificationService);
+  private dialog = inject(MatDialog);
+  private providerService = inject(ProviderService);
   private destroy$ = new Subject<void>();
+
+  /** Create is offered only when the connected broker's API explicitly declares entity administration. */
+  readonly canCreate = computed(() => this.providerService.capabilities()?.supportsEntityUpdate === true);
 
   treeData: TreeNode[] = [];
   expandedNodes = new Set<string>();
@@ -772,6 +812,21 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
     }
 
     this.logger.log('[EntitiesTree] Node is now expanded:', this.expandedNodes.has(node.id));
+  }
+
+  createLabel(node: TreeNode): string | null {
+    if (node.id === 'category-queues') return 'Create queue';
+    if (node.id === 'category-topics') return 'Create topic';
+    if (node.type === 'topic') return `Create subscription in ${node.name}`;
+    return null;
+  }
+
+  openCreate(node: TreeNode, event: Event) {
+    event.stopPropagation();
+    const data: EntityFormDialogData = node.type === 'topic'
+      ? { mode: 'create', kind: 'subscription', topicName: node.name }
+      : { mode: 'create', kind: node.id === 'category-queues' ? 'queue' : 'topic', topicName: undefined };
+    this.dialog.open(EntityFormDialogComponent, { data, width: '720px', maxWidth: '95vw' });
   }
 
   isSelected(node: TreeNode): boolean {

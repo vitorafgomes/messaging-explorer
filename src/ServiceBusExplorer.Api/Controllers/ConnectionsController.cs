@@ -393,6 +393,7 @@ public class ConnectionsController : ControllerBase
                 supportsDeferral = capabilities.SupportsDeferral,
                 supportsDuplicateDetection = capabilities.SupportsDuplicateDetection,
                 supportsAutoForwarding = capabilities.SupportsAutoForwarding,
+                supportsEntityUpdate = capabilities.SupportsEntityUpdate,
                 maxMessageSizeInBytes = capabilities.MaxMessageSizeInBytes,
                 maxTimeToLive = capabilities.MaxTimeToLive.ToString(),
                 supportedExchangeTypes = capabilities.SupportedExchangeTypes

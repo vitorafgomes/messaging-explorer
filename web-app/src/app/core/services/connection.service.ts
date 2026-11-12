@@ -62,6 +62,9 @@ export class ConnectionService {
   private connectionStatusSubject = new BehaviorSubject<ConnectionStatus>({ connected: false });
   connectionStatus$ = this.connectionStatusSubject.asObservable();
 
+  /** The stored connection this app connected; null when none, or when the status came from the API alone. */
+  currentConnectionId: string | null = null;
+
   constructor() {
     this.refreshStatus();
   }
@@ -139,13 +142,19 @@ export class ConnectionService {
 
   connect(id: string): Observable<ConnectionStatus> {
     return this.api.post<ConnectionStatus>(apiPath`connections/${id}/connect`, {}).pipe(
-      tap(status => this.connectionStatusSubject.next(status))
+      tap(status => {
+        this.currentConnectionId = status.connected ? id : null;
+        this.connectionStatusSubject.next(status);
+      })
     );
   }
 
   disconnect(): Observable<ConnectionStatus> {
     return this.api.post<ConnectionStatus>('connections/disconnect', {}).pipe(
-      tap(status => this.connectionStatusSubject.next(status))
+      tap(status => {
+        this.currentConnectionId = null;
+        this.connectionStatusSubject.next(status);
+      })
     );
   }
 
@@ -154,9 +163,12 @@ export class ConnectionService {
   }
 
   refreshStatus(): void {
-    this.api.get<ConnectionStatus>('connections/status').subscribe(
-      status => this.connectionStatusSubject.next(status)
-    );
+    this.api.get<ConnectionStatus>('connections/status').subscribe(status => {
+      if (!status.connected) {
+        this.currentConnectionId = null;
+      }
+      this.connectionStatusSubject.next(status);
+    });
   }
 
   /**

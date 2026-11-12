@@ -1,0 +1,156 @@
+<h2 mat-dialog-title>{{ creating ? 'Create' : 'Edit' }} {{ kind }}</h2>
+
+<mat-dialog-content>
+  <p class="context">
+    <mat-chip-set aria-label="Environment">
+      <mat-chip [disableRipple]="true">{{ context().environment }}</mat-chip>
+    </mat-chip-set>
+    @if (creating) {
+      <span>{{ context().connection }}</span>
+    } @else {
+      <span><b>{{ entityName }}</b> on {{ context().connection }}</span>
+    }
+  </p>
+
+  @if (kind === 'subscription') {
+    <dl class="facts">
+      <div class="fact"><dt>Topic</dt><dd>{{ topicName }}</dd></div>
+    </dl>
+  }
+
+  <form [formGroup]="form" (ngSubmit)="save()" id="entity-form">
+    @if (creating) {
+      <mat-form-field class="name">
+        <mat-label>{{ kindLabel }} name</mat-label>
+        <input matInput formControlName="name" autocomplete="off" [errorStateMatcher]="showErrors">
+        <mat-hint>
+          {{ kind === 'subscription'
+            ? 'Letters, digits, dot, dash and underscore. 50 characters at most.'
+            : 'Letters, digits, dot, dash, underscore and slash. 260 characters at most.' }}
+        </mat-hint>
+        <mat-error>{{ errorOf('name') }}</mat-error>
+      </mat-form-field>
+      <h3>Options</h3>
+      <p class="note">Leave a field empty to keep the broker's default.</p>
+    }
+
+    <div class="grid">
+      @for (f of valueFields; track f.key) {
+        @switch (f.type) {
+          @case ('duration') {
+            <div class="duration" [formGroupName]="f.key">
+              <mat-form-field>
+                <mat-label>{{ f.label }}</mat-label>
+                <input matInput type="number" min="0" formControlName="amount" [errorStateMatcher]="showErrors">
+                @if (neverHint(f.key)) {
+                  <mat-hint>Now: never. Leave empty to keep it.</mat-hint>
+                }
+                <mat-error>{{ errorOf(f.key + '.amount') }}</mat-error>
+              </mat-form-field>
+              <mat-form-field class="unit">
+                <mat-label>Unit</mat-label>
+                <mat-select formControlName="unit" [aria-label]="f.label + ' unit'">
+                  @for (unit of units; track unit) {
+                    <mat-option [value]="unit">{{ unit }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+            </div>
+          }
+          @case ('number') {
+            <mat-form-field>
+              <mat-label>{{ f.label }}</mat-label>
+              <input matInput type="number" min="1" step="1" [formControlName]="f.key" [errorStateMatcher]="showErrors">
+              <mat-error>{{ errorOf(f.key) }}</mat-error>
+            </mat-form-field>
+          }
+          @case ('target') {
+            <mat-form-field>
+              <mat-label>{{ f.label }}</mat-label>
+              <mat-select [formControlName]="f.key" [errorStateMatcher]="showErrors">
+                <mat-option value="">None</mat-option>
+                @for (target of targets; track target) {
+                  <mat-option [value]="target">{{ target }}</mat-option>
+                }
+              </mat-select>
+              <mat-hint>A queue or topic of this namespace.</mat-hint>
+              <mat-error>{{ errorOf(f.key) }}</mat-error>
+            </mat-form-field>
+          }
+          @default {
+            <mat-form-field class="wide">
+              <mat-label>{{ f.label }}</mat-label>
+              <textarea matInput rows="2" [formControlName]="f.key" [errorStateMatcher]="showErrors"></textarea>
+              <mat-error>{{ errorOf(f.key) }}</mat-error>
+            </mat-form-field>
+          }
+        }
+      }
+    </div>
+
+    <div class="grid">
+      @for (f of flagFields; track f.key) {
+        <mat-form-field>
+          <mat-label>{{ f.label }}</mat-label>
+          <mat-select [formControlName]="f.key">
+            @if (startsUnset(f.key)) {
+              <mat-option [value]="null">{{ creating ? 'Broker default' : 'Not set' }}</mat-option>
+            }
+            <mat-option [value]="true">On</mat-option>
+            <mat-option [value]="false">Off</mat-option>
+          </mat-select>
+        </mat-form-field>
+      }
+    </div>
+  </form>
+
+  @if (fixedFacts.length) {
+    <section class="fixed">
+      <h3>Fixed at creation</h3>
+      <p class="note">These cannot change after the {{ kind }} is created.</p>
+      <dl class="facts">
+        @for (fact of fixedFacts; track fact.label) {
+          <div class="fact"><dt>{{ fact.label }}</dt><dd>{{ fact.value }}</dd></div>
+        }
+      </dl>
+    </section>
+  }
+
+  @if (!creating && changes().length) {
+    <section class="summary" aria-live="polite">
+      <div>
+        <b>{{ changes().length }} {{ changes().length === 1 ? 'change' : 'changes' }}</b>
+        @for (change of changes(); track change.key) {
+          <div>{{ change.label }}: {{ change.from }} to {{ change.to }}</div>
+        }
+      </div>
+      <button mat-button type="button" (click)="undoAll()">Undo all</button>
+    </section>
+  }
+
+  @if (kind === 'subscription' && creating) {
+    <p class="banner">
+      <mat-icon aria-hidden="true">info</mat-icon>
+      <span>It starts with the default rule and receives every message published to the topic from now on.</span>
+    </p>
+  }
+
+  @if (errorMessage()) {
+    <div class="error" role="alert">
+      <mat-icon aria-hidden="true">error</mat-icon>
+      <span class="grow">{{ errorMessage() }}</span>
+      @if (notFound()) {
+        <button mat-button type="button" (click)="refresh()">Refresh</button>
+      }
+    </div>
+  }
+
+  @if (saving()) {
+    <mat-progress-bar mode="indeterminate" aria-label="Saving"></mat-progress-bar>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button mat-dialog-close type="button">Cancel</button>
+  <button mat-flat-button type="submit" form="entity-form" [disabled]="!canSave()">{{ saveLabel() }}</button>
+</mat-dialog-actions>

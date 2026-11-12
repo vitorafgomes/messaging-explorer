@@ -92,6 +92,13 @@ public interface IProviderCapabilities
     bool SupportsAutoForwarding { get; }
 
     /// <summary>
+    /// Indicates whether the provider can change the settings and status of an existing queue, topic or subscription.
+    /// For Azure Service Bus: true.
+    /// For RabbitMQ: false (queue and exchange arguments are fixed at declaration).
+    /// </summary>
+    bool SupportsEntityUpdate { get; }
+
+    /// <summary>
     /// Gets the supported exchange types for the provider.
     /// For Azure Service Bus: empty (not applicable).
     /// For RabbitMQ: ["direct", "fanout", "topic", "headers"].

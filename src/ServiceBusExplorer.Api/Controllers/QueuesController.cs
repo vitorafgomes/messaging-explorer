@@ -55,14 +55,53 @@ public class QueuesController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<ActionResult> CreateQueue([FromBody] CreateEntityRequest request)
+    public async Task<ActionResult> CreateQueue([FromBody] CreateQueueRequest request)
     {
         var provider = GetProvider();
         if (provider == null)
             return NoProviderConnected();
 
-        await provider.CreateQueueAsync(request.Name);
-        return CreatedAtAction(nameof(GetQueue), new { name = request.Name }, null);
+        if (string.IsNullOrWhiteSpace(request.Name))
+            return EntityAdministrationResults.NameRequired();
+
+        var options = request.Options?.ToOptions();
+
+        var name = request.Name;
+        try
+        {
+            if (options == null)
+                await provider.CreateQueueAsync(name);
+            else
+                await provider.CreateQueueAsync(name, options);
+            return CreatedAtAction(nameof(GetQueue), new { name }, null);
+        }
+        catch (Exception ex)
+        {
+            return EntityAdministrationResults.Failure(ex, _logger, "queue", name, "queue");
+        }
+    }
+
+    [HttpPatch("{name}")]
+    public async Task<ActionResult<IQueueEntity>> UpdateQueue(string name, [FromBody] QueueUpdateOptions options)
+    {
+        var provider = GetProvider();
+        if (provider == null)
+            return NoProviderConnected();
+
+        try
+        {
+            await provider.UpdateQueueAsync(name, options, HttpContext.RequestAborted);
+            var queue = await provider.GetQueueAsync(name);
+            return queue == null ? EntityAdministrationResults.NotFound("queue") : Ok(queue);
+        }
+        catch (NotSupportedException)
+        {
+            return EntityAdministrationResults.NotSupported();
+        }
+        catch (Exception ex)
+        {
+            return EntityAdministrationResults.Failure(ex, _logger, "queue", name, "queue");
+        }
     }
 
     [HttpDelete("{name}")]
@@ -327,9 +366,4 @@ public class QueuesController : ControllerBase
             return StatusCode(500, new { message = "An internal error occurred." });
         }
     }
-}
-
-public class CreateEntityRequest
-{
-    public string Name { get; set; } = string.Empty;
 }

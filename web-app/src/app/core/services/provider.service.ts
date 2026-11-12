@@ -33,6 +33,7 @@ export const DEFAULT_AZURE_CAPABILITIES: ProviderCapabilities = {
   supportsDeferral: true,
   supportsDuplicateDetection: true,
   supportsAutoForwarding: true,
+  supportsEntityUpdate: true,
   supportedExchangeTypes: [],
   maxMessageSizeInBytes: 262144, // 256KB Standard tier
   maxTimeToLive: '14.00:00:00', // 14 days
@@ -57,6 +58,7 @@ export const DEFAULT_RABBITMQ_CAPABILITIES: ProviderCapabilities = {
   supportsDeferral: false,
   supportsDuplicateDetection: false,
   supportsAutoForwarding: false,
+  supportsEntityUpdate: false,
   supportedExchangeTypes: ['direct', 'fanout', 'topic', 'headers'],
   maxMessageSizeInBytes: 134217728, // 128MB
   maxTimeToLive: '10675199.02:48:05.4775807', // TimeSpan.MaxValue
@@ -69,6 +71,14 @@ const DISCONNECTED_STATE: ProviderSelectionState = {
   capabilities: null,
   isLoading: false
 };
+
+/**
+ * The built-in defaults standing in for an API answer: entity administration needs the API's
+ * own explicit true, because an older API that lacks the routes does not send the flag.
+ */
+function unconfirmed(capabilities: ProviderCapabilities): ProviderCapabilities {
+  return { ...capabilities, supportsEntityUpdate: false };
+}
 
 /**
  * Reads the provider type of a connection status, which the API sends as the enum name.
@@ -148,7 +158,7 @@ export class ProviderService {
       catchError(error => {
         // Return default capabilities based on provider type
         const defaultCapabilities = this.getDefaultCapabilities(providerType);
-        return of(defaultCapabilities);
+        return of(unconfirmed(defaultCapabilities));
       })
     );
   }
@@ -161,12 +171,16 @@ export class ProviderService {
     const defaultCapabilities = this.getDefaultCapabilities(providerType);
     this.providerStateSubject.next({
       selectedProvider: providerType,
-      capabilities: defaultCapabilities,
+      capabilities: unconfirmed(defaultCapabilities),
       isLoading: true
     });
 
     return this.getCapabilities(providerType).pipe(
-      map(capabilities => ({ ...defaultCapabilities, ...capabilities })),
+      map(capabilities => ({
+        ...defaultCapabilities,
+        ...capabilities,
+        supportsEntityUpdate: capabilities.supportsEntityUpdate === true
+      })),
       tap(capabilities => {
         this.providerStateSubject.next({
           selectedProvider: providerType,
@@ -175,7 +189,7 @@ export class ProviderService {
         });
       }),
       catchError(error => {
-        const defaultCapabilities = this.getDefaultCapabilities(providerType);
+        const defaultCapabilities = unconfirmed(this.getDefaultCapabilities(providerType));
         this.providerStateSubject.next({
           selectedProvider: providerType,
           capabilities: defaultCapabilities,

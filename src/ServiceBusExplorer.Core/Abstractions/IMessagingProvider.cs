@@ -98,6 +98,16 @@ public interface IMessagingProvider : IAsyncDisposable
     /// <param name="queueName">The name of the queue to delete.</param>
     Task DeleteQueueAsync(string queueName);
 
+    /// <summary>
+    /// Changes the given settings of an existing queue; a null option leaves its setting as it is.
+    /// A provider that cannot update entities throws <see cref="NotSupportedException"/> and declares it in
+    /// <see cref="IProviderCapabilities.SupportsEntityUpdate"/>.
+    /// </summary>
+    /// <param name="queueName">The name of the queue.</param>
+    /// <param name="options">The settings to change.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    Task UpdateQueueAsync(string queueName, QueueUpdateOptions options, CancellationToken cancellationToken = default);
+
     #endregion
 
     #region Topic/Exchange Operations
@@ -135,6 +145,15 @@ public interface IMessagingProvider : IAsyncDisposable
     /// </summary>
     /// <param name="topicName">The name of the topic/exchange to delete.</param>
     Task DeleteTopicAsync(string topicName);
+
+    /// <summary>
+    /// Changes the given settings of an existing topic; a null option leaves its setting as it is.
+    /// A provider that cannot update entities throws <see cref="NotSupportedException"/>.
+    /// </summary>
+    /// <param name="topicName">The name of the topic.</param>
+    /// <param name="options">The settings to change.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    Task UpdateTopicAsync(string topicName, TopicUpdateOptions options, CancellationToken cancellationToken = default);
 
     #endregion
 
@@ -178,6 +197,16 @@ public interface IMessagingProvider : IAsyncDisposable
     /// <param name="topicName">The name of the topic/exchange.</param>
     /// <param name="subscriptionName">The name of the subscription/binding to delete.</param>
     Task DeleteSubscriptionAsync(string topicName, string subscriptionName);
+
+    /// <summary>
+    /// Changes the given settings of an existing subscription; a null option leaves its setting as it is.
+    /// A provider that cannot update entities throws <see cref="NotSupportedException"/>.
+    /// </summary>
+    /// <param name="topicName">The name of the topic.</param>
+    /// <param name="subscriptionName">The name of the subscription.</param>
+    /// <param name="options">The settings to change.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    Task UpdateSubscriptionAsync(string topicName, string subscriptionName, SubscriptionUpdateOptions options, CancellationToken cancellationToken = default);
 
     #endregion
 
@@ -350,6 +379,46 @@ public class QueueCreateOptions
     public bool DeadLetteringOnMessageExpiration { get; set; } = false;
 
     /// <summary>
+    /// Whether the queue detects duplicate messages by message id. Azure Service Bus only.
+    /// </summary>
+    public bool RequiresDuplicateDetection { get; set; } = false;
+
+    /// <summary>
+    /// How long message ids are kept for duplicate detection. Azure Service Bus only.
+    /// </summary>
+    public TimeSpan? DuplicateDetectionHistoryTimeWindow { get; set; }
+
+    /// <summary>
+    /// The maximum size of the queue in megabytes. Azure Service Bus only.
+    /// </summary>
+    public long? MaxSizeInMegabytes { get; set; }
+
+    /// <summary>
+    /// The idle time after which the queue is deleted. Azure Service Bus only.
+    /// </summary>
+    public TimeSpan? AutoDeleteOnIdle { get; set; }
+
+    /// <summary>
+    /// Whether server-side batched operations are enabled; null keeps the broker default. Azure Service Bus only.
+    /// </summary>
+    public bool? EnableBatchedOperations { get; set; }
+
+    /// <summary>
+    /// The queue or topic every message is forwarded to; null or empty forwards nothing. Azure Service Bus only.
+    /// </summary>
+    public string? ForwardTo { get; set; }
+
+    /// <summary>
+    /// The queue or topic dead-lettered messages are forwarded to; null or empty forwards nothing. Azure Service Bus only.
+    /// </summary>
+    public string? ForwardDeadLetteredMessagesTo { get; set; }
+
+    /// <summary>
+    /// Free text the user keeps with the queue. Azure Service Bus only.
+    /// </summary>
+    public string? UserMetadata { get; set; }
+
+    /// <summary>
     /// Provider-specific additional options.
     /// </summary>
     public Dictionary<string, object>? AdditionalOptions { get; set; }
@@ -390,6 +459,36 @@ public class TopicCreateOptions
     /// Ignored for Azure Service Bus.
     /// </summary>
     public string? ExchangeType { get; set; }
+
+    /// <summary>
+    /// How long message ids are kept for duplicate detection. Azure Service Bus only.
+    /// </summary>
+    public TimeSpan? DuplicateDetectionHistoryTimeWindow { get; set; }
+
+    /// <summary>
+    /// The maximum size of the topic in megabytes. Azure Service Bus only.
+    /// </summary>
+    public long? MaxSizeInMegabytes { get; set; }
+
+    /// <summary>
+    /// The idle time after which the topic is deleted. Azure Service Bus only.
+    /// </summary>
+    public TimeSpan? AutoDeleteOnIdle { get; set; }
+
+    /// <summary>
+    /// Whether server-side batched operations are enabled; null keeps the broker default. Azure Service Bus only.
+    /// </summary>
+    public bool? EnableBatchedOperations { get; set; }
+
+    /// <summary>
+    /// Whether the topic keeps the order messages were sent in; null keeps the broker default. Azure Service Bus only.
+    /// </summary>
+    public bool? SupportOrdering { get; set; }
+
+    /// <summary>
+    /// Free text the user keeps with the topic. Azure Service Bus only.
+    /// </summary>
+    public string? UserMetadata { get; set; }
 
     /// <summary>
     /// Provider-specific additional options.
@@ -440,7 +539,94 @@ public class SubscriptionCreateOptions
     public string? FilterExpression { get; set; }
 
     /// <summary>
+    /// Whether a message whose filter evaluation fails is dead-lettered; null keeps the broker default. Azure Service Bus only.
+    /// </summary>
+    public bool? DeadLetteringOnFilterEvaluationExceptions { get; set; }
+
+    /// <summary>
+    /// The idle time after which the subscription is deleted. Azure Service Bus only.
+    /// </summary>
+    public TimeSpan? AutoDeleteOnIdle { get; set; }
+
+    /// <summary>
+    /// Whether server-side batched operations are enabled; null keeps the broker default. Azure Service Bus only.
+    /// </summary>
+    public bool? EnableBatchedOperations { get; set; }
+
+    /// <summary>
+    /// The queue or topic every message is forwarded to; null or empty forwards nothing. Azure Service Bus only.
+    /// </summary>
+    public string? ForwardTo { get; set; }
+
+    /// <summary>
+    /// The queue or topic dead-lettered messages are forwarded to; null or empty forwards nothing. Azure Service Bus only.
+    /// </summary>
+    public string? ForwardDeadLetteredMessagesTo { get; set; }
+
+    /// <summary>
+    /// Free text the user keeps with the subscription. Azure Service Bus only.
+    /// </summary>
+    public string? UserMetadata { get; set; }
+
+    /// <summary>
     /// Provider-specific additional options.
     /// </summary>
     public Dictionary<string, object>? AdditionalOptions { get; set; }
+}
+
+/// <summary>
+/// The settings of an existing queue to change. A null member leaves its setting as it is; an empty
+/// <see cref="ForwardTo"/> or <see cref="ForwardDeadLetteredMessagesTo"/> clears that forward target.
+/// <see cref="Status"/> is one of Active, Disabled, SendDisabled, ReceiveDisabled.
+/// </summary>
+public class QueueUpdateOptions
+{
+    public TimeSpan? DefaultMessageTimeToLive { get; set; }
+    public TimeSpan? LockDuration { get; set; }
+    public int? MaxDeliveryCount { get; set; }
+    public bool? DeadLetteringOnMessageExpiration { get; set; }
+    public TimeSpan? DuplicateDetectionHistoryTimeWindow { get; set; }
+    public long? MaxSizeInMegabytes { get; set; }
+    public TimeSpan? AutoDeleteOnIdle { get; set; }
+    public bool? EnableBatchedOperations { get; set; }
+    public string? ForwardTo { get; set; }
+    public string? ForwardDeadLetteredMessagesTo { get; set; }
+    public string? UserMetadata { get; set; }
+    public string? Status { get; set; }
+}
+
+/// <summary>
+/// The settings of an existing topic to change. A null member leaves its setting as it is.
+/// <see cref="Status"/> is one of Active, Disabled, SendDisabled.
+/// </summary>
+public class TopicUpdateOptions
+{
+    public TimeSpan? DefaultMessageTimeToLive { get; set; }
+    public TimeSpan? DuplicateDetectionHistoryTimeWindow { get; set; }
+    public long? MaxSizeInMegabytes { get; set; }
+    public TimeSpan? AutoDeleteOnIdle { get; set; }
+    public bool? EnableBatchedOperations { get; set; }
+    public bool? SupportOrdering { get; set; }
+    public string? UserMetadata { get; set; }
+    public string? Status { get; set; }
+}
+
+/// <summary>
+/// The settings of an existing subscription to change. A null member leaves its setting as it is; an empty
+/// <see cref="ForwardTo"/> or <see cref="ForwardDeadLetteredMessagesTo"/> clears that forward target.
+/// <see cref="Status"/> is one of Active, Disabled, ReceiveDisabled.
+/// </summary>
+public class SubscriptionUpdateOptions
+{
+    public TimeSpan? DefaultMessageTimeToLive { get; set; }
+    public TimeSpan? LockDuration { get; set; }
+    public int? MaxDeliveryCount { get; set; }
+    public bool? DeadLetteringOnMessageExpiration { get; set; }
+    public bool? DeadLetteringOnFilterEvaluationExceptions { get; set; }
+    public TimeSpan? AutoDeleteOnIdle { get; set; }
+    public bool? EnableBatchedOperations { get; set; }
+    public string? ForwardTo { get; set; }
+    public string? ForwardDeadLetteredMessagesTo { get; set; }
+    public string? UserMetadata { get; set; }
+    public string? Status { get; set; }
 }

@@ -204,6 +204,10 @@ public class RabbitMQProvider : IMessagingProvider
         await _managementClient!.DeleteQueueAsync(queueName);
     }
 
+    /// <inheritdoc />
+    public Task UpdateQueueAsync(string queueName, QueueUpdateOptions options, CancellationToken cancellationToken = default) =>
+        Task.FromException(new NotSupportedException("RabbitMQ does not support updating entities."));
+
     #endregion
 
     #region Topic/Exchange Operations
@@ -336,6 +340,10 @@ public class RabbitMQProvider : IMessagingProvider
         await _managementClient!.DeleteExchangeAsync(topicName);
     }
 
+    /// <inheritdoc />
+    public Task UpdateTopicAsync(string topicName, TopicUpdateOptions options, CancellationToken cancellationToken = default) =>
+        Task.FromException(new NotSupportedException("RabbitMQ does not support updating entities."));
+
     #endregion
 
     #region Subscription/Binding Operations
@@ -455,6 +463,10 @@ public class RabbitMQProvider : IMessagingProvider
                 binding.PropertiesKey);
         }
     }
+
+    /// <inheritdoc />
+    public Task UpdateSubscriptionAsync(string topicName, string subscriptionName, SubscriptionUpdateOptions options, CancellationToken cancellationToken = default) =>
+        Task.FromException(new NotSupportedException("RabbitMQ does not support updating entities."));
 
     private static SubscriptionInfo MapBindingToSubscriptionInfo(string topicName, RabbitMQBindingInfo binding, RabbitMQQueueInfo? queue = null, RabbitMQQueueInfo? dlqQueue = null)
     {

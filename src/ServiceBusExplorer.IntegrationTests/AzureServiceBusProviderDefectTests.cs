@@ -212,12 +212,12 @@ public sealed class AzureServiceBusProviderDefectTests(AzureServiceBusFixture fi
 
         var parse = await Assert.ThrowsAsync<ArgumentException>(() => _management.CreateSubscriptionAsync(topic, "filtered", options));
         var left = await _management.GetSubscriptionAsync(topic, "filtered");
-        var retry = await Assert.ThrowsAsync<ServiceBusException>(() => _management.CreateSubscriptionAsync(topic, "filtered", options));
+        var retry = await Assert.ThrowsAsync<EntityAlreadyExistsException>(() => _management.CreateSubscriptionAsync(topic, "filtered", options));
 
         Assert.Contains("error parsing the SQL expression", parse.Message);
         Assert.NotNull(left);
         Assert.Empty(left.Rules);
-        Assert.Equal(ServiceBusFailureReason.MessagingEntityAlreadyExists, retry.Reason);
+        Assert.Equal("The entity already exists.", retry.Message);
     }
 
     /// <summary>Correct: a send of many messages is split into batches that each fit, and every message is sent.</summary>
