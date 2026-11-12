@@ -2,147 +2,325 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Messaging Explorer — Universal messaging platform explorer</title>
-  <meta name="description" content="Free, open-source desktop and web app to explore and manage messages on Azure Service Bus. RabbitMQ support is in active development. Cross-platform: Windows, macOS, Linux." />
-  <meta property="og:title" content="Messaging Explorer" />
-  <meta property="og:description" content="Free, open-source universal messaging platform explorer." />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src https://api.github.com; base-uri 'none'; form-action 'none'" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Messaging Explorer: a desktop app for Azure Service Bus and RabbitMQ</title>
+  <meta name="description" content="A free, open-source desktop app to explore and manage Azure Service Bus and RabbitMQ: queues, topics, subscriptions and exchanges, messages and dead-letter queues. Windows, macOS and Linux." />
+  <link rel="canonical" href="https://vitorafgomes.github.io/messaging-explorer/" />
   <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Messaging Explorer" />
+  <meta property="og:title" content="Messaging Explorer: a desktop app for Azure Service Bus and RabbitMQ" />
+  <meta property="og:description" content="Browse queues, topics, subscriptions and exchanges, read and send messages, and resubmit, move or delete what is stuck in the dead-letter queue. Free and open source, for Windows, macOS and Linux." />
   <meta property="og:url" content="https://vitorafgomes.github.io/messaging-explorer/" />
+  <meta name="theme-color" content="#f7f7f5" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0f1216" media="(prefers-color-scheme: dark)" />
+  <meta name="color-scheme" content="light dark" />
   <link rel="icon" type="image/svg+xml" href="icon.svg" />
   <link rel="stylesheet" href="styles.css" />
+  <script src="app.js" defer></script>
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
   <header class="site-header">
-    <a href="#" class="brand">
-      <img src="icon.svg" alt="" width="28" height="28" />
-      <span>Messaging Explorer</span>
-    </a>
-    <nav class="nav">
-      <a href="#features">Features</a>
-      <a href="#download">Download</a>
-      <a href="https://github.com/vitorafgomes/messaging-explorer" target="_blank" rel="noopener">GitHub</a>
-    </nav>
+    <div class="wrap header-inner">
+      <a class="brand" href="./">
+        <img src="icon.svg" alt="" width="28" height="28" />
+        <span>Messaging Explorer</span>
+      </a>
+      <nav aria-label="Sections">
+        <ul class="nav">
+          <li class="nav-wide"><a href="#features">What it does</a></li>
+          <li class="nav-wide"><a href="#production">Before production</a></li>
+          <li><a href="#download">Download</a></li>
+          <li><a href="https://github.com/vitorafgomes/messaging-explorer">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
   </header>
 
-  <main>
+  <main id="main">
     <section class="hero">
-      <div class="hero-inner">
-        <h1>Explore your messaging platforms <span class="hero-accent">in one place</span></h1>
-        <p class="hero-subtitle">
-          A free and open-source desktop and web application to manage queues, topics and messages on Azure Service Bus. RabbitMQ support is in active development.
-        </p>
-        <div class="hero-cta">
-          <a href="#download" class="btn btn-primary">Download for free</a>
-          <a href="https://github.com/vitorafgomes/messaging-explorer" class="btn btn-ghost" target="_blank" rel="noopener">View on GitHub</a>
+      <div class="wrap hero-inner">
+        <div class="hero-text">
+          <p class="eyebrow">Free and open source, for Windows, macOS and Linux</p>
+          <h1>A desktop app to explore and manage Azure Service Bus and RabbitMQ.</h1>
+          <p class="lead">
+            Browse queues, topics, subscriptions and exchanges, read the messages in them, send new ones,
+            and deal with the dead-letter queue: resubmit, move or delete what is stuck there.
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#download" data-hero-cta>
+              <svg class="icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+                <path d="M10 3v10M6 9.5l4 4 4-4M4 17h12" />
+              </svg>
+              <span data-hero-label>Download</span>
+            </a>
+            <a class="btn" href="https://github.com/vitorafgomes/messaging-explorer">View the source</a>
+          </div>
+          <p class="hero-meta">
+            <a href="https://github.com/vitorafgomes/messaging-explorer/releases/latest" data-version>Latest release on GitHub</a>
+            <span>MIT license</span>
+            <a href="#download">All systems</a>
+          </p>
         </div>
-        <p class="hero-meta">
-          <span data-version-label>Latest version: <span data-latest-version>—</span></span>
-          <span class="dot">•</span>
-          <span>MIT licensed</span>
-          <span class="dot">•</span>
-          <span>Cross-platform</span>
-        </p>
+
+        <figure class="diagram">
+          <svg viewBox="0 0 356 244" role="img" aria-labelledby="diagram-title diagram-desc">
+            <title id="diagram-title">What the app works with</title>
+            <desc id="diagram-desc">
+              A sender puts messages on a queue and a consumer reads them. A message that cannot be
+              delivered goes to the dead-letter queue, and from there it can be resubmitted to the queue.
+            </desc>
+            <text class="dg-text" x="178" y="30" text-anchor="middle">queue</text>
+            <rect class="dg-box" x="8" y="48" width="72" height="40" rx="6" />
+            <text class="dg-text" x="44" y="72" text-anchor="middle">Sender</text>
+            <path class="dg-line" d="M80 68h28M102 63l6 5-6 5" />
+            <rect class="dg-box" x="108" y="40" width="140" height="56" rx="8" />
+            <rect class="dg-msg" x="120" y="54" width="22" height="28" rx="3" />
+            <rect class="dg-msg" x="150" y="54" width="22" height="28" rx="3" />
+            <rect class="dg-msg" x="180" y="54" width="22" height="28" rx="3" />
+            <rect class="dg-msg" x="210" y="54" width="22" height="28" rx="3" />
+            <path class="dg-line" d="M248 68h28M270 63l6 5-6 5" />
+            <rect class="dg-box" x="276" y="48" width="72" height="40" rx="6" />
+            <text class="dg-text" x="312" y="72" text-anchor="middle">Consumer</text>
+
+            <path class="dg-line" d="M213 96v64M208 154l5 6 5-6" />
+            <text class="dg-text" x="222" y="132">dead-lettered</text>
+            <path class="dg-line dg-accent" d="M143 160V96M138 102l5-6 5 6" />
+            <text class="dg-text dg-accent-text" x="134" y="132" text-anchor="end">resubmit</text>
+
+            <rect class="dg-box dg-dashed" x="108" y="160" width="140" height="56" rx="8" />
+            <rect class="dg-msg dg-msg-accent" x="120" y="174" width="22" height="28" rx="3" />
+            <rect class="dg-msg" x="150" y="174" width="22" height="28" rx="3" />
+            <text class="dg-text" x="178" y="236" text-anchor="middle">dead-letter queue</text>
+          </svg>
+          <figcaption>An illustration, not a screenshot: where messages wait, where the failed ones go, and the way back.</figcaption>
+        </figure>
       </div>
     </section>
 
-    <section id="features" class="features">
-      <h2>What it does</h2>
-      <div class="feature-grid">
-        <article class="feature">
-          <h3>Multi-broker support</h3>
-          <p>Connect to Azure Service Bus today. RabbitMQ support is in active development; more providers planned.</p>
-        </article>
-        <article class="feature">
-          <h3>Browse and manage</h3>
-          <p>View queues, topics, subscriptions and exchanges. Send, peek and resubmit messages with ease.</p>
-        </article>
-        <article class="feature">
-          <h3>Dead-letter handling</h3>
-          <p>Real-time notifications for dead-letter messages with click-to-navigate and resubmit support.</p>
-        </article>
-        <article class="feature">
-          <h3>Pattern detection <span class="status-pill">In development</span></h3>
-          <p>Automatic detection of RabbitMQ messaging patterns: Work Queue, Pub/Sub, Routing, Topics, RPC, Headers. Ships with RabbitMQ support.</p>
-        </article>
-        <article class="feature">
-          <h3>Cross-platform</h3>
-          <p>Native desktop apps for Windows, macOS and Linux. Plus a web mode for browser access.</p>
-        </article>
-        <article class="feature">
-          <h3>Free and open source</h3>
-          <p>MIT licensed. No accounts, no telemetry, no subscription. Use it, fork it, ship it.</p>
-        </article>
-      </div>
-    </section>
-
-    <section id="download" class="download">
-      <h2>Download</h2>
-      <p class="download-version">
-        <span data-latest-version-label>Latest release:</span>
-        <strong data-latest-version>—</strong>
-        <span data-latest-date class="release-date"></span>
-      </p>
-
-      <div class="platform-grid">
-        <div class="platform" data-platform="windows">
-          <div class="platform-header">
-            <h3>Windows</h3>
-            <span class="platform-icon" aria-hidden="true">⊞</span>
+    <section id="features" class="section" aria-labelledby="features-title">
+      <div class="wrap section-inner">
+        <h2 id="features-title">What it does</h2>
+        <div class="columns">
+          <div>
+            <h3>Both brokers</h3>
+            <ul class="list">
+              <li>Keep several connections, grouped by client and environment, and export or import them.</li>
+              <li>List entities with their message counts.</li>
+              <li>Peek messages without removing them, search them by text or regular expression, and compare two messages.</li>
+              <li>Send a message with its properties, from scratch or from a saved template; import messages from a JSON or CSV file.</li>
+              <li>Export messages to JSON, CSV or Excel.</li>
+              <li>Light and dark themes.</li>
+            </ul>
           </div>
-          <div class="platform-downloads" data-downloads="windows">
-            <p class="loading">Loading downloads…</p>
+          <div>
+            <h3>Azure Service Bus</h3>
+            <ul class="list">
+              <li>Queues, topics and subscriptions with their configuration, status and rules.</li>
+              <li>Dead-letter queues: resubmit, move to another queue or delete, one message or many, with progress and cancel.</li>
+              <li>Schedule a message for later and set its time to live.</li>
+              <li>Sessions on session-enabled subscriptions.</li>
+              <li>Sign in with Microsoft, a connection string, a service principal or the Azure CLI session.</li>
+            </ul>
           </div>
-        </div>
-
-        <div class="platform" data-platform="macos">
-          <div class="platform-header">
-            <h3>macOS</h3>
-            <span class="platform-icon" aria-hidden="true">⌘</span>
-          </div>
-          <div class="platform-downloads" data-downloads="macos">
-            <p class="loading">Loading downloads…</p>
-          </div>
-        </div>
-
-        <div class="platform" data-platform="linux">
-          <div class="platform-header">
-            <h3>Linux</h3>
-            <span class="platform-icon" aria-hidden="true">🐧</span>
-          </div>
-          <div class="platform-downloads" data-downloads="linux">
-            <p class="loading">Loading downloads…</p>
+          <div>
+            <h3>RabbitMQ</h3>
+            <ul class="list">
+              <li>Exchanges, queues and bindings, read through the management plugin.</li>
+              <li>Recognises the common topologies: work queue, publish and subscribe, routing, topics, RPC, headers.</li>
+            </ul>
           </div>
         </div>
       </div>
-
-      <p class="download-fallback">
-        Trouble downloading? Browse all releases and assets on
-        <a href="https://github.com/vitorafgomes/messaging-explorer/releases" target="_blank" rel="noopener">GitHub Releases</a>.
-      </p>
     </section>
 
-    <section class="cta-bottom">
-      <h2>Built for developers, by developers</h2>
-      <p>Source code, issue tracking and discussions on GitHub.</p>
-      <a href="https://github.com/vitorafgomes/messaging-explorer" class="btn btn-primary" target="_blank" rel="noopener">Open the repository</a>
+    <section id="production" class="section" aria-labelledby="production-title">
+      <div class="wrap section-inner">
+        <h2 id="production-title">Before you point it at production</h2>
+        <div>
+          <p class="section-intro">This tool reads and changes real messages. Know these things first.</p>
+          <ul class="cautions">
+            <li>
+              <strong>Moving messages is at-least-once.</strong>
+              Resubmit and move send the message to its destination first and remove it from the source after.
+              If the removal fails, the message exists in both places; the app reports it as a possible duplicate
+              and does not send it again. Consumers should tolerate a duplicate.
+            </li>
+            <li>
+              <strong>Resubmitting from a subscription publishes to its topic.</strong>
+              Every subscription whose rules match receives the message again, not only the one you resubmitted from.
+            </li>
+            <li>
+              <strong>RabbitMQ bulk delete, resubmit and move can lose messages when something fails midway.</strong>
+              Use them with care on RabbitMQ until that part is reworked.
+            </li>
+            <li>
+              <strong>Saved connections are stored on your disk in plain text.</strong>
+              Secrets are included; the file is in the app's data folder. Exporting connections masks the secrets unless you ask to include them.
+            </li>
+            <li>
+              <strong>Nothing leaves your machine except the calls to your broker.</strong>
+              The app starts a local API that listens on <code>127.0.0.1</code> only and accepts requests only with a key
+              generated at each start. The update check contacts GitHub; nothing else is sent anywhere.
+            </li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="download" class="section" aria-labelledby="download-title">
+      <div class="wrap section-inner">
+        <h2 id="download-title">Download</h2>
+        <div>
+          <p class="section-intro">
+            <a href="https://github.com/vitorafgomes/messaging-explorer/releases/latest" data-version>Latest release on GitHub</a>
+          </p>
+
+          <div class="platforms">
+            <article class="platform" data-platform="windows" aria-labelledby="platform-windows">
+              <header class="platform-head">
+                <svg class="icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+                  <rect x="2" y="3" width="16" height="11" rx="1.5" />
+                  <path d="M10 14v3.5M6.5 17.5h7" />
+                </svg>
+                <h3 id="platform-windows">Windows</h3>
+                <span class="badge" data-yours hidden>For your system</span>
+              </header>
+              <ul class="files">
+                <li>
+                  <a class="file file-primary" data-asset="windows-installer" href="https://github.com/vitorafgomes/messaging-explorer/releases/latest">
+                    <span class="file-name">Installer</span>
+                    <span class="file-meta">64-bit .exe<span data-size></span></span>
+                  </a>
+                </li>
+                <li>
+                  <a class="file" data-asset="windows-portable" href="https://github.com/vitorafgomes/messaging-explorer/releases/latest">
+                    <span class="file-name">Portable, no install</span>
+                    <span class="file-meta">64-bit .exe<span data-size></span></span>
+                  </a>
+                </li>
+              </ul>
+              <p class="platform-note">The installed app updates itself. The portable one does not.</p>
+            </article>
+
+            <article class="platform" data-platform="macos" aria-labelledby="platform-macos">
+              <header class="platform-head">
+                <svg class="icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+                  <rect x="4" y="4" width="12" height="9" rx="1.5" />
+                  <path d="M1.5 16h17" />
+                </svg>
+                <h3 id="platform-macos">macOS</h3>
+                <span class="badge" data-yours hidden>For your system</span>
+              </header>
+              <ul class="files">
+                <li>
+                  <a class="file file-primary" data-asset="macos-arm64" href="https://github.com/vitorafgomes/messaging-explorer/releases/latest">
+                    <span class="file-name">Apple silicon</span>
+                    <span class="file-meta">arm64 .dmg<span data-size></span></span>
+                  </a>
+                </li>
+                <li>
+                  <a class="file file-primary" data-asset="macos-x64" href="https://github.com/vitorafgomes/messaging-explorer/releases/latest">
+                    <span class="file-name">Intel</span>
+                    <span class="file-meta">x64 .dmg<span data-size></span></span>
+                  </a>
+                </li>
+              </ul>
+              <p class="platform-note">macOS builds do not update themselves. Download the new version when the app tells you one exists.</p>
+            </article>
+
+            <article class="platform" data-platform="linux" aria-labelledby="platform-linux">
+              <header class="platform-head">
+                <svg class="icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+                  <rect x="2" y="3" width="16" height="14" rx="2" />
+                  <path d="M5.5 7.5l3 2.5-3 2.5M10.5 13h4" />
+                </svg>
+                <h3 id="platform-linux">Linux</h3>
+                <span class="badge" data-yours hidden>For your system</span>
+              </header>
+              <ul class="files">
+                <li>
+                  <a class="file file-primary" data-asset="linux-appimage" href="https://github.com/vitorafgomes/messaging-explorer/releases/latest">
+                    <span class="file-name">AppImage</span>
+                    <span class="file-meta">x86_64<span data-size></span></span>
+                  </a>
+                </li>
+                <li>
+                  <a class="file" data-asset="linux-deb" href="https://github.com/vitorafgomes/messaging-explorer/releases/latest">
+                    <span class="file-name">Debian and Ubuntu</span>
+                    <span class="file-meta">amd64 .deb<span data-size></span></span>
+                  </a>
+                </li>
+              </ul>
+              <p class="platform-note">Both update themselves. The .deb asks for the administrator password to do it.</p>
+            </article>
+          </div>
+
+          <div class="first-start">
+            <h3>The first start</h3>
+            <p>The builds are not code signed, so the system asks before the first start.</p>
+            <dl class="steps">
+              <div>
+                <dt>Windows</dt>
+                <dd>SmartScreen shows "Windows protected your PC". Choose <strong>More info</strong>, then <strong>Run anyway</strong>.</dd>
+              </div>
+              <div>
+                <dt>macOS</dt>
+                <dd>Open the app from Finder with a right click, then <strong>Open</strong>. Because the build is unsigned, macOS cannot install an update by itself.</dd>
+              </div>
+            </dl>
+            <p>
+              The app looks for a new version a few seconds after it starts and every four hours. It tells you when one
+              exists and downloads it only when you ask.
+            </p>
+            <p>
+              Every file and every earlier version is on
+              <a href="https://github.com/vitorafgomes/messaging-explorer/releases">GitHub Releases</a>.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="source" class="section" aria-labelledby="source-title">
+      <div class="wrap section-inner">
+        <h2 id="source-title">Open source</h2>
+        <div>
+          <p class="section-intro">
+            Messaging Explorer is released under the
+            <a href="https://github.com/vitorafgomes/messaging-explorer/blob/main/LICENSE">MIT license</a>.
+            Issues and pull requests are welcome; for anything beyond a small fix, please open an issue first.
+          </p>
+          <dl class="links">
+            <div>
+              <dt><a href="https://github.com/vitorafgomes/messaging-explorer">Repository</a></dt>
+              <dd>The source, how to build it and how to run it against local brokers.</dd>
+            </div>
+            <div>
+              <dt><a href="https://github.com/vitorafgomes/messaging-explorer/issues">Issues</a></dt>
+              <dd>Report a bug or ask for something.</dd>
+            </div>
+            <div>
+              <dt><a href="https://github.com/vitorafgomes/messaging-explorer/blob/main/CHANGELOG.md">Changelog</a></dt>
+              <dd>What each version added, fixed and still gets wrong.</dd>
+            </div>
+            <div>
+              <dt><a href="https://github.com/vitorafgomes/messaging-explorer/security/advisories/new">Report a security problem</a></dt>
+              <dd>Privately, through a GitHub security advisory, instead of a public issue.</dd>
+            </div>
+          </dl>
+        </div>
+      </div>
     </section>
   </main>
 
   <footer class="site-footer">
-    <p>
-      &copy; <span id="year"></span> Vitor Gomes. Released under the
-      <a href="https://github.com/vitorafgomes/messaging-explorer/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>.
-    </p>
-    <p>
-      <a href="https://github.com/vitorafgomes/messaging-explorer" target="_blank" rel="noopener">GitHub</a>
-      <span class="dot">•</span>
-      <a href="https://github.com/vitorafgomes/messaging-explorer/issues" target="_blank" rel="noopener">Issues</a>
-      <span class="dot">•</span>
-      <a href="https://github.com/vitorafgomes/messaging-explorer/releases" target="_blank" rel="noopener">All releases</a>
-    </p>
+    <div class="wrap footer-inner">
+      <p>&copy; Vitor Gomes. MIT license.</p>
+      <p>This page asks the GitHub API for the latest version. It loads nothing else from another site.</p>
+    </div>
   </footer>
-
-  <script src="app.js"></script>
 </body>
 </html>
