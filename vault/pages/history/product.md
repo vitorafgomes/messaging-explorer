@@ -31,6 +31,7 @@ Everything before 2026-04-30 comes from the owner's notes and predates the publi
 | 2026-07-06 | - | A survey of the public code named the same three weaknesses the audit of November found again: RabbitMQ operations that can lose messages, secrets in plain text on disk, and thin tests exactly where the risk is. |
 | 2026-07-20 | 2.3.0 | Dead-letter bulk delete and resubmit reworked into per-batch cycles with cancellation. The version jumped from 1.0.2 to 2.3.0 so that users of the private 2.x line would not see the relaunch as a downgrade (`CHANGELOG.md`). |
 | 2026-11-12 | - | The agent harness, this vault, the code audit and the integration tests ([[pages/decisions/0001-in-repo-vault-and-agent-harness]], [[pages/roadmap/code-audit-2026-11]]). |
+| 2026-11-12 | 2.4.0 | The fixes of the audit (connection fields kept on save, entity names with reserved characters, bulk actions bound to the selection, a start that waits for the API), the Beta update channel, block maps in the release, dependencies moved inside their majors (`CHANGELOG.md`). First release built by the gated workflow: CI on the tagged commit, tag checked against the package version, then the three builds. |
 
 ## Decisions taken on the way that still hold
 

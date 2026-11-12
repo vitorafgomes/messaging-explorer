@@ -1,3 +1,6 @@
+## [2026-11-12] release | 2.4.0 published
+Tag `v2.4.0` ran the gated release workflow for the first time: CI on the tagged commit, the tag checked against the package version, the builds for Linux, Windows and macOS, and a public release with the update metadata and the block maps. [[pages/history/product]] has the line.
+
 ## [2026-11-12] chore | Dependencies moved to the newest version inside their majors
 npm: lockfile only, Angular 21.2.26, Material 21.2.14, Electron 41.10.7, electron-updater 6.8.11, electron-builder 26.18.1; `npm audit` fell from 79 advisories to 25 and from 20 to 2 in shipped packages. .NET: Azure.Identity 1.21.0, Azure.Messaging.ServiceBus 7.21.0, Azure.Monitor.Query 1.7.1, Microsoft.Extensions 10.0.15, the test stack; Moq stays at 4.20.70 and RabbitMQ.Client at 6.8.1. Every suite passed with the same counts before and after. What needs a major is on [[pages/roadmap/followups]].
 
