@@ -15,6 +15,13 @@ function normalizeUpdateChannel(channel) {
   return UPDATE_CHANNELS.includes(channel) ? channel : null;
 }
 
+/** Sets the updater channel, looks at prereleases only on beta, and never allows a downgrade. */
+function applyUpdateChannel(updater, channel) {
+  updater.channel = channel;
+  updater.allowPrerelease = channel === 'beta';
+  updater.allowDowngrade = false;
+}
+
 function delay(ms) {
   let timer;
   const promise = new Promise((resolve) => { timer = setTimeout(resolve, ms); });
@@ -61,4 +68,4 @@ function stopProcess(child, { graceMs, setTimeoutFn = setTimeout }) {
   }, graceMs);
 }
 
-module.exports = { isSafeExternalUrl, normalizeUpdateChannel, waitForHealth, stopProcess };
+module.exports = { isSafeExternalUrl, normalizeUpdateChannel, applyUpdateChannel, waitForHealth, stopProcess };

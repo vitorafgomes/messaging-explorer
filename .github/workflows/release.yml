@@ -89,7 +89,7 @@ jobs:
           path: |
             web-app/release/*.AppImage
             web-app/release/*.deb
-            web-app/release/latest-linux.yml
+            web-app/release/*-linux.yml
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
@@ -130,7 +130,9 @@ jobs:
           name: windows-artifacts
           path: |
             web-app/release/*.exe
+            web-app/release/*.blockmap
             web-app/release/latest.yml
+            web-app/release/beta.yml
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
@@ -172,7 +174,8 @@ jobs:
           path: |
             web-app/release/*.dmg
             web-app/release/*.zip
-            web-app/release/latest-mac.yml
+            web-app/release/*.blockmap
+            web-app/release/*-mac.yml
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------

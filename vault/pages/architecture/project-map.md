@@ -60,21 +60,21 @@ Dotted and plain arrows from `web-app` and `electron`, and the dotted arrows to 
 
 | Project | Package | Version |
 |---|---|---|
-| Core | `Azure.Identity` | 1.13.1 (`src/ServiceBusExplorer.Core/ServiceBusExplorer.Core.csproj:14`) |
-| Core | `Azure.Messaging.ServiceBus` | 7.20.1 (`src/ServiceBusExplorer.Core/ServiceBusExplorer.Core.csproj:15`) |
-| Core | `Azure.Monitor.Query` | 1.5.0 (`src/ServiceBusExplorer.Core/ServiceBusExplorer.Core.csproj:16`) |
-| Core | `Microsoft.Extensions.Caching.Memory` | 9.0.0 (`src/ServiceBusExplorer.Core/ServiceBusExplorer.Core.csproj:17`) |
-| Core | `Microsoft.Extensions.Logging.Abstractions` | 9.0.0 (`src/ServiceBusExplorer.Core/ServiceBusExplorer.Core.csproj:18`) |
+| Core | `Azure.Identity` | 1.21.0 (`src/ServiceBusExplorer.Core/ServiceBusExplorer.Core.csproj:14`) |
+| Core | `Azure.Messaging.ServiceBus` | 7.21.0 (`src/ServiceBusExplorer.Core/ServiceBusExplorer.Core.csproj:15`) |
+| Core | `Azure.Monitor.Query` | 1.7.1 (`src/ServiceBusExplorer.Core/ServiceBusExplorer.Core.csproj:16`) |
+| Core | `Microsoft.Extensions.Caching.Memory` | 10.0.15 (`src/ServiceBusExplorer.Core/ServiceBusExplorer.Core.csproj:17`) |
+| Core | `Microsoft.Extensions.Logging.Abstractions` | 10.0.15 (`src/ServiceBusExplorer.Core/ServiceBusExplorer.Core.csproj:18`) |
 | Core | `RabbitMQ.Client` | 6.8.1 (`src/ServiceBusExplorer.Core/ServiceBusExplorer.Core.csproj:19`) |
-| Api | `Microsoft.AspNetCore.OpenApi` | 10.0.0 (`src/ServiceBusExplorer.Api/ServiceBusExplorer.Api.csproj:10`) |
-| Api | `Microsoft.OpenApi` | 2.7.5 (`src/ServiceBusExplorer.Api/ServiceBusExplorer.Api.csproj:11`) |
+| Api | `Microsoft.AspNetCore.OpenApi` | 10.0.15 (`src/ServiceBusExplorer.Api/ServiceBusExplorer.Api.csproj:10`) |
+| Api | `Microsoft.OpenApi` | 2.13.0 (`src/ServiceBusExplorer.Api/ServiceBusExplorer.Api.csproj:11`) |
 | Core.Tests | `Moq` | 4.20.70 (`src/ServiceBusExplorer.Core.Tests/ServiceBusExplorer.Core.Tests.csproj:17`) |
-| Core.Tests | `xunit` / `xunit.runner.visualstudio` / `Microsoft.NET.Test.Sdk` / `coverlet.collector` | 2.6.2 / 2.5.4 / 17.8.0 / 6.0.0 (`src/ServiceBusExplorer.Core.Tests/ServiceBusExplorer.Core.Tests.csproj:18`, `src/ServiceBusExplorer.Core.Tests/ServiceBusExplorer.Core.Tests.csproj:19`, `src/ServiceBusExplorer.Core.Tests/ServiceBusExplorer.Core.Tests.csproj:16`, `src/ServiceBusExplorer.Core.Tests/ServiceBusExplorer.Core.Tests.csproj:12`) |
+| Core.Tests | `xunit` / `xunit.runner.visualstudio` / `Microsoft.NET.Test.Sdk` / `coverlet.collector` | 2.9.3 / 2.8.2 / 17.14.2 / 6.0.4 (`src/ServiceBusExplorer.Core.Tests/ServiceBusExplorer.Core.Tests.csproj:18`, `src/ServiceBusExplorer.Core.Tests/ServiceBusExplorer.Core.Tests.csproj:19`, `src/ServiceBusExplorer.Core.Tests/ServiceBusExplorer.Core.Tests.csproj:16`, `src/ServiceBusExplorer.Core.Tests/ServiceBusExplorer.Core.Tests.csproj:12`) |
 | IntegrationTests | `Testcontainers.RabbitMq` | 4.16.0 (`src/ServiceBusExplorer.IntegrationTests/ServiceBusExplorer.IntegrationTests.csproj:17`) |
 | IntegrationTests | `Testcontainers.ServiceBus` | 4.16.0 (`src/ServiceBusExplorer.IntegrationTests/ServiceBusExplorer.IntegrationTests.csproj:18`); it brings `Testcontainers.MsSql` for the emulator's SQL Server. The project names `Azure.Messaging.ServiceBus` types, which reach it through Core, only to arrange and observe broker state |
-| IntegrationTests | `xunit` / `xunit.runner.visualstudio` / `Microsoft.NET.Test.Sdk` / `coverlet.collector` | 2.6.2 / 2.5.4 / 17.8.0 / 6.0.0, the versions of Core.Tests (`src/ServiceBusExplorer.IntegrationTests/ServiceBusExplorer.IntegrationTests.csproj:19`, `src/ServiceBusExplorer.IntegrationTests/ServiceBusExplorer.IntegrationTests.csproj:20`, `src/ServiceBusExplorer.IntegrationTests/ServiceBusExplorer.IntegrationTests.csproj:16`, `src/ServiceBusExplorer.IntegrationTests/ServiceBusExplorer.IntegrationTests.csproj:12`) |
-| Api.Tests | `Microsoft.AspNetCore.Mvc.Testing` | 10.0.0 (`src/ServiceBusExplorer.Api.Tests/ServiceBusExplorer.Api.Tests.csproj:12`) |
-| Api.Tests | `xunit` / `xunit.runner.visualstudio` / `Microsoft.NET.Test.Sdk` / `coverlet.collector` | 2.6.2 / 2.5.4 / 17.8.0 / 6.0.0 (`src/ServiceBusExplorer.Api.Tests/ServiceBusExplorer.Api.Tests.csproj:14`, `src/ServiceBusExplorer.Api.Tests/ServiceBusExplorer.Api.Tests.csproj:15`, `src/ServiceBusExplorer.Api.Tests/ServiceBusExplorer.Api.Tests.csproj:13`, `src/ServiceBusExplorer.Api.Tests/ServiceBusExplorer.Api.Tests.csproj:19`) |
+| IntegrationTests | `xunit` / `xunit.runner.visualstudio` / `Microsoft.NET.Test.Sdk` / `coverlet.collector` | 2.9.3 / 2.8.2 / 17.14.2 / 6.0.4, the versions of Core.Tests (`src/ServiceBusExplorer.IntegrationTests/ServiceBusExplorer.IntegrationTests.csproj:19`, `src/ServiceBusExplorer.IntegrationTests/ServiceBusExplorer.IntegrationTests.csproj:20`, `src/ServiceBusExplorer.IntegrationTests/ServiceBusExplorer.IntegrationTests.csproj:16`, `src/ServiceBusExplorer.IntegrationTests/ServiceBusExplorer.IntegrationTests.csproj:12`) |
+| Api.Tests | `Microsoft.AspNetCore.Mvc.Testing` | 10.0.15 (`src/ServiceBusExplorer.Api.Tests/ServiceBusExplorer.Api.Tests.csproj:12`) |
+| Api.Tests | `xunit` / `xunit.runner.visualstudio` / `Microsoft.NET.Test.Sdk` / `coverlet.collector` | 2.9.3 / 2.8.2 / 17.14.2 / 6.0.4 (`src/ServiceBusExplorer.Api.Tests/ServiceBusExplorer.Api.Tests.csproj:14`, `src/ServiceBusExplorer.Api.Tests/ServiceBusExplorer.Api.Tests.csproj:15`, `src/ServiceBusExplorer.Api.Tests/ServiceBusExplorer.Api.Tests.csproj:13`, `src/ServiceBusExplorer.Api.Tests/ServiceBusExplorer.Api.Tests.csproj:19`) |
 
 The vendor SDKs (`Azure.*`, `RabbitMQ.Client`) are referenced by Core only; Api reaches them transitively. `ProviderVersion` in the two capability classes repeats the Azure and RabbitMQ package versions as strings (see Known gaps in [[pages/services/core]]).
 
@@ -97,7 +97,7 @@ The vendor SDKs (`Azure.*`, `RabbitMQ.Client`) are referenced by Core only; Api 
 
 ## CI
 
-`.github/workflows/ci.yml` runs on pushes and pull requests to `main`. Job `dotnet` restores and builds the whole solution in Release (`.github/workflows/ci.yml:59`, `.github/workflows/ci.yml:62`), so all five projects always build together, and tests Core.Tests and Api.Tests by path (`.github/workflows/ci.yml:66`, `.github/workflows/ci.yml:67`), so it starts no container. Job `integration` builds and runs the integration project on its own runner (`.github/workflows/ci.yml:72`, `.github/workflows/ci.yml:89`); the release workflow calls this workflow, so a tag waits for it too. Job `web` runs `npm ci` and `npm run build` in `web-app` (`.github/workflows/ci.yml:111`, `.github/workflows/ci.yml:123`) and, since 2026-11-12, `npm test -- --watch=false` between them (`.github/workflows/ci.yml:115`), so the 21 spec files are part of CI. `.github/workflows/release.yml` triggers on `v*` tags (`.github/workflows/release.yml:13`) and builds Electron installers for Linux, Windows and macOS (`.github/workflows/release.yml:83`, `.github/workflows/release.yml:125`, `.github/workflows/release.yml:166`).
+`.github/workflows/ci.yml` runs on pushes and pull requests to `main`. Job `dotnet` restores and builds the whole solution in Release (`.github/workflows/ci.yml:59`, `.github/workflows/ci.yml:62`), so all five projects always build together, and tests Core.Tests and Api.Tests by path (`.github/workflows/ci.yml:66`, `.github/workflows/ci.yml:67`), so it starts no container. Job `integration` builds and runs the integration project on its own runner (`.github/workflows/ci.yml:72`, `.github/workflows/ci.yml:89`); the release workflow calls this workflow, so a tag waits for it too. Job `web` runs `npm ci` and `npm run build` in `web-app` (`.github/workflows/ci.yml:111`, `.github/workflows/ci.yml:123`) and, since 2026-11-12, `npm test -- --watch=false` between them (`.github/workflows/ci.yml:115`), so the 21 spec files are part of CI. `.github/workflows/release.yml` triggers on `v*` tags (`.github/workflows/release.yml:13`) and builds Electron installers for Linux, Windows and macOS (`.github/workflows/release.yml:83`, `.github/workflows/release.yml:125`, `.github/workflows/release.yml:168`).
 
 ## Who references whom: what to run when X changes
 

@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const {
   isSafeExternalUrl,
   normalizeUpdateChannel,
+  applyUpdateChannel,
   waitForHealth,
   stopProcess
 } = require('./shell-helpers');
@@ -34,6 +35,43 @@ test('set-update-channel must reject a channel that is not latest or beta: anyth
   assert.equal(normalizeUpdateChannel(''), null);
   assert.equal(normalizeUpdateChannel(undefined), null);
   assert.equal(normalizeUpdateChannel({ toString: () => 'beta' }), null);
+});
+
+function fakeUpdater({ allowPrerelease }) {
+  return {
+    allowPrerelease,
+    allowDowngrade: false,
+    _channel: null,
+    get channel() {
+      return this._channel;
+    },
+    set channel(value) {
+      this._channel = value;
+      this.allowDowngrade = true;
+    }
+  };
+}
+
+test('the beta channel must find beta releases: beta turns allowPrerelease on', () => {
+  const updater = fakeUpdater({ allowPrerelease: false });
+  applyUpdateChannel(updater, 'beta');
+  assert.equal(updater.channel, 'beta');
+  assert.equal(updater.allowPrerelease, true);
+});
+
+test('the beta channel must find beta releases: latest turns allowPrerelease off', () => {
+  const updater = fakeUpdater({ allowPrerelease: true });
+  applyUpdateChannel(updater, 'latest');
+  assert.equal(updater.channel, 'latest');
+  assert.equal(updater.allowPrerelease, false);
+});
+
+test('choosing an update channel never enables a downgrade', () => {
+  for (const channel of ['latest', 'beta']) {
+    const updater = fakeUpdater({ allowPrerelease: channel === 'latest' });
+    applyUpdateChannel(updater, channel);
+    assert.equal(updater.allowDowngrade, false, `allowDowngrade after choosing ${channel}`);
+  }
 });
 
 test('the window must not open before the API answers /health: healthy once a response is ok, after a rejected and a non-ok attempt', async () => {
