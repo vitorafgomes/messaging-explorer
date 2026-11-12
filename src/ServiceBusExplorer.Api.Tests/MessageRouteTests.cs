@@ -88,6 +88,21 @@ public class MessageRouteTests
         Assert.Empty(answered.Calls);
     }
 
+    [Theory]
+    [InlineData("GET", "/api/queues/orders/messages", null)]
+    [InlineData("GET", Subscription + "/messages", null)]
+    [InlineData("GET", "/api/queues/orders/transferdeadletter", null)]
+    [InlineData("GET", Subscription + "/transferdeadletter", null)]
+    [InlineData("POST", "/api/queues/orders/messages/search", Search)]
+    [InlineData("POST", Subscription + "/transferdeadletter/search", Search)]
+    public async Task A_peek_or_a_search_hands_the_provider_the_request_token_so_an_aborted_request_stops_it(string method, string path, string? body)
+    {
+        var answered = await SendAsync(method, path, body, ProviderAnswers);
+
+        Assert.Equal(HttpStatusCode.OK, answered.Status);
+        Assert.True(Assert.Single(answered.Calls).Args.OfType<CancellationToken>().Single().CanBeCanceled);
+    }
+
     [Fact]
     public async Task A_transfer_dead_letter_batch_hands_the_provider_the_request_token()
     {

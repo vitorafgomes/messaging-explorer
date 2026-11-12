@@ -245,13 +245,15 @@ public interface IMessagingProvider : IAsyncDisposable
     #region Message Operations
 
     /// <summary>
-    /// Searches messages by peeking in batches and filtering server-side.
+    /// Searches messages by peeking in batches and filtering server-side. The caller's token stops the scan between
+    /// two broker calls.
     /// </summary>
     Task<MessageSearchResult> SearchMessagesAsync(
         string entityName,
         MessageSearchRequest request,
         MessageSubQueue subQueue = MessageSubQueue.Active,
-        string? subscriptionName = null);
+        string? subscriptionName = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Peeks messages from a queue or subscription without removing them: up to <paramref name="count"/>, fewer only
@@ -261,8 +263,9 @@ public interface IMessagingProvider : IAsyncDisposable
     /// <param name="count">The maximum number of messages to peek.</param>
     /// <param name="subQueue">The queue of the entity to peek.</param>
     /// <param name="subscriptionName">The subscription name if peeking from a topic subscription.</param>
+    /// <param name="cancellationToken">Token that stops the peek between two broker calls.</param>
     /// <returns>A collection of messages.</returns>
-    Task<IEnumerable<IMessage>> PeekMessagesAsync(string entityName, int count = 10, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null);
+    Task<IEnumerable<IMessage>> PeekMessagesAsync(string entityName, int count = 10, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Sends a message to a queue or topic.

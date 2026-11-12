@@ -134,7 +134,7 @@ public class QueuesController : ControllerBase
         if (EntityAdministrationResults.SubQueueNotSupported(provider, subQueue) is { } notSupported) return notSupported;
         try
         {
-            var result = await provider.SearchMessagesAsync(name, request, subQueue);
+            var result = await provider.SearchMessagesAsync(name, request, subQueue, cancellationToken: HttpContext.RequestAborted);
             return Ok(result);
         }
         catch (EntityDisabledException)
@@ -172,7 +172,7 @@ public class QueuesController : ControllerBase
 
         try
         {
-            var messages = await provider.PeekMessagesAsync(name, count, subQueue);
+            var messages = await provider.PeekMessagesAsync(name, count, subQueue, cancellationToken: HttpContext.RequestAborted);
             return Ok(messages);
         }
         catch (EntityDisabledException)

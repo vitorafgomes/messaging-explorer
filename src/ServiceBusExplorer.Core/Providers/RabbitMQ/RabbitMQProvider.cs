@@ -522,7 +522,7 @@ public class RabbitMQProvider : IMessagingProvider
     #region Message Operations
 
     /// <inheritdoc />
-    public Task<IEnumerable<IMessage>> PeekMessagesAsync(string entityName, int count = 10, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null)
+    public Task<IEnumerable<IMessage>> PeekMessagesAsync(string entityName, int count = 10, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, CancellationToken cancellationToken = default)
     {
         if (subQueue == MessageSubQueue.TransferDeadLetter)
             return Task.FromException<IEnumerable<IMessage>>(TransferDeadLetterNotSupported());
@@ -538,6 +538,9 @@ public class RabbitMQProvider : IMessagingProvider
         var messages = new List<IMessage>();
         for (var i = 0; i < count; i++)
         {
+            if (cancellationToken.IsCancellationRequested)
+                return Task.FromCanceled<IEnumerable<IMessage>>(cancellationToken);
+
             var result = _channel!.BasicGet(queueName, autoAck: false);
             if (result == null)
                 break;
@@ -1070,7 +1073,8 @@ public class RabbitMQProvider : IMessagingProvider
         string entityName,
         MessageSearchRequest request,
         MessageSubQueue subQueue = MessageSubQueue.Active,
-        string? subscriptionName = null)
+        string? subscriptionName = null,
+        CancellationToken cancellationToken = default)
         => subQueue == MessageSubQueue.TransferDeadLetter
             ? Task.FromException<MessageSearchResult>(TransferDeadLetterNotSupported())
             : Task.FromResult(new MessageSearchResult());

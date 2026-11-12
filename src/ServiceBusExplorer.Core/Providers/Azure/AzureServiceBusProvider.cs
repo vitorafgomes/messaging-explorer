@@ -1055,17 +1055,18 @@ public class AzureServiceBusProvider : IMessagingProvider
         string entityName,
         MessageSearchRequest request,
         MessageSubQueue subQueue = MessageSubQueue.Active,
-        string? subscriptionName = null)
+        string? subscriptionName = null,
+        CancellationToken cancellationToken = default)
     {
         EnsureConnected();
 
         await using var receiver = CreateReceiver(_client!, entityName, subscriptionName, subQueue,
             new ServiceBusReceiverOptions { ReceiveMode = ServiceBusReceiveMode.PeekLock });
 
-        return await RefuseDisabledAsync(() => SearchCoreAsync(receiver, request, subQueue != MessageSubQueue.Active));
+        return await RefuseDisabledAsync(() => SearchCoreAsync(receiver, request, subQueue != MessageSubQueue.Active, cancellationToken));
     }
 
-    private static async Task<MessageSearchResult> SearchCoreAsync(ServiceBusReceiver receiver, MessageSearchRequest request, bool isDeadLetter)
+    internal static async Task<MessageSearchResult> SearchCoreAsync(ServiceBusReceiver receiver, MessageSearchRequest request, bool isDeadLetter, CancellationToken cancellationToken)
     {
         var matches = new List<IMessage>();
         int totalPeeked = 0;
@@ -1075,7 +1076,8 @@ public class AzureServiceBusProvider : IMessagingProvider
 
         while (matches.Count < request.Count)
         {
-            var batch = await receiver.PeekMessagesAsync(batchSize, fromSequenceNumber);
+            cancellationToken.ThrowIfCancellationRequested();
+            var batch = await receiver.PeekMessagesAsync(batchSize, fromSequenceNumber, cancellationToken);
             if (!batch.Any()) break;
 
             totalPeeked += batch.Count;
@@ -1151,12 +1153,12 @@ public class AzureServiceBusProvider : IMessagingProvider
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<IMessage>> PeekMessagesAsync(string entityName, int count = 10, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null)
+    public async Task<IEnumerable<IMessage>> PeekMessagesAsync(string entityName, int count = 10, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, CancellationToken cancellationToken = default)
     {
         EnsureConnected();
 
         await using var receiver = CreateReceiver(_client!, entityName, subscriptionName, subQueue);
-        var messages = await RefuseDisabledAsync(() => PeekCoreAsync(receiver, count));
+        var messages = await RefuseDisabledAsync(() => PeekCoreAsync(receiver, count, cancellationToken));
 
         return messages.Select(m => MapToMessageInfo(m, subQueue != MessageSubQueue.Active));
     }
@@ -1166,16 +1168,18 @@ public class AzureServiceBusProvider : IMessagingProvider
     /// shorter than asked is not the end: the broker returns one where a scheduled message or a dropped duplicate
     /// sits between messages. The peek goes on from the last sequence number until a batch is empty or
     /// <paramref name="count"/> is reached; every batch that is not empty brings it closer to <paramref name="count"/>,
-    /// so it makes at most <paramref name="count"/> plus one calls.
+    /// so it makes at most <paramref name="count"/> plus one calls. The caller's token is checked before each call
+    /// and handed to the SDK, so an aborted request stops the peek.
     /// </summary>
-    internal static async Task<List<ServiceBusReceivedMessage>> PeekCoreAsync(ServiceBusReceiver receiver, int count)
+    internal static async Task<List<ServiceBusReceivedMessage>> PeekCoreAsync(ServiceBusReceiver receiver, int count, CancellationToken cancellationToken)
     {
         var allMessages = new List<ServiceBusReceivedMessage>();
         long? fromSequenceNumber = null;
 
         while (allMessages.Count < count)
         {
-            var messages = await receiver.PeekMessagesAsync(Math.Min(count - allMessages.Count, PeekBatchSize), fromSequenceNumber);
+            cancellationToken.ThrowIfCancellationRequested();
+            var messages = await receiver.PeekMessagesAsync(Math.Min(count - allMessages.Count, PeekBatchSize), fromSequenceNumber, cancellationToken);
             if (messages.Count == 0)
             {
                 break;

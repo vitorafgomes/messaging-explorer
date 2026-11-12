@@ -165,7 +165,7 @@ public class AzureServiceBusProviderSubQueueTests
         receiver.Setup(r => r.PeekMessagesAsync(5, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(Batch(Msg(1), Msg(2), Msg(3), Msg(4), Msg(5)));
 
-        var peeked = await AzureServiceBusProvider.PeekCoreAsync(receiver.Object, 5);
+        var peeked = await AzureServiceBusProvider.PeekCoreAsync(receiver.Object, 5, CancellationToken.None);
 
         Assert.Equal(new long[] { 1, 2, 3, 4, 5 }, peeked.Select(m => m.SequenceNumber).ToArray());
         receiver.Verify(r => r.PeekMessagesAsync(It.IsAny<int>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()), Times.Once);
@@ -181,10 +181,80 @@ public class AzureServiceBusProviderSubQueueTests
             .ReturnsAsync((int max, long? from, CancellationToken _) =>
                 Enumerable.Range(0, max).Select(i => Msg((from ?? 1) + i)).ToList());
 
-        var peeked = await AzureServiceBusProvider.PeekCoreAsync(receiver.Object, 300);
+        var peeked = await AzureServiceBusProvider.PeekCoreAsync(receiver.Object, 300, CancellationToken.None);
 
         Assert.Equal(300, peeked.Count);
         Assert.Equal(new[] { 250, 50 }, asked.ToArray());
+    }
+
+    [Fact]
+    public async Task A_peek_whose_token_is_cancelled_after_the_first_batch_makes_no_further_broker_call_and_hands_the_sdk_that_token()
+    {
+        using var cts = new CancellationTokenSource();
+        var tokens = new List<CancellationToken>();
+        var receiver = new Mock<ServiceBusReceiver>();
+        receiver.Setup(r => r.PeekMessagesAsync(It.IsAny<int>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()))
+            .Callback((int _, long? _, CancellationToken token) =>
+            {
+                tokens.Add(token);
+                cts.Cancel();
+            })
+            .ReturnsAsync(Batch(Msg(1)));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => AzureServiceBusProvider.PeekCoreAsync(receiver.Object, 1000, cts.Token));
+
+        Assert.Equal(new[] { true }, tokens.Select(t => t.IsCancellationRequested).ToArray());
+    }
+
+    [Fact]
+    public async Task A_peek_with_an_already_cancelled_token_makes_no_broker_call()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        var receiver = new Mock<ServiceBusReceiver>();
+        receiver.Setup(r => r.PeekMessagesAsync(It.IsAny<int>(), It.IsAny<long?>(), It.IsAny<CancellationToken>())).ReturnsAsync(Batch());
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => AzureServiceBusProvider.PeekCoreAsync(receiver.Object, 10, cts.Token));
+
+        receiver.Verify(r => r.PeekMessagesAsync(It.IsAny<int>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(7)]
+    [InlineData(1000)]
+    public async Task A_broker_answering_one_message_per_batch_gives_exactly_count_messages_in_at_most_count_plus_one_calls(int count)
+    {
+        var receiver = new Mock<ServiceBusReceiver>();
+        var calls = 0;
+        receiver.Setup(r => r.PeekMessagesAsync(It.IsAny<int>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()))
+            .Callback(() => calls++)
+            .ReturnsAsync((int _, long? from, CancellationToken _) => Batch(Msg(from ?? 1)));
+
+        var peeked = await AzureServiceBusProvider.PeekCoreAsync(receiver.Object, count, CancellationToken.None);
+
+        Assert.Equal(Enumerable.Range(1, count).Select(i => (long)i), peeked.Select(m => m.SequenceNumber));
+        Assert.InRange(calls, count, count + 1);
+    }
+
+    [Fact]
+    public async Task A_search_whose_token_is_cancelled_after_the_first_batch_makes_no_further_broker_call_and_hands_the_sdk_that_token()
+    {
+        using var cts = new CancellationTokenSource();
+        var tokens = new List<CancellationToken>();
+        var receiver = new Mock<ServiceBusReceiver>();
+        receiver.Setup(r => r.PeekMessagesAsync(It.IsAny<int>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()))
+            .Callback((int _, long? _, CancellationToken token) =>
+            {
+                tokens.Add(token);
+                cts.Cancel();
+            })
+            .ReturnsAsync(Batch(Msg(1)));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            AzureServiceBusProvider.SearchCoreAsync(receiver.Object, new MessageSearchRequest { Query = "no match" }, false, cts.Token));
+
+        Assert.Equal(new[] { true }, tokens.Select(t => t.IsCancellationRequested).ToArray());
     }
 
     [Fact]
@@ -399,6 +469,20 @@ public class AzureServiceBusProviderSubQueueTests
         Assert.Equal(1, result.SuccessCount);
         Assert.Equal(new[] { (13L, Disabled), (14L, Disabled) }, FailuresOf(result));
         Assert.Equal(new[] { new long[] { 12, 13, 14 }, [12], [13] }, calls.ToArray());
+    }
+
+    [Fact]
+    public async Task A_cancel_whose_first_single_number_call_finds_the_queue_disabled_throws_the_neutral_exception_and_tries_no_other_number()
+    {
+        var calls = new List<long[]>();
+        var sender = CancellingSender(calls, call => call.Length > 1
+            ? Broker(ServiceBusFailureReason.MessageNotFound)
+            : Broker(ServiceBusFailureReason.MessagingEntityDisabled));
+
+        await Assert.ThrowsAsync<EntityDisabledException>(() =>
+            AzureServiceBusProvider.CancelScheduledCoreAsync(sender.Object, "orders", NullLogger.Instance, [12, 13, 14], CancellationToken.None));
+
+        Assert.Equal(new[] { new long[] { 12, 13, 14 }, [12] }, calls.ToArray());
     }
 
     [Fact]

@@ -331,7 +331,7 @@ public class TopicsController : ControllerBase
         if (EntityAdministrationResults.SubQueueNotSupported(provider, subQueue) is { } notSupported) return notSupported;
         try
         {
-            var result = await provider.SearchMessagesAsync(topicName, request, subQueue, subscriptionName);
+            var result = await provider.SearchMessagesAsync(topicName, request, subQueue, subscriptionName, HttpContext.RequestAborted);
             return Ok(result);
         }
         catch (EntityDisabledException)
@@ -369,7 +369,7 @@ public class TopicsController : ControllerBase
 
         try
         {
-            var messages = await provider.PeekMessagesAsync(topicName, count, subQueue, subscriptionName);
+            var messages = await provider.PeekMessagesAsync(topicName, count, subQueue, subscriptionName, HttpContext.RequestAborted);
             return Ok(messages);
         }
         catch (EntityDisabledException)

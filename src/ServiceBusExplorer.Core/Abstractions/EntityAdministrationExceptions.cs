@@ -16,8 +16,10 @@ public sealed class EntityNotFoundException(Exception? innerException = null)
 
 /// <summary>
 /// The broker refused a message operation because the entity is disabled for it: a send to an entity that is
-/// disabled or send-disabled, a receive from one that is disabled or receive-disabled. Thrown only when nothing of
-/// the operation was done. The message is fixed; the broker's own error is the inner exception and is for the log only.
+/// disabled or send-disabled, a receive from one that is disabled or receive-disabled. Thrown only when no message
+/// was removed from its source. A resubmit or move whose first cycle was sent in several batches may have sent part of
+/// that cycle before the broker refused the next batch; those messages stay in the source, so a retry can duplicate
+/// them. The message is fixed; the broker's own error is the inner exception and is for the log only.
 /// </summary>
 public sealed class EntityDisabledException(Exception? innerException = null)
     : Exception("The entity is disabled for this operation.", innerException);
