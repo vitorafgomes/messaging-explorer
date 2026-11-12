@@ -1,6 +1,5 @@
 import { Component, inject, signal, DestroyRef } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { ReactiveFormsModule, FormBuilder, FormGroup } from '@angular/forms';
+import { CommonModule, formatDate as formatDateText } from '@angular/common';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatMenuModule } from '@angular/material/menu';
@@ -16,31 +15,23 @@ import { ViewMessagesDialogComponent } from '../messages/view-messages-dialog.co
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog.component';
 import { TransferMonitorComponent } from './transfer-monitor.component';
 import { ContinuousResubmitDialogComponent, ContinuousResubmitDialogData } from '../messages/continuous-resubmit-dialog.component';
-import { MetricsDashboardComponent } from './metrics-dashboard.component';
-import type {
-  ApexAxisChartSeries,
-  ApexChart,
-  ApexXAxis,
-  ApexYAxis,
-  ApexStroke,
-  ApexTooltip,
-  ApexLegend,
-  ApexDataLabels,
-  ApexGrid
-} from 'ng-apexcharts';
+import { ProviderService } from '../../core/services/provider.service';
+import { ProviderCapabilities } from '../../core/models/provider.model';
+
+const NOT_SET = 'Not set';
+/** Days in TimeSpan.MaxValue, which .NET uses for "never" on a TTL or an auto-delete. */
+const MAX_TIMESPAN_DAYS = 10675199;
 
 @Component({
   selector: 'app-entity-details',
   standalone: true,
   imports: [
     CommonModule,
-    ReactiveFormsModule,
     MatSnackBarModule,
     MatDialogModule,
     MatMenuModule,
     MatIconModule,
     MatTooltipModule,
-    MetricsDashboardComponent,
     TransferMonitorComponent
   ],
   template: `
@@ -89,7 +80,7 @@ import type {
           <button class="btn btn-danger" (click)="purgeMessages()" [disabled]="queueEntity.activeMessageCount === 0">
             <i class="fa fa-trash me-2"></i>Purge
           </button>
-          @if (queueEntity.deadLetterMessageCount > 0) {
+          @if (queueEntity.deadLetterMessageCount > 0 && supports('supportsDeadLetterQueue')) {
             <button class="btn btn-warning" (click)="openAutoResubmit()">
               <i class="fa fa-repeat me-2"></i>Auto Resubmit ({{ queueEntity.deadLetterMessageCount }})
             </button>
@@ -103,14 +94,24 @@ import type {
             <span class="stat-value">{{ queueEntity.activeMessageCount }}</span>
             <span class="stat-label">Active Messages</span>
           </div>
-          <div class="stat-card stat-card-queue clickable" [class.warning]="queueEntity.deadLetterMessageCount > 0" (click)="viewMessages(1)">
-            <span class="stat-value">{{ queueEntity.deadLetterMessageCount }}</span>
-            <span class="stat-label">Dead Letter</span>
-          </div>
-          <div class="stat-card stat-card-queue">
-            <span class="stat-value">{{ queueEntity.scheduledMessageCount }}</span>
-            <span class="stat-label">Scheduled</span>
-          </div>
+          @if (supports('supportsDeadLetterQueue')) {
+            <div class="stat-card stat-card-queue clickable" [class.warning]="queueEntity.deadLetterMessageCount > 0" (click)="viewMessages(1)">
+              <span class="stat-value">{{ queueEntity.deadLetterMessageCount }}</span>
+              <span class="stat-label">Dead Letter</span>
+            </div>
+            @if (queueEntity.transferDeadLetterMessageCount > 0) {
+              <div class="stat-card stat-card-queue">
+                <span class="stat-value">{{ queueEntity.transferDeadLetterMessageCount }}</span>
+                <span class="stat-label">Transfer Dead Letter</span>
+              </div>
+            }
+          }
+          @if (supports('supportsScheduledMessages')) {
+            <div class="stat-card stat-card-queue">
+              <span class="stat-value">{{ queueEntity.scheduledMessageCount }}</span>
+              <span class="stat-label">Scheduled</span>
+            </div>
+          }
           <div class="stat-card stat-card-queue">
             <span class="stat-value">{{ formatSize(queueEntity.sizeInBytes) }}</span>
             <span class="stat-label">Size</span>
@@ -126,61 +127,13 @@ import type {
               <span class="property-label">Max Delivery Count</span>
               <span class="property-value">{{ queueEntity.maxDeliveryCount }}</span>
             </div>
-            <div class="property lock-duration-property">
+            <div class="property">
               <span class="property-label">Lock Duration</span>
-              @let lockDuration = parseLockDuration(queueEntity.lockDuration);
-              <div class="duration-inputs">
-                <div class="duration-field">
-                  <label>Days:</label>
-                  <input type="text" readonly [value]="lockDuration.days">
-                </div>
-                <div class="duration-field">
-                  <label>Hours:</label>
-                  <input type="text" readonly [value]="lockDuration.hours">
-                </div>
-                <div class="duration-field">
-                  <label>Minutes:</label>
-                  <input type="text" readonly [value]="lockDuration.minutes">
-                </div>
-                <div class="duration-field">
-                  <label>Seconds:</label>
-                  <input type="text" readonly [value]="lockDuration.seconds">
-                </div>
-                <div class="duration-field">
-                  <label>Millisecs:</label>
-                  <input type="text" readonly [value]="lockDuration.milliseconds">
-                </div>
-              </div>
+              <span class="property-value">{{ formatDuration(queueEntity.lockDuration) }}</span>
             </div>
-            <div class="property lock-duration-property">
+            <div class="property">
               <span class="property-label">Message TTL</span>
-              @if (queueEntity.defaultMessageTimeToLive && queueEntity.defaultMessageTimeToLive !== 'Max Value') {
-                @let ttl = parseLockDuration(queueEntity.defaultMessageTimeToLive);
-                <div class="duration-inputs">
-                  <div class="duration-field">
-                    <label>Days:</label>
-                    <input type="text" readonly [value]="ttl.days">
-                  </div>
-                  <div class="duration-field">
-                    <label>Hours:</label>
-                    <input type="text" readonly [value]="ttl.hours">
-                  </div>
-                  <div class="duration-field">
-                    <label>Minutes:</label>
-                    <input type="text" readonly [value]="ttl.minutes">
-                  </div>
-                  <div class="duration-field">
-                    <label>Seconds:</label>
-                    <input type="text" readonly [value]="ttl.seconds">
-                  </div>
-                  <div class="duration-field">
-                    <label>Millisecs:</label>
-                    <input type="text" readonly [value]="ttl.milliseconds">
-                  </div>
-                </div>
-              } @else {
-                <span class="property-value">Max Value</span>
-              }
+              <span class="property-value">{{ formatDuration(queueEntity.defaultMessageTimeToLive) }}</span>
             </div>
             <div class="property">
               <span class="property-label">Max Size</span>
@@ -194,12 +147,51 @@ import type {
               <span class="property-label">Partitioning</span>
               <span class="property-value">{{ queueEntity.enablePartitioning ? 'Enabled' : 'Disabled' }}</span>
             </div>
+            <div class="property">
+              <span class="property-label">Status</span>
+              <span class="property-value">{{ queueEntity.status || notSet }}</span>
+            </div>
+            <div class="property">
+              <span class="property-label">Created At (UTC)</span>
+              <span class="property-value">{{ formatDate(queueEntity.createdAt) }}</span>
+            </div>
+            <div class="property">
+              <span class="property-label">Updated At (UTC)</span>
+              <span class="property-value">{{ formatDate(queueEntity.updatedAt) }}</span>
+            </div>
+            <div class="property">
+              <span class="property-label">Accessed At (UTC)</span>
+              <span class="property-value">{{ formatDate(queueEntity.accessedAt) }}</span>
+            </div>
+            <div class="property">
+              <span class="property-label">Dead-lettering On Expiration</span>
+              <span class="property-value">{{ enabledText(queueEntity.deadLetteringOnMessageExpiration) }}</span>
+            </div>
+            <div class="property">
+              <span class="property-label">Auto Delete On Idle</span>
+              <span class="property-value">{{ formatDuration(queueEntity.autoDeleteOnIdle) }}</span>
+            </div>
+            <div class="property">
+              <span class="property-label">Forward To</span>
+              <span class="property-value">{{ queueEntity.forwardTo || notSet }}</span>
+            </div>
+            <div class="property">
+              <span class="property-label">Forward Dead-lettered To</span>
+              <span class="property-value">{{ queueEntity.forwardDeadLetteredMessagesTo || notSet }}</span>
+            </div>
+            <div class="property">
+              <span class="property-label">Duplicate Detection</span>
+              <span class="property-value">{{ duplicateDetectionText(queueEntity) }}</span>
+            </div>
+            <div class="property">
+              <span class="property-label">User Metadata</span>
+              <span class="property-value">{{ queueEntity.userMetadata || notSet }}</span>
+            </div>
           </div>
         </div>
       } @else if (state.selection.type === 'topic' && state.selection.entity) {
         @let topicEntity = $any(state.selection.entity);
         <div class="topic-container">
-          <!-- Topic Header -->
           <div class="entity-header entity-header-topic">
             <div class="entity-icon-wrapper">
               <i class="fa-solid fa-tower-broadcast entity-icon topic-icon"></i>
@@ -212,237 +204,59 @@ import type {
 
           <hr class="my-3">
 
-          <form [formGroup]="topicForm">
-            <div class="topic-layout">
-            <!-- Left Column: Path + Config Grid -->
-            <div class="topic-left-column">
-              <!-- Path - Full Width -->
-              <div class="topic-path-section">
-                <div class="form-section">
-                  <div class="section-header">Path</div>
-                  <div class="form-group">
-                    <label class="form-label">Relative URI</label>
-                    <input class="form-control" formControlName="path" placeholder="Enter topic path">
-                  </div>
-                </div>
+          <div class="entity-properties">
+            <h3>Properties</h3>
+            <div class="property-grid">
+              <div class="property">
+                <span class="property-label">Status</span>
+                <span class="property-value">{{ topicEntity.status || notSet }}</span>
               </div>
-
-              <!-- Config Panels Grid: 2 columns x 3 rows -->
-              <div class="topic-config-grid">
-                <!-- Row 1, Col 1: Auto Delete On Idle -->
-                <div class="form-section">
-                  <div class="section-header">Auto Delete On Idle</div>
-                  <div class="duration-inputs">
-                    <div class="duration-field">
-                      <label class="form-label">Days</label>
-                      <input class="form-control" type="number" formControlName="autoDeleteDays" min="0">
-                    </div>
-                    <div class="duration-field">
-                      <label class="form-label">H</label>
-                      <input class="form-control" type="number" formControlName="autoDeleteHours" min="0" max="23">
-                    </div>
-                    <div class="duration-field">
-                      <label class="form-label">M</label>
-                      <input class="form-control" type="number" formControlName="autoDeleteMinutes" min="0" max="59">
-                    </div>
-                    <div class="duration-field">
-                      <label class="form-label">S</label>
-                      <input class="form-control" type="number" formControlName="autoDeleteSeconds" min="0" max="59">
-                    </div>
-                    <div class="duration-field">
-                      <label class="form-label">Ms</label>
-                      <input class="form-control" type="number" formControlName="autoDeleteMillisecs" min="0" max="999">
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Row 1, Col 2: Default Message Time To Live -->
-                <div class="form-section">
-                  <div class="section-header">Default Message Time To Live</div>
-                  <div class="duration-inputs">
-                    <div class="duration-field">
-                      <label class="form-label">Days</label>
-                      <input class="form-control" type="number" formControlName="ttlDays" min="0">
-                    </div>
-                    <div class="duration-field">
-                      <label class="form-label">H</label>
-                      <input class="form-control" type="number" formControlName="ttlHours" min="0" max="23">
-                    </div>
-                    <div class="duration-field">
-                      <label class="form-label">M</label>
-                      <input class="form-control" type="number" formControlName="ttlMinutes" min="0" max="59">
-                    </div>
-                    <div class="duration-field">
-                      <label class="form-label">S</label>
-                      <input class="form-control" type="number" formControlName="ttlSeconds" min="0" max="59">
-                    </div>
-                    <div class="duration-field">
-                      <label class="form-label">Ms</label>
-                      <input class="form-control" type="number" formControlName="ttlMillisecs" min="0" max="999">
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Row 2-3, Col 1: Topic Properties (spans 2 rows) -->
-                <div class="form-section topic-properties-panel">
-                  <div class="section-header">Topic Properties</div>
-                  <div class="form-group">
-                    <div class="config-row">
-                      <span class="config-label">Max Queue Size In GB</span>
-                      <span class="config-value">{{ topicForm.get('maxSizeInGB')?.value }} GB</span>
-                    </div>
-                    <input type="range" class="form-range w-100 mb-3" min="1" max="5" step="1" formControlName="maxSizeInGB">
-                    <div>
-                      <label class="form-label">User Description</label>
-                      <textarea class="form-control" formControlName="userDescription" rows="3" placeholder="Enter description"></textarea>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Row 2, Col 2: Duplicate Detection -->
-                <div class="form-section">
-                  <div class="section-header">Duplicate Detection History Time Window</div>
-                  <div class="duration-inputs">
-                    <div class="duration-field">
-                      <label class="form-label">Days</label>
-                      <input class="form-control" type="number" formControlName="duplicateDetectionDays" min="0">
-                    </div>
-                    <div class="duration-field">
-                      <label class="form-label">H</label>
-                      <input class="form-control" type="number" formControlName="duplicateDetectionHours" min="0" max="23">
-                    </div>
-                    <div class="duration-field">
-                      <label class="form-label">M</label>
-                      <input class="form-control" type="number" formControlName="duplicateDetectionMinutes" min="0" max="59">
-                    </div>
-                    <div class="duration-field">
-                      <label class="form-label">S</label>
-                      <input class="form-control" type="number" formControlName="duplicateDetectionSeconds" min="0" max="59">
-                    </div>
-                    <div class="duration-field">
-                      <label class="form-label">Ms</label>
-                      <input class="form-control" type="number" formControlName="duplicateDetectionMillisecs" min="0" max="999">
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Row 3, Col 2: Topic Settings -->
-                <div class="form-section topic-settings-panel">
-                  <div class="section-header">Topic Settings</div>
-                  <div class="form-group">
-                    <div class="settings-grid">
-                      <div class="setting-badge"
-                           [class.active]="topicForm.get('enableBatchedOperations')?.value"
-                           (click)="toggleSetting('enableBatchedOperations')">
-                        <i class="fa" [class.fa-check-circle]="topicForm.get('enableBatchedOperations')?.value" [class.fa-circle-o]="!topicForm.get('enableBatchedOperations')?.value"></i>
-                        <span class="setting-label">Batched Operations</span>
-                      </div>
-                      <div class="setting-badge"
-                           [class.active]="topicForm.get('enableFilteringMessagesBeforePublishing')?.value"
-                           (click)="toggleSetting('enableFilteringMessagesBeforePublishing')">
-                        <i class="fa" [class.fa-check-circle]="topicForm.get('enableFilteringMessagesBeforePublishing')?.value" [class.fa-circle-o]="!topicForm.get('enableFilteringMessagesBeforePublishing')?.value"></i>
-                        <span class="setting-label">Filter Before Publish</span>
-                      </div>
-                      <div class="setting-badge"
-                           [class.active]="topicForm.get('enablePartitioning')?.value"
-                           (click)="toggleSetting('enablePartitioning')">
-                        <i class="fa" [class.fa-check-circle]="topicForm.get('enablePartitioning')?.value" [class.fa-circle-o]="!topicForm.get('enablePartitioning')?.value"></i>
-                        <span class="setting-label">Partitioning</span>
-                      </div>
-                      <div class="setting-badge"
-                           [class.active]="topicForm.get('enableExpress')?.value"
-                           (click)="toggleSetting('enableExpress')">
-                        <i class="fa" [class.fa-check-circle]="topicForm.get('enableExpress')?.value" [class.fa-circle-o]="!topicForm.get('enableExpress')?.value"></i>
-                        <span class="setting-label">Express</span>
-                      </div>
-                      <div class="setting-badge"
-                           [class.active]="topicForm.get('requiresDuplicateDetection')?.value"
-                           (click)="toggleSetting('requiresDuplicateDetection')">
-                        <i class="fa" [class.fa-check-circle]="topicForm.get('requiresDuplicateDetection')?.value" [class.fa-circle-o]="!topicForm.get('requiresDuplicateDetection')?.value"></i>
-                        <span class="setting-label">Duplicate Detection</span>
-                      </div>
-                      <div class="setting-badge"
-                           [class.active]="topicForm.get('enforceMessageOrdering')?.value"
-                           (click)="toggleSetting('enforceMessageOrdering')">
-                        <i class="fa" [class.fa-check-circle]="topicForm.get('enforceMessageOrdering')?.value" [class.fa-circle-o]="!topicForm.get('enforceMessageOrdering')?.value"></i>
-                        <span class="setting-label">Message Ordering</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+              <div class="property">
+                <span class="property-label">Max Size</span>
+                <span class="property-value">{{ topicEntity.maxSizeInMegabytes != null ? topicEntity.maxSizeInMegabytes + ' MB' : notSet }}</span>
               </div>
-            </div>
-
-            <!-- Right Column: Topic Information with Tabs -->
-            <div class="topic-right-column">
-              <ul class="nav nav-tabs topic-tabs mb-3" role="tablist">
-                <li class="nav-item" role="presentation">
-                  <button class="nav-link" [class.active]="activeTopicTab() === 'description'" (click)="setTopicTab('description')" type="button">
-                    <i class="fa-regular fa-file-lines me-2"></i>Description
-                  </button>
-                </li>
-                <!-- Metrics tab hidden — not yet implemented -->
-                <!--<li class="nav-item" role="presentation">
-                  <button class="nav-link" [class.active]="activeTopicTab() === 'metrics'" (click)="setTopicTab('metrics')" type="button">
-                    <i class="fa fa-line-chart me-2"></i>Metrics
-                  </button>
-                </li>-->
-              </ul>
-              <div class="tab-content">
-                <!-- Description Tab -->
-                <div class="description-tab" [hidden]="activeTopicTab() !== 'description'" id="topic-description-tab">
-                    <div class="form-section">
-                      <div class="section-header">Configuration</div>
-                      <div class="form-group">
-                        <div class="config-row">
-                          <span class="config-label">Status</span>
-                          <span class="config-value">{{ topicEntity.status }}</span>
-                        </div>
-                        <div class="config-row">
-                          <span class="config-label">Max Size</span>
-                          <span class="config-value">{{ topicEntity.maxSizeInMegabytes }} MB</span>
-                        </div>
-                        <div class="config-row">
-                          <span class="config-label">Message Time To Live</span>
-                          <span class="config-value">{{ formatDuration(topicEntity.defaultMessageTimeToLive) }}</span>
-                        </div>
-                        <div class="config-row">
-                          <span class="config-label">Auto-Delete</span>
-                          <span class="config-value">{{ formatDuration(topicEntity.autoDeleteOnIdle) }}</span>
-                        </div>
-                        <div class="config-row">
-                          <span class="config-label">User Metadata</span>
-                          <span class="config-value">{{ topicEntity.userMetadata || 'None' }}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div class="form-section">
-                      <div class="section-header">Timestamps</div>
-                      <div class="form-group">
-                        <div class="config-row">
-                          <span class="config-label">Created At</span>
-                          <span class="config-value">{{ formatDate(topicEntity.createdAt) }}</span>
-                        </div>
-                        <div class="config-row">
-                          <span class="config-label">Accessed At</span>
-                          <span class="config-value">{{ formatDate(topicEntity.accessedAt) }}</span>
-                        </div>
-                        <div class="config-row">
-                          <span class="config-label">Updated At</span>
-                          <span class="config-value">{{ formatDate(topicEntity.updatedAt) }}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                <div class="metrics-tab" [hidden]="activeTopicTab() !== 'metrics'" id="topic-metrics-tab">
-                  <app-metrics-dashboard />
-                  </div>
+              <div class="property">
+                <span class="property-label">Message Time To Live</span>
+                <span class="property-value">{{ formatDuration(topicEntity.defaultMessageTimeToLive) }}</span>
+              </div>
+              <div class="property">
+                <span class="property-label">Auto Delete On Idle</span>
+                <span class="property-value">{{ formatDuration(topicEntity.autoDeleteOnIdle) }}</span>
+              </div>
+              <div class="property">
+                <span class="property-label">Duplicate Detection</span>
+                <span class="property-value">{{ duplicateDetectionText(topicEntity) }}</span>
+              </div>
+              <div class="property">
+                <span class="property-label">Batched Operations</span>
+                <span class="property-value">{{ enabledText(topicEntity.enableBatchedOperations) }}</span>
+              </div>
+              <div class="property">
+                <span class="property-label">Partitioning</span>
+                <span class="property-value">{{ enabledText(topicEntity.enablePartitioning) }}</span>
+              </div>
+              <div class="property">
+                <span class="property-label">Support Ordering</span>
+                <span class="property-value">{{ enabledText(topicEntity.supportOrdering) }}</span>
+              </div>
+              <div class="property">
+                <span class="property-label">User Metadata</span>
+                <span class="property-value">{{ topicEntity.userMetadata || notSet }}</span>
+              </div>
+              <div class="property">
+                <span class="property-label">Created At (UTC)</span>
+                <span class="property-value">{{ formatDate(topicEntity.createdAt) }}</span>
+              </div>
+              <div class="property">
+                <span class="property-label">Updated At (UTC)</span>
+                <span class="property-value">{{ formatDate(topicEntity.updatedAt) }}</span>
+              </div>
+              <div class="property">
+                <span class="property-label">Accessed At (UTC)</span>
+                <span class="property-value">{{ formatDate(topicEntity.accessedAt) }}</span>
               </div>
             </div>
           </div>
-        </form>
         </div>
       } @else if (state.selection.type === 'subscription') {
         @let subscriptionEntity = $any(state.selection.entity);
@@ -478,7 +292,7 @@ import type {
               <span>Purge All Messages</span>
             </button>
           </mat-menu>
-          @if (subscriptionEntity && subscriptionEntity.deadLetterMessageCount > 0) {
+          @if (subscriptionEntity && subscriptionEntity.deadLetterMessageCount > 0 && supports('supportsDeadLetterQueue')) {
             <button class="btn btn-warning" (click)="openAutoResubmit()">
               <i class="fa fa-repeat me-2"></i>Auto Resubmit ({{ subscriptionEntity.deadLetterMessageCount }})
             </button>
@@ -492,16 +306,18 @@ import type {
               [subscriptionName]="subscriptionEntity.name"
               (subscriptionUpdated)="onSubscriptionUpdated($event)"
               (clicked)="viewMessages(0)" />
-            <div class="metric-card warning-card clickable" (click)="viewMessages(1)">
-              <div class="card-header">
-                <i class="fa fa-exclamation-circle"></i>
-                <span>Dead Letter</span>
+            @if (supports('supportsDeadLetterQueue')) {
+              <div class="metric-card warning-card clickable" (click)="viewMessages(1)">
+                <div class="card-header">
+                  <i class="fa fa-exclamation-circle"></i>
+                  <span>Dead Letter</span>
+                </div>
+                <div class="card-body">
+                  <div class="metric-value">{{ liveDeadLetterCount() ?? subscriptionEntity.deadLetterMessageCount }}</div>
+                  <div class="metric-label">Failed messages</div>
+                </div>
               </div>
-              <div class="card-body">
-                <div class="metric-value">{{ liveDeadLetterCount() ?? subscriptionEntity.deadLetterMessageCount }}</div>
-                <div class="metric-label">Failed messages</div>
-              </div>
-            </div>
+            }
           </div>
 
           <hr class="my-3">
@@ -517,13 +333,7 @@ import type {
                 <i class="fa fa-filter me-2"></i>Subscription Rules
               </button>
             </li>
-            <!-- Metrics tab hidden — not yet implemented -->
-            <!--<li class="nav-item" role="presentation">
-              <button class="nav-link" [class.active]="activeSubscriptionTab() === 'metrics'" (click)="setSubscriptionTab('metrics')" type="button">
-                <i class="fa fa-line-chart me-2"></i>Metrics
-              </button>
-            </li>-->
-            @if (subscriptionEntity.requiresSession) {
+            @if (subscriptionEntity.requiresSession && supports('supportsSessions')) {
               <li class="nav-item" role="presentation">
                 <button class="nav-link" [class.active]="activeSubscriptionTab() === 'sessions'" (click)="setSubscriptionTab('sessions')" type="button">
                   <i class="fa-solid fa-layer-group me-2"></i>Sessions
@@ -536,9 +346,6 @@ import type {
             <div class="description-tab" [hidden]="activeSubscriptionTab() !== 'description'" id="subscription-description-tab">
                 <!-- Subscription Details - 3 Column Layout -->
                 <div class="subscription-details-layout">
-                    @let lockDuration = parseLockDuration(subscriptionEntity.lockDuration || '00:01:00');
-                    @let autoDeleteDuration = parseLockDuration(subscriptionEntity.autoDeleteOnIdle || '10675199.02:48:05.4775807');
-                    @let defaultTTL = parseLockDuration(subscriptionEntity.defaultMessageTimeToLive || '10675199.02:48:05.4775807');
 
                     <!-- 3-Column Layout -->
                     <div class="three-column-layout">
@@ -556,28 +363,7 @@ import type {
                         <!-- Lock Duration Section -->
                         <div class="form-section">
                           <div class="section-header">Lock Duration</div>
-                          <div class="timespan-inputs">
-                            <div class="timespan-group">
-                              <label>Days</label>
-                              <input type="number" class="form-control" [value]="lockDuration.days" readonly />
-                            </div>
-                            <div class="timespan-group">
-                              <label>Hours</label>
-                              <input type="number" class="form-control" [value]="lockDuration.hours" readonly />
-                            </div>
-                            <div class="timespan-group">
-                              <label>Minutes</label>
-                              <input type="number" class="form-control" [value]="lockDuration.minutes" readonly />
-                            </div>
-                            <div class="timespan-group">
-                              <label>Seconds</label>
-                              <input type="number" class="form-control" [value]="lockDuration.seconds" readonly />
-                            </div>
-                            <div class="timespan-group">
-                              <label>Milliseconds</label>
-                              <input type="number" class="form-control" [value]="lockDuration.milliseconds" readonly />
-                            </div>
-                          </div>
+                          <div class="form-group"><span class="property-value">{{ formatDuration(subscriptionEntity.lockDuration) }}</span></div>
                         </div>
 
                         <!-- Subscription Properties Section -->
@@ -613,55 +399,13 @@ import type {
                         <!-- Auto Delete On Idle Section -->
                         <div class="form-section">
                           <div class="section-header">Auto Delete On Idle</div>
-                          <div class="timespan-inputs">
-                            <div class="timespan-group">
-                              <label>Days</label>
-                              <input type="number" class="form-control" [value]="autoDeleteDuration.days" readonly />
-                            </div>
-                            <div class="timespan-group">
-                              <label>Hours</label>
-                              <input type="number" class="form-control" [value]="autoDeleteDuration.hours" readonly />
-                            </div>
-                            <div class="timespan-group">
-                              <label>Minutes</label>
-                              <input type="number" class="form-control" [value]="autoDeleteDuration.minutes" readonly />
-                            </div>
-                            <div class="timespan-group">
-                              <label>Seconds</label>
-                              <input type="number" class="form-control" [value]="autoDeleteDuration.seconds" readonly />
-                            </div>
-                            <div class="timespan-group">
-                              <label>Milliseconds</label>
-                              <input type="number" class="form-control" [value]="autoDeleteDuration.milliseconds" readonly />
-                            </div>
-                          </div>
+                          <div class="form-group"><span class="property-value">{{ formatDuration(subscriptionEntity.autoDeleteOnIdle) }}</span></div>
                         </div>
 
                         <!-- Default Message Time To Live Section -->
                         <div class="form-section">
                           <div class="section-header">Default Message Time To Live</div>
-                          <div class="timespan-inputs">
-                            <div class="timespan-group">
-                              <label>Days</label>
-                              <input type="number" class="form-control" [value]="defaultTTL.days" readonly />
-                            </div>
-                            <div class="timespan-group">
-                              <label>Hours</label>
-                              <input type="number" class="form-control" [value]="defaultTTL.hours" readonly />
-                            </div>
-                            <div class="timespan-group">
-                              <label>Minutes</label>
-                              <input type="number" class="form-control" [value]="defaultTTL.minutes" readonly />
-                            </div>
-                            <div class="timespan-group">
-                              <label>Seconds</label>
-                              <input type="number" class="form-control" [value]="defaultTTL.seconds" readonly />
-                            </div>
-                            <div class="timespan-group">
-                              <label>Milliseconds</label>
-                              <input type="number" class="form-control" [value]="defaultTTL.milliseconds" readonly />
-                            </div>
-                          </div>
+                          <div class="form-group"><span class="property-value">{{ formatDuration(subscriptionEntity.defaultMessageTimeToLive) }}</span></div>
                         </div>
 
                         <!-- Subscription Settings Section -->
@@ -705,15 +449,15 @@ import type {
                                 </tr>
                                 <tr>
                                   <td class="label-cell">Created At (UTC)</td>
-                                  <td class="value-cell">{{ subscriptionEntity.createdAt | date:'medium' }}</td>
+                                  <td class="value-cell">{{ formatDate(subscriptionEntity.createdAt) }}</td>
                                 </tr>
                                 <tr>
                                   <td class="label-cell">Updated At (UTC)</td>
-                                  <td class="value-cell">{{ subscriptionEntity.updatedAt | date:'medium' }}</td>
+                                  <td class="value-cell">{{ formatDate(subscriptionEntity.updatedAt) }}</td>
                                 </tr>
                                 <tr>
                                   <td class="label-cell">Accessed At (UTC)</td>
-                                  <td class="value-cell">{{ subscriptionEntity.accessedAt | date:'medium' }}</td>
+                                  <td class="value-cell">{{ formatDate(subscriptionEntity.accessedAt) }}</td>
                                 </tr>
                                 <tr>
                                   <td class="label-cell">User Metadata</td>
@@ -812,56 +556,8 @@ import type {
                 }
               </div>
 
-            <!-- Metrics Tab -->
-            <div class="metrics-tab" [hidden]="activeSubscriptionTab() !== 'metrics'" id="subscription-metrics-tab">
-                <div class="metrics-grid">
-                  <div class="metric-card">
-                    <i class="fa fa-inbox"></i>
-                    <div class="metric-info">
-                      <span class="metric-value">{{ subscriptionEntity.activeMessageCount }}</span>
-                      <span class="metric-label">Active Messages</span>
-                    </div>
-                  </div>
-                  <div class="metric-card">
-                    <i class="fa fa-exclamation-circle"></i>
-                    <div class="metric-info">
-                      <span class="metric-value" [class.warning]="subscriptionEntity.deadLetterMessageCount > 0">{{ subscriptionEntity.deadLetterMessageCount }}</span>
-                      <span class="metric-label">Dead Letter Messages</span>
-                    </div>
-                  </div>
-                  <div class="metric-card">
-                    <i class="fa fa-exchange"></i>
-                    <div class="metric-info">
-                      <span class="metric-value">{{ subscriptionEntity.transferMessageCount }}</span>
-                      <span class="metric-label">Transfer Messages</span>
-                    </div>
-                  </div>
-                  <div class="metric-card">
-                    <i class="fa fa-clock-o"></i>
-                    <div class="metric-info">
-                      <span class="metric-value">{{ subscriptionEntity.scheduledMessageCount || 0 }}</span>
-                      <span class="metric-label">Scheduled Messages</span>
-                    </div>
-                  </div>
-                  <div class="metric-card full-width">
-                    <i class="fa fa-clock-o"></i>
-                    <div class="metric-info">
-                      <span class="metric-value">{{ subscriptionEntity.accessedAt | date:'medium' }}</span>
-                      <span class="metric-label">Last Accessed</span>
-                    </div>
-                  </div>
-                  <div class="metric-card full-width">
-                    <i class="fa fa-history"></i>
-                    <div class="metric-info">
-                      <span class="metric-value">{{ subscriptionEntity.updatedAt | date:'medium' }}</span>
-                      <span class="metric-label">Last Updated</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-            <!-- Sessions Tab (only visible when requiresSession is true) -->
-            @if (subscriptionEntity.requiresSession) {
+            <!-- Sessions Tab (only visible when requiresSession is true and the broker supports sessions) -->
+            @if (subscriptionEntity.requiresSession && supports('supportsSessions')) {
               <div class="sessions-tab" [hidden]="activeSubscriptionTab() !== 'sessions'" id="subscription-sessions-tab">
                   <div class="sessions-layout">
                     <!-- Sessions List (Left Panel) -->
@@ -1235,58 +931,6 @@ import type {
             font-size: 14px;
             color: var(--bs-body-color);
           }
-
-          &.lock-duration-property {
-            grid-column: span 2;
-          }
-        }
-      }
-    }
-
-    .duration-inputs {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      align-items: center;
-
-      mat-form-field {
-        flex: 0 0 auto;
-
-        &:first-child {
-          width: 90px; // Days field - slightly wider
-        }
-
-        &:not(:first-child) {
-          width: 60px; // H, M, S, Ms fields - compact
-        }
-      }
-    }
-
-    .duration-field {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-
-      label {
-        font-size: 11px;
-        color: var(--bs-secondary-color);
-        font-weight: 500;
-      }
-
-      input {
-        width: 70px;
-        padding: 4px 6px;
-        border: 1px solid var(--bs-border-color);
-        border-radius: 2px;
-        font-size: 13px;
-        color: var(--bs-body-color);
-        background: var(--bs-body-bg);
-        text-align: center;
-        font-family: 'Consolas', 'Courier New', monospace;
-
-        &:focus {
-          outline: none;
-          border-color: #1976d2;
         }
       }
     }
@@ -1488,53 +1132,6 @@ import type {
       .hint {
         font-size: 12px;
         color: var(--bs-tertiary-color);
-      }
-    }
-
-    .metrics-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 16px;
-      padding: 0 16px;
-
-      .metric-card {
-        display: flex;
-        align-items: center;
-        gap: 16px;
-        padding: 16px;
-        background: var(--bs-secondary-bg);
-        border-radius: 8px;
-
-        &.full-width {
-          grid-column: span 2;
-        }
-
-        mat-icon {
-          font-size: 32px;
-          width: 32px;
-          height: 32px;
-          color: #1976d2;
-        }
-
-        .metric-info {
-          display: flex;
-          flex-direction: column;
-
-          .metric-value {
-            font-size: 20px;
-            font-weight: 500;
-            color: var(--bs-body-color);
-
-            &.warning {
-              color: #f44336;
-            }
-          }
-
-          .metric-label {
-            font-size: 12px;
-            color: var(--bs-secondary-color);
-          }
-        }
       }
     }
 
@@ -1871,94 +1468,6 @@ import type {
         color: var(--bs-body-color);
         border-bottom: 2px solid #1976d2;
         padding-bottom: 8px;
-      }
-
-      // Reduce right padding for duration input panels
-      &:has(.duration-inputs) {
-        padding-right: 8px;
-      }
-    }
-
-    .config-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 8px 0;
-      border-bottom: 1px solid var(--bs-border-color);
-
-      &:last-child {
-        border-bottom: none;
-      }
-
-      .config-label {
-        font-size: 12px;
-        color: var(--bs-secondary-color);
-      }
-
-      .config-value {
-        font-size: 12px;
-        font-weight: 500;
-        color: var(--bs-body-color);
-      }
-    }
-
-    // Remove extra padding when config-row is inside form-group
-    .form-group .config-row {
-      padding: 0;
-      margin-bottom: 8px;
-
-      &:last-child {
-        margin-bottom: 0;
-      }
-    }
-
-    .settings-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-      gap: 8px;
-    }
-
-    .setting-badge {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 8px;
-      background: var(--bs-secondary-bg);
-      border-radius: 4px;
-      font-size: 11px;
-      color: var(--bs-secondary-color);
-      cursor: pointer;
-      transition: all 0.2s ease;
-      user-select: none;
-
-      &:hover {
-        background: var(--bs-tertiary-bg);
-        transform: translateY(-1px);
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      }
-
-      mat-icon {
-        font-size: 16px;
-        width: 16px;
-        height: 16px;
-        color: var(--bs-tertiary-color);
-        transition: color 0.2s ease;
-      }
-
-      .setting-label {
-        flex: 1;
-      }
-
-      &.active {
-        background: #e8f5e9;
-        color: #2e7d32;
-
-        &:hover {
-          background: #dcedc8;
-        }
-
-        mat-icon {
-          color: #4caf50;
-        }
       }
     }
 
@@ -2585,145 +2094,8 @@ import type {
       background: var(--bs-secondary-bg);
     }
 
-    .topic-layout {
-      display: flex;
-      gap: 16px;
-      flex: 1;
-      min-height: 0;
-    }
-
-    .topic-left-column {
-      flex: 2;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      min-width: 0;
-    }
-
-    .topic-path-section {
-      width: 100%;
-    }
-
-    .topic-config-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      grid-template-rows: auto auto auto;
-      gap: 16px;
-    }
-
-    /* Grid positioning:
-       Row 1: Auto Delete (col 1) | Default TTL (col 2)
-       Row 2: Topic Properties (col 1, spans 2 rows) | Duplicate Detection (col 2)
-       Row 3: Topic Properties continues | Topic Settings (col 2)
-    */
-    .topic-properties-panel {
-      grid-row: 2 / span 2;
-      grid-column: 1;
-    }
-
-    .topic-settings-panel {
-      grid-row: 3;
-      grid-column: 2;
-    }
-
-    .topic-right-column {
-      flex: 1;
-      min-width: 0;
-    }
-
     .topic-info-panel {
       height: 100%;
-    }
-
-    .full-width {
-      width: 100%;
-    }
-
-    @media (max-width: 1200px) {
-      .topic-layout {
-        flex-direction: column;
-      }
-
-      .topic-config-grid {
-        grid-template-columns: 1fr;
-        grid-template-rows: auto;
-      }
-
-      .topic-properties-panel {
-        grid-row: auto;
-        grid-column: 1;
-      }
-
-      .topic-settings-panel {
-        grid-row: auto;
-        grid-column: 1;
-      }
-    }
-
-    /* Metrics Dashboard Styles */
-    .metrics-header {
-      padding: 16px;
-      border-bottom: 1px solid var(--bs-border-color);
-      margin-bottom: 24px;
-    }
-
-    .time-range-selector {
-      display: flex;
-      gap: 8px;
-      justify-content: flex-start;
-    }
-
-    .time-range-btn {
-      padding: 8px 16px;
-      border: 1px solid var(--bs-border-color);
-      background: var(--bs-body-bg);
-      color: var(--bs-body-color);
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 14px;
-      transition: all 0.2s;
-    }
-
-    .time-range-btn:hover {
-      border-color: #3b82f6;
-    }
-
-    .time-range-btn.selected {
-      background: #3b82f6;
-      color: white;
-      border-color: #3b82f6;
-    }
-
-    .charts-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 24px;
-      padding: 0 16px;
-    }
-
-    .chart-container {
-      background: var(--bs-body-bg);
-      border: 1px solid var(--bs-border-color);
-      padding: 16px;
-      border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-
-    .chart-title {
-      margin: 0 0 16px 0;
-      font-size: 16px;
-      font-weight: 500;
-      color: var(--bs-body-color);
-    }
-
-    @media (max-width: 768px) {
-      .charts-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .time-range-selector {
-        flex-wrap: wrap;
-      }
     }
 
     /* Subscription 3-Column Layout Styles */
@@ -2769,13 +2141,6 @@ import type {
       border: 1px solid var(--bs-border-color);
       border-radius: 4px;
       overflow: hidden;
-
-      // Add padding for duration inputs
-      &:has(.duration-inputs) {
-        .duration-inputs {
-          padding: 12px;
-        }
-      }
     }
 
     .section-header {
@@ -2821,36 +2186,6 @@ import type {
     textarea.form-control {
       resize: vertical;
       min-height: 50px;
-    }
-
-    /* TimeSpan Inputs */
-    .timespan-inputs {
-      padding: 12px;
-      display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 8px;
-    }
-
-    .timespan-group {
-      display: flex;
-      flex-direction: column;
-    }
-
-    .timespan-group label {
-      font-size: 11px;
-      color: var(--bs-secondary-color);
-      margin-bottom: 4px;
-      font-weight: 500;
-      text-align: center;
-    }
-
-    .timespan-group input {
-      padding: 6px 4px;
-      border: 1px solid var(--bs-border-color);
-      border-radius: 3px;
-      font-size: 12px;
-      text-align: center;
-      background: var(--bs-secondary-bg);
     }
 
     /* Input with Browse Button */
@@ -2967,16 +2302,6 @@ import type {
       .three-column-layout .column-3 {
         flex: 1 1 100%;
       }
-
-      .timespan-inputs {
-        grid-template-columns: repeat(3, 1fr);
-      }
-    }
-
-    @media (max-width: 600px) {
-      .timespan-inputs {
-        grid-template-columns: repeat(2, 1fr);
-      }
     }
 
     // Badge animations (like connections)
@@ -3028,35 +2353,9 @@ export class EntityDetailsComponent {
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
   private readonly destroyRef = inject(DestroyRef);
-  private fb = inject(FormBuilder);
+  private readonly providerService = inject(ProviderService);
 
-  // Topic form
-  topicForm = this.fb.group({
-    path: [''],
-    autoDeleteDays: [0],
-    autoDeleteHours: [0],
-    autoDeleteMinutes: [0],
-    autoDeleteSeconds: [0],
-    autoDeleteMillisecs: [0],
-    ttlDays: [0],
-    ttlHours: [0],
-    ttlMinutes: [0],
-    ttlSeconds: [0],
-    ttlMillisecs: [0],
-    maxSizeInGB: [1],
-    userDescription: [''],
-    duplicateDetectionDays: [0],
-    duplicateDetectionHours: [0],
-    duplicateDetectionMinutes: [0],
-    duplicateDetectionSeconds: [0],
-    duplicateDetectionMillisecs: [0],
-    enableBatchedOperations: [false],
-    enableFilteringMessagesBeforePublishing: [false],
-    enablePartitioning: [false],
-    enableExpress: [false],
-    requiresDuplicateDetection: [false],
-    enforceMessageOrdering: [false]
-  });
+  readonly notSet = NOT_SET;
 
   // Make Object available in template
   Object = Object;
@@ -3071,36 +2370,28 @@ export class EntityDetailsComponent {
   loadingSessions = signal(false);
 
   // Tab navigation state
-  activeTopicTab = signal<'description' | 'metrics'>('description');
-  activeSubscriptionTab = signal<'description' | 'rules' | 'metrics' | 'sessions'>('description');
+  activeSubscriptionTab = signal<'description' | 'rules' | 'sessions'>('description');
 
   // Description tab style selector
   descriptionStyle: 'cards' | 'infobox' | 'list' | 'hybrid' = 'cards';
-
-  // Retained while the metrics dashboard is progressively extracted.
-  selectedTimeRange = '1h';
-  requestsChartOptions: { series?: ApexAxisChartSeries; chart?: ApexChart; xaxis?: ApexXAxis; yaxis?: ApexYAxis; stroke?: ApexStroke; tooltip?: ApexTooltip; legend?: ApexLegend; dataLabels?: ApexDataLabels; grid?: ApexGrid } = {};
-  messagesChartOptions: { series?: ApexAxisChartSeries; chart?: ApexChart; xaxis?: ApexXAxis; yaxis?: ApexYAxis; stroke?: ApexStroke; tooltip?: ApexTooltip; legend?: ApexLegend; dataLabels?: ApexDataLabels; grid?: ApexGrid } = {};
 
   // Use observables directly with async pipe
   state$ = this.selectionService.state$;
 
   constructor() {
-    // Load topic data when selection changes
     this.state$.pipe(
       takeUntilDestroyed(this.destroyRef)
-    ).subscribe(state => {
+    ).subscribe(() => {
       // Reset tabs and live counts when entity changes
-      this.activeTopicTab.set('description');
       this.activeSubscriptionTab.set('description');
       this.liveActiveCount.set(null);
       this.liveDeadLetterCount.set(null);
-
-      if (state.selection && state.selection.type === 'topic' && state.selection.entity) {
-        const topic = state.selection.entity as TopicInfo;
-        this.loadTopicData(topic);
-      }
     });
+  }
+
+  /** False only when the connected broker declares it lacks the feature. */
+  supports(feature: keyof ProviderCapabilities): boolean {
+    return this.providerService.capabilities()?.[feature] !== false;
   }
 
   /**
@@ -3162,62 +2453,6 @@ export class EntityDetailsComponent {
     return result;
   }
 
-  /**
-   * Load all topic data into the form
-   */
-  private loadTopicData(topic: TopicInfo) {
-    // Parse durations
-    const ttl = this.parseDuration(topic.defaultMessageTimeToLive || '');
-    const autoDelete = this.parseDuration(topic.autoDeleteOnIdle || '');
-    const dupDetection = this.parseDuration(topic.duplicateDetectionHistoryTimeWindow || '');
-
-    // Load all topic data into the form
-    this.topicForm.patchValue({
-      // Basic properties
-      path: topic.name || '',
-
-      // Durations - Default Message Time To Live
-      ttlDays: ttl.days,
-      ttlHours: ttl.hours,
-      ttlMinutes: ttl.minutes,
-      ttlSeconds: ttl.seconds,
-      ttlMillisecs: ttl.milliseconds,
-
-      // Durations - Auto Delete On Idle
-      autoDeleteDays: autoDelete.days,
-      autoDeleteHours: autoDelete.hours,
-      autoDeleteMinutes: autoDelete.minutes,
-      autoDeleteSeconds: autoDelete.seconds,
-      autoDeleteMillisecs: autoDelete.milliseconds,
-
-      // Durations - Duplicate Detection History Time Window
-      duplicateDetectionDays: dupDetection.days,
-      duplicateDetectionHours: dupDetection.hours,
-      duplicateDetectionMinutes: dupDetection.minutes,
-      duplicateDetectionSeconds: dupDetection.seconds,
-      duplicateDetectionMillisecs: dupDetection.milliseconds,
-
-      // Size and capacity (using maxSizeInGB which is the form control)
-      maxSizeInGB: Math.floor((topic.maxSizeInMegabytes || 1024) / 1024),
-
-      // Features
-      enableBatchedOperations: topic.enableBatchedOperations || false,
-      enablePartitioning: topic.enablePartitioning || false,
-      requiresDuplicateDetection: topic.requiresDuplicateDetection || false,
-      enforceMessageOrdering: topic.supportOrdering || false,
-
-      // Metadata
-      userDescription: topic.userMetadata || ''
-    });
-  }
-
-  toggleSetting(controlName: string) {
-    const control = this.topicForm.get(controlName);
-    if (control) {
-      control.setValue(!control.value);
-    }
-  }
-
   get selection(): EntitySelection | null {
     return this.selectionService.currentSelection;
   }
@@ -3257,9 +2492,10 @@ export class EntityDetailsComponent {
     return this.formatSize(freeSpaceBytes);
   }
 
-  formatDuration(durationString: string | undefined): string {
-    if (!durationString) return 'N/A';
+  formatDuration(durationString: string | null | undefined): string {
+    if (!durationString) return NOT_SET;
     const duration = this.parseDuration(durationString);
+    if (duration.days >= MAX_TIMESPAN_DAYS) return 'Never';
     const parts: string[] = [];
 
     if (duration.days > 0) parts.push(`${duration.days}d`);
@@ -3267,56 +2503,28 @@ export class EntityDetailsComponent {
     if (duration.minutes > 0) parts.push(`${duration.minutes}m`);
     if (duration.seconds > 0 || duration.milliseconds > 0) {
       const secs = duration.seconds + (duration.milliseconds / 1000);
-      parts.push(`${secs.toFixed(3)}s`);
+      parts.push(`${Number(secs.toFixed(3))}s`);
     }
 
     return parts.length > 0 ? parts.join(' ') : '0s';
   }
 
-  formatDate(dateString: string | undefined): string {
-    if (!dateString) return 'N/A';
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleString();
-    } catch {
-      return 'Invalid Date';
-    }
+  /** A date in UTC; an absent date, or the .NET default of year 1, is not set. */
+  formatDate(value: Date | string | null | undefined): string {
+    if (!value || new Date(value).getUTCFullYear() <= 1) return NOT_SET;
+    return formatDateText(value, 'medium', 'en-US', 'UTC');
   }
 
-  parseLockDuration(duration: string): { days: number; hours: number; minutes: number; seconds: number; milliseconds: number } {
-    if (!duration) return { days: 0, hours: 0, minutes: 1, seconds: 0, milliseconds: 0 };
+  enabledText(value: boolean | null | undefined): string {
+    if (value == null) return NOT_SET;
+    return value ? 'Enabled' : 'Disabled';
+  }
 
-    // Parse ISO 8601 duration format (e.g., "PT1M" or "P0DT0H1M0S") or simple timespan format (e.g., "00:01:00")
-    const timespanMatch = duration.match(/^(\d+):(\d+):(\d+)(?:\.(\d+))?$/);
-
-    if (timespanMatch) {
-      // Simple timespan format: HH:MM:SS.fff
-      const hours = parseInt(timespanMatch[1], 10);
-      const minutes = parseInt(timespanMatch[2], 10);
-      const seconds = parseInt(timespanMatch[3], 10);
-      const milliseconds = timespanMatch[4] ? parseInt(timespanMatch[4].padEnd(3, '0').substring(0, 3), 10) : 0;
-
-      const days = Math.floor(hours / 24);
-      const remainingHours = hours % 24;
-
-      return { days, hours: remainingHours, minutes, seconds, milliseconds };
-    }
-
-    // ISO 8601 duration format: P[n]DT[n]H[n]M[n]S
-    const iso8601Match = duration.match(/P(?:(\d+)D)?T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)(?:\.(\d+))?S)?/);
-
-    if (iso8601Match) {
-      const days = parseInt(iso8601Match[1] || '0', 10);
-      const hours = parseInt(iso8601Match[2] || '0', 10);
-      const minutes = parseInt(iso8601Match[3] || '0', 10);
-      const seconds = parseInt(iso8601Match[4] || '0', 10);
-      const milliseconds = iso8601Match[5] ? parseInt(iso8601Match[5].padEnd(3, '0').substring(0, 3), 10) : 0;
-
-      return { days, hours, minutes, seconds, milliseconds };
-    }
-
-    // Fallback
-    return { days: 0, hours: 0, minutes: 1, seconds: 0, milliseconds: 0 };
+  duplicateDetectionText(entity: { requiresDuplicateDetection?: boolean; duplicateDetectionHistoryTimeWindow?: string }): string {
+    if (entity.requiresDuplicateDetection == null) return NOT_SET;
+    return entity.requiresDuplicateDetection
+      ? `Enabled, window ${this.formatDuration(entity.duplicateDetectionHistoryTimeWindow)}`
+      : 'Disabled';
   }
 
   getTopicNameFromNode(node: TreeNode): string {
@@ -3544,207 +2752,8 @@ export class EntityDetailsComponent {
     }
   }
 
-  // Metrics Dashboard Methods
-
-  /**
-   * Initialize ApexCharts configuration for both charts
-   */
-  private initializeCharts() {
-    const commonChartConfig: ApexChart = {
-      type: 'line',
-      height: 350,
-      toolbar: {
-        show: false
-      },
-      zoom: {
-        enabled: false
-      }
-    };
-
-    const commonStroke: ApexStroke = {
-      curve: 'smooth',
-      width: 2
-    };
-
-    const commonDataLabels: ApexDataLabels = {
-      enabled: false
-    };
-
-    const commonGrid: ApexGrid = {
-      borderColor: '#e7e7e7',
-      row: {
-        colors: ['#f3f3f3', 'transparent'],
-        opacity: 0.5
-      }
-    };
-
-    // Requests Chart Configuration
-    this.requestsChartOptions = {
-      series: [
-        {
-          name: 'Incoming Requests (Sum)',
-          data: this.generateMockData(20, 0, 6),
-          color: '#3b82f6' // Blue
-        },
-        {
-          name: 'Successful Requests (Sum)',
-          data: this.generateMockData(20, 0, 5),
-          color: '#ec4899' // Pink/Magenta
-        },
-        {
-          name: 'Server Errors (Sum)',
-          data: this.generateMockData(20, 0, 2),
-          color: '#9ca3af' // Light gray
-        },
-        {
-          name: 'Throttled Requests (Sum)',
-          data: this.generateMockData(20, 0, 1),
-          color: '#6b7280' // Gray
-        }
-      ],
-      chart: commonChartConfig,
-      stroke: commonStroke,
-      dataLabels: commonDataLabels,
-      grid: commonGrid,
-      xaxis: {
-        categories: this.generateTimeLabels(20),
-        labels: {
-          rotate: -45,
-          rotateAlways: true,
-          style: {
-            fontSize: '10px'
-          }
-        }
-      },
-      yaxis: {
-        title: {
-          text: 'Count'
-        },
-        min: 0,
-        max: 8
-      },
-      tooltip: {
-        shared: true,
-        intersect: false,
-        y: {
-          formatter: (value: number, opts: any) => {
-            const seriesName = opts.w.config.series[opts.seriesIndex].name;
-            return `${seriesName}: ${value}`;
-          }
-        }
-      },
-      legend: {
-        position: 'bottom',
-        horizontalAlign: 'center',
-        fontSize: '12px'
-      }
-    };
-
-    // Messages Chart Configuration
-    this.messagesChartOptions = {
-      series: [
-        {
-          name: 'Incoming Messages (Sum)',
-          data: this.generateMockData(20, 0, 100),
-          color: '#3b82f6' // Blue
-        },
-        {
-          name: 'Outgoing Messages (Sum)',
-          data: this.generateMockData(20, 0, 95),
-          color: '#ec4899' // Pink/Magenta
-        }
-      ],
-      chart: commonChartConfig,
-      stroke: commonStroke,
-      dataLabels: commonDataLabels,
-      grid: commonGrid,
-      xaxis: {
-        categories: this.generateTimeLabels(20),
-        labels: {
-          rotate: -45,
-          rotateAlways: true,
-          style: {
-            fontSize: '10px'
-          }
-        }
-      },
-      yaxis: {
-        title: {
-          text: 'Count'
-        },
-        min: 0,
-        max: 120
-      },
-      tooltip: {
-        shared: true,
-        intersect: false,
-        y: {
-          formatter: (value: number, opts: any) => {
-            const seriesName = opts.w.config.series[opts.seriesIndex].name;
-            return `${seriesName}: ${value}`;
-          }
-        }
-      },
-      legend: {
-        position: 'bottom',
-        horizontalAlign: 'center',
-        fontSize: '12px'
-      }
-    };
-  }
-
-  /**
-   * Generate mock data for charts
-   * TODO: Replace with actual Azure Monitor API call to fetch real metrics
-   */
-  private generateMockData(points: number, min: number, max: number): number[] {
-    const data: number[] = [];
-    for (let i = 0; i < points; i++) {
-      data.push(Math.floor(Math.random() * (max - min + 1)) + min);
-    }
-    return data;
-  }
-
-  /**
-   * Generate time labels for X-axis
-   */
-  private generateTimeLabels(count: number): string[] {
-    const labels: string[] = [];
-    const now = new Date();
-
-    for (let i = count - 1; i >= 0; i--) {
-      const time = new Date(now.getTime() - i * 15 * 60 * 1000); // 15 minute intervals
-      const hours = time.getHours().toString().padStart(2, '0');
-      const minutes = time.getMinutes().toString().padStart(2, '0');
-      labels.push(`${hours}:${minutes}`);
-    }
-
-    return labels;
-  }
-
-  /**
-   * Handle time range selection change
-   * TODO: Fetch new data from Azure Monitor API based on selected time range
-   */
-  selectTimeRange(range: string) {
-    this.selectedTimeRange = range;
-
-    // Update chart data based on new time range
-    // For now, just regenerate mock data
-    // In production, this would call the backend API:
-    // this.topicService.getMetrics(topicName, range).subscribe(data => {...})
-
-    this.initializeCharts();
-
-    this.snackBar.open(`Time range updated to ${range}`, 'Close', { duration: 2000 });
-  }
-
   // Tab navigation methods
-  setTopicTab(tab: 'description' | 'metrics') {
-    this.activeTopicTab.set(tab);
-  }
-
-  setSubscriptionTab(tab: 'description' | 'rules' | 'metrics' | 'sessions') {
+  setSubscriptionTab(tab: 'description' | 'rules' | 'sessions') {
     this.activeSubscriptionTab.set(tab);
     if (tab === 'sessions' && this.sessions.length === 0 && !this.loadingSessions()) {
       this.refreshSessions();

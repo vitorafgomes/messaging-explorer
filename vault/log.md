@@ -6,6 +6,8 @@ The owner recalled a report of layout problems on macOS and asked for a speciali
 ## [2026-11-12] integrate | Azure Service Bus administration: the survey of what to build
 The owner asked what Paolo Salvatori's Service Bus Explorer has that this product lacks, then for the full list of work. Two surveys of the code produced [[pages/roadmap/azure-service-bus-administration]]: five foundations and twelve items, each with what exists, what to build in the provider, the API and the app, the member of the current SDK it calls, its cost and its risk. The surveys also found that no screen creates or deletes an entity, that the topic form saves nothing, that the metrics dashboard draws random numbers and that no capability flag hides anything. [[pages/roadmap/product-backlog]] carries the entries.
 
+## [2026-11-12] fix | Panels show only what is real, and the broker's capabilities reach the app
+The topic panel was a form that saved nothing: it is read-only text now. The metrics dashboard that drew random numbers is gone. `ProviderService` follows the active connection, and sessions, scheduling and the dead-letter side are hidden where the broker's capabilities say no. The queue panel shows status, dates, forward targets, auto delete, duplicate detection and metadata; durations of days no longer read as one minute; a value the API did not send reads "Not set". [[pages/services/web-app]], [[pages/roadmap/code-audit-2026-11]].
 ## [2026-11-12] release | 2.4.0 published
 Tag `v2.4.0` ran the gated release workflow for the first time: CI on the tagged commit, the tag checked against the package version, the builds for Linux, Windows and macOS, and a public release with the update metadata and the block maps. [[pages/history/product]] has the line.
 

@@ -5,6 +5,8 @@ import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { SendMessageDialogComponent, SendMessageDialogData } from './send-message-dialog.component';
 import { QueueService, TopicService, ThemeService } from '../../core/services';
+import { DEFAULT_AZURE_CAPABILITIES, DEFAULT_RABBITMQ_CAPABILITIES, ProviderService } from '../../core/services/provider.service';
+import { ProviderCapabilities } from '../../core/models/provider.model';
 
 describe('SendMessageDialogComponent', () => {
   let queueServiceMock: { sendMessage: ReturnType<typeof vi.fn> };
@@ -12,6 +14,7 @@ describe('SendMessageDialogComponent', () => {
   let dialogRefMock: { close: ReturnType<typeof vi.fn> };
   let snackBarMock: { open: ReturnType<typeof vi.fn> };
   let themeServiceMock: { isDark: ReturnType<typeof signal<boolean>> };
+  let capabilities: ReturnType<typeof signal<ProviderCapabilities | null>>;
 
   const dialogData: SendMessageDialogData = {
     entityType: 'queue',
@@ -24,6 +27,7 @@ describe('SendMessageDialogComponent', () => {
     dialogRefMock = { close: vi.fn() };
     snackBarMock = { open: vi.fn() };
     themeServiceMock = { isDark: signal(false) };
+    capabilities = signal<ProviderCapabilities | null>(DEFAULT_AZURE_CAPABILITIES);
 
     TestBed.configureTestingModule({
       imports: [SendMessageDialogComponent],
@@ -34,6 +38,7 @@ describe('SendMessageDialogComponent', () => {
         { provide: TopicService, useValue: topicServiceMock },
         { provide: MatSnackBar, useValue: snackBarMock },
         { provide: ThemeService, useValue: themeServiceMock },
+        { provide: ProviderService, useValue: { capabilities } },
       ],
     });
   });
@@ -182,5 +187,30 @@ describe('SendMessageDialogComponent', () => {
 
     const sentMessage = queueServiceMock.sendMessage.mock.calls[0][1];
     expect(sentMessage.scheduledEnqueueTime).toBeInstanceOf(Date);
+  });
+
+  describe('a feature the broker lacks is hidden, and stays visible on Azure', () => {
+    const labels = (el: HTMLElement) => Array.from(el.querySelectorAll('label')).map(l => (l.textContent ?? '').trim());
+
+    it('a broker without sessions has no Session ID field; Azure has it', () => {
+      capabilities.set(DEFAULT_RABBITMQ_CAPABILITIES);
+      expect(labels(createComponent({ activeTab: 1 }).fixture.nativeElement)).not.toContain('Session ID');
+
+      capabilities.set(DEFAULT_AZURE_CAPABILITIES);
+      expect(labels(createComponent({ activeTab: 1 }).fixture.nativeElement)).toContain('Session ID');
+    });
+
+    it('a broker without scheduled messages has no Scheduled Delivery field; Azure has it', () => {
+      capabilities.set(DEFAULT_RABBITMQ_CAPABILITIES);
+      const rabbit = createComponent({ activeTab: 1 }).fixture.nativeElement as HTMLElement;
+      expect(labels(rabbit)).not.toContain('Scheduled Delivery');
+      expect(rabbit.querySelector('[data-testid="scheduled-enqueue-time"]')).toBeNull();
+      expect(rabbit.querySelector('[data-testid="time-to-live"]')).not.toBeNull();
+
+      capabilities.set(DEFAULT_AZURE_CAPABILITIES);
+      const azure = createComponent({ activeTab: 1 }).fixture.nativeElement as HTMLElement;
+      expect(labels(azure)).toContain('Scheduled Delivery');
+      expect(azure.querySelector('[data-testid="scheduled-enqueue-time"]')).not.toBeNull();
+    });
   });
 });

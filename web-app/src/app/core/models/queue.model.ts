@@ -26,6 +26,19 @@ export interface QueueInfo {
   requiresSession: boolean;
   deadLetteringOnMessageExpiration: boolean;
 
+  // Optional so that an API that does not send them yet still parses
+  transferDeadLetterMessageCount?: number;
+  forwardTo?: string | null;
+  forwardDeadLetteredMessagesTo?: string | null;
+  /** Duration string, the same format as defaultMessageTimeToLive. */
+  autoDeleteOnIdle?: string;
+  enableBatchedOperations?: boolean;
+  userMetadata?: string | null;
+  requiresDuplicateDetection?: boolean;
+  /** Duration string, the same format as defaultMessageTimeToLive. */
+  duplicateDetectionHistoryTimeWindow?: string;
+  maxMessageSizeInKilobytes?: number | null;
+
   // Provider identification (optional for backward compatibility)
   providerType?: ProviderType;
 

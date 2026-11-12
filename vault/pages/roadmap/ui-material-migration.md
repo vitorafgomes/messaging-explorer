@@ -73,7 +73,7 @@ No dates are set; the owner sets them.
 
 ## Risks
 
-- **A visual refactor of a 3,760-line component with no spec breaks behaviour.** Mitigation: Phase 0 first; one screen per change; the flows as the lock.
+- **A visual refactor of a 2,760-line component with no spec breaks behaviour.** Mitigation: Phase 0 first; one screen per change; the flows as the lock.
 - **The dark theme regresses where a Bootstrap variable had no exact token.** Mitigation: both themes captured for every screen.
 - **The emulator cannot serve a flow** (management calls, sessions). Mitigation: found in the provider phase before this one starts; such a flow runs against RabbitMQ or is listed as not covered.
 

@@ -20,6 +20,8 @@ export interface MessageInfo {
   deadLetterReason?: string;
   deadLetterErrorDescription?: string;
   applicationProperties: { [key: string]: any };
+  state?: 'Active' | 'Deferred' | 'Scheduled';
+  sizeInBytes?: number;
 }
 
 export interface SendMessageRequest {

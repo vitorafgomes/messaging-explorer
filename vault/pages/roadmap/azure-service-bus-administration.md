@@ -37,9 +37,9 @@ It does not include Event Hubs, Relay, Notification Hubs or Event Grid: a differ
 Four things the vault or the conversation had wrong, found while surveying:
 
 - **No screen creates or deletes an entity.** The provider and the API can (`src/ServiceBusExplorer.Api/Controllers/QueuesController.cs:57`), and the Angular services have the methods, but nothing calls them (`web-app/src/app/core/services/queue.service.ts:44`, `web-app/src/app/core/services/queue.service.ts:53`, `web-app/src/app/core/services/topic.service.ts:48`, `web-app/src/app/core/services/topic.service.ts:112`). There is no create dialog in the app.
-- **The topic panel looks editable and saves nothing.** Its form has live inputs and toggles and no submit path (`web-app/src/app/features/entities/entity-details.component.ts:3034`, `web-app/src/app/features/entities/entity-details.component.ts:3214`); an edit is discarded in silence.
-- **The metrics dashboard draws random numbers** and cannot be reached: every series is mock data (`web-app/src/app/features/entities/metrics-dashboard.component.ts:95`) and its tab button is commented out (`web-app/src/app/features/entities/entity-details.component.ts:384`). The real metrics service of the API has no consumer in the app.
-- **No capability flag hides anything.** The flags reach the app (`web-app/src/app/core/models/provider.model.ts:14`) and their helpers have no consumer (`web-app/src/app/core/services/provider.service.ts:177`); the provider registry and the provider shell are mounted nowhere (`web-app/src/app/features/entities/entities-container.component.ts:17`). One shared panel serves both brokers.
+- **The topic panel looked editable and saved nothing. Fixed 2026-11-12.** Its form had live inputs and toggles and no submit path, so an edit was discarded in silence; the panel is read-only text now.
+- **The metrics dashboard drew random numbers** and could not be reached. Removed 2026-11-12, with its two unreachable tabs. The real metrics service of the API still has no consumer in the app.
+- **No capability flag hid anything.** Since 2026-11-12 `ProviderService` follows the active connection and sessions, scheduled messages and the dead-letter side are hidden where the flag is explicitly false (`web-app/src/app/features/entities/entity-details.component.ts:2393`). The provider registry and the provider shell are still mounted nowhere (`web-app/src/app/features/entities/entities-container.component.ts:17`); one shared panel serves both brokers.
 
 ## Foundations (before any item)
 
@@ -47,7 +47,7 @@ Each of these is needed by several items; doing them first keeps the items small
 
 - **F1. The queue read path reads the queue's configuration. Done 2026-11-12.** `GetQueueAsync` read only the runtime properties, so lock duration, time to live, max delivery count, max size, sessions, dead-lettering on expiration and status came back as zero, false or empty. It now reads the configuration and the runtime properties in parallel, two calls, and maps both (`src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:162`); `QueueInfo` carries forward to, forward dead-lettered to, auto delete on idle, batched operations, user metadata, duplicate detection, max message size and the transfer dead-letter count. The list stays on the single paged enumeration (`src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:144`) and therefore still carries configuration at its defaults.
 - **F2. Create accepts options through the API.** The option models exist (`src/ServiceBusExplorer.Core/Abstractions/IMessagingProvider.cs:310`, `src/ServiceBusExplorer.Core/Abstractions/IMessagingProvider.cs:361`, `src/ServiceBusExplorer.Core/Abstractions/IMessagingProvider.cs:403`) and the routes take a name only (`src/ServiceBusExplorer.Api/Controllers/QueuesController.cs:332`), so the options overloads are unreachable. Give the create routes a typed body, validated at the boundary.
-- **F3. Capabilities gate the UI.** Push the connected provider's capabilities into `ProviderService` and hide what the broker cannot do, so the new Azure-only screens never appear on RabbitMQ. Delete or mount the unused provider registry and the two provider-specific detail components; today they are dead code that looks like the extension point.
+- **F3. Capabilities gate the UI. Done 2026-11-12 for what exists:** the connected provider's capabilities reach `ProviderService` (`web-app/src/app/core/services/provider.service.ts:103`) and hide what the broker cannot do, so the new Azure-only screens can be gated the same way. Still open: delete or mount the unused provider registry and the two provider-specific detail components, which look like the extension point and are dead code; that takes an ADR.
 - **F4. A sub-queue is a value, not a boolean.** Every message operation takes `bool isDeadLetter` and appends the path by hand (`src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:640`, `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:738`). Replace it with a three-value type (active, dead-letter, transfer dead-letter) mapped to `SubQueue`, across the interface (`src/ServiceBusExplorer.Core/Abstractions/IMessagingProvider.cs:189`), the provider and both controllers. Behaviour lock: the existing unit and integration suites.
 - **F5. A message says what state it is in and how big it is. Done 2026-11-12.** `MessageInfo` and `IMessage` carry the state (active, deferred, scheduled) and the body size in bytes, mapped where the message is mapped (`src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:1745`). No extra call. On the emulator a scheduled message shows in a search and not in a peek ([[pages/roadmap/followups]]).
 
@@ -99,7 +99,7 @@ Each item lists what exists, what to build by layer, the SDK members, and its co
 
 - **Exists:** a background service polls every 30 seconds, fixed (`src/ServiceBusExplorer.Api/Monitoring/MonitoringBackgroundService.cs:33`), and keeps 120 snapshots in memory (`src/ServiceBusExplorer.Api/Monitoring/MonitoringStore.cs:7`). The monitoring screen shows totals, a chart and two tables with dead-letter rows tinted (`web-app/src/app/features/monitoring/monitoring.component.ts:159`, `web-app/src/app/features/monitoring/monitoring.component.ts:214`). Subscriptions carry no scheduled count and nobody carries the transfer dead-letter count (`src/ServiceBusExplorer.Api/Monitoring/MonitoringBackgroundService.cs:79`).
 - **Core and API:** add the missing counts to the snapshot; make the interval a setting with a floor; an on-demand refresh of one entity.
-- **Web:** sorting by column, a name filter, a click from a row to the entity, user thresholds for the dead-letter highlight. Either wire the entity metrics tab to the real metrics service or remove the mock.
+- **Web:** sorting by column, a name filter, a click from a row to the entity, user thresholds for the dead-letter highlight. The mock metrics tab is gone; wiring the real metrics service to a screen is the owner's open decision.
 - **Performance:** the poll costs one enumeration per topic for subscriptions (`src/ServiceBusExplorer.Api/Monitoring/MonitoringBackgroundService.cs:68`); it must stay bounded in parallelism and skip a cycle when the previous one has not finished.
 - **Security:** read-only. The interval floor prevents the tool from hammering a production namespace.
 
@@ -143,8 +143,8 @@ Each item lists what exists, what to build by layer, the SDK members, and its co
 
 ### 11. Small ones
 
-- **Sort the message list.** The list is a virtual scroll of cards (`web-app/src/app/features/messages/view-messages-dialog.component.ts:159`); sorting loaded messages by sequence, time, delivery count or size is client side once F5 lands.
-- **Copy the body.** The copy action exists in a component no template uses (`web-app/src/app/shared/components/message-body-editor/message-body-editor.component.ts:564`); add it to the detail pane, which also omits session id, subject, to, reply to, scheduled time and expiry (`web-app/src/app/features/messages/view-messages-dialog.component.ts:305`).
+- **Sort the message list.** The list is a virtual scroll of cards (`web-app/src/app/features/messages/view-messages-dialog.component.ts:162`); sorting loaded messages by sequence, time, delivery count or size is client side once F5 lands.
+- **Copy the body.** The copy action exists in a component no template uses (`web-app/src/app/shared/components/message-body-editor/message-body-editor.component.ts:564`); add it to the detail pane, which also omits session id, subject, to, reply to, scheduled time and expiry (`web-app/src/app/features/messages/view-messages-dialog.component.ts:308`).
 - **Filter the tree by name.** Client side over the loaded tree (`web-app/src/app/features/entities/entities-tree.component.ts:17`). A server-side filter comes only if a namespace is too large to list; the list calls take no parameter today (`src/ServiceBusExplorer.Core/Abstractions/IMessagingProvider.cs:73`).
 - **Dates on the queue panel.** Created, updated and accessed are already returned (`src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:234`) and shown for topics and subscriptions only.
 
@@ -157,7 +157,7 @@ Each item lists what exists, what to build by layer, the SDK members, and its co
 
 ## Order
 
-1. **F1, F3, F5** and the two honest removals (the topic form that saves nothing, the mock metrics). They fix what the product shows wrong today and cost little.
+1. **F1, F3, F5** and the two honest removals (the topic form that saved nothing, the mock metrics). Done on 2026-11-12, with the duration parser that read days as one minute.
 2. **F2, item 1, item 3.** Create, edit, status: one dialog family, one update call.
 3. **Item 2.** Rules.
 4. **F4, item 8, item 7.** Sub-queues and message states.

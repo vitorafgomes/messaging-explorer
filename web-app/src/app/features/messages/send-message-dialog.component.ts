@@ -6,6 +6,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { finalize } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { QueueService, TopicService, ThemeService, MessageTemplateService } from '../../core/services';
+import { ProviderService } from '../../core/services/provider.service';
 import { SendMessageRequest, MessageTemplate } from '../../core/models';
 
 export interface SendMessageDialogData {
@@ -126,10 +127,12 @@ export interface SendMessageDialogData {
             </div>
 
             <div class="row mb-3">
-              <div class="col-md-6">
-                <label class="form-label">Session ID</label>
-                <input class="form-control" [(ngModel)]="message.sessionId">
-              </div>
+              @if (capabilities()?.supportsSessions !== false) {
+                <div class="col-md-6">
+                  <label class="form-label" for="send-session-id">Session ID</label>
+                  <input id="send-session-id" class="form-control" [(ngModel)]="message.sessionId">
+                </div>
+              }
               <div class="col-md-6">
                 <label class="form-label">Partition Key</label>
                 <input class="form-control" [(ngModel)]="message.partitionKey">
@@ -158,13 +161,15 @@ export interface SendMessageDialogData {
             </h6>
 
             <div class="row mb-3">
-              <div class="col-md-6">
-                <label class="form-label">Scheduled Delivery</label>
-                <input type="datetime-local" class="form-control"
-                  data-testid="scheduled-enqueue-time"
-                  [(ngModel)]="scheduledEnqueueTimeLocal"
-                  [min]="minDateTimeLocal">
-              </div>
+              @if (capabilities()?.supportsScheduledMessages !== false) {
+                <div class="col-md-6">
+                  <label class="form-label" for="send-scheduled-delivery">Scheduled Delivery</label>
+                  <input id="send-scheduled-delivery" type="datetime-local" class="form-control"
+                    data-testid="scheduled-enqueue-time"
+                    [(ngModel)]="scheduledEnqueueTimeLocal"
+                    [min]="minDateTimeLocal">
+                </div>
+              }
               <div class="col-md-6">
                 <label class="form-label">Time to Live</label>
                 <input type="text" class="form-control"
@@ -279,6 +284,7 @@ export class SendMessageDialogComponent {
   private readonly destroyRef = inject(DestroyRef);
   protected themeService = inject(ThemeService);
   private templateService = inject(MessageTemplateService);
+  protected readonly capabilities = inject(ProviderService).capabilities;
 
   message: SendMessageRequest = {
     body: '',

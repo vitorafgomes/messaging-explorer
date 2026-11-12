@@ -19,6 +19,7 @@ import { BulkOperationProgressDialogComponent, BulkOperationProgressDialogData }
 import { BulkOperationResultsDialogComponent, BulkOperationResultsDialogData } from '../../shared/components/bulk-operation-results-dialog/bulk-operation-results-dialog.component';
 import { SendMessageDialogComponent, SendMessageDialogData } from './send-message-dialog.component';
 import { MessageDiffDialogComponent, MessageDiffDialogData } from './message-diff-dialog.component';
+import { ProviderService } from '../../core/services/provider.service';
 
 export interface ViewMessagesDialogData {
   entityType: 'queue' | 'subscription';
@@ -59,13 +60,15 @@ export interface ViewMessagesDialogData {
             <span class="badge bg-primary ms-2">{{ activeMessageCount() ?? activeMessages.length }}</span>
           </button>
         </li>
-        <li class="nav-item" role="presentation">
-          <button class="nav-link" [class.active]="selectedTabIndex === 1" (click)="setTab(1)" type="button">
-            <i class="fa fa-exclamation-triangle me-2"></i>
-            Dead Letter
-            <span class="badge bg-danger ms-2">{{ deadLetterMessageCount() ?? deadLetterMessages.length }}</span>
-          </button>
-        </li>
+        @if (capabilities()?.supportsDeadLetterQueue !== false) {
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" [class.active]="selectedTabIndex === 1" (click)="setTab(1)" type="button">
+              <i class="fa fa-exclamation-triangle me-2"></i>
+              Dead Letter
+              <span class="badge bg-danger ms-2">{{ deadLetterMessageCount() ?? deadLetterMessages.length }}</span>
+            </button>
+          </li>
+        }
       </ul>
 
       @if (selectedTabIndex === 0) {
@@ -329,6 +332,40 @@ export interface ViewMessagesDialogData {
             <div class="detail-item">
               <label class="text-muted small">Delivery Count</label>
               <span class="fw-medium">{{ selectedMessage.deliveryCount }}</span>
+            </div>
+            @if (selectedMessage.state && selectedMessage.state !== 'Active') {
+              <div class="detail-item">
+                <label class="text-muted small">State</label>
+                <span class="fw-medium">{{ selectedMessage.state }}</span>
+              </div>
+            }
+            <div class="detail-item">
+              <label class="text-muted small">Size</label>
+              <span class="fw-medium">{{ selectedMessage.sizeInBytes != null ? (selectedMessage.sizeInBytes | number) + ' bytes' : '-' }}</span>
+            </div>
+            <div class="detail-item">
+              <label class="text-muted small">Session ID</label>
+              <span class="fw-medium">{{ selectedMessage.sessionId || '-' }}</span>
+            </div>
+            <div class="detail-item">
+              <label class="text-muted small">Subject</label>
+              <span class="fw-medium">{{ selectedMessage.subject || '-' }}</span>
+            </div>
+            <div class="detail-item">
+              <label class="text-muted small">To</label>
+              <span class="fw-medium">{{ selectedMessage.to || '-' }}</span>
+            </div>
+            <div class="detail-item">
+              <label class="text-muted small">Reply To</label>
+              <span class="fw-medium">{{ selectedMessage.replyTo || '-' }}</span>
+            </div>
+            <div class="detail-item">
+              <label class="text-muted small">Scheduled Time</label>
+              <span class="fw-medium">{{ isDateSet(selectedMessage.scheduledEnqueueTime) ? (selectedMessage.scheduledEnqueueTime | date:'medium') : '-' }}</span>
+            </div>
+            <div class="detail-item">
+              <label class="text-muted small">Expires At</label>
+              <span class="fw-medium">{{ isDateSet(selectedMessage.expiresAt) ? (selectedMessage.expiresAt | date:'medium') : '-' }}</span>
             </div>
           </div>
 
@@ -793,6 +830,7 @@ export class ViewMessagesDialogComponent implements OnInit {
   private messageExportService = inject(MessageExportService);
   private readonly destroyRef = inject(DestroyRef);
   bulkOperationsService = inject(BulkOperationsService);
+  protected readonly capabilities = inject(ProviderService).capabilities;
 
   activeMessages: MessageInfo[] = [];
   deadLetterMessages: MessageInfo[] = [];
@@ -891,6 +929,11 @@ export class ViewMessagesDialogComponent implements OnInit {
     } else {
       this.loadActiveMessages();
     }
+  }
+
+  /** An absent date, or the .NET default of year 1, is not set. */
+  isDateSet(value: Date | string | undefined): boolean {
+    return !!value && new Date(value).getUTCFullYear() > 1;
   }
 
   onCountChange(value: number) {
