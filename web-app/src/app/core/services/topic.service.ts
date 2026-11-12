@@ -3,7 +3,10 @@ import { Observable } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 import { ApiService } from './api.service';
 import { apiPath } from './api-path';
-import { TopicInfo, SubscriptionInfo, MessageInfo, SendMessageRequest, BatchOperationResult, DeleteBatchRequest, ResubmitBatchRequest } from '../models';
+import {
+  TopicInfo, SubscriptionInfo, MessageInfo, SendMessageRequest, BatchOperationResult, DeleteBatchRequest, ResubmitBatchRequest,
+  TopicCreateOptions, TopicUpdate, SubscriptionCreateOptions, SubscriptionUpdate
+} from '../models';
 
 /**
  * Service for managing topics/exchanges and their subscriptions/bindings.
@@ -43,10 +46,19 @@ export class TopicService {
   /**
    * Creates a new topic/exchange.
    * @param name - The name for the new topic/exchange
+   * @param options - Only the options the user set; omitted, the broker applies its defaults
    * @returns Observable that completes when the topic/exchange is created
    */
-  createTopic(name: string): Observable<void> {
-    return this.api.post<void>('topics', { name });
+  createTopic(name: string, options?: TopicCreateOptions): Observable<void> {
+    return this.api.post<void>('topics', options ? { name, options } : { name });
+  }
+
+  /**
+   * Changes the given properties of a topic; a property not in `changes` is left as it is.
+   * @returns Observable with the topic as the API reads it after the change
+   */
+  updateTopic(name: string, changes: TopicUpdate): Observable<TopicInfo> {
+    return this.api.patch<TopicInfo>(apiPath`topics/${name}`, changes);
   }
 
   /**
@@ -107,10 +119,20 @@ export class TopicService {
    * Creates a new subscription/binding.
    * @param topicName - The topic/exchange name
    * @param subscriptionName - The name for the new subscription/binding
+   * @param options - Only the options the user set; omitted, the broker applies its defaults
    * @returns Observable that completes when the subscription/binding is created
    */
-  createSubscription(topicName: string, subscriptionName: string): Observable<void> {
-    return this.api.post<void>(apiPath`topics/${topicName}/subscriptions`, { name: subscriptionName });
+  createSubscription(topicName: string, subscriptionName: string, options?: SubscriptionCreateOptions): Observable<void> {
+    const body = options ? { name: subscriptionName, options } : { name: subscriptionName };
+    return this.api.post<void>(apiPath`topics/${topicName}/subscriptions`, body);
+  }
+
+  /**
+   * Changes the given properties of a subscription; a property not in `changes` is left as it is.
+   * @returns Observable with the subscription as the API reads it after the change
+   */
+  updateSubscription(topicName: string, subscriptionName: string, changes: SubscriptionUpdate): Observable<SubscriptionInfo> {
+    return this.api.patch<SubscriptionInfo>(apiPath`topics/${topicName}/subscriptions/${subscriptionName}`, changes);
   }
 
   /**

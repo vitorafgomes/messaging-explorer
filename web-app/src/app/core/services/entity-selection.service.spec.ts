@@ -80,4 +80,18 @@ describe('EntitySelectionService', () => {
 
     expect(service.currentSelection?.node.name).toBe('b');
   });
+
+  it('showEntity puts the entity the API returned after a change into the panel, and a late read does not overwrite it', () => {
+    service.select(queueNode('orders'));
+    respond('orders');
+    service.refreshCurrentSelection();
+
+    service.showEntity({ name: 'orders', lockDuration: '00:05:00' } as QueueInfo);
+    pending.get('orders')!.next({ name: 'orders', lockDuration: '00:01:00' } as QueueInfo);
+
+    expect(service.currentSelection?.node.name).toBe('orders');
+    expect((service.currentSelection?.entity as QueueInfo).lockDuration).toBe('00:05:00');
+    expect(service.isLoading).toBe(false);
+  });
 });
+

@@ -94,6 +94,14 @@ export class EntitySelectionService {
     }
   }
 
+  /** Shows the entity the API returned after a change to the current selection, without reading it again. */
+  showEntity(entity: QueueInfo | TopicInfo | SubscriptionInfo): void {
+    const current = this.stateSubject.value.selection;
+    if (!current) return;
+    this.pendingLoad?.unsubscribe();
+    this.stateSubject.next({ selection: { ...current, entity }, loading: false, error: null });
+  }
+
   refreshTree(): void {
     this.treeRefreshSubject.next();
   }

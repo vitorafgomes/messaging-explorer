@@ -96,6 +96,13 @@ export class ApiService {
     });
   }
 
+  patch<T>(endpoint: string, data: unknown): Observable<T> {
+    return this.waitForReady(() => {
+      const url = `${this.baseUrl}/${endpoint}`;
+      return this.http.patch<T>(url, data, this.getHeaders());
+    });
+  }
+
   delete<T>(endpoint: string): Observable<T> {
     return this.waitForReady(() => {
       const url = `${this.baseUrl}/${endpoint}`;

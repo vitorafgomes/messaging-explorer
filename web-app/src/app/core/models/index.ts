@@ -10,3 +10,4 @@ export * from './filter.model';
 export * from './monitoring.model';
 export * from './metrics.model';
 export * from './session.model';
+export * from './entity-admin.model';
