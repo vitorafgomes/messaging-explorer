@@ -8,10 +8,10 @@ status: active
 description: "A bulk delete, resubmit, move or purge never loses a message silently: send first, complete after; a message sent but not removed from its source is reported as a possible duplicate; failures are reported per sequence number; scans are bounded; the caller's token stops the batch."
 updated: 2026-11-12
 enforced_by:
-  - "src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:1408"
-  - "src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:1444"
-  - "src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:1653"
-  - "src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:983"
+  - "src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:1456"
+  - "src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:1492"
+  - "src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:1701"
+  - "src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:1031"
   - "src/ServiceBusExplorer.Api/Controllers/QueuesController.cs:264"
 verified_by:
   - "src/ServiceBusExplorer.Core.Tests/Providers/Azure/AzureServiceBusProviderBatchTests.cs:162"
@@ -42,11 +42,11 @@ Version 2.3.0 fixed dead-letter bulk delete and resubmit losing and duplicating 
 
 ## Where it's enforced (Azure provider)
 
-- `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:1408` - a resubmit cycle sends its batch; `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:1444` only then completes each source message, and a failed complete is recorded per sequence number, not retried by resending.
-- `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:1653` - a move whose complete fails after the send is reported with the "may be duplicated" text defined at `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:985`.
-- `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:983` - a scan stops after a safety timeout; `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:981` it also stops after consecutive windows with no target, and the targets left are reported as not found.
-- `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:1151` - messages received and not selected are abandoned so their locks are released.
-- `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:1119` - each cycle checks the token; `src/ServiceBusExplorer.Api/Controllers/QueuesController.cs:264` the controllers pass `HttpContext.RequestAborted` into every batch action.
+- `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:1456` - a resubmit cycle sends its batch; `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:1492` only then completes each source message, and a failed complete is recorded per sequence number, not retried by resending.
+- `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:1701` - a move whose complete fails after the send is reported with the "may be duplicated" text defined at `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:1033`.
+- `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:1031` - a scan stops after a safety timeout; `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:1029` it also stops after consecutive windows with no target, and the targets left are reported as not found.
+- `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:1199` - messages received and not selected are abandoned so their locks are released.
+- `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:1167` - each cycle checks the token; `src/ServiceBusExplorer.Api/Controllers/QueuesController.cs:264` the controllers pass `HttpContext.RequestAborted` into every batch action.
 - `src/ServiceBusExplorer.Core/Models/BatchOperationResult.cs:21` - the result carries one failure entry per sequence number.
 
 ## How it's verified
@@ -64,8 +64,8 @@ Version 2.3.0 fixed dead-letter bulk delete and resubmit losing and duplicating 
 None is intended; each is recorded on [[pages/services/core]] with its citations and tracked in [[pages/roadmap/followups]].
 
 - **The RabbitMQ provider does the opposite order, and loses messages three ways.** Its bulk delete, resubmit and move consume through the management API with `ack_requeue_false` (`src/ServiceBusExplorer.Core/Providers/RabbitMQ/RabbitMQProvider.cs:669`) and republish afterwards; it never reads the cancellation token. Each loss was reproduced against a broker in a container on 2026-11-12, and the test pins today's behaviour as a defect: a republish that reaches no queue is reported as success and the message is gone (`src/ServiceBusExplorer.IntegrationTests/RabbitMQProviderDefectTests.cs:153`); a response that fails to parse, as it does for a message published with no properties, throws after every message up to the highest selected position was already consumed, the unselected ones included (`src/ServiceBusExplorer.IntegrationTests/RabbitMQProviderDefectTests.cs:188`); a republish the broker refuses, as for another user's `user_id`, loses the message already consumed (`src/ServiceBusExplorer.IntegrationTests/RabbitMQProviderDefectTests.cs:317`). Until that is fixed this invariant does not hold for RabbitMQ at all. The decision recorded on [[pages/roadmap/code-audit-2026-11]] is to turn these operations off for RabbitMQ and rebuild them over AMQP.
-- **The Azure provider loses a message on a resubmit or a move into an entity with duplicate detection.** The copy keeps the original `MessageId`; inside the detection window the broker accepts and drops it, the source is completed, and the result reports success. Reproduced on the emulator (`src/ServiceBusExplorer.IntegrationTests/AzureServiceBusProviderDefectTests.cs:152`).
-- **A selective delete or move on an active Azure entity dead-letters messages the user did not select.** The scan abandons the non-targets, which raises their delivery count; with a low `MaxDeliveryCount` they reach the dead-letter queue while the result reports success. Reproduced on the emulator (`src/ServiceBusExplorer.IntegrationTests/AzureServiceBusProviderDefectTests.cs:198`).
+- **The Azure provider loses a message on a resubmit or a move into an entity with duplicate detection.** The copy keeps the original `MessageId`; inside the detection window the broker accepts and drops it, the source is completed, and the result reports success. Reproduced on the emulator (`src/ServiceBusExplorer.IntegrationTests/AzureServiceBusProviderDefectTests.cs:107`).
+- **A selective delete or move on an active Azure entity dead-letters messages the user did not select.** The scan abandons the non-targets, which raises their delivery count; with a low `MaxDeliveryCount` they reach the dead-letter queue while the result reports success. Reproduced on the emulator (`src/ServiceBusExplorer.IntegrationTests/AzureServiceBusProviderDefectTests.cs:153`).
 - **A send that fails partway through a cycle** leaves the messages already sent reported as not found; a retry duplicates them without the duplicate warning.
 - **The single-message resubmit** sends first and returns silently when the original is not found again.
 - **Single receive and single resubmit actions ignore the request token** ([[pages/services/api]]).

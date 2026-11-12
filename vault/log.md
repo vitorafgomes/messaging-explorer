@@ -1,3 +1,6 @@
+## [2026-11-12] fix | Queue details show the queue's real configuration; a message says its state and size
+`GetQueueAsync` read only the runtime properties, so the queue panel showed zeros where a subscription showed real values. It now reads configuration and runtime in parallel, two calls, and carries status, forward targets, auto delete, duplicate detection, batched operations, user metadata, max message size and the transfer dead-letter count. `MessageInfo` and `IMessage` gain the state (active, deferred, scheduled) and the body size in bytes. The pinned defect test became a test of the correct behaviour. [[pages/roadmap/code-audit-2026-11]], [[pages/services/core]].
+
 ## [2026-11-12] release | 2.4.0 published
 Tag `v2.4.0` ran the gated release workflow for the first time: CI on the tagged commit, the tag checked against the package version, the builds for Linux, Windows and macOS, and a public release with the update metadata and the block maps. [[pages/history/product]] has the line.
 

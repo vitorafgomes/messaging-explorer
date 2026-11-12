@@ -122,4 +122,15 @@ public interface IMessage
     /// Null if the message is not scheduled or scheduling is not supported.
     /// </summary>
     DateTimeOffset? ScheduledEnqueueTime { get; }
+
+    /// <summary>
+    /// The state of the message in its entity: "Active", "Deferred" or "Scheduled".
+    /// For RabbitMQ: always "Active".
+    /// </summary>
+    string State { get; }
+
+    /// <summary>
+    /// The size of the message body in bytes.
+    /// </summary>
+    long SizeInBytes { get; }
 }

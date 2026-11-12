@@ -956,7 +956,9 @@ public class RabbitMQProvider : IMessagingProvider
             SessionId = applicationProperties.TryGetValue("x-session-id", out var sessionId) ? sessionId?.ToString() : null,
             PartitionKey = applicationProperties.TryGetValue("x-partition-key", out var partitionKey) ? partitionKey?.ToString() : null,
             To = applicationProperties.TryGetValue("x-to", out var to) ? to?.ToString() : null,
-            ScheduledEnqueueTime = null
+            ScheduledEnqueueTime = null,
+            State = "Active",
+            SizeInBytes = result.Body.Length
         };
     }
 
@@ -1026,7 +1028,9 @@ public class RabbitMQProvider : IMessagingProvider
             SessionId = applicationProperties.TryGetValue("x-session-id", out var sessionId) ? sessionId?.ToString() : null,
             PartitionKey = applicationProperties.TryGetValue("x-partition-key", out var partitionKey) ? partitionKey?.ToString() : null,
             To = applicationProperties.TryGetValue("x-to", out var to) ? to?.ToString() : null,
-            ScheduledEnqueueTime = null
+            ScheduledEnqueueTime = null,
+            State = "Active",
+            SizeInBytes = message.PayloadBytes
         };
     }
 
