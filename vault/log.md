@@ -1,3 +1,6 @@
+## [2026-11-12] integrate | Local brokers in Docker for trying the app by hand
+`dev/brokers/` starts RabbitMQ and the Azure Service Bus emulator with sample entities, on loopback. A small proxy puts the emulator's messaging and management ports behind one, so the app connects with a single connection string. Checked through the packaged API on both brokers. [[pages/runbooks/local-brokers]].
+
 ## [2026-11-12] fix | Queue details show the queue's real configuration; a message says its state and size
 `GetQueueAsync` read only the runtime properties, so the queue panel showed zeros where a subscription showed real values. It now reads configuration and runtime in parallel, two calls, and carries status, forward targets, auto delete, duplicate detection, batched operations, user metadata, max message size and the transfer dead-letter count. `MessageInfo` and `IMessage` gain the state (active, deferred, scheduled) and the body size in bytes. The pinned defect test became a test of the correct behaviour. [[pages/roadmap/code-audit-2026-11]], [[pages/services/core]].
 ## [2026-11-12] integrate | UI review and the prototype of every screen

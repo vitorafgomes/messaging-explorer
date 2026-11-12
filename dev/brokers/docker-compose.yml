@@ -1,0 +1,49 @@
+# Local brokers for trying Messaging Explorer by hand: RabbitMQ and the Azure Service Bus emulator.
+# Everything listens on loopback only. The credentials below are for these throwaway containers
+# and must never be reused anywhere else.
+name: messaging-explorer-brokers
+
+services:
+  rabbitmq:
+    image: rabbitmq:4.3.7-management
+    # The user, exchanges and queues come from the definitions file (user and password: explorer).
+    volumes:
+      - ./rabbitmq-definitions.json:/etc/rabbitmq/definitions.json:ro
+      - ./rabbitmq.conf:/etc/rabbitmq/conf.d/20-definitions.conf:ro
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 10s
+      retries: 12
+
+  servicebus-sql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-Explorer_dev_only_1}
+
+  servicebus-emulator:
+    image: mcr.microsoft.com/azure-messaging/servicebus-emulator:2.0.1
+    environment:
+      ACCEPT_EULA: "Y"
+      SQL_SERVER: servicebus-sql
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-Explorer_dev_only_1}
+      SQL_WAIT_INTERVAL: "15"
+    volumes:
+      - ./servicebus-config.json:/ServiceBus_Emulator/ConfigFiles/Config.json:ro
+    depends_on:
+      - servicebus-sql
+
+  # The emulator serves messages (AMQP) and entity management (HTTP) on two ports, and the app,
+  # like a real namespace, uses one endpoint for both. This proxy puts the two behind one port.
+  servicebus:
+    image: haproxy:3.0-alpine
+    volumes:
+      - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    ports:
+      - "127.0.0.1:5673:5673"
+    depends_on:
+      - servicebus-emulator
