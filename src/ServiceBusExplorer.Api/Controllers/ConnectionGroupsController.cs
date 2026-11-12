@@ -47,11 +47,14 @@ public class ConnectionGroupsController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<ActionResult<ConnectionGroup>> CreateGroup([FromBody] ConnectionGroup group)
+    public async Task<ActionResult<ConnectionGroup>> CreateGroup([FromBody] ConnectionGroup? group)
     {
         try
         {
             _logger.LogInformation("Creating group {GroupName} of type {GroupType}", group?.Name, group?.Type);
+
+            if (group is null)
+                return BadRequest(new { message = "A connection group is required" });
 
             if (string.IsNullOrWhiteSpace(group.Name))
                 return BadRequest(new { message = "Group name is required" });

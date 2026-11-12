@@ -16,7 +16,7 @@ import { ViewMessagesDialogComponent } from '../messages/view-messages-dialog.co
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
 import { TransferMonitorComponent } from './transfer-monitor.component';
 import { ContinuousResubmitDialogComponent, ContinuousResubmitDialogData } from '../messages/continuous-resubmit-dialog.component';
-import { NgApexchartsModule } from 'ng-apexcharts';
+import { MetricsDashboardComponent } from './metrics-dashboard.component';
 import type {
   ApexAxisChartSeries,
   ApexChart,
@@ -40,7 +40,7 @@ import type {
     MatMenuModule,
     MatIconModule,
     MatTooltipModule,
-    NgApexchartsModule,
+    MetricsDashboardComponent,
     TransferMonitorComponent
   ],
   template: `
@@ -436,56 +436,8 @@ import type {
                     </div>
                   </div>
 
-                <!-- Metrics Tab -->
                 <div class="metrics-tab" [hidden]="activeTopicTab() !== 'metrics'" id="topic-metrics-tab">
-                    <!-- Time Range Selector Header -->
-                    <div class="metrics-header">
-                      <div class="time-range-selector">
-                        @for (range of timeRanges; track range.value) {
-                          <button
-                            class="time-range-btn"
-                            [class.selected]="selectedTimeRange === range.value"
-                            (click)="selectTimeRange(range.value)">
-                            {{ range.label }}
-                          </button>
-                        }
-                      </div>
-                    </div>
-
-                    <!-- Charts Grid -->
-                    <div class="charts-grid">
-                      <!-- Requests Chart -->
-                      <div class="chart-container">
-                        <h3 class="chart-title">Requests</h3>
-                        <apx-chart
-                          [series]="requestsChartOptions.series!"
-                          [chart]="requestsChartOptions.chart!"
-                          [xaxis]="requestsChartOptions.xaxis!"
-                          [yaxis]="requestsChartOptions.yaxis!"
-                          [stroke]="requestsChartOptions.stroke!"
-                          [tooltip]="requestsChartOptions.tooltip!"
-                          [legend]="requestsChartOptions.legend!"
-                          [dataLabels]="requestsChartOptions.dataLabels!"
-                          [grid]="requestsChartOptions.grid!">
-                        </apx-chart>
-                      </div>
-
-                      <!-- Messages Chart -->
-                      <div class="chart-container">
-                        <h3 class="chart-title">Messages</h3>
-                        <apx-chart
-                          [series]="messagesChartOptions.series!"
-                          [chart]="messagesChartOptions.chart!"
-                          [xaxis]="messagesChartOptions.xaxis!"
-                          [yaxis]="messagesChartOptions.yaxis!"
-                          [stroke]="messagesChartOptions.stroke!"
-                          [tooltip]="messagesChartOptions.tooltip!"
-                          [legend]="messagesChartOptions.legend!"
-                          [dataLabels]="messagesChartOptions.dataLabels!"
-                          [grid]="messagesChartOptions.grid!">
-                        </apx-chart>
-                      </div>
-                    </div>
+                  <app-metrics-dashboard />
                   </div>
               </div>
             </div>
@@ -3124,49 +3076,15 @@ export class EntityDetailsComponent {
   // Description tab style selector
   descriptionStyle: 'cards' | 'infobox' | 'list' | 'hybrid' = 'cards';
 
-  // Metrics dashboard - Time range selector
-  timeRanges = [
-    { label: '1 hour', value: '1h' },
-    { label: '6 hours', value: '6h' },
-    { label: '12 hours', value: '12h' },
-    { label: '1 day', value: '1d' },
-    { label: '7 days', value: '7d' },
-    { label: '30 days', value: '30d' }
-  ];
+  // Retained while the metrics dashboard is progressively extracted.
   selectedTimeRange = '1h';
-
-  // Metrics dashboard - Chart options
-  requestsChartOptions: {
-    series?: ApexAxisChartSeries;
-    chart?: ApexChart;
-    xaxis?: ApexXAxis;
-    yaxis?: ApexYAxis;
-    stroke?: ApexStroke;
-    tooltip?: ApexTooltip;
-    legend?: ApexLegend;
-    dataLabels?: ApexDataLabels;
-    grid?: ApexGrid;
-  } = {};
-
-  messagesChartOptions: {
-    series?: ApexAxisChartSeries;
-    chart?: ApexChart;
-    xaxis?: ApexXAxis;
-    yaxis?: ApexYAxis;
-    stroke?: ApexStroke;
-    tooltip?: ApexTooltip;
-    legend?: ApexLegend;
-    dataLabels?: ApexDataLabels;
-    grid?: ApexGrid;
-  } = {};
+  requestsChartOptions: { series?: ApexAxisChartSeries; chart?: ApexChart; xaxis?: ApexXAxis; yaxis?: ApexYAxis; stroke?: ApexStroke; tooltip?: ApexTooltip; legend?: ApexLegend; dataLabels?: ApexDataLabels; grid?: ApexGrid } = {};
+  messagesChartOptions: { series?: ApexAxisChartSeries; chart?: ApexChart; xaxis?: ApexXAxis; yaxis?: ApexYAxis; stroke?: ApexStroke; tooltip?: ApexTooltip; legend?: ApexLegend; dataLabels?: ApexDataLabels; grid?: ApexGrid } = {};
 
   // Use observables directly with async pipe
   state$ = this.selectionService.state$;
 
   constructor() {
-    // Initialize charts
-    this.initializeCharts();
-
     // Load topic data when selection changes
     this.state$.pipe(
       takeUntilDestroyed(this.destroyRef)

@@ -874,7 +874,16 @@ public class AzureServiceBusProvider : IMessagingProvider
     public async Task PurgeMessagesAsync(string entityName, bool isDeadLetter = false, string? subscriptionName = null, CancellationToken cancellationToken = default)
     {
         EnsureConnected();
+        await PurgeEntityAsync(entityName, isDeadLetter, subscriptionName, cancellationToken);
+    }
 
+    /// <summary>
+    /// Session-aware drain of an entire entity (active or dead-letter). Shared by
+    /// <see cref="PurgeMessagesAsync"/> and the drain-all path of <see cref="DeleteMessagesAsync"/>.
+    /// Returns the number of messages removed (0 when the count is unknown).
+    /// </summary>
+    private async Task<long> PurgeEntityAsync(string entityName, bool isDeadLetter, string? subscriptionName, CancellationToken cancellationToken)
+    {
         var entityPath = subscriptionName != null
             ? $"{entityName}/subscriptions/{subscriptionName}"
             : entityName;
@@ -901,15 +910,16 @@ public class AzureServiceBusProvider : IMessagingProvider
         // Always use the non-session receiver for dead-letter queues.
         if (requiresSession && !isDeadLetter)
         {
-            await PurgeSessionEntityAsync(entityPath, cancellationToken);
+            // Server-side purge is a management operation and does not need a session lock.
+            await using var receiver = _client!.CreateReceiver(entityPath);
+            return await TryPurgeServerSideAsync(receiver, cancellationToken)
+                ?? await PurgeSessionEntityAsync(entityPath, cancellationToken);
         }
-        else
-        {
-            await PurgeNonSessionEntityAsync(entityPath, cancellationToken);
-        }
+
+        return await PurgeNonSessionEntityAsync(entityPath, cancellationToken);
     }
 
-    private async Task PurgeNonSessionEntityAsync(string entityPath, CancellationToken cancellationToken)
+    private async Task<long> PurgeNonSessionEntityAsync(string entityPath, CancellationToken cancellationToken)
     {
         await using var receiver = _client!.CreateReceiver(entityPath, new ServiceBusReceiverOptions
         {
@@ -917,11 +927,12 @@ public class AzureServiceBusProvider : IMessagingProvider
             PrefetchCount = DrainPrefetchCount
         });
 
-        await DrainAllAsync(receiver, cancellationToken);
+        return await DrainAllAsync(receiver, cancellationToken);
     }
 
-    private async Task PurgeSessionEntityAsync(string entityPath, CancellationToken cancellationToken)
+    private async Task<long> PurgeSessionEntityAsync(string entityPath, CancellationToken cancellationToken)
     {
+        long drained = 0;
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(TimeSpan.FromSeconds(10));
 
@@ -943,6 +954,7 @@ public class AzureServiceBusProvider : IMessagingProvider
                     var messages = await sessionReceiver.ReceiveMessagesAsync(100, TimeSpan.FromSeconds(2));
                     if (!messages.Any())
                         break;
+                    drained += messages.Count;
                 }
             }
             catch (OperationCanceledException)
@@ -954,6 +966,8 @@ public class AzureServiceBusProvider : IMessagingProvider
                 break;
             }
         }
+
+        return drained;
     }
 
     // Shared batch-scan tuning. A large prefetch lets the receiver stream messages
@@ -991,17 +1005,12 @@ public class AzureServiceBusProvider : IMessagingProvider
             entityPath = $"{entityPath}/$deadletterqueue";
         }
 
-        // Fast path: delete everything. ReceiveAndDelete drains the entity without
-        // taking per-message locks, so there is no scan loop and no lock-expiry risk.
+        // Fast path: delete everything. Session-aware, so a session-enabled active
+        // queue does not blow up on a non-session receiver (the DLQ sub-queue never
+        // requires sessions, which is why only the active side used to fail).
         if (all)
         {
-            await using var drainReceiver = _client!.CreateReceiver(entityPath, new ServiceBusReceiverOptions
-            {
-                ReceiveMode = ServiceBusReceiveMode.ReceiveAndDelete,
-                PrefetchCount = DrainPrefetchCount
-            });
-
-            result.SuccessCount = checked((int)await DrainAllAsync(drainReceiver, cancellationToken));
+            result.SuccessCount = checked((int)await PurgeEntityAsync(entityName, isDeadLetter, subscriptionName, cancellationToken));
             return result;
         }
 
@@ -1015,11 +1024,51 @@ public class AzureServiceBusProvider : IMessagingProvider
     }
 
     /// <summary>
+    /// Server-side batch delete (up to 4000 messages per request, no payload transfer).
+    /// Returns null when the broker does not support it (for example the emulator),
+    /// so the caller can fall back to a client-side drain.
+    /// </summary>
+    internal static async Task<long?> TryPurgeServerSideAsync(ServiceBusReceiver receiver, CancellationToken cancellationToken)
+    {
+        // ponytail: PurgeMessagesAsync is still internal in Azure.Messaging.ServiceBus 7.20.x
+        // (the AMQP batch-delete operation itself is GA). Call it directly once the SDK makes it public.
+        if (ServerSidePurgeMethod is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var task = (Task<int>)ServerSidePurgeMethod.Invoke(receiver, new object?[] { null, cancellationToken })!;
+            var purged = await task;
+            // Zero is ambiguous (empty entity or silently unsupported): let the drain confirm.
+            return purged > 0 ? purged : null;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            // Broker (for example the emulator) or SDK does not support server-side purge.
+            return null;
+        }
+    }
+
+    private static readonly System.Reflection.MethodInfo? ServerSidePurgeMethod = typeof(ServiceBusReceiver).GetMethod(
+        "PurgeMessagesAsync",
+        System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public,
+        new[] { typeof(DateTimeOffset?), typeof(CancellationToken) });
+
+    /// <summary>
     /// Drains every message from a <see cref="ServiceBusReceiveMode.ReceiveAndDelete"/> receiver.
+    /// Prefers the server-side purge and falls back to a receive loop.
     /// Returns the number of messages removed.
     /// </summary>
     internal static async Task<long> DrainAllAsync(ServiceBusReceiver receiver, CancellationToken cancellationToken)
     {
+        var purged = await TryPurgeServerSideAsync(receiver, cancellationToken);
+        if (purged is not null)
+        {
+            return purged.Value;
+        }
+
         long drained = 0;
         var consecutiveEmpty = 0;
 

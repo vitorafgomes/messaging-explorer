@@ -145,6 +145,18 @@ public class AzureServiceBusProviderBatchTests
         Assert.Equal(13, drained);
     }
 
+    // A mocked receiver has no AMQP link, so the server-side purge fails and the
+    // drain must fall back to the receive loop instead of surfacing the error.
+    [Fact]
+    public async Task TryPurgeServerSide_returns_null_when_unsupported()
+    {
+        var receiver = BuildReceiver(Array.Empty<IReadOnlyList<ServiceBusReceivedMessage>>());
+
+        var purged = await AzureServiceBusProvider.TryPurgeServerSideAsync(receiver.Object, CancellationToken.None);
+
+        Assert.Null(purged);
+    }
+
     // Test 5a: resubmit sends each cycle's messages before completing them.
     [Fact]
     public async Task ResubmitCore_sends_before_completing_each_cycle()

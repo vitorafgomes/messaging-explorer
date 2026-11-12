@@ -79,7 +79,11 @@ export class BulkOperationsService {
    * Gets the current complete state
    */
   get currentState(): BulkOperationsState {
-    return this.stateSubject.value;
+    const state = this.stateSubject.value;
+    return {
+      active: this.cloneTabState(state.active),
+      deadletter: this.cloneTabState(state.deadletter)
+    };
   }
 
   /**
@@ -88,7 +92,15 @@ export class BulkOperationsService {
    * @returns The selection state for the specified tab
    */
   getTabState(tabType: TabType): TabSelectionState {
-    return this.stateSubject.value[tabType];
+    return this.cloneTabState(this.stateSubject.value[tabType]);
+  }
+
+  private cloneTabState(state: TabSelectionState): TabSelectionState {
+    return {
+      selectedSequenceNumbers: new Set(state.selectedSequenceNumbers),
+      allSelected: state.allSelected,
+      indeterminate: state.indeterminate
+    };
   }
 
   /**

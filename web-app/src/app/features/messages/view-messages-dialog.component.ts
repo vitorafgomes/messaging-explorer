@@ -1729,7 +1729,7 @@ export class ViewMessagesDialogComponent implements OnInit {
     // execution time, so it affects every message present then, including any
     // that arrive after this dialog opened, not just the ones currently loaded.
     // That case warrants a stronger, explicit confirmation.
-    const drainAll = this.shouldDrainEntireTab(tabType, selectedCount);
+    const drainAll = this.shouldDrainEntireTab(tabType);
     const entityLabel = this.data.entityType === 'queue' ? 'queue' : 'subscription';
 
     const confirmData: ConfirmDialogData = drainAll
@@ -1784,7 +1784,7 @@ export class ViewMessagesDialogComponent implements OnInit {
     // When the selection covers the whole tab with no active filter, ask the
     // backend to drain the entity server-side. In that mode sequenceNumbers are
     // ignored, so send an empty array.
-    const drainAll = this.shouldDrainEntireTab(tabType, totalCount);
+    const drainAll = this.shouldDrainEntireTab(tabType);
     const sequenceNumbers = drainAll ? [] : selectedSequenceNumbers;
 
     // Open progress dialog
@@ -1891,23 +1891,14 @@ export class ViewMessagesDialogComponent implements OnInit {
 
   /**
    * Determines whether a bulk delete should drain the entire tab server-side.
-   * Returns true only when select-all is active for the tab, no filter is
-   * applied, and the selection count matches the entity's message count for
-   * that tab. In every other case the caller sends the explicit selection.
+   * Returns true when select-all is active for the tab and no filter is applied.
+   * The dialog only loads a page of messages, so the confirmation explicitly
+   * warns that the whole entity is purged, not just the loaded ones.
+   * In every other case the caller sends the explicit selection.
    * @param tabType - The current tab type ('active' or 'deadletter')
-   * @param selectedCount - Number of currently selected messages in the tab
    */
-  private shouldDrainEntireTab(tabType: 'active' | 'deadletter', selectedCount: number): boolean {
-    if (!this.bulkOperationsService.isAllSelected(tabType)) {
-      return false;
-    }
-    if (this.hasActiveFilter(tabType)) {
-      return false;
-    }
-    const entityCount = tabType === 'deadletter'
-      ? this.deadLetterMessageCount()
-      : this.activeMessageCount();
-    return entityCount !== undefined && selectedCount === entityCount;
+  private shouldDrainEntireTab(tabType: 'active' | 'deadletter'): boolean {
+    return this.bulkOperationsService.isAllSelected(tabType) && !this.hasActiveFilter(tabType);
   }
 
   /**
