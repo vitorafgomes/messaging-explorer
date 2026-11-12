@@ -1,0 +1,671 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Entities</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.hov:hover{background-image:linear-gradient(rgba(128,128,128,.16),rgba(128,128,128,.16)) !important}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #ffffff;outline-offset:0;box-shadow:0 0 0 4px #005cbb !important}
+input::placeholder{color:currentColor;opacity:.72}
+@keyframes dc-spin{to{transform:rotate(360deg)}}
+.spin{animation:dc-spin 1s linear infinite}
+@media (prefers-reduced-motion: reduce){.spin{animation:none}}
+</style>
+</helmet>
+<div style="min-height: 900px; box-sizing: border-box; display: flex; flex-direction: column; background: {{t.surface}}; color: {{t.onSurface}}; font-family: Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 14px; line-height: 20px">
+
+  <div style="display: flex; align-items: center; gap: 8px; height: 28px; box-sizing: border-box; padding: 0 16px; background: {{t.surfaceHigh}}; color: {{t.onSurfaceVariant}}; border-bottom: 1px solid {{t.outlineVariant}}; font-size: 12px; line-height: 16px">
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M4 10h16M10 10v10"></path></svg>
+    <strong style="font-weight: 600; color: {{t.onSurface}}">Built, layout to migrate</strong>
+    <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Entities: the app does all of this today, the screen does not look like this yet.</span>
+  </div>
+
+  <header style="display: flex; align-items: center; gap: 16px; height: 56px; box-sizing: border-box; padding: 0 8px 0 12px; background: {{bar.bg}}; color: {{bar.fg}}; border-bottom: 1px solid {{bar.line}}">
+    <nav aria-label="Main" style="display: flex; align-items: center; gap: 4px">
+      <a href="Connections.dc.html" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none; font-weight: 500">Connections</a>
+      <a href="Main.dc.html" aria-current="page" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; background: {{bar.navOn}}; color: {{bar.navOnFg}}; text-decoration: underline; text-underline-offset: 6px; text-decoration-thickness: 2px; font-weight: 700">Entities</a>
+      <a href="Monitoring.dc.html" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none; font-weight: 500">Monitoring</a>
+    </nav>
+    <span aria-hidden="true" style="flex: none; width: 1px; height: 24px; background: {{bar.sep}}"></span>
+    <span style="display: inline-flex; align-items: center; gap: 6px; flex: none; height: 24px; padding: 0 10px; border-radius: 999px; background: {{env.bg}}; color: {{env.fg}}; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap">
+      <sc-if value="{{env.isProd}}" hint-placeholder-val="{{true}}">
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
+      </sc-if>
+      <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Environment:</span>
+      {{env.label}}
+    </span>
+    <span title="{{conn}}" style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; font-weight: 500">
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="12" cy="12" r="9"></circle><path d="M8 12l3 3 5-6"></path></svg>
+      <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Connected to</span>
+      <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{conn}}</span>
+    </span>
+    <div style="display: flex; align-items: center; gap: 4px">
+      <button type="button" aria-label="Notifications: 1 subscription with dead-letter messages" title="Notifications" class="hov" style="position: relative; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: {{bar.fg}}; font: inherit; cursor: pointer">
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16v-5a6 6 0 1 1 12 0v5l2 2H4zM10 21a2 2 0 0 0 4 0"></path></svg>
+        <span aria-hidden="true" style="position: absolute; top: 4px; right: 2px; min-width: 16px; height: 16px; box-sizing: border-box; padding: 0 4px; border-radius: 999px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}; font-size: 11px; line-height: 16px; font-weight: 700; font-variant-numeric: tabular-nums; text-align: center">1</span>
+      </button>
+      <button type="button" aria-label="Help" title="Help" class="hov" style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: {{bar.fg}}; font: inherit; cursor: pointer">
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1 1-1.1 1.8M12 17h.01"></path></svg>
+      </button>
+      <a href="Settings.dc.html" aria-label="Settings" title="Settings" class="hov" style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none">
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h9M19 7h1M4 17h1M11 17h9"></path><circle cx="16" cy="7" r="3"></circle><circle cx="8" cy="17" r="3"></circle></svg>
+      </a>
+    </div>
+  </header>
+
+  <div style="display: flex; flex: 1; min-height: 0">
+
+    <aside aria-label="Entities" style="flex: 0 0 26%; min-width: 264px; max-width: 340px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px; padding: 12px 8px 16px; background: {{t.surfaceLow}}; border-right: 1px solid {{t.outlineVariant}}">
+      <div style="display: flex; align-items: center; gap: 4px; padding: 0 0 4px 4px">
+        <label style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; height: 36px; box-sizing: border-box; padding: 0 10px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurfaceVariant}}">
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="11" cy="11" r="6"></circle><path d="M16 16l4 4"></path></svg>
+          <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Filter entities by name</span>
+          <input type="text" value="{{filter}}" onChange="{{onFilter}}" placeholder="Filter by name" autocomplete="off" style="flex: 1; min-width: 0; height: 32px; padding: 0; border: 0; background: transparent; color: {{t.onSurface}}; font: inherit">
+        </label>
+        <button type="button" aria-label="Refresh entities" title="Refresh entities" class="hov" style="display: flex; align-items: center; justify-content: center; flex: none; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: {{t.onSurfaceVariant}}; font: inherit; cursor: pointer">
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg>
+        </button>
+      </div>
+      <sc-if value="{{hasHidden}}" hint-placeholder-val="{{true}}">
+        <p aria-live="polite" style="margin: 0; padding: 0 8px 4px; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">{{hiddenText}}</p>
+      </sc-if>
+
+      <div style="display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 0 0 8px">
+        <h2 style="flex: 1; margin: 0; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: {{t.onSurfaceVariant}}">Queues <span style="margin-left: 4px; font-weight: 400; font-variant-numeric: tabular-nums">{{queueCount}}</span></h2>
+        <a href="EntityAdmin.dc.html" aria-label="Create queue" title="Create queue" class="hov" style="display: flex; align-items: center; justify-content: center; flex: none; width: 32px; height: 32px; border-radius: 999px; color: {{t.onSurfaceVariant}}; text-decoration: none">
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>
+        </a>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 2px">
+        <sc-for list="{{queueRows}}" as="row" hint-placeholder-count="4">
+          <button type="button" onClick="{{row.pick}}" aria-current="{{row.current}}" class="hov" style="display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; box-sizing: border-box; padding: 0 8px 0 {{row.pad}}; border: 0; border-radius: 8px; background: {{row.bg}}; color: {{row.fg}}; font: inherit; font-weight: {{row.weight}}; text-align: left; cursor: pointer">
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M4 13l2.5-8h11L20 13v6H4zM4 13h5l1 2h4l1-2h5"></path></svg>
+            <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{row.name}}</span>
+            <sc-if value="{{row.hasActive}}" hint-placeholder-val="{{true}}">
+              <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border-radius: 999px; background: {{t.surfaceHigh}}; color: {{t.onSurfaceVariant}}; font-size: 12px; line-height: 16px; font-weight: 500; font-variant-numeric: tabular-nums"><span aria-hidden="true">{{row.active}}</span><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">{{row.activeLabel}}</span></span>
+            </sc-if>
+            <sc-if value="{{row.hasDlq}}" hint-placeholder-val="{{true}}">
+              <span style="display: inline-flex; align-items: center; gap: 4px; flex: none; height: 20px; padding: 0 8px 0 6px; border-radius: 999px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}; font-size: 12px; line-height: 16px; font-weight: 700; font-variant-numeric: tabular-nums"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg><span aria-hidden="true">{{row.dlq}}</span><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">{{row.dlqLabel}}</span></span>
+            </sc-if>
+          </button>
+        </sc-for>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 8px; height: 36px; margin-top: 8px; padding: 0 0 0 8px">
+        <h2 style="flex: 1; margin: 0; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: {{t.onSurfaceVariant}}">Topics <span style="margin-left: 4px; font-weight: 400; font-variant-numeric: tabular-nums">{{topicCount}}</span></h2>
+        <a href="EntityAdmin.dc.html" aria-label="Create topic" title="Create topic" class="hov" style="display: flex; align-items: center; justify-content: center; flex: none; width: 32px; height: 32px; border-radius: 999px; color: {{t.onSurfaceVariant}}; text-decoration: none">
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>
+        </a>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 2px">
+        <sc-for list="{{topicRows}}" as="row" hint-placeholder-count="3">
+          <div style="display: flex; align-items: center; gap: 2px">
+            <button type="button" onClick="{{row.pick}}" aria-current="{{row.current}}" class="hov" style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; min-height: 32px; box-sizing: border-box; padding: 0 8px 0 {{row.pad}}; border: 0; border-radius: 8px; background: {{row.bg}}; color: {{row.fg}}; font: inherit; font-weight: {{row.weight}}; text-align: left; cursor: pointer">
+              <sc-if value="{{row.isTopic}}" hint-placeholder-val="{{true}}">
+                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="5" cy="12" r="2"></circle><circle cx="19" cy="6" r="2"></circle><circle cx="19" cy="18" r="2"></circle><path d="M7 12h4l6-5M11 12l6 5"></path></svg>
+              </sc-if>
+              <sc-if value="{{row.isSub}}" hint-placeholder-val="{{true}}">
+                <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M4 12h11M11 8l4 4-4 4M19 5v14"></path></svg>
+              </sc-if>
+              <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{row.name}}</span>
+              <sc-if value="{{row.hasActive}}" hint-placeholder-val="{{true}}">
+                <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border-radius: 999px; background: {{t.surfaceHigh}}; color: {{t.onSurfaceVariant}}; font-size: 12px; line-height: 16px; font-weight: 500; font-variant-numeric: tabular-nums"><span aria-hidden="true">{{row.active}}</span><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">{{row.activeLabel}}</span></span>
+              </sc-if>
+              <sc-if value="{{row.hasDlq}}" hint-placeholder-val="{{true}}">
+                <span style="display: inline-flex; align-items: center; gap: 4px; flex: none; height: 20px; padding: 0 8px 0 6px; border-radius: 999px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}; font-size: 12px; line-height: 16px; font-weight: 700; font-variant-numeric: tabular-nums"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg><span aria-hidden="true">{{row.dlq}}</span><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">{{row.dlqLabel}}</span></span>
+              </sc-if>
+            </button>
+            <sc-if value="{{row.isTopic}}" hint-placeholder-val="{{true}}">
+              <a href="EntityAdmin.dc.html" aria-label="{{row.createLabel}}" title="{{row.createLabel}}" class="hov" style="display: flex; align-items: center; justify-content: center; flex: none; width: 32px; height: 32px; border-radius: 999px; color: {{t.onSurfaceVariant}}; text-decoration: none">
+                <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>
+              </a>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+    </aside>
+
+    <main style="flex: 1; min-width: 0; box-sizing: border-box; padding: 20px 24px 32px">
+
+      <sc-if value="{{isLoading}}" hint-placeholder-val="{{true}}">
+        <div style="display: flex; flex-direction: column; gap: 20px">
+          <div>
+            <div style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">{{sel.kind}}</div>
+            <h1 style="margin: 0; font-size: 28px; line-height: 36px; font-weight: 400; overflow-wrap: anywhere">{{sel.name}}</h1>
+          </div>
+          <p aria-live="polite" style="display: flex; align-items: center; gap: 12px; margin: 0; color: {{t.onSurfaceVariant}}">
+            <svg aria-hidden="true" class="spin" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="{{t.primary}}" stroke-width="2.4" stroke-linecap="round" style="flex: none"><path d="M12 3a9 9 0 1 0 9 9"></path></svg>
+            <span>Loading the {{sel.kindLower}} from {{conn}}</span>
+          </p>
+          <div aria-hidden="true" style="display: flex; gap: 12px">
+            <div style="flex: 1 1 0; height: 92px; border-radius: 8px; background: {{t.surfaceLow}}"></div>
+            <div style="flex: 1 1 0; height: 92px; border-radius: 8px; background: {{t.surfaceLow}}"></div>
+            <div style="flex: 1 1 0; height: 92px; border-radius: 8px; background: {{t.surfaceLow}}"></div>
+            <div style="flex: 1 1 0; height: 92px; border-radius: 8px; background: {{t.surfaceLow}}"></div>
+          </div>
+          <div aria-hidden="true" style="display: flex; flex-direction: column; gap: 12px; max-width: 560px">
+            <div style="height: 12px; border-radius: 4px; background: {{t.surfaceContainer}}"></div>
+            <div style="height: 12px; width: 82%; border-radius: 4px; background: {{t.surfaceContainer}}"></div>
+            <div style="height: 12px; width: 64%; border-radius: 4px; background: {{t.surfaceContainer}}"></div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{isEmpty}}" hint-placeholder-val="{{true}}">
+        <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 12px; max-width: 520px; padding-top: 24px">
+          <svg aria-hidden="true" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="{{t.outline}}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h7M4 12h7M4 19h7M15 5l5 3.5L15 12"></path></svg>
+          <h1 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">Select an entity</h1>
+          <p style="margin: 0; color: {{t.onSurfaceVariant}}">Choose a queue, topic or subscription from the tree to see its counts, its properties and its messages.</p>
+          <p style="margin: 0; color: {{t.onSurfaceVariant}}; font-variant-numeric: tabular-nums">{{conn}} holds {{queueCount}} queues and {{topicCount}} topic with {{subCount}} subscriptions.</p>
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 4px">
+            <a href="EntityAdmin.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px 0 16px; border-radius: 999px; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}; font-weight: 500; text-decoration: none; white-space: nowrap">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>
+              Create queue
+            </a>
+            <a href="EntityAdmin.dc.html" class="hov" style="display: inline-flex; align-items: center; height: 40px; padding: 0 12px; border-radius: 999px; color: {{t.primary}}; font-weight: 500; text-decoration: none; white-space: nowrap">Create topic</a>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{isError}}" hint-placeholder-val="{{true}}">
+        <div style="display: flex; flex-direction: column; gap: 20px">
+          <div>
+            <div style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">{{sel.kind}}</div>
+            <h1 style="margin: 0; font-size: 28px; line-height: 36px; font-weight: 400; overflow-wrap: anywhere">{{sel.name}}</h1>
+          </div>
+          <section aria-label="Error" style="display: flex; align-items: flex-start; gap: 12px; max-width: 680px; box-sizing: border-box; padding: 16px; border-radius: 8px; background: {{t.errorContainer}}; color: {{t.onErrorContainer}}">
+            <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 2px"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
+            <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0">
+              <h2 style="margin: 0; font-size: 16px; line-height: 24px; font-weight: 500">Could not load the {{sel.kindLower}} {{sel.name}}</h2>
+              <p style="margin: 0">The request to {{conn}} timed out after 30 seconds. Nothing is shown because nothing was read, and nothing on the broker was changed.</p>
+              <button type="button" onClick="{{retry}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; margin-top: 4px; padding: 0 20px 0 16px; border: 1px solid {{t.onErrorContainer}}; border-radius: 999px; background: transparent; color: {{t.onErrorContainer}}; font: inherit; font-weight: 500; cursor: pointer">
+                <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg>
+                Retry
+              </button>
+            </div>
+          </section>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{showPanel}}" hint-placeholder-val="{{true}}">
+        <div style="display: flex; flex-direction: column; gap: 20px">
+
+          <div style="display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap">
+            <div style="flex: 1; min-width: 240px">
+              <div style="display: flex; align-items: center; gap: 4px; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">
+                <span>{{sel.kind}}</span>
+                <sc-if value="{{isSub}}" hint-placeholder-val="{{true}}">
+                  <span>in topic</span>
+                  <button type="button" onClick="{{pickTopic}}" style="margin: -8px 0; padding: 8px 0; border: 0; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; text-decoration: underline; cursor: pointer">{{sel.topic}}</button>
+                </sc-if>
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+                <h1 style="margin: 0; font-size: 28px; line-height: 36px; font-weight: 400; overflow-wrap: anywhere">{{sel.name}}</h1>
+                <a href="EntityAdmin.dc.html" aria-label="Status: Active. Change status" title="Change status" class="hov" style="display: inline-flex; align-items: center; gap: 6px; height: 32px; box-sizing: border-box; padding: 0 12px 0 8px; border: 1px solid {{t.outlineVariant}}; border-radius: 999px; color: {{t.onSurface}}; font-size: 12px; line-height: 16px; font-weight: 500; text-decoration: none; white-space: nowrap">
+                  <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{t.success}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M8 12l3 3 5-6"></path></svg>
+                  Active
+                </a>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px">
+              <sc-if value="{{isHolder}}" hint-placeholder-val="{{true}}">
+                <a href="Messages.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px 0 16px; border-radius: 999px; background: {{t.primary}}; color: {{t.onPrimary}}; font-weight: 500; text-decoration: none; white-space: nowrap">
+                  <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  View messages
+                </a>
+                <a href="Send.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px 0 16px; border-radius: 999px; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}; font-weight: 500; text-decoration: none; white-space: nowrap">
+                  <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l17-8L4 4v6l10 2-10 2z"></path></svg>
+                  {{sel.sendLabel}}
+                </a>
+              </sc-if>
+              <sc-if value="{{isTopic}}" hint-placeholder-val="{{true}}">
+                <a href="Send.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px 0 16px; border-radius: 999px; background: {{t.primary}}; color: {{t.onPrimary}}; font-weight: 500; text-decoration: none; white-space: nowrap">
+                  <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l17-8L4 4v6l10 2-10 2z"></path></svg>
+                  Send
+                </a>
+                <a href="EntityAdmin.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px 0 16px; border-radius: 999px; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}; font-weight: 500; text-decoration: none; white-space: nowrap">
+                  <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>
+                  Create subscription
+                </a>
+              </sc-if>
+              <a href="EntityAdmin.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; padding: 0 20px 0 16px; border: 1px solid {{t.outline}}; border-radius: 999px; color: {{t.primary}}; font-weight: 500; text-decoration: none; white-space: nowrap">
+                <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16zM13 7l4 4"></path></svg>
+                Edit
+              </a>
+              <div style="position: relative">
+                <button type="button" onClick="{{toggleMenu}}" aria-label="More actions" title="More actions" aria-haspopup="menu" aria-expanded="{{menuExpanded}}" class="hov" style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 999px; background: {{menuBtnBg}}; color: {{t.onSurfaceVariant}}; font: inherit; cursor: pointer">
+                  <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="12" cy="19" r="2"></circle></svg>
+                </button>
+                <sc-if value="{{menuOpen}}" hint-placeholder-val="{{true}}">
+                  <div style="position: absolute; top: 44px; right: 0; z-index: 2; display: flex; flex-direction: column; min-width: 280px; box-sizing: border-box; padding: 8px 0; border-radius: 8px; background: {{t.surfaceContainer}}; color: {{t.onSurface}}; box-shadow: {{t.shadow}}">
+                    <sc-for list="{{menuItems}}" as="item" hint-placeholder-count="2">
+                      <div style="display: flex; flex-direction: column">
+                        <sc-if value="{{item.isLink}}" hint-placeholder-val="{{false}}">
+                          <a href="{{item.href}}" class="hov" style="display: flex; align-items: center; gap: 12px; min-height: 40px; box-sizing: border-box; padding: 0 16px; color: {{item.fg}}; text-decoration: none">
+                            <span style="flex: 1">{{item.label}}</span>
+                            <span style="font-size: 12px; line-height: 16px; font-variant-numeric: tabular-nums">{{item.count}}</span>
+                          </a>
+                        </sc-if>
+                        <sc-if value="{{item.isButton}}" hint-placeholder-val="{{true}}">
+                          <button type="button" onClick="{{closeMenu}}" disabled="{{item.off}}" class="hov" style="display: flex; align-items: center; gap: 12px; width: 100%; min-height: 40px; box-sizing: border-box; padding: 0 16px; border: 0; background: transparent; color: {{item.fg}}; font: inherit; text-align: left; cursor: {{item.cursor}}">
+                            <span style="flex: 1">{{item.label}}</span>
+                            <span style="font-size: 12px; line-height: 16px; font-variant-numeric: tabular-nums">{{item.count}}</span>
+                          </button>
+                        </sc-if>
+                      </div>
+                    </sc-for>
+                    <sc-if value="{{hasMenuItems}}" hint-placeholder-val="{{true}}">
+                      <div aria-hidden="true" style="height: 1px; margin: 8px 0; background: {{t.outlineVariant}}"></div>
+                    </sc-if>
+                    <div style="padding: 4px 16px; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Cannot be undone</div>
+                    <sc-for list="{{dangerItems}}" as="item" hint-placeholder-count="3">
+                      <button type="button" onClick="{{closeMenu}}" disabled="{{item.off}}" class="hov" style="display: flex; align-items: center; gap: 12px; width: 100%; min-height: 40px; box-sizing: border-box; padding: 0 16px; border: 0; background: transparent; color: {{item.fg}}; font: inherit; font-weight: 500; text-align: left; cursor: {{item.cursor}}">
+                        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"></path></svg>
+                        <span style="flex: 1">{{item.label}}</span>
+                        <span style="font-size: 12px; line-height: 16px; font-variant-numeric: tabular-nums">{{item.count}}</span>
+                      </button>
+                    </sc-for>
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+          </div>
+
+          <sc-if value="{{isHolder}}" hint-placeholder-val="{{true}}">
+            <div style="display: flex; gap: 12px; flex-wrap: wrap">
+              <a href="Messages.dc.html" class="hov" style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 0; min-width: 132px; box-sizing: border-box; padding: 12px 16px; border-radius: 8px; background: {{t.surfaceLow}}; color: {{t.onSurface}}; text-decoration: none">
+                <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Active</span>
+                <span style="font-size: 28px; line-height: 36px; font-variant-numeric: tabular-nums">{{sel.active}}</span>
+                <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Open the active messages</span>
+              </a>
+              <div style="display: flex; flex-direction: column; flex: 1 1 0; min-width: 132px; border-radius: 8px; background: {{dl.bg}}; color: {{dl.fg}}">
+                <a href="Messages.dc.html" class="hov" style="display: flex; flex-direction: column; gap: 2px; flex: 1; box-sizing: border-box; padding: 12px 16px; border-radius: 8px; color: {{dl.fg}}; text-decoration: none">
+                  <span style="display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 16px; color: {{dl.sub}}">
+                    <sc-if value="{{dl.warn}}" hint-placeholder-val="{{true}}">
+                      <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
+                    </sc-if>
+                    Dead-letter
+                  </span>
+                  <span style="font-size: 28px; line-height: 36px; font-variant-numeric: tabular-nums">{{sel.dlq}}</span>
+                  <span style="font-size: 12px; line-height: 16px; color: {{dl.sub}}">{{dl.note}}</span>
+                </a>
+                <sc-if value="{{dl.warn}}" hint-placeholder-val="{{true}}">
+                  <a href="AutoResubmit.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; height: 32px; box-sizing: border-box; margin: 0 12px 12px; padding: 0 14px 0 10px; border: 1px solid {{dl.fg}}; border-radius: 999px; color: {{dl.fg}}; font-size: 12px; line-height: 16px; font-weight: 500; text-decoration: none; white-space: nowrap">
+                    <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg>
+                    Auto resubmit
+                  </a>
+                </sc-if>
+              </div>
+              <sc-if value="{{sel.hasScheduled}}" hint-placeholder-val="{{true}}">
+                <div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 0; min-width: 132px; box-sizing: border-box; padding: 12px 16px; border-radius: 8px; background: {{t.surfaceLow}}">
+                  <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Scheduled</span>
+                  <span style="font-size: 28px; line-height: 36px; font-variant-numeric: tabular-nums">{{sel.scheduled}}</span>
+                  <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Not yet deliverable</span>
+                </div>
+              </sc-if>
+              <sc-if value="{{sel.hasTransfer}}" hint-placeholder-val="{{true}}">
+                <div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 0; min-width: 132px; box-sizing: border-box; padding: 12px 16px; border-radius: 8px; background: {{t.surfaceLow}}">
+                  <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Transfer dead-letter</span>
+                  <span style="font-size: 28px; line-height: 36px; font-variant-numeric: tabular-nums">{{sel.transfer}}</span>
+                  <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Could not be forwarded</span>
+                </div>
+              </sc-if>
+              <div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 0; min-width: 132px; box-sizing: border-box; padding: 12px 16px; border-radius: 8px; background: {{t.surfaceLow}}">
+                <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Size</span>
+                <span style="font-size: 28px; line-height: 36px; font-variant-numeric: tabular-nums">{{sel.size}}</span>
+                <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">{{sel.sizeNote}}</span>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{isSub}}" hint-placeholder-val="{{true}}">
+            <p style="display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 10px 14px; border-radius: 8px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
+              <span><strong style="font-weight: 600">A resubmit from this subscription publishes to the topic.</strong> The message goes to {{sel.topic}}, so every subscription of the topic receives it again.</span>
+            </p>
+          </sc-if>
+
+          <nav aria-label="Sections of the entity" style="display: flex; gap: 4px; border-bottom: 1px solid {{t.outlineVariant}}">
+            <sc-for list="{{tabs}}" as="tab" hint-placeholder-count="3">
+              <button type="button" onClick="{{tab.pick}}" aria-current="{{tab.current}}" class="hov" style="height: 44px; margin-bottom: -1px; padding: 0 16px; border: 0; border-bottom: 3px solid {{tab.line}}; background: transparent; color: {{tab.fg}}; font: inherit; font-weight: {{tab.weight}}; font-variant-numeric: tabular-nums; cursor: pointer">{{tab.label}}</button>
+            </sc-for>
+          </nav>
+
+          <sc-if value="{{showProps}}" hint-placeholder-val="{{true}}">
+            <div style="display: flex; gap: 40px; flex-wrap: wrap">
+              <dl style="display: flex; flex-direction: column; flex: 1 1 320px; min-width: 0; margin: 0">
+                <sc-for list="{{propsA}}" as="p" hint-placeholder-count="8">
+                  <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+                    <dt style="flex: 0 0 48%; color: {{t.onSurfaceVariant}}">{{p.k}}</dt>
+                    <dd style="flex: 1; min-width: 0; margin: 0; color: {{p.fg}}; overflow-wrap: anywhere; font-variant-numeric: tabular-nums">{{p.v}}</dd>
+                  </div>
+                </sc-for>
+              </dl>
+              <dl style="display: flex; flex-direction: column; flex: 1 1 320px; min-width: 0; margin: 0">
+                <sc-for list="{{propsB}}" as="p" hint-placeholder-count="8">
+                  <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+                    <dt style="flex: 0 0 48%; color: {{t.onSurfaceVariant}}">{{p.k}}</dt>
+                    <dd style="flex: 1; min-width: 0; margin: 0; color: {{p.fg}}; overflow-wrap: anywhere; font-variant-numeric: tabular-nums">{{p.v}}</dd>
+                  </div>
+                </sc-for>
+              </dl>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{showSessions}}" hint-placeholder-val="{{true}}">
+            <div style="display: flex; flex-direction: column; gap: 12px">
+              <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+                <span style="color: {{t.onSurfaceVariant}}">2 sessions hold messages. Read only.</span>
+                <span style="display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Design, not built for a queue</span>
+              </div>
+              <table style="width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums">
+                <thead>
+                  <tr>
+                    <th scope="col" style="padding: 8px 12px 8px 0; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Session ID</th>
+                    <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Lock Status</th>
+                    <th scope="col" style="padding: 8px 0 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">State</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td style="padding: 8px 12px 8px 0; border-bottom: 1px solid {{t.outlineVariant}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">customer-1042</td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">Unlocked</td>
+                    <td style="padding: 8px 0 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">Has state</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 12px 8px 0; border-bottom: 1px solid {{t.outlineVariant}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">customer-2718</td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">Locked until Nov 12, 2026, 2:10:00 PM</td>
+                    <td style="padding: 8px 0 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; color: {{t.onSurfaceVariant}}">No state</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{showRules}}" hint-placeholder-val="{{true}}">
+            <div style="display: flex; flex-direction: column; gap: 12px">
+              <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+                <span style="flex: 1; min-width: 200px; color: {{t.onSurfaceVariant}}">A message reaches this subscription when any rule matches.</span>
+                <span style="display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Design, not built</span>
+                <a href="Rules.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; border-radius: 999px; color: {{t.primary}}; font-weight: 500; text-decoration: none; white-space: nowrap">
+                  <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>
+                  Add rule
+                </a>
+              </div>
+              <sc-for list="{{rules}}" as="rule" hint-placeholder-count="1">
+                <div style="display: flex; flex-direction: column; gap: 8px; padding: 12px 0; border-top: 1px solid {{t.outlineVariant}}">
+                  <div style="display: flex; align-items: center; gap: 8px">
+                    <span style="font-weight: 500">{{rule.name}}</span>
+                    <span style="display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; background: {{t.surfaceHigh}}; color: {{t.onSurfaceVariant}}; font-size: 12px; line-height: 16px; font-weight: 500">{{rule.kind}}</span>
+                  </div>
+                  <div style="display: flex; flex-direction: column; gap: 4px">
+                    <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Filter Expression</span>
+                    <pre style="margin: 0; padding: 10px 12px; border-radius: 8px; background: {{t.surfaceContainer}}; color: {{t.onSurface}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; line-height: 20px; white-space: pre-wrap; overflow-wrap: anywhere">{{rule.expr}}</pre>
+                  </div>
+                  <sc-if value="{{rule.hasAction}}" hint-placeholder-val="{{true}}">
+                    <div style="display: flex; flex-direction: column; gap: 4px">
+                      <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Action</span>
+                      <pre style="margin: 0; padding: 10px 12px; border-radius: 8px; background: {{t.surfaceContainer}}; color: {{t.onSurface}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; line-height: 20px; white-space: pre-wrap; overflow-wrap: anywhere">{{rule.action}}</pre>
+                    </div>
+                  </sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{showSubs}}" hint-placeholder-val="{{true}}">
+            <table style="width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums">
+              <thead>
+                <tr>
+                  <th scope="col" style="padding: 8px 12px 8px 0; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Subscription</th>
+                  <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: right">Active</th>
+                  <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: right">Dead-letter</th>
+                  <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: right">Rules</th>
+                  <th scope="col" style="padding: 8px 0 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style="padding: 0 12px 0 0; border-bottom: 1px solid {{t.outlineVariant}}"><button type="button" onClick="{{pickWarehouse}}" style="min-height: 36px; padding: 0; border: 0; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; text-decoration: underline; cursor: pointer">warehouse</button></td>
+                  <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">12</td>
+                  <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">0</td>
+                  <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">2</td>
+                  <td style="padding: 8px 0 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">Active</td>
+                </tr>
+                <tr>
+                  <td style="padding: 0 12px 0 0; border-bottom: 1px solid {{t.outlineVariant}}"><button type="button" onClick="{{pickEmail}}" style="min-height: 36px; padding: 0; border: 0; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; text-decoration: underline; cursor: pointer">email</button></td>
+                  <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">0</td>
+                  <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right"><span style="display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px 0 6px; border-radius: 999px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}; font-size: 12px; line-height: 16px; font-weight: 700"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>4</span></td>
+                  <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">1</td>
+                  <td style="padding: 8px 0 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">Active</td>
+                </tr>
+              </tbody>
+            </table>
+          </sc-if>
+
+        </div>
+      </sc-if>
+
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Preview"},"entity":{"editor":"enum","options":["queue","subscription","topic"],"default":"queue","section":"Preview"},"state":{"editor":"enum","options":["default","loading","empty","error","menuOpen"],"default":"default","section":"Preview"},"environment":{"editor":"enum","options":["production","development"],"default":"production","section":"Preview"},"$preview":{"width":1280,"height":900}}'>
+const LIGHT = { surface:'#f9f9ff', surfaceLow:'#f2f3fa', surfaceContainer:'#ecedf4', surfaceHigh:'#e6e8ee',
+  onSurface:'#191c20', onSurfaceVariant:'#43474e', outline:'#73777f', outlineVariant:'#c3c6cf',
+  primary:'#005cbb', onPrimary:'#ffffff', primaryContainer:'#d7e3ff', onPrimaryContainer:'#001b3f',
+  secondaryContainer:'#dae2f9', onSecondaryContainer:'#131c2b',
+  error:'#ba1a1a', onError:'#ffffff', errorContainer:'#ffdad6', onErrorContainer:'#410002',
+  warnContainer:'#ffdea3', onWarnContainer:'#261900', success:'#1b6b32', successContainer:'#b6f2be', onSuccessContainer:'#002108',
+  scrim:'rgba(0,0,0,.45)', shadow:'0 1px 2px rgba(0,0,0,.3), 0 2px 6px 2px rgba(0,0,0,.15)' };
+const DARK = { surface:'#111318', surfaceLow:'#191c20', surfaceContainer:'#1d2024', surfaceHigh:'#282a2f',
+  onSurface:'#e2e2e9', onSurfaceVariant:'#c3c6cf', outline:'#8d9199', outlineVariant:'#43474e',
+  primary:'#abc7ff', onPrimary:'#002f65', primaryContainer:'#00458f', onPrimaryContainer:'#d7e3ff',
+  secondaryContainer:'#3e4759', onSecondaryContainer:'#dae2f9',
+  error:'#ffb4ab', onError:'#690005', errorContainer:'#93000a', onErrorContainer:'#ffdad6',
+  warnContainer:'#5c4300', onWarnContainer:'#ffdea3', success:'#9bd6a4', successContainer:'#00531f', onSuccessContainer:'#b6f2be',
+  scrim:'rgba(0,0,0,.6)', shadow:'0 1px 3px rgba(0,0,0,.6), 0 4px 8px 3px rgba(0,0,0,.3)' };
+
+const NOT_SET = 'Not set';
+
+const ENTITIES = [
+  { id: 'q:orders', kind: 'queue', name: 'orders', active: 1204, dlq: 37, scheduled: 3, transfer: 2, size: '4.2 MB', session: true,
+    props: [['Max Delivery Count', '10'], ['Lock Duration', '1m'], ['Message TTL', '14d'], ['Max Size', '1,024 MB'],
+      ['Requires Session', 'Yes'], ['Partitioning', 'Disabled'], ['Status', 'Active'], ['Dead-lettering On Expiration', 'Enabled'],
+      ['Auto Delete On Idle', 'Never'], ['Forward To', NOT_SET], ['Forward Dead-lettered To', NOT_SET],
+      ['Duplicate Detection', 'Enabled, window 10m'], ['User Metadata', NOT_SET],
+      ['Created At (UTC)', 'Mar 14, 2026, 9:12:00 AM'], ['Updated At (UTC)', 'Nov 3, 2026, 4:40:12 PM'], ['Accessed At (UTC)', 'Nov 12, 2026, 1:58:31 PM']] },
+  { id: 'q:billing/invoices', kind: 'queue', name: 'billing/invoices', active: 18, dlq: 0, scheduled: 0, transfer: 0, size: '61.4 KB', session: false,
+    props: [['Max Delivery Count', '5'], ['Lock Duration', '30s'], ['Message TTL', '7d'], ['Max Size', '1,024 MB'],
+      ['Requires Session', 'No'], ['Partitioning', 'Disabled'], ['Status', 'Active'], ['Dead-lettering On Expiration', 'Enabled'],
+      ['Auto Delete On Idle', 'Never'], ['Forward To', NOT_SET], ['Forward Dead-lettered To', NOT_SET],
+      ['Duplicate Detection', 'Disabled'], ['User Metadata', NOT_SET],
+      ['Created At (UTC)', 'Apr 2, 2026, 11:05:44 AM'], ['Updated At (UTC)', 'Apr 2, 2026, 11:05:44 AM'], ['Accessed At (UTC)', 'Nov 12, 2026, 1:51:09 PM']] },
+  { id: 'q:notifications', kind: 'queue', name: 'notifications', active: 0, dlq: 0, scheduled: 0, transfer: 0, size: '0 B', session: false,
+    props: [['Max Delivery Count', '10'], ['Lock Duration', '1m'], ['Message TTL', '1d'], ['Max Size', '1,024 MB'],
+      ['Requires Session', 'No'], ['Partitioning', 'Disabled'], ['Status', 'Active'], ['Dead-lettering On Expiration', 'Disabled'],
+      ['Auto Delete On Idle', 'Never'], ['Forward To', NOT_SET], ['Forward Dead-lettered To', NOT_SET],
+      ['Duplicate Detection', 'Disabled'], ['User Metadata', NOT_SET],
+      ['Created At (UTC)', 'Apr 2, 2026, 11:06:10 AM'], ['Updated At (UTC)', 'Apr 2, 2026, 11:06:10 AM'], ['Accessed At (UTC)', 'Nov 11, 2026, 8:20:47 PM']] },
+  { id: 'q:orders-archive', kind: 'queue', name: 'orders-archive', active: 52310, dlq: 0, scheduled: 0, transfer: 0, size: '188.07 MB', session: false,
+    props: [['Max Delivery Count', '10'], ['Lock Duration', '1m'], ['Message TTL', 'Never'], ['Max Size', '5,120 MB'],
+      ['Requires Session', 'No'], ['Partitioning', 'Enabled'], ['Status', 'Active'], ['Dead-lettering On Expiration', 'Disabled'],
+      ['Auto Delete On Idle', 'Never'], ['Forward To', NOT_SET], ['Forward Dead-lettered To', NOT_SET],
+      ['Duplicate Detection', 'Disabled'], ['User Metadata', NOT_SET],
+      ['Created At (UTC)', 'Mar 14, 2026, 9:14:27 AM'], ['Updated At (UTC)', 'Jun 20, 2026, 7:02:00 AM'], ['Accessed At (UTC)', 'Nov 12, 2026, 12:00:03 AM']] },
+  { id: 't:order-events', kind: 'topic', name: 'order-events',
+    props: [['Status', 'Active'], ['Max Size', '1,024 MB'], ['Message Time To Live', '14d'], ['Auto Delete On Idle', 'Never'],
+      ['Duplicate Detection', 'Enabled, window 10m'], ['Batched Operations', 'Enabled'], ['Partitioning', 'Disabled'],
+      ['Support Ordering', 'Enabled'], ['User Metadata', NOT_SET],
+      ['Created At (UTC)', 'Mar 14, 2026, 9:20:15 AM'], ['Updated At (UTC)', 'Mar 14, 2026, 9:20:15 AM'], ['Accessed At (UTC)', 'Nov 12, 2026, 1:59:02 PM']] },
+  { id: 's:warehouse', kind: 'subscription', name: 'warehouse', topic: 'order-events', active: 12, dlq: 0, transfer: 0, size: '9.8 KB', session: false,
+    props: [['Topic Name', 'order-events'], ['Lock Duration', '1m'], ['Max Delivery Count', '10'], ['Default Message Time To Live', '14d'],
+      ['Auto Delete On Idle', 'Never'], ['Forward To', NOT_SET], ['Forward Dead-lettered Messages To', NOT_SET], ['Status', 'Active'],
+      ['Enable Sessions', 'No'], ['Enable Dead Lettering On Message Expiration', 'Yes'], ['Enable Dead Lettering On Filter Evaluation Exceptions', 'Yes'],
+      ['Enable Batched Operations', 'Yes'], ['User Metadata', NOT_SET],
+      ['Created At (UTC)', 'Mar 14, 2026, 9:21:40 AM'], ['Updated At (UTC)', 'Sep 8, 2026, 10:15:00 AM'], ['Accessed At (UTC)', 'Nov 12, 2026, 1:59:02 PM']],
+    rules: [
+      { name: 'paid-orders', kind: 'SQL', expr: "sys.Label = 'OrderPaid' AND region IN ('EU', 'UK')", hasAction: true, action: "SET sys.To = 'warehouse'" },
+      { name: 'returns', kind: 'Correlation', expr: "Label = 'OrderReturned'", hasAction: false, action: '' }] },
+  { id: 's:email', kind: 'subscription', name: 'email', topic: 'order-events', active: 0, dlq: 4, transfer: 0, size: '3.1 KB', session: false,
+    props: [['Topic Name', 'order-events'], ['Lock Duration', '1m'], ['Max Delivery Count', '10'], ['Default Message Time To Live', '14d'],
+      ['Auto Delete On Idle', 'Never'], ['Forward To', NOT_SET], ['Forward Dead-lettered Messages To', NOT_SET], ['Status', 'Active'],
+      ['Enable Sessions', 'No'], ['Enable Dead Lettering On Message Expiration', 'No'], ['Enable Dead Lettering On Filter Evaluation Exceptions', 'Yes'],
+      ['Enable Batched Operations', 'Yes'], ['User Metadata', NOT_SET],
+      ['Created At (UTC)', 'Mar 14, 2026, 9:22:05 AM'], ['Updated At (UTC)', 'Mar 14, 2026, 9:22:05 AM'], ['Accessed At (UTC)', 'Nov 12, 2026, 1:59:02 PM']],
+    rules: [
+      { name: 'shipped-orders', kind: 'SQL', expr: "sys.Label = 'OrderShipped' AND notify = TRUE", hasAction: false, action: '' }] }
+];
+
+const DEFAULT_ID = { queue: 'q:orders', subscription: 's:email', topic: 't:order-events' };
+const KIND_LABEL = { queue: 'Queue', subscription: 'Subscription', topic: 'Topic' };
+const BLANK = { kind: '', kindLower: '', name: '', topic: '', active: '', dlq: '', scheduled: '', transfer: '', size: '', sizeNote: '', sendLabel: '', hasScheduled: false, hasTransfer: false };
+
+function fmt(n) { return Number(n || 0).toLocaleString('en-US'); }
+
+class Component extends DCLogic {
+  componentDidUpdate(prev) {
+    if (!prev) return;
+    if (prev.entity !== this.props.entity || prev.state !== this.props.state) {
+      this.setState({ sel: undefined, tab: undefined, menu: undefined, view: undefined });
+    }
+  }
+
+  renderVals() {
+    const s = this.state || {};
+    const dark = (this.props.theme ?? 'light') === 'dark';
+    const t = dark ? DARK : LIGHT;
+    const prod = (this.props.environment ?? 'production') === 'production';
+    const stateProp = this.props.state ?? 'default';
+
+    const bar = dark
+      ? { bg: t.surfaceContainer, fg: t.onSurface, line: t.outlineVariant, sep: t.outlineVariant, navOn: t.secondaryContainer, navOnFg: t.onSecondaryContainer }
+      : { bg: t.primary, fg: t.onPrimary, line: t.primary, sep: 'rgba(255,255,255,.4)', navOn: 'rgba(255,255,255,.18)', navOnFg: t.onPrimary };
+    const env = prod
+      ? { label: 'PRODUCTION', name: 'Production', isProd: true, bg: t.errorContainer, fg: t.onErrorContainer }
+      : { label: 'DEVELOPMENT', name: 'Development', isProd: false, bg: t.secondaryContainer, fg: t.onSecondaryContainer };
+    const conn = prod ? 'contoso-prod.servicebus.windows.net' : 'contoso-dev.servicebus.windows.net';
+
+    const rawView = s.view ?? stateProp;
+    const view = rawView === 'menuOpen' ? 'default' : rawView;
+    const defaultId = DEFAULT_ID[this.props.entity ?? 'queue'] || DEFAULT_ID.queue;
+    const selId = view === 'empty' ? null : (s.sel ?? defaultId);
+    const e = ENTITIES.find(x => x.id === selId) || null;
+    const kind = e ? e.kind : '';
+    const isHolder = kind === 'queue' || kind === 'subscription';
+    const showPanel = view === 'default' && !!e;
+    const menuOpen = showPanel && (s.menu ?? (stateProp === 'menuOpen'));
+
+    const pickId = id => () => this.setState({ sel: id, view: 'default', menu: false, tab: undefined });
+    const filter = s.filter || '';
+    const f = filter.trim().toLowerCase();
+    const match = x => !f || x.name.toLowerCase().includes(f);
+    const row = (x, pad) => {
+      const on = x.id === selId;
+      const counts = x.kind !== 'topic';
+      return {
+        name: x.name, pad, isTopic: x.kind === 'topic', isSub: x.kind === 'subscription',
+        hasActive: counts && x.active > 0, active: fmt(x.active), activeLabel: ', ' + fmt(x.active) + ' active messages',
+        hasDlq: counts && x.dlq > 0, dlq: fmt(x.dlq), dlqLabel: ', ' + fmt(x.dlq) + ' dead-letter messages',
+        current: on ? 'true' : 'false',
+        bg: on ? t.secondaryContainer : 'transparent', fg: on ? t.onSecondaryContainer : t.onSurface, weight: on ? 600 : 400,
+        createLabel: 'Create subscription in ' + x.name, pick: pickId(x.id)
+      };
+    };
+    const queues = ENTITIES.filter(x => x.kind === 'queue');
+    const topics = ENTITIES.filter(x => x.kind === 'topic');
+    const subs = ENTITIES.filter(x => x.kind === 'subscription');
+    const queueRows = queues.filter(match).map(x => row(x, '8px'));
+    const topicRows = [];
+    topics.forEach(tp => {
+      const own = subs.filter(x => x.topic === tp.name);
+      const shown = match(tp) ? own : own.filter(match);
+      if (match(tp) || shown.length) {
+        topicRows.push(row(tp, '8px'));
+        shown.forEach(x => topicRows.push(row(x, '32px')));
+      }
+    });
+    const hidden = ENTITIES.length - queueRows.length - topicRows.length;
+
+    let sel = BLANK;
+    let dl = { warn: false, bg: t.surfaceLow, fg: t.onSurface, sub: t.onSurfaceVariant, note: '' };
+    let menuItems = [];
+    let dangerItems = [];
+    let tabIds = [];
+    let propsA = [];
+    let propsB = [];
+    let rules = [];
+    if (e) {
+      const warn = isHolder && e.dlq > 0;
+      sel = {
+        kind: KIND_LABEL[kind], kindLower: kind, name: e.name, topic: e.topic || '',
+        active: fmt(e.active), dlq: fmt(e.dlq), scheduled: fmt(e.scheduled), transfer: fmt(e.transfer),
+        size: e.size || '', sizeNote: kind === 'queue' ? 'Max Size ' + e.props[3][1] : 'Messages held for this subscription',
+        sendLabel: kind === 'subscription' ? 'Send to topic' : 'Send',
+        hasScheduled: kind === 'queue', hasTransfer: isHolder && e.transfer > 0
+      };
+      dl = warn
+        ? { warn: true, bg: t.warnContainer, fg: t.onWarnContainer, sub: t.onWarnContainer, note: 'Open to resubmit or delete' }
+        : { warn: false, bg: t.surfaceLow, fg: t.onSurface, sub: t.onSurfaceVariant, note: 'None waiting' };
+
+      const item = (label, count, enabled, danger, href) => ({
+        label, count: count === null ? '' : fmt(count), off: !enabled,
+        fg: enabled ? (danger ? t.error : t.onSurface) : t.outline, cursor: enabled ? 'pointer' : 'default',
+        href: href || '', isLink: !!href && enabled, isButton: !(href && enabled)
+      });
+      if (kind === 'queue') menuItems.push(item('Import messages', null, true, false));
+      if (isHolder) {
+        menuItems.push(item('Resubmit dead-letter', e.dlq, e.dlq > 0, false, 'AutoResubmit.dc.html'));
+        dangerItems.push(item('Purge active messages', e.active, e.active > 0, true));
+        dangerItems.push(item('Purge dead-letter', e.dlq, e.dlq > 0, true));
+      }
+      dangerItems.push(item('Delete ' + kind, null, true, true));
+
+      tabIds = kind === 'topic' ? ['subs', 'props'] : ['props'];
+      if (isHolder && e.session) tabIds.push('sessions');
+      if (kind === 'subscription') tabIds.push('rules');
+
+      const rows = e.props.map(p => ({ k: p[0], v: p[1], fg: p[1] === NOT_SET ? t.onSurfaceVariant : t.onSurface }));
+      const half = Math.ceil(rows.length / 2);
+      propsA = rows.slice(0, half);
+      propsB = rows.slice(half);
+      rules = e.rules || [];
+    }
+
+    const tab = tabIds.includes(s.tab) ? s.tab : tabIds[0];
+    const ownSubs = e && kind === 'topic' ? subs.filter(x => x.topic === e.name).length : 0;
+    const tabLabel = { props: 'Properties', sessions: 'Sessions', rules: 'Rules (' + rules.length + ')', subs: 'Subscriptions (' + ownSubs + ')' };
+    const tabs = tabIds.map(id => ({
+      label: tabLabel[id], current: id === tab ? 'true' : 'false',
+      fg: id === tab ? t.primary : t.onSurfaceVariant, line: id === tab ? t.primary : 'transparent', weight: id === tab ? 700 : 500,
+      pick: () => this.setState({ tab: id, menu: false })
+    }));
+
+    return {
+      t, bar, env, conn,
+      isDefault: view === 'default', isLoading: view === 'loading', isEmpty: view === 'empty', isError: view === 'error',
+      showPanel, sel, dl,
+      isQueue: kind === 'queue', isSub: kind === 'subscription', isTopic: kind === 'topic', isHolder,
+      filter, onFilter: ev => this.setState({ filter: ev.target.value }),
+      hasHidden: hidden > 0, hiddenText: hidden + ' of ' + ENTITIES.length + ' entities hidden by the filter',
+      queueCount: fmt(queues.length), topicCount: fmt(topics.length), subCount: fmt(subs.length),
+      queueRows, topicRows,
+      menuOpen, menuExpanded: menuOpen ? 'true' : 'false', menuBtnBg: menuOpen ? t.surfaceHigh : 'transparent',
+      toggleMenu: () => this.setState({ menu: !menuOpen }), closeMenu: () => this.setState({ menu: false }),
+      menuItems, dangerItems, hasMenuItems: menuItems.length > 0,
+      tabs, showProps: tab === 'props', showSessions: tab === 'sessions', showRules: tab === 'rules', showSubs: tab === 'subs',
+      propsA, propsB, rules,
+      pickTopic: pickId('t:order-events'), pickWarehouse: pickId('s:warehouse'), pickEmail: pickId('s:email'),
+      retry: () => this.setState({ view: 'default', menu: false })
+    };
+  }
+}
+</script>
+</body>
+</html>

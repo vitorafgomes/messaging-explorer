@@ -21,7 +21,7 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 - Operation contract: [[CLAUDE]] (how Claude operates on this vault)
 - Page schema: [[wiki-schema]] | Config: [[wiki-config]]
 - Templates: `templates/`
-- UI prototype: `prototypes/web-app/` (the target layout, with screenshots; the spec for [[pages/conventions/ui]])
+- UI prototype: `prototypes/web-app/` (the target layout: a design canvas of one artboard per screen, and the earlier single-file drawing with screenshots; the spec for [[pages/conventions/ui]])
 
 > **Coverage note (2026-11-12):** founded in one day, from the code only, in the working tree of
 > branch `fix/dlq-bulk-operations` with the owner's uncommitted changes. Every `path:line` citation

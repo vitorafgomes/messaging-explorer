@@ -8,6 +8,26 @@ It is a drawing of the proposal, not the application: the data is invented and n
 
 To refresh the screenshots, run a headless Chromium on each address with a 1280 px wide window and the height the page reports in `data-h` on its root element: `chrome-headless-shell --headless --hide-scrollbars --window-size=1280,<h> --screenshot=screens/<n>-<name>.png "file://<path>/index.html#<name>,shot"`.
 
+## The design canvas
+
+The prototype is being redrawn as a design canvas: one `.dc.html` artboard per screen, listed and placed by [`canvas.json`](./canvas.json). Each artboard carries both themes, a `state` switch for every state of the screen (loading, empty, error, each dialog), an `environment` switch, and is clickable; a strip at its top says whether the screen is `Built`, `Built, layout to migrate` or `Design, not built`. The artboards need the canvas runtime to render and are not opened directly in a browser. Until every board of `index.html` has its artboard, `index.html` and its screenshots stay, and the addresses the review cites stay valid; where the two differ, the artboard is the newer drawing.
+
+| Artboard | Page | Draws |
+|---|---|---|
+| `Main.dc.html` | The app today | the entity tree and the queue, topic and subscription panel |
+| `Connections.dc.html` | The app today | the connection list, add and edit for both brokers, groups, export, import, a failed connect |
+| `Settings.dc.html` | The app today | settings, every state of the update, the bug report, clearing the data |
+| `Messages.dc.html` | The app today | active, dead-letter, transfer dead-letter and scheduled messages, selection, cancel scheduled, progress and results |
+| `Send.dc.html` | The app today | send, schedule, edit and resubmit, move, import, export, compare |
+| `AutoResubmit.dc.html` | The app today | the automatic dead-letter resubmit as it is today on a queue of 700,000, and the proposal for a run of that size |
+| `EntityAdmin.dc.html` | Azure Service Bus | create, edit and status of a queue, a topic and a subscription |
+| `Rules.dc.html` | Azure Service Bus | the subscription rules table and editor |
+| `Monitoring.dc.html` | Azure Service Bus | monitoring today, and the proposed counts, sessions and definitions screens |
+| `Components.dc.html` | Window and components | the colours, type and components every artboard uses |
+| `Window.dc.html` | Window and components | the window on each system, without a menu bar, and macOS as it is today |
+
+The pages `RabbitMQ` and `Next version` of the canvas are empty until the screens of [`rabbitmq-messaging-scenarios`](../../pages/roadmap/rabbitmq-messaging-scenarios.md) and [`azure-event-hubs-and-event-grid`](../../pages/roadmap/azure-event-hubs-and-event-grid.md) are drawn.
+
 ## Entities
 
 ### 1. Queue

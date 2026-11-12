@@ -1,8 +1,8 @@
 ---
 title: "User interface"
-version: "1.0"
+version: "1.1"
 date: 2026-11-12
-changes: "Initial convention, written before the migration it governs"
+changes: "The prototype is also a design canvas, one artboard per screen"
 page_type: convention
 status: active
 description: "How a screen is built in the web app: Angular Material components and theme tokens only, one icon set, named destructive actions, distinct empty, loading and error states, and a name on every control."
@@ -50,6 +50,8 @@ They apply to every new screen and to every screen a change touches. A change is
 ## The prototype
 
 `vault/prototypes/web-app/index.html` draws the target layout as 38 artboards in one self-contained file, with its screenshots and a README beside it: every screen and dialog the app has, the window on macOS, Windows and at the minimum size, and seven screens that are proposed and not built, marked as such. The review that produced them is [[pages/roadmap/ui-review-2026-11]].
+
+The same folder holds the prototype redrawn as a design canvas: one `.dc.html` artboard per screen, placed by `canvas.json`, each with both themes, a switch for every state of the screen and a strip that says whether the screen is built. A new or redrawn screen is drawn as an artboard; `index.html` stays until each of its boards has one, and where the two differ the artboard is the newer drawing. The README of the folder lists the artboards.
 
 The prototype is the spec. Where the application and an artboard differ, the artboard is what the screen should become, and what an artboard draws that the application lacks is owed. A change to a screen updates its artboard and its screenshot in the same change. A layout question is settled on the prototype first, because it costs minutes there and days in a 2,760-line component.
 
