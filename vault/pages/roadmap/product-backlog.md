@@ -18,6 +18,11 @@ reliability: medium
 
 Each entry carries the date it was first written down. What was planned and is already built is on [[pages/history/product]]. This page is a tracker: `version` changes only when its shape does.
 
+## Next version: Azure Event Hubs and Azure Event Grid (2026-11-12)
+
+On 2026-11-12 the owner decided that the next version adds Azure Event Hubs and Azure Event Grid. The three Microsoft products (Service Bus, Event Hubs, Event Grid) are presented together as one "Microsoft Azure" family, under one sign-in where the user has one.
+Current SDKs only, with performance and security decided at design time, as for the Service Bus work. The survey, the connection model, the fit with `IMessagingProvider`, the items and the order are on [[pages/roadmap/azure-event-hubs-and-event-grid]].
+
 ## Asked for, in the owner's last order (2026-07-06)
 
 - **2026-07-06 - Search across entities.** One screen that searches every queue and subscription. The per-entity search endpoints exist; this needs a fan-out on the server and a client, which the web app does not have even for one entity.
