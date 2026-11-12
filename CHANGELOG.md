@@ -2,6 +2,48 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.4.0] - 2026-11-12
+
+### Fixed
+- Saving or importing a connection keeps every editable field; some were
+  dropped before. The response to a save is masked like every other response.
+- A workspace file that cannot be read is reported instead of being replaced
+  by an empty one, and the file is written atomically.
+- Queue, topic and subscription names with reserved characters (`/`, `#`, `?`,
+  `%`, spaces) work in every screen; they are encoded once by the app and
+  decoded once by the API.
+- A bulk action never acts on more than the selection: the selection is
+  cleared when the connection changes, a late response cannot replace a newer
+  selection, and "delete all" is only offered when the whole entity is
+  selected.
+- A message that was sent but could not be removed from its source is shown as
+  a possible duplicate in the results, not as a plain failure.
+- The window opens only after the local API answers; a failed start shows an
+  error instead of an empty window.
+- An unexpected API error returns one fixed message and no internal detail.
+- The Beta update channel finds beta releases. A stable build on Beta used to
+  fail on every update check.
+- The app no longer offers an older version as an update.
+
+### Added
+- Fonts are bundled with the app, so it renders the same offline.
+- Releases carry block maps, so an update downloads only what changed, and
+  beta releases carry their own update metadata.
+
+### Changed
+- Dependencies updated inside their major versions, among them Angular
+  21.2.26, Electron 41.10.7 and the Azure SDKs. Known advisories in shipped
+  packages went from 20 to 2.
+- External links open only for `http` and `https` addresses.
+
+### Known issues
+- RabbitMQ bulk delete, resubmit and move can lose messages on a failure. Use
+  them with care on RabbitMQ until the rework lands.
+- The queue details panel shows zeros for some properties that the
+  subscription panel reads correctly.
+- macOS builds are unsigned, so macOS cannot install an update by itself;
+  download the new version from the releases page.
+
 ## [2.3.0] - 2026-07-20
 
 > Version jump from 1.0.2: this release resumes the original Message Explorer
