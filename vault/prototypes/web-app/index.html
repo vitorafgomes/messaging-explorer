@@ -251,7 +251,8 @@
   .win-title { display: flex; align-items: center; height: 32px; padding-left: 12px; background: var(--surface-container-high); font-size: 12px; gap: 8px; }
   .win-title .ctl { margin-left: auto; display: flex; }
   .win-title .ctl span { width: 46px; height: 32px; display: grid; place-items: center; }
-  .win-menu { display: flex; gap: 16px; height: 26px; align-items: center; padding: 0 12px; font-size: 13px; background: var(--surface-container); border-bottom: 1px solid var(--outline-variant); }
+  .win-title.mac { justify-content: center; position: relative; height: 28px; padding: 0; font-weight: 500; }
+  .win-title.mac .lights { left: 10px; top: 8px; }
   .fixed-1000 { width: 1000px; height: 700px; max-width: none; }
   .fixed-1000 .shell { grid-template-columns: 240px minmax(0, 1fr); min-height: 0; height: 644px; }
   .fixed-1000 .panel { padding: 16px; overflow: hidden; }
@@ -1215,7 +1216,7 @@ Last errors (2):
   <ol class="legend">
     <li><b>The close, minimise and zoom buttons sit on the first letters of the title.</b> The window uses a hidden inset title bar with the buttons at 15, 15; the toolbar starts its text at 16 px.</li>
     <li><b>The window cannot be dragged.</b> With a hidden title bar the page must declare a drag region, and no style in the app does.</li>
-    <li><b>No Edit menu: Cmd+C, Cmd+V, Cmd+X and Cmd+A may do nothing in text fields</b>, so a connection string cannot be pasted. No Window menu either: no Cmd+M, no Cmd+W.</li>
+    <li><b>No Edit menu: Cmd+C, Cmd+V, Cmd+X and Cmd+A may do nothing in text fields</b>, so a connection string cannot be pasted. No Window menu either: no Cmd+M, no Cmd+W. The File, View and Help menus drawn above are what the app sets today.</li>
     <li><b>No way to reach Monitoring.</b> The side navigation is hidden in the desktop app on every platform, and the menu only leads to Connections.</li>
     <li><b>The vibrancy asked for is never visible</b>: the window and the page both paint an opaque background. A blue window shows for a moment before the page, even in the dark theme.</li>
     <li><b>Smaller risks:</b> F11 and F12 as shortcuts, a tray icon resized from one bitmap (blurred on Retina, not a template image), Consolas and Courier New named first for code, a custom scrollbar in the tree, and an auto-update that needs a signed app.</li>
@@ -1224,42 +1225,46 @@ Last errors (2):
 
 <!-- 29. MACOS TARGET -->
 <section class="board" id="mac">
-  <p class="why"><b>The same shell on macOS, with room for the window buttons.</b> The toolbar is the title bar: 84 px reserved on the left, the buttons centred on its height, the toolbar as the drag region with every control excluded from it. The menu bar gains Edit and Window. Nothing else on the screen changes by platform.</p>
-  <div class="macbar" aria-label="macOS menu bar"><b>Messaging Explorer</b><span>File</span><span class="new">Edit</span><span>View</span><span class="new">Window</span><span>Help</span></div>
-  <div class="frame win-mac" style="border-radius:0 0 10px 10px">
-    <div class="lights" style="left:16px;top:22px"><i></i><i></i><i></i></div>
-    <div class="pin ok" style="left:4px;top:4px;width:78px;height:48px"><span>1</span></div>
-    <div class="pin ok" style="left:88px;top:4px;right:4px;height:48px"><span>2</span></div>
-    <div class="toolbar" data-env="prod" data-nav="entities" data-mac="1"></div>
+  <p class="why"><b>The same shell on macOS, in a standard window and with no menu bar of its own.</b> The window keeps the native title bar, so the close, minimise and zoom buttons have their own strip, the window drags by it, and the page needs no special layout for the Mac. No File, Edit, View, Window or Help row is drawn anywhere in the window.</p>
+  <div class="frame win-mac">
+    <div class="win-title mac"><div class="lights"><i></i><i></i><i></i></div>Messaging Explorer</div>
+    <div class="pin ok" style="left:4px;top:2px;width:70px;height:24px"><span>1</span></div>
+    <div class="pin ok" style="left:4px;top:32px;right:4px;height:48px"><span>2</span></div>
+    <div class="toolbar" data-env="prod" data-nav="entities" data-nobrand="1"></div>
     <div class="shell" style="min-height:300px">
       <nav class="tree" aria-label="Entities" data-sel="orders"></nav>
       <main class="panel"><div class="head"><div class="title"><div class="kind">Queue</div><h2>orders</h2></div><div class="actions"><button class="btn filled"><svg class="i"><use href="#i-eye"/></svg>View messages</button><button class="btn tonal"><svg class="i"><use href="#i-send"/></svg>Send</button><button class="icon-btn" aria-label="More actions" title="More actions"><svg class="i"><use href="#i-more"/></svg></button></div></div>
-      <div class="props"><div class="prop"><span>Select all loaded messages</span><span><span class="kbd">Cmd</span> <span class="kbd">A</span></span></div><div class="prop"><span>New connection</span><span><span class="kbd">Cmd</span> <span class="kbd">N</span></span></div><div class="prop"><span>Full screen</span><span><span class="kbd">Ctrl</span> <span class="kbd">Cmd</span> <span class="kbd">F</span></span></div></div></main>
+      <div class="props"><div class="prop"><span>Select all loaded messages</span><span><span class="kbd">Cmd</span> <span class="kbd">A</span></span></div><div class="prop"><span>New connection</span><span><span class="kbd">Cmd</span> <span class="kbd">N</span></span></div><div class="prop"><span>Full screen</span><span>the green window button</span></div></div></main>
     </div>
   </div>
   <ol class="legend">
-    <li><b>Inset.</b> On macOS the toolbar gets a left padding of 84 px, from a class the app sets when the shell reports the platform. In full screen the buttons hide and the padding goes back to 16 px.</li>
-    <li><b>Drag region.</b> The toolbar drags the window; buttons, chips with a menu and the navigation are excluded so they stay clickable. A double click on the bar zooms, as on any Mac window.</li>
-    <li><b>Height.</b> The toolbar stays 56 px and the buttons are centred on it (about 22 px from the top) instead of sitting at 15 px for a 28 px bar.</li>
-    <li><b>Menus.</b> Edit (undo, redo, cut, copy, paste, select all) and Window (minimise, zoom, close) come from the standard roles; full screen uses the standard role and shortcut; Quit lives only in the application menu.</li>
-    <li><b>Background.</b> Either drop the vibrancy request or stop painting the window blue: the window background follows the theme surface so there is no flash.</li>
+    <li><b>Native title bar.</b> The window stops asking for a hidden title bar. The buttons sit in the system's own strip, the strip drags the window and a double click zooms, with no drag region and no inset to maintain in the page.</li>
+    <li><b>The toolbar is the same on every platform.</b> The title bar already says Messaging Explorer, so the toolbar starts with the navigation and gives that width to the broker name.</li>
+    <li><b>No menu bar in the window.</b> What the old File, View and Help menus held is in the app: a new connection on the Connections screen, About and the developer tools in Settings, and the testing item that cleared all data is removed.</li>
+    <li><b>The system menu bar keeps three menus, as macOS requires:</b> the application menu (About, Hide, Quit), Edit and Window. Copy, paste, cut and select all work in text fields on a Mac only because the Edit menu declares them.</li>
+    <li><b>Background.</b> The window opens in the theme's page colour instead of blue, and no vibrancy is requested, so there is no flash before the page.</li>
     <li><b>Details.</b> Shortcut hints say Cmd; code uses one monospace stack that starts with fonts a Mac has; the tree keeps the system overlay scrollbar; the tray icon is a template image with a 2x file.</li>
   </ol>
 </section>
 
 <!-- 30. WINDOWS AND LINUX -->
 <section class="board" id="win">
-  <p class="why"><b>On Windows and Linux the native frame stays, and the toolbar does not repeat it.</b> The title bar already says Messaging Explorer, so the toolbar starts with the navigation and gives that width to the broker name. The menu gains Edit, loses the testing item, and Help opens the app's own About.</p>
+  <p class="why"><b>On Windows and Linux the native frame stays and there is no menu bar.</b> No File, Edit, View or Help row sits between the title bar and the toolbar: copy and paste work in text fields without a menu on these systems, and everything the menu held is in the app.</p>
   <div class="frame" style="border-radius:8px">
     <div class="win-title"><svg class="i s" style="color:var(--primary)"><use href="#i-topic"/></svg>Messaging Explorer<span class="ctl"><span aria-hidden="true">&#9472;</span><span aria-hidden="true">&#9633;</span><span aria-hidden="true">&#10005;</span></span></div>
-    <div class="win-menu"><span>File</span><span>Edit</span><span>View</span><span>Help</span></div>
     <div class="toolbar" data-env="dev" data-nav="entities" data-nobrand="1"></div>
     <div class="shell" style="min-height:300px">
       <nav class="tree" aria-label="Entities" data-sel="orders"></nav>
       <main class="panel"><div class="head"><div class="title"><div class="kind">Queue</div><h2>orders</h2></div><div class="actions"><button class="btn filled"><svg class="i"><use href="#i-eye"/></svg>View messages</button><button class="btn tonal"><svg class="i"><use href="#i-send"/></svg>Send</button><button class="icon-btn" aria-label="More actions" title="More actions"><svg class="i"><use href="#i-more"/></svg></button></div></div>
-      <p class="muted">Closing the window keeps the app in the tray on Windows and minimises it on Linux. The first time, a notification says so and says where Quit is.</p></main>
+      <div class="props"><div class="prop"><span>New connection</span><span><span class="kbd">Ctrl</span> <span class="kbd">N</span></span></div><div class="prop"><span>About, developer tools</span><span>Settings</span></div><div class="prop"><span>Quit</span><span>the tray menu</span></div></div>
+      <p class="muted" style="margin-top:16px">Closing the window keeps the app in the tray on Windows and minimises it on Linux. The first time, a notification says so and says where Quit is.</p></main>
     </div>
   </div>
+  <ol class="legend">
+    <li><b>No menu bar, and none that appears on Alt.</b> The application menu is not set on these systems, and the window hides the bar even if one is set later.</li>
+    <li><b>Where each old menu item went.</b> File, Connection: the Connections screen and its shortcut. File, Clear All Data (Testing): removed. View, developer tools and developer mode: Settings. View, full screen: the system's own shortcut. Help, About: Settings.</li>
+    <li><b>Shortcuts are handled by the page</b>, since without a menu there are no menu accelerators: the app listens for its own keys and shows them in tooltips.</li>
+  </ol>
 </section>
 
 <!-- 31. MINIMUM SIZE -->

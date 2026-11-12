@@ -40,21 +40,21 @@ The owner remembers a user reporting layout problems on macOS, with no details. 
 - **Evidence:** on darwin the window is created with `titleBarStyle: 'hiddenInset'` and `trafficLightPosition: { x: 15, y: 15 }` (`web-app/electron/main.js:601`, `web-app/electron/main.js:603`). The page starts with the toolbar (`web-app/src/app/app.html:1`); in Electron the menu button is not rendered (`web-app/src/app/app.html:2`), so the first thing in the toolbar is the brand text (`web-app/src/app/app.html:8`). Nothing in the Angular app reads the platform to change layout: the only use of `platform` is the bug report (`web-app/src/app/app.ts:157`), although the preload exposes it (`web-app/electron/preload.js:52`).
 - **What a Mac user sees:** the close, minimise and zoom buttons on top of the first letters of "Messaging Explorer".
 - **How sure:** high that they overlap; the exact pixels are not known.
-- **Fix:** a `platform-darwin` class on the root element set from `electronAPI.platform`; under it the toolbar gets 84 px of left padding, removed in full screen; `trafficLightPosition` chosen so the buttons are centred on the toolbar height. Board `#mac`; the defect is board `#mac-today`.
+- **Fix (owner's decision, 2026-11-12: a standard window and no menu bar of its own):** stop asking for the hidden title bar on darwin. With the native title bar the buttons have their own strip and nothing in the page has to make room for them. Board `#mac`; the defect is board `#mac-today`.
 
 ### A2. The window cannot be dragged
 
 - **Evidence:** a hidden title bar leaves no native drag area; the page must mark one with `-webkit-app-region: drag`. The only `app-region` in the repo is `no-drag` on the splash screen (`web-app/electron/splash.html:27`); there is none under `web-app/src`.
 - **What a Mac user sees:** a window that cannot be moved by its top edge, and no double click to zoom.
 - **How sure:** high. This is the most likely content of the "layout problems" report.
-- **Fix:** the toolbar is the drag region; every button, menu trigger and chip in it is `no-drag`. Board `#mac`.
+- **Fix:** the native title bar drags the window, so the page declares no drag region. Board `#mac`.
 
 ### A3. No Edit menu and no Window menu
 
 - **Evidence:** the menu template has File, View and Help (`web-app/electron/main.js:100`, `web-app/electron/main.js:136`, `web-app/electron/main.js:166`) and, on darwin, the application menu (`web-app/electron/main.js:185`). No item uses the `undo`, `cut`, `copy`, `paste` or `selectAll` roles, and there is no `windowMenu`.
 - **What a Mac user sees:** on macOS the clipboard shortcuts are delivered through the Edit menu, so Cmd+C, Cmd+V, Cmd+X and Cmd+A may do nothing in a text field: a connection string cannot be pasted with the keyboard. Cmd+M and Cmd+W are missing too.
 - **How sure:** medium to high; it is the documented behaviour of an Electron app without those roles, not verified on this build.
-- **Fix:** add `{ role: 'editMenu' }` and `{ role: 'windowMenu' }`. Worth doing on every platform. Boards `#mac`, `#win`.
+- **Fix:** on macOS the application menu is reduced to three entries: the application menu, Edit (undo, redo, cut, copy, paste, select all) and Window. On Windows and Linux no application menu is set and the window hides the menu bar, because copy and paste work there without one. What File, View and Help held moves into the app: a new connection on the Connections screen, About and the developer tools in Settings; the testing item that clears all data is removed; shortcuts are handled by the page. Boards `#mac`, `#win`.
 
 ### A4. Menu items and shortcuts that are not macOS
 
