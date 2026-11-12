@@ -27,4 +27,15 @@ public class QueueInfo : IQueueEntity
     public long MaxSizeInMegabytes { get; set; }
     public bool RequiresSession { get; set; }
     public bool DeadLetteringOnMessageExpiration { get; set; }
+
+    // Azure configuration and runtime properties read by the single-queue read
+    public string? ForwardTo { get; set; }
+    public string? ForwardDeadLetteredMessagesTo { get; set; }
+    public TimeSpan AutoDeleteOnIdle { get; set; }
+    public bool EnableBatchedOperations { get; set; }
+    public string? UserMetadata { get; set; }
+    public bool RequiresDuplicateDetection { get; set; }
+    public TimeSpan DuplicateDetectionHistoryTimeWindow { get; set; }
+    public long? MaxMessageSizeInKilobytes { get; set; }
+    public long TransferDeadLetterMessageCount { get; set; }
 }

@@ -44,6 +44,9 @@ public class MessageInfo : IMessage
     public string? PartitionKey { get; set; }
     public DateTimeOffset? ScheduledEnqueueTime { get; set; }
 
+    public string State { get; set; } = string.Empty;
+    public long SizeInBytes { get; set; }
+
     // Azure-specific additional properties (not in IMessage interface)
     public string? ReplyToSessionId { get; set; }
 }

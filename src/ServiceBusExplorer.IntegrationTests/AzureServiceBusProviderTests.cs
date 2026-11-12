@@ -104,6 +104,28 @@ public sealed class AzureServiceBusProviderTests(AzureServiceBusFixture fixture)
     }
 
     [Fact]
+    public async Task Queue_details_show_the_configured_values_and_the_status_instead_of_zeros()
+    {
+        var queue = Name(_queues, "details");
+        await _management.CreateQueueAsync(queue, new QueueCreateOptions
+        {
+            LockDuration = TimeSpan.FromSeconds(45),
+            MaxDeliveryCount = 3,
+            RequiresSession = true,
+            DefaultMessageTimeToLive = TimeSpan.FromMinutes(30),
+            DeadLetteringOnMessageExpiration = true
+        });
+
+        var shown = await _management.GetQueueAsync(queue);
+
+        Assert.NotNull(shown);
+        Assert.Equal(queue, shown.Name);
+        Assert.Equal(
+            (TimeSpan.FromSeconds(45), 3, true, TimeSpan.FromMinutes(30), true, 100L, "Active"),
+            (shown.LockDuration, shown.MaxDeliveryCount, shown.RequiresSession, shown.DefaultMessageTimeToLive, shown.DeadLetteringOnMessageExpiration, shown.MaxSizeInMegabytes, shown.Status));
+    }
+
+    [Fact]
     public async Task A_created_topic_and_subscription_are_listed_read_and_deleted()
     {
         var topic = Name(_topics, "topic");
@@ -151,6 +173,20 @@ public sealed class AzureServiceBusProviderTests(AzureServiceBusFixture fixture)
         Assert.Equal("message-1", message.MessageId);
         Assert.Equal("session-1", message.SessionId);
         Assert.Equal("contoso", message.ApplicationProperties["tenant"]);
+    }
+
+    [Fact]
+    public async Task A_searched_message_says_whether_it_is_active_or_scheduled_and_its_size_in_bytes()
+    {
+        var queue = await CreateQueueAsync("state");
+        await _messaging.SendMessageAsync(queue, new SendMessageRequest { Body = "now €" });
+        await _messaging.SendMessageAsync(queue, new SendMessageRequest { Body = "later", ScheduledEnqueueTime = DateTimeOffset.UtcNow.AddMinutes(10) });
+
+        var found = await _messaging.SearchMessagesAsync(queue, new MessageSearchRequest { Property = "body", Count = 10 });
+
+        Assert.Equal(
+            [("now €", "Active", 7L), ("later", "Scheduled", 5L)],
+            found.Messages.Select(m => (m.Body, m.State, m.SizeInBytes)).ToList());
     }
 
     [Fact]

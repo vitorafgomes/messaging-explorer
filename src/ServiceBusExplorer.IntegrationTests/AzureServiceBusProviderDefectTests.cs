@@ -55,51 +55,6 @@ public sealed class AzureServiceBusProviderDefectTests(AzureServiceBusFixture fi
     private async Task<long> SequenceOfAsync(string queue, string body, bool isDeadLetter = false) =>
         (await _messaging.PeekMessagesAsync(queue, 500, isDeadLetter)).Single(m => m.Body == body).SequenceNumber!.Value;
 
-    /// <summary>
-    /// Correct: a queue's details show its real lock duration, max delivery count, sessions, default
-    /// time to live, dead-lettering on expiry, size and status, as a subscription's details do.
-    /// </summary>
-    [Fact]
-    public async Task Defect_queue_details_show_zero_and_empty_values_where_a_subscription_with_the_same_settings_shows_the_real_ones()
-    {
-        var queue = Name(_queues, "details");
-        var topic = Name(_topics, "details");
-        await _management.CreateQueueAsync(queue, new QueueCreateOptions
-        {
-            LockDuration = TimeSpan.FromSeconds(45),
-            MaxDeliveryCount = 3,
-            RequiresSession = true,
-            DefaultMessageTimeToLive = TimeSpan.FromMinutes(30),
-            DeadLetteringOnMessageExpiration = true
-        });
-        await _management.CreateTopicAsync(topic);
-        await _management.CreateSubscriptionAsync(topic, "details", new SubscriptionCreateOptions
-        {
-            LockDuration = TimeSpan.FromSeconds(45),
-            MaxDeliveryCount = 3,
-            RequiresSession = true,
-            DefaultMessageTimeToLive = TimeSpan.FromMinutes(30),
-            DeadLetteringOnMessageExpiration = true
-        });
-
-        var stored = (await fixture.Admin.GetQueueAsync(queue)).Value;
-        var shown = await _management.GetQueueAsync(queue);
-        var subscription = await _management.GetSubscriptionAsync(topic, "details");
-
-        Assert.Equal(
-            (TimeSpan.FromSeconds(45), 3, true, TimeSpan.FromMinutes(30), true, 100L, EntityStatus.Active),
-            (stored.LockDuration, stored.MaxDeliveryCount, stored.RequiresSession, stored.DefaultMessageTimeToLive, stored.DeadLetteringOnMessageExpiration, stored.MaxSizeInMegabytes, stored.Status));
-        Assert.NotNull(shown);
-        Assert.Equal(queue, shown.Name);
-        Assert.Equal(
-            (TimeSpan.Zero, 0, false, TimeSpan.Zero, false, 0L, ""),
-            (shown.LockDuration, shown.MaxDeliveryCount, shown.RequiresSession, shown.DefaultMessageTimeToLive, shown.DeadLetteringOnMessageExpiration, shown.MaxSizeInMegabytes, shown.Status));
-        Assert.NotNull(subscription);
-        Assert.Equal(
-            (TimeSpan.FromSeconds(45), 3, true, TimeSpan.FromMinutes(30), true, "Active"),
-            (subscription.LockDuration, subscription.MaxDeliveryCount, subscription.RequiresSession, subscription.DefaultMessageTimeToLive, subscription.DeadLetteringOnMessageExpiration, subscription.Status));
-    }
-
     /// <summary>Correct: a property value bound from JSON is sent as its string, number or boolean value.</summary>
     [Fact]
     public async Task Defect_send_with_an_application_property_bound_from_json_throws_and_sends_nothing()

@@ -153,16 +153,31 @@ public class AzureServiceBusProvider : IMessagingProvider
     public async Task<IQueueEntity?> GetQueueAsync(string queueName)
     {
         EnsureConnected();
+        return await GetQueueCoreAsync(_adminClient!, queueName);
+    }
+
+    /// <summary>
+    /// Reads a queue's configuration and runtime properties in parallel and maps both; null when either call says the queue does not exist.
+    /// </summary>
+    internal static async Task<QueueInfo?> GetQueueCoreAsync(ServiceBusAdministrationClient adminClient, string queueName)
+    {
+        var propsTask = adminClient.GetQueueAsync(queueName);
+        var runtimePropsTask = adminClient.GetQueueRuntimePropertiesAsync(queueName);
+
         try
         {
-            var response = await _adminClient!.GetQueueRuntimePropertiesAsync(queueName);
-            return MapToQueueInfo(response.Value);
+            await Task.WhenAll(propsTask, runtimePropsTask);
         }
-        catch (ServiceBusException ex) when (ex.Reason == ServiceBusFailureReason.MessagingEntityNotFound)
+        catch (Exception) when (IsEntityNotFound(propsTask) || IsEntityNotFound(runtimePropsTask))
         {
             return null;
         }
+
+        return MapToQueueInfo(propsTask.Result.Value, runtimePropsTask.Result.Value);
     }
+
+    private static bool IsEntityNotFound(Task task) =>
+        task.Exception?.InnerException is ServiceBusException { Reason: ServiceBusFailureReason.MessagingEntityNotFound };
 
     /// <inheritdoc />
     public Task CreateQueueAsync(string queueName)
@@ -219,6 +234,39 @@ public class AzureServiceBusProvider : IMessagingProvider
             CreatedAt = props.CreatedAt,
             UpdatedAt = props.UpdatedAt,
             AccessedAt = props.AccessedAt
+        };
+    }
+
+    private static QueueInfo MapToQueueInfo(QueueProperties props, QueueRuntimeProperties runtimeProps)
+    {
+        return new QueueInfo
+        {
+            Name = runtimeProps.Name,
+            ActiveMessageCount = runtimeProps.ActiveMessageCount,
+            DeadLetterMessageCount = runtimeProps.DeadLetterMessageCount,
+            ScheduledMessageCount = runtimeProps.ScheduledMessageCount,
+            TransferMessageCount = runtimeProps.TransferMessageCount,
+            TransferDeadLetterMessageCount = runtimeProps.TransferDeadLetterMessageCount,
+            SizeInBytes = runtimeProps.SizeInBytes,
+            CreatedAt = runtimeProps.CreatedAt,
+            UpdatedAt = runtimeProps.UpdatedAt,
+            AccessedAt = runtimeProps.AccessedAt,
+            Status = props.Status.ToString(),
+            EnablePartitioning = props.EnablePartitioning,
+            DefaultMessageTimeToLive = props.DefaultMessageTimeToLive,
+            LockDuration = props.LockDuration,
+            MaxDeliveryCount = props.MaxDeliveryCount,
+            MaxSizeInMegabytes = props.MaxSizeInMegabytes,
+            RequiresSession = props.RequiresSession,
+            DeadLetteringOnMessageExpiration = props.DeadLetteringOnMessageExpiration,
+            ForwardTo = props.ForwardTo,
+            ForwardDeadLetteredMessagesTo = props.ForwardDeadLetteredMessagesTo,
+            AutoDeleteOnIdle = props.AutoDeleteOnIdle,
+            EnableBatchedOperations = props.EnableBatchedOperations,
+            UserMetadata = props.UserMetadata,
+            RequiresDuplicateDetection = props.RequiresDuplicateDetection,
+            DuplicateDetectionHistoryTimeWindow = props.DuplicateDetectionHistoryTimeWindow,
+            MaxMessageSizeInKilobytes = props.MaxMessageSizeInKilobytes
         };
     }
 
@@ -1694,7 +1742,7 @@ public class AzureServiceBusProvider : IMessagingProvider
         return message;
     }
 
-    private static MessageInfo MapToMessageInfo(ServiceBusReceivedMessage message, bool isDeadLettered)
+    internal static MessageInfo MapToMessageInfo(ServiceBusReceivedMessage message, bool isDeadLettered)
     {
         string body;
         try
@@ -1722,6 +1770,8 @@ public class AzureServiceBusProvider : IMessagingProvider
             DeliveryCount = message.DeliveryCount,
             EnqueuedTime = message.EnqueuedTime,
             ScheduledEnqueueTime = message.ScheduledEnqueueTime,
+            State = message.State.ToString(),
+            SizeInBytes = message.Body.ToMemory().Length,
             ExpiresAt = message.ExpiresAt,
             TimeToLive = message.TimeToLive,
             IsDeadLettered = isDeadLettered,
