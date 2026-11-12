@@ -33,7 +33,7 @@ No dates are set; the owner sets them. Done when each phase's success criteria c
 
 ## Status
 
-- **As of 2026-11-12:** Phase 1 in progress, both halves landed. `src/ServiceBusExplorer.IntegrationTests` holds 59 tests: 27 against a RabbitMQ container and 32 against the Azure Service Bus emulator, with fifteen RabbitMQ and twelve Azure-rooted audit entries reproduced and pinned by `Defect_` tests, two new Azure findings pinned, one Azure entry not reproduced on the emulator and kept as plausible, and the emulator's limits written down.
+- **As of 2026-11-12:** Phase 1 in progress, both halves landed. `src/ServiceBusExplorer.IntegrationTests` holds 60 tests: 27 against a RabbitMQ container and 32 against the Azure Service Bus emulator, with fifteen RabbitMQ and twelve Azure-rooted audit entries reproduced and pinned by `Defect_` tests, two new Azure findings pinned, one Azure entry not reproduced on the emulator and kept as plausible, and the emulator's limits written down.
 - **Next milestone:** the working path of the RabbitMQ bulk resubmit and move, then Phase 2.
 
 ## Phases
