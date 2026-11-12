@@ -21,6 +21,7 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 - Operation contract: [[CLAUDE]] (how Claude operates on this vault)
 - Page schema: [[wiki-schema]] | Config: [[wiki-config]]
 - Templates: `templates/`
+- UI prototype: `prototypes/web-app/` (the target layout, with screenshots; the spec for [[pages/conventions/ui]])
 
 > **Coverage note (2026-11-12):** founded in one day, from the code only, in the working tree of
 > branch `fix/dlq-bulk-operations` with the owner's uncommitted changes. Every `path:line` citation
@@ -58,6 +59,7 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 ## Conventions
 
 - [[pages/conventions/tooling|Tooling]] - Model routing, the agents, the hooks, the pipeline skill, the review workflow, what the build does not enforce.
+- [[pages/conventions/ui|User interface]] - One design system: Material components and theme tokens, one icon set, named destructive actions, three distinct states, a name on every control; and where the app stands against that today.
 - [[pages/conventions/testing|Testing]] - The stacks, the commands, the state at the founding, why web tests run only through `ng test`, what has no test.
 - [[pages/conventions/decisions-that-look-like-defects|Decisions that look like defects]] - Intended behaviour that reads as a bug, with the test that locks it.
 
@@ -68,6 +70,7 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 
 ## Roadmap
 
+- [[pages/roadmap/ui-material-migration|UI: finish the move to Angular Material]] - End-to-end tests with screenshots first, then the queue panel at the subscription's level, safer destructive actions, Material screen by screen, and Bootstrap removed.
 - [[pages/roadmap/tests-of-everything|Tests of everything]] - Four phases: the providers against real brokers in Docker, every controller, the web app where it acts on messages, the packaged app.
 - [[pages/roadmap/code-audit-2026-11|Code audit, November 2026]] - The line-by-line bug hunt of the back end and the front end: findings by area and severity, improvements, and where to start.
 - [[pages/roadmap/improvement-plan|Improvement plan]] - The order of work in seven phases: land what is open, gates that tell the truth, message and secret safety, a release that works on three systems, dependencies, the API boundary, tests and structure.

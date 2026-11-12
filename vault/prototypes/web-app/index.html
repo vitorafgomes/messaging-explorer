@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Messaging Explorer - UI prototype</title>
+<style>
+  :root {
+    --primary: #005cbb; --on-primary: #ffffff; --primary-container: #d7e3ff; --on-primary-container: #001b3f;
+    --surface: #faf9fd; --surface-container: #efedf1; --surface-container-high: #e9e7ec; --on-surface: #1a1b1f;
+    --on-surface-variant: #44474e; --outline: #74777f; --outline-variant: #c4c6d0;
+    --error: #ba1a1a; --on-error: #ffffff; --error-container: #ffdad6; --on-error-container: #410002;
+    --warning: #7a5900; --warning-container: #ffdfa0; --success: #1b6d2f; --success-container: #b6f2b6;
+    --shadow: 0 1px 2px rgba(0,0,0,.2), 0 1px 3px 1px rgba(0,0,0,.1);
+  }
+  html.dark {
+    --primary: #abc7ff; --on-primary: #002f65; --primary-container: #00458e; --on-primary-container: #d7e3ff;
+    --surface: #121316; --surface-container: #1e1f23; --surface-container-high: #292a2d; --on-surface: #e3e2e6;
+    --on-surface-variant: #c4c6d0; --outline: #8e9099; --outline-variant: #44474e;
+    --error: #ffb4ab; --on-error: #690005; --error-container: #93000a; --on-error-container: #ffdad6;
+    --warning: #f5bf3a; --warning-container: #5c4300; --success: #9bd69b; --success-container: #00531c;
+    --shadow: 0 1px 3px rgba(0,0,0,.6);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/20px Roboto, "Helvetica Neue", Arial, sans-serif; background: var(--surface); color: var(--on-surface); }
+  h1, h2, h3, p { margin: 0; }
+  svg.i { width: 20px; height: 20px; fill: currentColor; flex: none; }
+
+  /* prototype chrome: not part of the product */
+  .proto-bar { display: flex; gap: 8px; align-items: center; padding: 8px 16px; background: var(--surface-container-high); border-bottom: 1px solid var(--outline-variant); position: sticky; top: 0; z-index: 5; flex-wrap: wrap; }
+  .proto-bar strong { margin-right: 8px; }
+  .proto-bar button { font: inherit; padding: 4px 12px; border-radius: 16px; border: 1px solid var(--outline); background: transparent; color: var(--on-surface); cursor: pointer; }
+  .proto-bar button[aria-pressed="true"] { background: var(--primary-container); color: var(--on-primary-container); border-color: transparent; }
+  .proto-bar .grow { flex: 1; }
+  .board { display: none; padding: 16px; }
+  .board.on { display: block; }
+  .board > .why { max-width: 900px; margin: 0 0 16px; color: var(--on-surface-variant); }
+  .board > .why b { color: var(--on-surface); }
+  .frame { border: 1px solid var(--outline-variant); border-radius: 12px; overflow: hidden; max-width: 1180px; box-shadow: var(--shadow); }
+
+  /* product */
+  .toolbar { display: flex; align-items: center; gap: 12px; height: 56px; padding: 0 16px; background: var(--primary); color: var(--on-primary); }
+  .toolbar .brand { font-size: 20px; font-weight: 500; }
+  .toolbar .grow { flex: 1; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 8px; font-weight: 500; font-size: 13px; }
+  .chip.env-prod { background: var(--error-container); color: var(--on-error-container); }
+  .chip.env-dev { background: var(--success-container); color: #002106; }
+  html.dark .chip.env-dev { color: #d0f5d0; }
+  .chip.target { background: rgba(255,255,255,.18); color: inherit; }
+  html.dark .chip.target { background: rgba(0,0,0,.2); }
+  .icon-btn { display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; border: 0; background: transparent; color: inherit; cursor: pointer; }
+  .icon-btn:hover { background: rgba(127,127,127,.18); }
+
+  .shell { display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 560px; }
+  .tree { background: var(--surface-container); border-right: 1px solid var(--outline-variant); padding: 8px; }
+  .tree h3 { font-size: 12px; letter-spacing: .5px; text-transform: uppercase; color: var(--on-surface-variant); padding: 12px 8px 4px; font-weight: 500; }
+  .node { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 16px; cursor: default; }
+  .node.sub { margin-left: 20px; }
+  .node.sel { background: var(--primary-container); color: var(--on-primary-container); }
+  .node .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .count { font-size: 12px; padding: 0 8px; border-radius: 10px; background: var(--surface-container-high); color: var(--on-surface-variant); }
+  .count.dlq { background: var(--warning-container); color: var(--warning); }
+  html.dark .count.dlq { color: #ffdfa0; }
+
+  .panel { padding: 24px; min-width: 0; }
+  .head { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+  .head .title { flex: 1; min-width: 240px; }
+  .head .kind { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--on-surface-variant); }
+  .head h2 { font-size: 24px; line-height: 32px; font-weight: 400; overflow-wrap: anywhere; }
+  .head .path { color: var(--on-surface-variant); }
+  .actions { display: flex; gap: 8px; align-items: center; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px; border-radius: 20px; font: 500 14px/20px inherit; border: 0; cursor: pointer; }
+  .btn.filled { background: var(--primary); color: var(--on-primary); }
+  .btn.tonal { background: var(--primary-container); color: var(--on-primary-container); }
+  .btn.outlined { background: transparent; color: var(--primary); border: 1px solid var(--outline); }
+  .btn.danger { background: var(--error); color: var(--on-error); }
+  .btn.text { background: transparent; color: var(--primary); padding: 0 12px; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .card { background: var(--surface-container); border: 1px solid var(--outline-variant); border-radius: 12px; padding: 16px; }
+  .card.click { cursor: pointer; }
+  .card .label { display: flex; align-items: center; gap: 6px; color: var(--on-surface-variant); font-size: 12px; }
+  .card .value { font-size: 32px; line-height: 40px; font-weight: 400; }
+  .card .sub { font-size: 12px; color: var(--on-surface-variant); }
+  .card.warn { background: var(--warning-container); border-color: transparent; }
+  .card.warn .label, .card.warn .sub { color: var(--warning); }
+  html.dark .card.warn, html.dark .card.warn .label, html.dark .card.warn .sub { color: #ffdfa0; }
+  .live { display: inline-flex; align-items: center; gap: 4px; }
+  .live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--success); }
+
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--outline-variant); margin-bottom: 16px; }
+  .tab { padding: 12px 16px; font-weight: 500; color: var(--on-surface-variant); border-bottom: 2px solid transparent; }
+  .tab.on { color: var(--primary); border-bottom-color: var(--primary); }
+  .tab.off { opacity: .38; }
+  .props { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0 24px; }
+  .prop { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--outline-variant); }
+  .prop span:first-child { color: var(--on-surface-variant); }
+  .prop span:last-child { font-weight: 500; text-align: right; }
+
+  .menu { position: relative; }
+  .menu .list { position: absolute; right: 0; top: 44px; min-width: 250px; background: var(--surface-container); border-radius: 8px; box-shadow: var(--shadow); padding: 8px 0; z-index: 2; }
+  .menu .item { display: flex; align-items: center; gap: 12px; padding: 10px 16px; }
+  .menu .item.danger { color: var(--error); }
+  .menu .sep { height: 1px; background: var(--outline-variant); margin: 8px 0; }
+  .menu .note { padding: 4px 16px 8px; font-size: 12px; color: var(--on-surface-variant); }
+
+  .scrim { background: rgba(0,0,0,.45); padding: 48px 16px; display: grid; place-items: center; min-height: 480px; }
+  .dialog { background: var(--surface-container-high); border-radius: 24px; padding: 24px; width: min(560px, 100%); box-shadow: var(--shadow); }
+  .dialog h3 { font-size: 22px; line-height: 28px; font-weight: 400; margin-bottom: 16px; display: flex; gap: 12px; align-items: center; }
+  .dialog h3 svg { color: var(--error); width: 28px; height: 28px; }
+  .facts { border: 1px solid var(--outline-variant); border-radius: 12px; margin: 12px 0 16px; }
+  .facts .prop { padding: 10px 16px; }
+  .facts .prop:last-child { border-bottom: 0; }
+  .field { margin-top: 12px; }
+  .field label { display: block; font-size: 12px; color: var(--on-surface-variant); margin-bottom: 4px; }
+  .field input { width: 100%; height: 48px; border-radius: 4px; border: 1px solid var(--outline); background: transparent; color: var(--on-surface); padding: 0 12px; font: inherit; }
+  .dialog .foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
+  .btn[disabled] { opacity: .38; cursor: default; }
+
+  .msgbar { display: flex; align-items: center; gap: 12px; padding: 8px 16px; background: var(--primary-container); color: var(--on-primary-container); border-radius: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+  .msgbar .grow { flex: 1; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-weight: 500; color: var(--on-surface-variant); font-size: 12px; padding: 8px 12px; border-bottom: 1px solid var(--outline-variant); }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--outline-variant); vertical-align: top; }
+  tr.sel td { background: var(--primary-container); color: var(--on-primary-container); }
+  .mono { font-family: "Roboto Mono", Consolas, monospace; font-size: 13px; }
+  .pill { display: inline-block; padding: 0 8px; border-radius: 8px; font-size: 12px; font-weight: 500; }
+  .pill.ok { background: var(--success-container); color: #002106; }
+  html.dark .pill.ok { color: #d0f5d0; }
+  .pill.dup { background: var(--warning-container); color: var(--warning); }
+  html.dark .pill.dup { color: #ffdfa0; }
+  .pill.fail { background: var(--error-container); color: var(--on-error-container); }
+
+  .states { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  .state { border: 1px solid var(--outline-variant); border-radius: 12px; padding: 32px 16px; text-align: center; min-height: 220px; display: grid; place-content: center; gap: 8px; justify-items: center; }
+  .state svg { width: 40px; height: 40px; color: var(--on-surface-variant); }
+  .state.err svg { color: var(--error); }
+  .state p { color: var(--on-surface-variant); max-width: 260px; }
+  .spin { width: 36px; height: 36px; border-radius: 50%; border: 4px solid var(--outline-variant); border-top-color: var(--primary); animation: r 1s linear infinite; }
+  @keyframes r { to { transform: rotate(360deg); } }
+  @media (max-width: 760px) { .shell { grid-template-columns: 1fr; } .tree { border-right: 0; border-bottom: 1px solid var(--outline-variant); } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-queue" viewBox="0 0 24 24"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h10v2H4z"/></symbol>
+  <symbol id="i-topic" viewBox="0 0 24 24"><path d="M12 3 3 8l9 5 9-5zm-7 9.5L12 16l7-3.5V15l-7 3.5L5 15z"/></symbol>
+  <symbol id="i-sub" viewBox="0 0 24 24"><path d="M6 4h12v2H6zm2 5h8v2H8zm-4 5h16v6H4z"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M12 5C7 5 2.7 8.1 1 12c1.7 3.9 6 7 11 7s9.3-3.1 11-7c-1.7-3.9-6-7-11-7zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8z"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M3 20v-6l8-2-8-2V4l19 8z"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><path d="M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 6a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 6a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M1 21h22L12 2zm12-3h-2v-2h2zm0-4h-2v-4h2z"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M6 7h12l-1 14H7zm3-4h6l1 2h4v2H4V5h4z"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M17.6 6.4A8 8 0 1 0 20 12h-2a6 6 0 1 1-1.8-4.2L13 11h7V4z"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 12h-4a3 3 0 0 1-6 0H5V5h14z"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2zm6-6V11a6 6 0 0 0-5-5.9V4a1 1 0 1 0-2 0v1.1A6 6 0 0 0 6 11v5l-2 2v1h16v-1z"/></symbol>
+</svg>
+
+<div class="proto-bar" role="toolbar" aria-label="Prototype controls">
+  <strong>UI prototype</strong>
+  <button data-board="queue" aria-pressed="true">1. Queue</button>
+  <button data-board="sub" aria-pressed="false">2. Subscription</button>
+  <button data-board="purge" aria-pressed="false">3. Purge confirmation</button>
+  <button data-board="messages" aria-pressed="false">4. Messages</button>
+  <button data-board="states" aria-pressed="false">5. States</button>
+  <span class="grow"></span>
+  <button id="theme" aria-pressed="false">Dark theme</button>
+</div>
+
+<!-- 1. QUEUE -->
+<section class="board on" id="queue">
+  <p class="why"><b>A queue uses the same panel as a subscription.</b> Same cards with live counts, same tabs, same actions. The toolbar says which environment and which broker. Purge is not beside View messages: it is under the overflow menu, in the error colour (shown open here).</p>
+  <div class="frame">
+    <div class="toolbar">
+      <span class="brand">Messaging Explorer</span>
+      <span class="chip env-prod">PRODUCTION</span>
+      <span class="chip target">contoso-prod.servicebus.windows.net</span>
+      <span class="grow"></span>
+      <button class="icon-btn" aria-label="Notifications"><svg class="i"><use href="#i-bell"/></svg></button>
+    </div>
+    <div class="shell">
+      <nav class="tree" aria-label="Entities">
+        <h3>Queues</h3>
+        <div class="node sel"><svg class="i"><use href="#i-queue"/></svg><span class="name">orders</span><span class="count">1,204</span><span class="count dlq">37</span></div>
+        <div class="node"><svg class="i"><use href="#i-queue"/></svg><span class="name">billing/invoices</span><span class="count">0</span></div>
+        <div class="node"><svg class="i"><use href="#i-queue"/></svg><span class="name">notifications</span><span class="count">58</span></div>
+        <h3>Topics</h3>
+        <div class="node"><svg class="i"><use href="#i-topic"/></svg><span class="name">order-events</span></div>
+        <div class="node sub"><svg class="i"><use href="#i-sub"/></svg><span class="name">warehouse</span><span class="count">12</span></div>
+        <div class="node sub"><svg class="i"><use href="#i-sub"/></svg><span class="name">email</span><span class="count">0</span><span class="count dlq">4</span></div>
+      </nav>
+      <main class="panel">
+        <div class="head">
+          <div class="title">
+            <div class="kind">Queue</div>
+            <h2>orders</h2>
+          </div>
+          <div class="actions">
+            <button class="btn filled"><svg class="i"><use href="#i-eye"/></svg>View messages</button>
+            <button class="btn tonal"><svg class="i"><use href="#i-send"/></svg>Send</button>
+            <div class="menu">
+              <button class="icon-btn" aria-label="More actions" aria-expanded="true"><svg class="i"><use href="#i-more"/></svg></button>
+              <div class="list" role="menu">
+                <div class="item" role="menuitem">Import messages</div>
+                <div class="item" role="menuitem">Resubmit dead-letter (37)</div>
+                <div class="sep"></div>
+                <div class="note">Cannot be undone</div>
+                <div class="item danger" role="menuitem"><svg class="i"><use href="#i-trash"/></svg>Purge active messages</div>
+                <div class="item danger" role="menuitem"><svg class="i"><use href="#i-trash"/></svg>Purge dead-letter</div>
+                <div class="item danger" role="menuitem"><svg class="i"><use href="#i-trash"/></svg>Delete queue</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="cards">
+          <div class="card click"><div class="label"><span class="live">Live</span> Active</div><div class="value">1,204</div><div class="sub">+18 in the last minute</div></div>
+          <div class="card click warn"><div class="label"><svg class="i"><use href="#i-warn"/></svg>Dead-letter</div><div class="value">37</div><div class="sub">Open to resubmit or delete</div></div>
+          <div class="card"><div class="label">Scheduled</div><div class="value">0</div><div class="sub">&nbsp;</div></div>
+          <div class="card"><div class="label">Size</div><div class="value">4.2 MB</div><div class="sub">of 1 GB</div></div>
+        </div>
+        <div class="tabs" role="tablist"><div class="tab on" role="tab">Properties</div><div class="tab" role="tab">Sessions</div><div class="tab off" role="tab" title="Only a subscription has rules">Rules</div></div>
+        <div class="props">
+          <div class="prop"><span>Lock duration</span><span>2 minutes</span></div>
+          <div class="prop"><span>Max delivery count</span><span>7</span></div>
+          <div class="prop"><span>Message time to live</span><span>14 days</span></div>
+          <div class="prop"><span>Requires session</span><span>Yes</span></div>
+          <div class="prop"><span>Dead-letter on expiry</span><span>Yes</span></div>
+          <div class="prop"><span>Partitioning</span><span>No</span></div>
+          <div class="prop"><span>Status</span><span>Active</span></div>
+          <div class="prop"><span>Created</span><span>2026-03-14 09:12 UTC</span></div>
+        </div>
+      </main>
+    </div>
+  </div>
+</section>
+
+<!-- 2. SUBSCRIPTION -->
+<section class="board" id="sub">
+  <p class="why"><b>The same panel, for a subscription.</b> It differs from the queue only where the broker differs: the parent topic in the header, the Rules tab, and a warning that a resubmit from here publishes to the topic.</p>
+  <div class="frame">
+    <div class="toolbar">
+      <span class="brand">Messaging Explorer</span>
+      <span class="chip env-dev">DEVELOPMENT</span>
+      <span class="chip target">contoso-dev.servicebus.windows.net</span>
+      <span class="grow"></span>
+      <button class="icon-btn" aria-label="Notifications"><svg class="i"><use href="#i-bell"/></svg></button>
+    </div>
+    <div class="shell">
+      <nav class="tree" aria-label="Entities">
+        <h3>Queues</h3>
+        <div class="node"><svg class="i"><use href="#i-queue"/></svg><span class="name">orders</span><span class="count">3</span></div>
+        <h3>Topics</h3>
+        <div class="node"><svg class="i"><use href="#i-topic"/></svg><span class="name">order-events</span></div>
+        <div class="node sub"><svg class="i"><use href="#i-sub"/></svg><span class="name">warehouse</span><span class="count">12</span></div>
+        <div class="node sub sel"><svg class="i"><use href="#i-sub"/></svg><span class="name">email</span><span class="count">0</span><span class="count dlq">4</span></div>
+      </nav>
+      <main class="panel">
+        <div class="head">
+          <div class="title">
+            <div class="kind">Subscription</div>
+            <h2>email</h2>
+            <div class="path">in topic order-events</div>
+          </div>
+          <div class="actions">
+            <button class="btn filled"><svg class="i"><use href="#i-eye"/></svg>View messages</button>
+            <button class="btn tonal"><svg class="i"><use href="#i-send"/></svg>Send to topic</button>
+            <button class="icon-btn" aria-label="More actions"><svg class="i"><use href="#i-more"/></svg></button>
+          </div>
+        </div>
+        <div class="cards">
+          <div class="card click"><div class="label"><span class="live">Live</span> Active</div><div class="value">0</div><div class="sub">No change in the last minute</div></div>
+          <div class="card click warn"><div class="label"><svg class="i"><use href="#i-warn"/></svg>Dead-letter</div><div class="value">4</div><div class="sub">A resubmit publishes to the topic: every subscription receives it</div></div>
+          <div class="card"><div class="label">Transfer</div><div class="value">0</div><div class="sub">&nbsp;</div></div>
+        </div>
+        <div class="tabs" role="tablist"><div class="tab on" role="tab">Properties</div><div class="tab" role="tab">Sessions</div><div class="tab" role="tab">Rules (1)</div></div>
+        <div class="props">
+          <div class="prop"><span>Lock duration</span><span>1 minute</span></div>
+          <div class="prop"><span>Max delivery count</span><span>10</span></div>
+          <div class="prop"><span>Message time to live</span><span>14 days</span></div>
+          <div class="prop"><span>Requires session</span><span>No</span></div>
+          <div class="prop"><span>Dead-letter on expiry</span><span>No</span></div>
+          <div class="prop"><span>Status</span><span>Active</span></div>
+        </div>
+      </main>
+    </div>
+  </div>
+</section>
+
+<!-- 3. PURGE -->
+<section class="board" id="purge">
+  <p class="why"><b>A destructive confirmation names what it destroys.</b> The entity, its parent, the connection and its environment, and the count read at this moment. The button stays disabled until the entity name is typed.</p>
+  <div class="frame">
+    <div class="scrim">
+      <div class="dialog" role="alertdialog" aria-labelledby="pt">
+        <h3 id="pt"><svg class="i"><use href="#i-warn"/></svg>Purge active messages?</h3>
+        <p>This deletes every active message in the queue. It cannot be undone.</p>
+        <div class="facts">
+          <div class="prop"><span>Queue</span><span>orders</span></div>
+          <div class="prop"><span>Connection</span><span>contoso-prod.servicebus.windows.net</span></div>
+          <div class="prop"><span>Environment</span><span><span class="chip env-prod">PRODUCTION</span></span></div>
+          <div class="prop"><span>Messages now</span><span>1,204 active</span></div>
+        </div>
+        <div class="field"><label for="ack">Type the queue name to confirm</label><input id="ack" placeholder="orders" autocomplete="off"></div>
+        <div class="foot"><button class="btn text">Cancel</button><button class="btn danger" id="purgeBtn" disabled>Purge 1,204 messages</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 4. MESSAGES -->
+<section class="board" id="messages">
+  <p class="why"><b>A selection says exactly what it covers, and a result says what happened to each message.</b> "3 selected of 20 loaded, 37 in the dead-letter queue" replaces a stored "all" flag. A message that was sent and could not be removed from the source is a possible duplicate, never offered for retry.</p>
+  <div class="frame">
+    <div class="panel">
+      <div class="head">
+        <div class="title"><div class="kind">Queue - dead-letter</div><h2>orders</h2><div class="path">contoso-prod.servicebus.windows.net</div></div>
+        <div class="actions"><button class="btn outlined"><svg class="i"><use href="#i-refresh"/></svg>Refresh</button></div>
+      </div>
+      <div class="msgbar">
+        <strong>3 selected</strong><span>of 20 loaded, 37 in the dead-letter queue</span>
+        <span class="grow"></span>
+        <button class="btn text">Select all 37</button>
+        <button class="btn tonal">Resubmit 3</button>
+        <button class="btn tonal">Move 3</button>
+        <button class="btn danger">Delete 3</button>
+      </div>
+      <table>
+        <thead><tr><th style="width:32px"></th><th>Sequence</th><th>Message id</th><th>Enqueued (UTC)</th><th>Dead-letter reason</th><th>Last result</th></tr></thead>
+        <tbody>
+          <tr class="sel"><td><input type="checkbox" checked aria-label="Select 9007"></td><td class="mono">9007</td><td class="mono">a1f4-77c2</td><td>2026-11-12 08:14</td><td>MaxDeliveryCountExceeded</td><td><span class="pill ok">Resubmitted</span></td></tr>
+          <tr class="sel"><td><input type="checkbox" checked aria-label="Select 9008"></td><td class="mono">9008</td><td class="mono">b93e-1c05</td><td>2026-11-12 08:14</td><td>MaxDeliveryCountExceeded</td><td><span class="pill dup">Possible duplicate - do not retry</span></td></tr>
+          <tr class="sel"><td><input type="checkbox" checked aria-label="Select 9011"></td><td class="mono">9011</td><td class="mono">c220-9af1</td><td>2026-11-12 08:15</td><td>TTLExpiredException</td><td><span class="pill fail">Failed: lock lost - retry</span></td></tr>
+          <tr><td><input type="checkbox" aria-label="Select 9012"></td><td class="mono">9012</td><td class="mono">d7b0-4e88</td><td>2026-11-12 08:15</td><td>MaxDeliveryCountExceeded</td><td></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 5. STATES -->
+<section class="board" id="states">
+  <p class="why"><b>Loading, empty and error are three different screens.</b> An error says what failed and offers a retry. It is never an empty list, and never a spinner that does not end.</p>
+  <div class="frame"><div class="panel"><div class="states">
+    <div class="state"><div class="spin" role="status" aria-label="Loading"></div><h3>Loading queues</h3><p>contoso-prod.servicebus.windows.net</p></div>
+    <div class="state"><svg class="i"><use href="#i-inbox"/></svg><h3>No queues in this namespace</h3><p>The namespace answered and holds no queue.</p><button class="btn tonal">Create a queue</button></div>
+    <div class="state err"><svg class="i"><use href="#i-warn"/></svg><h3>Could not load the queues</h3><p>The broker refused the credentials. Nothing is shown because nothing was read.</p><button class="btn outlined"><svg class="i"><use href="#i-refresh"/></svg>Try again</button></div>
+  </div></div></div>
+</section>
+
+<script>
+  document.querySelectorAll('.proto-bar button[data-board]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('.proto-bar button[data-board]').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+      document.querySelectorAll('.board').forEach(function (s) { s.classList.toggle('on', s.id === b.dataset.board); });
+    });
+  });
+  var theme = document.getElementById('theme');
+  theme.addEventListener('click', function () {
+    var dark = document.documentElement.classList.toggle('dark');
+    theme.setAttribute('aria-pressed', String(dark));
+  });
+  var wanted = location.hash.slice(1).split(',');
+  wanted.forEach(function (w) {
+    var b = document.querySelector('.proto-bar button[data-board="' + w + '"]');
+    if (b) { b.click(); }
+    if (w === 'dark') { theme.click(); }
+  });
+  var ack = document.getElementById('ack');
+  ack.addEventListener('input', function () { document.getElementById('purgeBtn').disabled = ack.value !== 'orders'; });
+</script>
+</body>
+</html>
