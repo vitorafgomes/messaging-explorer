@@ -4,5 +4,6 @@
     <Project Path="src/ServiceBusExplorer.Core/ServiceBusExplorer.Core.csproj" />
     <Project Path="src/ServiceBusExplorer.Api.Tests/ServiceBusExplorer.Api.Tests.csproj" />
     <Project Path="src/ServiceBusExplorer.Core.Tests/ServiceBusExplorer.Core.Tests.csproj" />
+    <Project Path="src/ServiceBusExplorer.IntegrationTests/ServiceBusExplorer.IntegrationTests.csproj" />
   </Folder>
 </Solution>

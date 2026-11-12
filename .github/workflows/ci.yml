@@ -62,7 +62,31 @@ jobs:
         run: dotnet build ServiceBusExplorer.slnx --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test ServiceBusExplorer.slnx --configuration Release --no-build --verbosity normal
+        run: |
+          dotnet test src/ServiceBusExplorer.Core.Tests --configuration Release --no-build --verbosity normal
+          dotnet test src/ServiceBusExplorer.Api.Tests --configuration Release --no-build --verbosity normal
+
+  # ---------------------------------------------------------------------------
+  # Integration - the providers against brokers in containers the run starts
+  # ---------------------------------------------------------------------------
+  integration:
+    name: Integration tests (Docker)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build
+        run: dotnet build src/ServiceBusExplorer.IntegrationTests --configuration Release
+
+      - name: Test
+        run: dotnet test src/ServiceBusExplorer.IntegrationTests --configuration Release --no-build --verbosity normal
 
   # ---------------------------------------------------------------------------
   # Angular / web app — install, test, build
