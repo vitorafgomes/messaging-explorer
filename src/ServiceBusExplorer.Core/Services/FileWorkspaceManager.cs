@@ -229,33 +229,34 @@ public class FileWorkspaceManager : IConnectionManager, IConnectionGroupManager
 
     /// <summary>
     /// Loads workspace data from disk. Must be called inside lock(_lock).
+    /// A missing file is an empty workspace; a file that exists and cannot be read or parsed throws.
     /// </summary>
     private WorkspaceData LoadWorkspace()
     {
-        if (File.Exists(_filePath))
-        {
-            try
-            {
-                var json = File.ReadAllText(_filePath);
-                return JsonSerializer.Deserialize<WorkspaceData>(json, JsonOptions) ?? new WorkspaceData();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to load workspace data ({ExceptionType})", ex.GetType().Name);
-                return new WorkspaceData();
-            }
-        }
+        if (!File.Exists(_filePath))
+            return new WorkspaceData();
 
-        return new WorkspaceData();
+        try
+        {
+            var json = File.ReadAllText(_filePath);
+            return JsonSerializer.Deserialize<WorkspaceData>(json, JsonOptions) ?? new WorkspaceData();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            throw new InvalidOperationException("The workspace file could not be read.", ex);
+        }
     }
 
     /// <summary>
     /// Saves workspace data to disk synchronously. Must be called inside lock(_lock).
+    /// Writes a temp file in the same directory and moves it over workspace.json.
     /// </summary>
     private void SaveWorkspace(WorkspaceData workspace)
     {
         var json = JsonSerializer.Serialize(workspace, JsonOptions);
-        File.WriteAllText(_filePath, json);
+        var tempPath = _filePath + ".tmp";
+        File.WriteAllText(tempPath, json);
+        File.Move(tempPath, _filePath, overwrite: true);
     }
 
     // ────────────────────────────────────────────────────────────────
@@ -298,28 +299,62 @@ public class FileWorkspaceManager : IConnectionManager, IConnectionGroupManager
     public Task<IEnumerable<ServiceBusConnection>> GetConnectionsAsync()
     {
         _logger.LogDebug("Loading connections");
-        var workspace = LoadWorkspace();
+        lock (_lock)
+        {
+            var workspace = LoadWorkspace();
 
-        _logger.LogDebug(
-            "Masking {ConnectionCount} connection strings for API response",
-            workspace.Connections.Count);
+            _logger.LogDebug(
+                "Masking {ConnectionCount} connection strings for API response",
+                workspace.Connections.Count);
 
-        var maskedConnections = workspace.Connections.Select(MaskConnection);
-        return Task.FromResult(maskedConnections);
+            var maskedConnections = workspace.Connections.Select(MaskConnection);
+            return Task.FromResult(maskedConnections);
+        }
     }
 
     public Task<ServiceBusConnection?> GetConnectionAsync(string id)
     {
-        var workspace = LoadWorkspace();
-        var connection = workspace.Connections.FirstOrDefault(c => c.Id == id);
-        return Task.FromResult(connection == null ? null : MaskConnection(connection));
+        lock (_lock)
+        {
+            var workspace = LoadWorkspace();
+            var connection = workspace.Connections.FirstOrDefault(c => c.Id == id);
+            return Task.FromResult(connection == null ? null : MaskConnection(connection));
+        }
     }
 
     public Task<ServiceBusConnection?> GetConnectionWithSecretAsync(string id)
     {
-        var workspace = LoadWorkspace();
-        var connection = workspace.Connections.FirstOrDefault(c => c.Id == id);
-        return Task.FromResult(connection);
+        lock (_lock)
+        {
+            var workspace = LoadWorkspace();
+            var connection = workspace.Connections.FirstOrDefault(c => c.Id == id);
+            return Task.FromResult(connection);
+        }
+    }
+
+    /// <summary>
+    /// Copies every editable field from <paramref name="source"/> onto a stored connection.
+    /// A secret that arrives as the mask keeps the stored value.
+    /// </summary>
+    private static void CopyEditableFields(ServiceBusConnection target, ServiceBusConnection source)
+    {
+        target.Name = source.Name;
+        target.ProviderType = source.ProviderType;
+        target.ConnectionString = source.ConnectionString == "***" ? target.ConnectionString : source.ConnectionString;
+        target.Namespace = source.Namespace;
+        target.HostName = source.HostName;
+        target.Port = source.Port;
+        target.UserName = source.UserName;
+        target.Password = source.Password == "***" ? target.Password : source.Password;
+        target.VirtualHost = source.VirtualHost;
+        target.ManagementPort = source.ManagementPort;
+        target.ClientId = source.ClientId;
+        target.EnvironmentId = source.EnvironmentId;
+        target.AuthType = source.AuthType;
+        target.FullyQualifiedNamespace = source.FullyQualifiedNamespace;
+        target.TenantId = source.TenantId;
+        target.ServicePrincipalClientId = source.ServicePrincipalClientId;
+        target.ClientSecret = source.ClientSecret == "***" ? target.ClientSecret : source.ClientSecret;
     }
 
     public Task<ServiceBusConnection> SaveConnectionAsync(ServiceBusConnection connection)
@@ -331,23 +366,7 @@ public class FileWorkspaceManager : IConnectionManager, IConnectionGroupManager
 
             if (existing != null)
             {
-                existing.Name = connection.Name;
-                // Preserve stored secret when the caller echoes back the masking sentinel.
-                existing.ConnectionString = connection.ConnectionString == "***"
-                    ? existing.ConnectionString
-                    : connection.ConnectionString;
-                existing.Namespace = connection.Namespace;
-                existing.ClientId = connection.ClientId;
-                existing.EnvironmentId = connection.EnvironmentId;
-
-                // Azure AD auth fields.
-                existing.AuthType = connection.AuthType;
-                existing.FullyQualifiedNamespace = connection.FullyQualifiedNamespace;
-                existing.TenantId = connection.TenantId;
-                existing.ServicePrincipalClientId = connection.ServicePrincipalClientId;
-                existing.ClientSecret = connection.ClientSecret == "***"
-                    ? existing.ClientSecret
-                    : connection.ClientSecret;
+                CopyEditableFields(existing, connection);
             }
             else
             {
@@ -360,7 +379,7 @@ public class FileWorkspaceManager : IConnectionManager, IConnectionGroupManager
             }
 
             SaveWorkspace(workspace);
-            return Task.FromResult(connection);
+            return Task.FromResult(MaskConnection(existing ?? connection));
         }
     }
 
@@ -408,22 +427,7 @@ public class FileWorkspaceManager : IConnectionManager, IConnectionGroupManager
 
                 if (existing != null)
                 {
-                    existing.Name = imported.Name;
-                    existing.ConnectionString = imported.ConnectionString == "***"
-                        ? existing.ConnectionString
-                        : imported.ConnectionString;
-                    existing.Namespace = imported.Namespace;
-                    existing.ClientId = imported.ClientId;
-                    existing.EnvironmentId = imported.EnvironmentId;
-
-                    // Azure AD auth fields.
-                    existing.AuthType = imported.AuthType;
-                    existing.FullyQualifiedNamespace = imported.FullyQualifiedNamespace;
-                    existing.TenantId = imported.TenantId;
-                    existing.ServicePrincipalClientId = imported.ServicePrincipalClientId;
-                    existing.ClientSecret = imported.ClientSecret == "***"
-                        ? existing.ClientSecret
-                        : imported.ClientSecret;
+                    CopyEditableFields(existing, imported);
                 }
                 else
                 {
@@ -431,6 +435,12 @@ public class FileWorkspaceManager : IConnectionManager, IConnectionGroupManager
                         imported.Id = Guid.NewGuid().ToString();
                     if (imported.CreatedAt == default)
                         imported.CreatedAt = DateTime.UtcNow;
+                    if (imported.ConnectionString == "***")
+                        imported.ConnectionString = string.Empty;
+                    if (imported.Password == "***")
+                        imported.Password = null;
+                    if (imported.ClientSecret == "***")
+                        imported.ClientSecret = null;
                     workspace.Connections.Add(imported);
                 }
             }
@@ -447,15 +457,21 @@ public class FileWorkspaceManager : IConnectionManager, IConnectionGroupManager
 
     public Task<IEnumerable<ConnectionGroup>> GetGroupsAsync()
     {
-        var workspace = LoadWorkspace();
-        return Task.FromResult<IEnumerable<ConnectionGroup>>(workspace.Groups);
+        lock (_lock)
+        {
+            var workspace = LoadWorkspace();
+            return Task.FromResult<IEnumerable<ConnectionGroup>>(workspace.Groups);
+        }
     }
 
     public Task<ConnectionGroup?> GetGroupAsync(string id)
     {
-        var workspace = LoadWorkspace();
-        var group = workspace.Groups.FirstOrDefault(g => g.Id == id);
-        return Task.FromResult(group);
+        lock (_lock)
+        {
+            var workspace = LoadWorkspace();
+            var group = workspace.Groups.FirstOrDefault(g => g.Id == id);
+            return Task.FromResult(group);
+        }
     }
 
     public Task<ConnectionGroup> SaveGroupAsync(ConnectionGroup group)
@@ -494,6 +510,28 @@ public class FileWorkspaceManager : IConnectionManager, IConnectionGroupManager
             workspace.Groups.RemoveAll(g => g.Id == id);
             SaveWorkspace(workspace);
             return Task.CompletedTask;
+        }
+    }
+
+    public Task<(int Connections, int Groups)> ClearAllAsync()
+    {
+        lock (_lock)
+        {
+            var deleted = (Connections: 0, Groups: 0);
+            try
+            {
+                var workspace = LoadWorkspace();
+                deleted = (workspace.Connections.Count, workspace.Groups.Count);
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogWarning(
+                    "Clearing an unreadable workspace file ({ExceptionType})",
+                    ex.InnerException?.GetType().Name);
+            }
+
+            SaveWorkspace(new WorkspaceData());
+            return Task.FromResult(deleted);
         }
     }
 

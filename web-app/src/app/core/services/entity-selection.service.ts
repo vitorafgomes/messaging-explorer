@@ -1,10 +1,11 @@
 import { Injectable, inject } from '@angular/core';
-import { BehaviorSubject, Observable, of, Subject } from 'rxjs';
-import { map, switchMap, tap, catchError } from 'rxjs/operators';
+import { BehaviorSubject, Observable, of, Subject, Subscription } from 'rxjs';
+import { map, skip } from 'rxjs/operators';
 import { EntitySelection, SelectionState, EntityType, TreeNode, SubscriptionNodeData } from '../models';
 import { QueueService } from './queue.service';
 import { TopicService } from './topic.service';
 import { LoggerService } from './logger.service';
+import { ConnectionService } from './connection.service';
 import { QueueInfo } from '../models/queue.model';
 import { TopicInfo, SubscriptionInfo } from '../models/topic.model';
 
@@ -23,6 +24,7 @@ export class EntitySelectionService {
   });
 
   private treeRefreshSubject = new Subject<void>();
+  private pendingLoad?: Subscription;
 
   state$ = this.stateSubject.asObservable();
   selection$ = this.state$.pipe(map(state => state.selection));
@@ -30,7 +32,19 @@ export class EntitySelectionService {
   error$ = this.state$.pipe(map(state => state.error));
   treeRefresh$ = this.treeRefreshSubject.asObservable();
 
+  /**
+   * Clears the selection on every connection status after the current one: a connect,
+   * a disconnect or the startup status. An entity selected under one connection is
+   * never acted on under another.
+   */
+  constructor() {
+    inject(ConnectionService).connectionStatus$
+      .pipe(skip(1))
+      .subscribe(() => this.clearSelection());
+  }
+
   select(node: TreeNode): void {
+    this.pendingLoad?.unsubscribe();
     if (node.type === 'root' || node.type === 'category') {
       this.stateSubject.next({
         selection: { type: node.type, node },
@@ -46,7 +60,7 @@ export class EntitySelectionService {
       error: null
     });
 
-    this.loadEntityDetails(node).subscribe({
+    this.pendingLoad = this.loadEntityDetails(node).subscribe({
       next: (entity) => {
         this.stateSubject.next({
           selection: { type: node.type, node, entity },
@@ -65,6 +79,7 @@ export class EntitySelectionService {
   }
 
   clearSelection(): void {
+    this.pendingLoad?.unsubscribe();
     this.stateSubject.next({
       selection: null,
       loading: false,

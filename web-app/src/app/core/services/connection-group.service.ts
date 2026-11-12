@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { ApiService } from './api.service';
+import { apiPath } from './api-path';
 import { ConnectionGroup, ConnectionGroupTree, ServiceBusConnection } from '../models';
 
 @Injectable({
@@ -14,7 +15,7 @@ export class ConnectionGroupService {
   }
 
   getGroup(id: string): Observable<ConnectionGroup> {
-    return this.api.get<ConnectionGroup>(`connectiongroups/${id}`);
+    return this.api.get<ConnectionGroup>(apiPath`connectiongroups/${id}`);
   }
 
   createGroup(group: Partial<ConnectionGroup>): Observable<ConnectionGroup> {
@@ -22,11 +23,11 @@ export class ConnectionGroupService {
   }
 
   updateGroup(id: string, group: Partial<ConnectionGroup>): Observable<ConnectionGroup> {
-    return this.api.put<ConnectionGroup>(`connectiongroups/${id}`, group);
+    return this.api.put<ConnectionGroup>(apiPath`connectiongroups/${id}`, group);
   }
 
   deleteGroup(id: string): Observable<void> {
-    return this.api.delete<void>(`connectiongroups/${id}`);
+    return this.api.delete<void>(apiPath`connectiongroups/${id}`);
   }
 
   buildGroupTree(groups: ConnectionGroup[], connections: ServiceBusConnection[]): ConnectionGroupTree[] {

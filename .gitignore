@@ -81,3 +81,13 @@ web-app/.auto-claude/
 # ServiceBus Explorer configuration (contains sensitive connection strings)
 .servicebus/
 *.servicebus.json
+
+# Per-session harness metrics written by the SessionEnd hook; local, never committed
+.claude/metrics/
+.claude/settings.local.json
+
+# graphify AST knowledge graph, built locally on demand; never committed
+graphify-out/
+
+# Throwaway extraction of origin/main used by the mechanic's prove-red run
+.prove-red/

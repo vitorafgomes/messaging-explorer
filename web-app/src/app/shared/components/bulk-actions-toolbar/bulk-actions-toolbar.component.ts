@@ -62,7 +62,7 @@ export interface BulkActionEvent {
           <div class="selection-info">
             <i class="fa fa-check-circle text-primary me-2"></i>
             <span class="selected-count">{{ selectedCount }}</span>
-            <span class="selected-text">{{ selectedCount === 1 ? 'message' : 'messages' }} selected</span>
+            <span class="selected-text">{{ detail || (selectedCount === 1 ? 'message selected' : 'messages selected') }}</span>
           </div>
 
           <!-- Action Buttons -->
@@ -313,6 +313,12 @@ export class BulkActionsToolbarComponent {
    * Number of selected messages to display
    */
   @Input() selectedCount = 0;
+
+  /**
+   * Text after the count, such as "selected of 20 loaded, 37 in the dead-letter queue";
+   * when empty the toolbar says "messages selected"
+   */
+  @Input() detail = '';
 
   /**
    * Whether to show the Resubmit button (Dead Letter tab only)

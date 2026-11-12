@@ -1,5 +1,5 @@
 import { Pipe, PipeTransform, inject } from '@angular/core';
-import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { SafeHtml } from '@angular/platform-browser';
 import { MessageSearchService, SearchOptions } from '../../core/services';
 
 /**
@@ -17,7 +17,6 @@ import { MessageSearchService, SearchOptions } from '../../core/services';
 })
 export class HighlightPipe implements PipeTransform {
   private searchService = inject(MessageSearchService);
-  private sanitizer = inject(DomSanitizer);
 
   /**
    * Transforms text by wrapping matching portions in <mark> tags
@@ -69,8 +68,10 @@ export class HighlightPipe implements PipeTransform {
     // Add remaining text after the last match (escaped)
     highlightedText += this.escapeHtml(text.substring(lastIndex));
 
-    // Return as SafeHtml since we've already escaped the content and only added safe <mark> tags
-    return this.sanitizer.sanitize(1, highlightedText) || '';
+    // The content is escaped before <mark> tags are added. Returning a string
+    // deliberately leaves Angular's [innerHTML] sanitizer in control; do not
+    // bypass it with DomSanitizer for message content received from a broker.
+    return highlightedText;
   }
 
   /**

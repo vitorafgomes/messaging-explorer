@@ -78,14 +78,9 @@ describe('AdvancedFilterPanelComponent', () => {
     const conditionId = component.filterState.conditions[0].id;
 
     const promise = new Promise<void>((resolve) => {
-      let emitCount = 0;
       component.filterStateChange.subscribe((state: AdvancedFilterState) => {
-        emitCount++;
-        // First emit is from addCondition, second is from removeCondition
-        if (emitCount === 2) {
-          expect(state.conditions.length).toBe(0);
-          resolve();
-        }
+        expect(state.conditions.length).toBe(0);
+        resolve();
       });
     });
 
@@ -98,14 +93,9 @@ describe('AdvancedFilterPanelComponent', () => {
     component.addCondition();
 
     const promise = new Promise<void>((resolve) => {
-      let emitCount = 0;
       component.filterStateChange.subscribe((state: AdvancedFilterState) => {
-        emitCount++;
-        // First two emits are from addCondition calls
-        if (emitCount === 3) {
-          expect(state.logicOperator).toBe(FilterLogic.Or);
-          resolve();
-        }
+        expect(state.logicOperator).toBe(FilterLogic.Or);
+        resolve();
       });
     });
 
@@ -117,6 +107,7 @@ describe('AdvancedFilterPanelComponent', () => {
   it('should handle custom property selection', () => {
     component.addCondition();
     const condition = component.filterState.conditions[0];
+    condition.property = 'customProperty';
 
     component.onPropertyChange(condition);
 
@@ -258,7 +249,7 @@ describe('AdvancedFilterPanelComponent', () => {
 
     it('should extract custom properties when messages input changes', () => {
       component.messages = mockMessages;
-      fixture.detectChanges();
+      component.ngOnInit();
 
       expect(component.availableCustomProperties.length).toBe(3);
 
@@ -388,12 +379,12 @@ describe('AdvancedFilterPanelComponent', () => {
     });
 
     it('should accept isCollapsed as input', () => {
-      component.isCollapsed = true;
+      fixture.componentRef.setInput('isCollapsed', true);
       fixture.detectChanges();
 
       expect(component.isCollapsed).toBe(true);
 
-      component.isCollapsed = false;
+      fixture.componentRef.setInput('isCollapsed', false);
       fixture.detectChanges();
 
       expect(component.isCollapsed).toBe(false);
@@ -471,14 +462,9 @@ describe('AdvancedFilterPanelComponent', () => {
       component.addCondition();
 
       const promise = new Promise<void>((resolve) => {
-        let emitCount = 0;
-        component.filterStateChange.subscribe((state: AdvancedFilterState) => {
-          emitCount++;
-          // First two emits from addCondition, third from clearAllFilters
-          if (emitCount === 3) {
-            expect(state.conditions.length).toBe(0);
-            resolve();
-          }
+      component.filterStateChange.subscribe((state: AdvancedFilterState) => {
+          expect(state.conditions.length).toBe(0);
+          resolve();
         });
       });
 
@@ -541,13 +527,11 @@ describe('AdvancedFilterPanelComponent', () => {
     });
 
     it('should have correct default values for all properties', () => {
-      const newComponent = new AdvancedFilterPanelComponent();
-
-      expect(newComponent.filterState.conditions).toEqual([]);
-      expect(newComponent.filterState.logicOperator).toBe(FilterLogic.And);
-      expect(newComponent.availableCustomProperties).toEqual([]);
-      expect(newComponent.isCollapsed).toBe(false);
-      expect(newComponent.customPropertyName).toEqual({});
+      expect(component.filterState.conditions).toEqual([]);
+      expect(component.filterState.logicOperator).toBe(FilterLogic.And);
+      expect(component.availableCustomProperties).toEqual([]);
+      expect(component.isCollapsed).toBe(false);
+      expect(component.customPropertyName).toEqual({});
     });
 
     it('should generate conditions with default property and operator', () => {

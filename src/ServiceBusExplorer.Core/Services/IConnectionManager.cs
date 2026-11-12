@@ -27,4 +27,10 @@ public interface IConnectionManager
     Task<string> ExportConfigurationAsync(bool includeSecrets = false);
 
     Task ImportConfigurationAsync(string jsonData);
+
+    /// <summary>
+    /// Replaces the stored workspace with an empty one and returns how many connections and groups it held.
+    /// An unreadable workspace file is cleared too and reports zero for both.
+    /// </summary>
+    Task<(int Connections, int Groups)> ClearAllAsync();
 }

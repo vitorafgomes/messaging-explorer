@@ -23,6 +23,7 @@
     "build:all": "npm run build:api && npm run build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
+    "test:electron": "node --test \"electron/**/*.test.js\"",
     "electron:dev": "concurrently \"npm run start\" \"wait-on http://localhost:4297 && NODE_ENV=development electron .\"",
     "electron:build": "npm run build:all && electron-builder --publish never",
     "electron:build:win": "npm run build:all && electron-builder --win --publish never",
@@ -54,6 +55,8 @@
     "@angular/material": "^21.0.5",
     "@angular/platform-browser": "^21.2.8",
     "@angular/router": "^21.2.8",
+    "@fontsource/material-icons": "^5.3.0",
+    "@fontsource/roboto": "^5.3.0",
     "@fortawesome/fontawesome-free": "^7.2.0",
     "@ng-bootstrap/ng-bootstrap": "^20.0.0",
     "@popperjs/core": "^2.11.8",
@@ -93,6 +96,7 @@
     "files": [
       "dist/web-app/**/*",
       "electron/**/*",
+      "!electron/**/*.test.js",
       "src/assets/**/*"
     ],
     "asarUnpack": [
@@ -124,8 +128,20 @@
     },
     "mac": {
       "target": [
-        { "target": "dmg", "arch": ["arm64", "x64"] },
-        { "target": "zip", "arch": ["arm64", "x64"] }
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
       ],
       "icon": "src/assets/icon.icns",
       "category": "public.app-category.developer-tools"

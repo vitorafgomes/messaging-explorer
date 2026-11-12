@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, of, timer, fromEvent, merge, throwError } from 'rxjs';
 import { catchError, map, switchMap, startWith, filter, shareReplay } from 'rxjs/operators';
 import { ApiService } from './api.service';
+import { apiPath } from './api-path';
 import { MetricsData, MetricsTimeRange } from '../models';
 import { HttpErrorResponse } from '@angular/common/http';
 
@@ -23,7 +24,7 @@ export class MetricsService {
    * @returns Observable with metrics data containing time series for the queue
    */
   getQueueMetrics(queueName: string, timeRange: MetricsTimeRange = MetricsTimeRange.OneHour): Observable<MetricsData> {
-    return this.api.get<MetricsData>(`metrics/queues/${queueName}?timeRange=${timeRange}`).pipe(
+    return this.api.get<MetricsData>(apiPath`metrics/queues/${queueName}?timeRange=${timeRange}`).pipe(
       map(data => this.convertDates(data)),
       catchError(error => this.handleMetricsError(error, timeRange))
     );
@@ -36,7 +37,7 @@ export class MetricsService {
    * @returns Observable with metrics data containing time series for the topic
    */
   getTopicMetrics(topicName: string, timeRange: MetricsTimeRange = MetricsTimeRange.OneHour): Observable<MetricsData> {
-    return this.api.get<MetricsData>(`metrics/topics/${topicName}?timeRange=${timeRange}`).pipe(
+    return this.api.get<MetricsData>(apiPath`metrics/topics/${topicName}?timeRange=${timeRange}`).pipe(
       map(data => this.convertDates(data)),
       catchError(error => this.handleMetricsError(error, timeRange))
     );
@@ -55,7 +56,7 @@ export class MetricsService {
     timeRange: MetricsTimeRange = MetricsTimeRange.OneHour
   ): Observable<MetricsData> {
     return this.api.get<MetricsData>(
-      `metrics/topics/${topicName}/subscriptions/${subscriptionName}?timeRange=${timeRange}`
+      apiPath`metrics/topics/${topicName}/subscriptions/${subscriptionName}?timeRange=${timeRange}`
     ).pipe(
       map(data => this.convertDates(data)),
       catchError(error => this.handleMetricsError(error, timeRange))

@@ -1,9 +1,10 @@
-const { app, BrowserWindow, shell, Menu, Tray, nativeImage, ipcMain } = require('electron');
+const { app, BrowserWindow, shell, Menu, Tray, nativeImage, ipcMain, dialog } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const { autoUpdater } = require('electron-updater');
 const crypto = require('crypto');
 const Store = require('electron-store');
+const { isSafeExternalUrl, normalizeUpdateChannel, waitForHealth, stopProcess } = require('./shell-helpers');
 
 // Generate a per-session API secret for Electron <-> .NET API authentication
 const API_SECRET = crypto.randomBytes(32).toString('hex');
@@ -19,6 +20,8 @@ let mainWindow;
 let splashWindow;
 let tray;
 let apiProcess;
+let apiExit = null;
+let apiHealthy = false;
 
 // Load port config from repo-root config.json; fall back to defaults if missing
 function loadPortConfig() {
@@ -681,7 +684,9 @@ function createWindow() {
 
   // Open external links in browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    if (isSafeExternalUrl(url)) {
+      shell.openExternal(url);
+    }
     return { action: 'deny' };
   });
 
@@ -747,12 +752,12 @@ function getApiPath() {
     console.log(`[getApiPath] Checking: ${apiPath}`);
     const executablePath = path.join(apiPath, exeName);
     if (fs.existsSync(executablePath)) {
-      console.log(`[getApiPath] ✅ Found API at: ${apiPath}`);
+      console.log(`[getApiPath] Found API at: ${apiPath}`);
       return apiPath;
     }
   }
 
-  console.error('[getApiPath] ❌ API not found in any expected location');
+  console.error('[getApiPath] API not found in any expected location');
   return null;
 }
 
@@ -780,24 +785,27 @@ function startApi() {
         },
         stdio: ['ignore', 'pipe', 'pipe']
       });
-      console.log(`[startApi] ✅ Dev API process spawned with PID: ${apiProcess.pid}`);
+      console.log(`[startApi] Dev API process spawned with PID: ${apiProcess.pid}`);
       apiProcess.stdout.on('data', (d) => console.log(`[API] ${d.toString().trim()}`));
       apiProcess.stderr.on('data', (d) => console.error(`[API ERROR] ${d.toString().trim()}`));
+      apiProcess.on('error', recordApiError);
       apiProcess.on('exit', (code, signal) => {
         console.log(`[startApi] Dev API exited code=${code} signal=${signal}`);
+        recordApiExit(code, signal);
       });
     } catch (err) {
-      console.error('[startApi] ❌ Failed to spawn dev API:', err.message);
+      console.error('[startApi] Failed to spawn dev API:', err.message);
+      return `it could not be launched (${err.message})`;
     }
-    return;
+    return null;
   }
 
   console.log('[startApi] Starting API in production mode on port', apiPort);
 
   const apiPath = getApiPath();
   if (!apiPath) {
-    console.error('[startApi] ❌ API path not found - API will not start');
-    return;
+    console.error('[startApi] API path not found - API will not start');
+    return 'the API executable was not found';
   }
 
   let executable;
@@ -809,22 +817,22 @@ function startApi() {
 
   // Check if executable exists
   if (!fs.existsSync(executable)) {
-    console.error(`[startApi] ❌ Executable not found at: ${executable}`);
-    return;
+    console.error(`[startApi] Executable not found at: ${executable}`);
+    return 'the API executable was not found';
   }
 
   // Check if executable has execute permissions
   try {
     fs.accessSync(executable, fs.constants.X_OK);
-    console.log('[startApi] ✅ Executable has execute permissions');
+    console.log('[startApi] Executable has execute permissions');
   } catch (err) {
-    console.error('[startApi] ❌ Executable does not have execute permissions, attempting to fix...');
+    console.error('[startApi] Executable does not have execute permissions, attempting to fix...');
     try {
       fs.chmodSync(executable, 0o755);
-      console.log('[startApi] ✅ Fixed execute permissions');
+      console.log('[startApi] Fixed execute permissions');
     } catch (chmodErr) {
-      console.error('[startApi] ❌ Failed to fix permissions:', chmodErr.message);
-      return;
+      console.error('[startApi] Failed to fix permissions:', chmodErr.message);
+      return 'the API executable could not be made executable';
     }
   }
 
@@ -845,7 +853,7 @@ function startApi() {
       stdio: ['ignore', 'pipe', 'pipe']
     });
 
-    console.log(`[startApi] ✅ API process spawned with PID: ${apiProcess.pid}`);
+    console.log(`[startApi] API process spawned with PID: ${apiProcess.pid}`);
 
     apiProcess.stdout.on('data', (data) => {
       const message = data.toString().trim();
@@ -858,8 +866,9 @@ function startApi() {
     });
 
     apiProcess.on('error', (err) => {
-      console.error(`[startApi] ❌ Failed to start API process: ${err.message}`);
+      console.error(`[startApi] Failed to start API process: ${err.message}`);
       console.error('[startApi] Error details:', err);
+      recordApiError(err);
     });
 
     apiProcess.on('exit', (code, signal) => {
@@ -867,23 +876,71 @@ function startApi() {
       if (code !== 0 && code !== null) {
         console.error('[startApi] API crashed or exited unexpectedly');
       }
+      recordApiExit(code, signal);
     });
   } catch (err) {
-    console.error('[startApi] ❌ Exception while spawning API:', err.message);
+    console.error('[startApi] Exception while spawning API:', err.message);
     console.error('[startApi] Stack trace:', err.stack);
+    return `it could not be launched (${err.message})`;
   }
 
+  return null;
+}
+
+function recordApiError(err) {
+  apiExit = apiExit || { error: err.message };
+}
+
+function recordApiExit(code, signal) {
+  apiExit = apiExit || { code, signal };
+  if (apiHealthy && code !== 0 && code !== null && !app.isQuitting) {
+    dialog.showErrorBox('Messaging Explorer', `The local API stopped unexpectedly (exit code ${code}). Restart Messaging Explorer to reconnect.`);
+  }
+}
+
+function describeApiExit(exit) {
+  if (exit.error) return `it could not be launched (${exit.error})`;
+  if (exit.code !== null) return `it exited with code ${exit.code}`;
+  return `it was stopped by signal ${exit.signal}`;
+}
+
+async function openWindowWhenApiReady(startFailure) {
+  let failure = startFailure;
+  if (!failure) {
+    const timeoutMs = isDev ? 120_000 : 30_000;
+    const result = await waitForHealth({
+      url: `http://127.0.0.1:${apiPort}/health`,
+      timeoutMs,
+      intervalMs: 250,
+      fetchFn: (url) => fetch(url, { signal: AbortSignal.timeout(2000) }),
+      hasExited: () => apiExit !== null
+    });
+    apiHealthy = result.healthy;
+    if (!result.healthy) {
+      failure = result.reason === 'timeout'
+        ? `it did not answer within ${timeoutMs / 1000} seconds`
+        : describeApiExit(apiExit);
+    }
+  }
+  if (app.isQuitting) return;
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow();
+  }
+  if (failure) {
+    if (splashWindow) {
+      splashWindow.close();
+      splashWindow = null;
+    }
+    dialog.showErrorBox('Messaging Explorer', `The local API did not start: ${failure}.`);
+  }
 }
 
 app.whenReady().then(() => {
   createSplashScreen();
-  startApi();
+  const startFailure = startApi();
   createTray();
 
-  // Small delay to show splash screen
-  setTimeout(() => {
-    createWindow();
-  }, 500);
+  openWindowWhenApiReady(startFailure);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -897,16 +954,9 @@ app.whenReady().then(() => {
 // Quit properly
 app.on('before-quit', () => {
   app.isQuitting = true;
-  if (apiProcess && !apiProcess.killed) {
+  if (apiProcess && apiProcess.exitCode === null && apiProcess.signalCode === null) {
     console.log('[beforeQuit] Terminating API process with PID:', apiProcess.pid);
-    apiProcess.kill('SIGTERM');
-    // Force kill after 5 seconds if process doesn't exit gracefully
-    setTimeout(() => {
-      if (apiProcess && !apiProcess.killed) {
-        console.log('[beforeQuit] Forcing API process termination with SIGKILL');
-        apiProcess.kill('SIGKILL');
-      }
-    }, 5000);
+    stopProcess(apiProcess, { graceMs: 5000 }).unref();
   }
 });
 
@@ -930,7 +980,7 @@ ipcMain.handle('get-api-port', () => apiPort);
 // === Auto Updater ===
 autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = true;
-autoUpdater.channel = store.get('updateChannel', 'latest');
+autoUpdater.channel = normalizeUpdateChannel(store.get('updateChannel', 'latest')) ?? 'latest';
 
 function sendUpdateStatus(status, data = {}) {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -995,7 +1045,11 @@ ipcMain.handle('install-update', () => {
 });
 
 // IPC: Set update channel (latest or beta)
-ipcMain.handle('set-update-channel', (event, channel) => {
+ipcMain.handle('set-update-channel', (event, requested) => {
+  const channel = normalizeUpdateChannel(requested);
+  if (!channel) {
+    return { status: 'error', message: 'Unknown update channel' };
+  }
   store.set('updateChannel', channel);
   autoUpdater.channel = channel;
   console.log(`[Updater] Channel changed to: ${channel}`);
@@ -1004,7 +1058,7 @@ ipcMain.handle('set-update-channel', (event, channel) => {
 
 // IPC: Get current update channel
 ipcMain.handle('get-update-channel', () => {
-  return store.get('updateChannel', 'latest');
+  return normalizeUpdateChannel(store.get('updateChannel', 'latest')) ?? 'latest';
 });
 
 // Check for updates shortly after launch and then on a fixed interval so

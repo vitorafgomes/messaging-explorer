@@ -159,7 +159,7 @@ describe('MessageSearchService', () => {
           createMockMessage({ applicationProperties: undefined as any })
         ];
         const result = service.searchMessages(messages, 'test', { mode: 'text' });
-        expect(result.length).toBe(0);
+        expect(result.length).toBe(1);
       });
 
       it('should filter by specific property', () => {
@@ -180,7 +180,7 @@ describe('MessageSearchService', () => {
           createMockMessage({ correlationId: undefined, sessionId: undefined, subject: undefined })
         ];
         const result = service.searchMessages(messages, 'test', { mode: 'text' });
-        expect(result.length).toBe(0);
+        expect(result.length).toBe(1);
       });
     });
 
@@ -321,7 +321,7 @@ describe('MessageSearchService', () => {
         // Should find "aa" at positions 0 and 2 (not overlapping)
         expect(matches.length).toBe(2);
         expect(matches[0].start).toBe(0);
-        expect(matches[1].start).toBe(1); // Actually finds at 1 and 2 due to indexOf behavior
+        expect(matches[1].start).toBe(2);
       });
 
       it('should preserve original case in match text', () => {

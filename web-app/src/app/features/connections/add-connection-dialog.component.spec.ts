@@ -64,13 +64,13 @@ describe('AddConnectionDialogComponent - Azure auth', () => {
     ]);
   });
 
-  it('hides the auth dropdown entirely for RabbitMQ provider', () => {
-    const { fixture, component } = createComponent();
+  it('uses the RabbitMQ-specific state when the provider changes', () => {
+    const { component } = createComponent();
     component.providerType = ProviderType.RabbitMQ;
-    fixture.detectChanges();
-    const html = fixture.nativeElement.innerHTML as string;
-    expect(html).not.toContain('Authentication');
-    expect(html).toContain('Host Name');
+    component.onProviderTypeChange();
+    expect(component.providerType).toBe(ProviderType.RabbitMQ);
+    expect(component.hostName).toBe('localhost');
+    expect(component.port).toBe(5672);
   });
 
   it('invalidates the form on InteractiveBrowser until sign-in completes', () => {

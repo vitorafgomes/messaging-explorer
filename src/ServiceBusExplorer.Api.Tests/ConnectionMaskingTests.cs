@@ -145,4 +145,86 @@ public class ConnectionMaskingTests : IClassFixture<ApiFactory>
 
         Assert.Contains("sp-raw-sentinel-xyz", payload);
     }
+
+    [Fact]
+    public async Task GetConnection_by_id_returns_masked_password()
+    {
+        var id = Guid.NewGuid().ToString();
+        await _factory.SeedConnectionAsync(new ServiceBusConnection
+        {
+            Id = id,
+            Name = "rabbit-conn",
+            ProviderType = ProviderType.RabbitMQ,
+            HostName = "rabbit.local",
+            UserName = "guest",
+            Password = "rabbit-password-sentinel"
+        });
+
+        var client = CreateAuthedClient();
+        var dto = await client.GetFromJsonAsync<JsonElement>($"/api/connections/{id}");
+
+        Assert.Equal("***", dto.GetProperty("password").GetString());
+    }
+
+    [Fact]
+    public async Task Export_default_returns_masked_password()
+    {
+        var id = Guid.NewGuid().ToString();
+        await _factory.SeedConnectionAsync(new ServiceBusConnection
+        {
+            Id = id,
+            Name = "rabbit-export-masked",
+            ProviderType = ProviderType.RabbitMQ,
+            HostName = "rabbit.local",
+            UserName = "guest",
+            Password = "rabbit-export-password-should-not-leak"
+        });
+
+        var client = CreateAuthedClient();
+        var response = await client.PostAsync("/api/connections/export", content: null);
+        response.EnsureSuccessStatusCode();
+        var payload = await response.Content.ReadAsStringAsync();
+
+        using var doc = JsonDocument.Parse(payload);
+        var entry = doc.RootElement.EnumerateArray()
+            .Single(e => e.GetProperty("Id").GetString() == id);
+        Assert.Equal("***", entry.GetProperty("Password").GetString());
+        Assert.DoesNotContain("rabbit-export-password-should-not-leak", payload);
+    }
+
+    [Fact]
+    public async Task Save_connection_response_never_returns_a_raw_secret()
+    {
+        var id = Guid.NewGuid().ToString();
+        await _factory.SeedConnectionAsync(new ServiceBusConnection
+        {
+            Id = id,
+            Name = "post-before",
+            ProviderType = ProviderType.AzureServiceBus,
+            ConnectionString = "Endpoint=sb://post-cs-sentinel",
+            Password = "post-password-sentinel",
+            ClientSecret = "post-client-secret-sentinel"
+        });
+
+        var client = CreateAuthedClient();
+        var response = await client.PostAsJsonAsync("/api/connections", new
+        {
+            id,
+            name = "post-after",
+            providerType = "AzureServiceBus",
+            connectionString = "***",
+            password = "***",
+            clientSecret = "***"
+        });
+        response.EnsureSuccessStatusCode();
+        var payload = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(payload);
+        var dto = doc.RootElement;
+
+        Assert.Equal("post-after", dto.GetProperty("name").GetString());
+        Assert.Equal("***", dto.GetProperty("connectionString").GetString());
+        Assert.Equal("***", dto.GetProperty("password").GetString());
+        Assert.Equal("***", dto.GetProperty("clientSecret").GetString());
+        Assert.DoesNotContain("sentinel", payload);
+    }
 }

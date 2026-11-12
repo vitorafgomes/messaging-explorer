@@ -630,7 +630,8 @@ describe('MessageExportService', () => {
       const result = service.exportToCsv(messages, options);
       const lines = result.split('\n');
 
-      expect(lines.length).toBe(4);
+      // A newline inside a quoted CSV field is valid and occupies a physical line.
+      expect(lines.length).toBe(5);
       expect(result).toContain('Simple text');
       expect(result).toContain('Complex ""text"", with\nspecial chars');
     });

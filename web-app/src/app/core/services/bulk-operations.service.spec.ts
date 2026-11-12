@@ -39,11 +39,11 @@ describe('BulkOperationsService', () => {
       const state = service.currentState;
 
       expect(state.active.selectedSequenceNumbers.size).toBe(0);
-      expect(state.active.allSelected).toBe(false);
+      expect(service.isAllSelected('active', createMockMessages(3))).toBe(false);
       expect(state.active.indeterminate).toBe(false);
 
       expect(state.deadletter.selectedSequenceNumbers.size).toBe(0);
-      expect(state.deadletter.allSelected).toBe(false);
+      expect(service.isAllSelected('deadletter', createMockMessages(3))).toBe(false);
       expect(state.deadletter.indeterminate).toBe(false);
     });
 
@@ -158,7 +158,7 @@ describe('BulkOperationsService', () => {
       service.selectMessage('active', 1, 5);
 
       expect(service.isIndeterminate('active')).toBe(true);
-      expect(service.isAllSelected('active')).toBe(false);
+      expect(service.isAllSelected('active', createMockMessages(5))).toBe(false);
     });
 
     it('should set allSelected when all messages selected individually', () => {
@@ -166,7 +166,7 @@ describe('BulkOperationsService', () => {
       service.selectMessage('active', 2, 3);
       service.selectMessage('active', 3, 3);
 
-      expect(service.isAllSelected('active')).toBe(true);
+      expect(service.isAllSelected('active', createMockMessages(3))).toBe(true);
       expect(service.isIndeterminate('active')).toBe(false);
     });
 
@@ -201,12 +201,12 @@ describe('BulkOperationsService', () => {
     it('should clear indeterminate and allSelected when deselecting all', () => {
       service.selectMessage('active', 1, 2);
       service.selectMessage('active', 2, 2);
-      expect(service.isAllSelected('active')).toBe(true);
+      expect(service.isAllSelected('active', createMockMessages(2))).toBe(true);
 
       service.deselectMessage('active', 1, 2);
       service.deselectMessage('active', 2, 2);
 
-      expect(service.isAllSelected('active')).toBe(false);
+      expect(service.isAllSelected('active', createMockMessages(2))).toBe(false);
       expect(service.isIndeterminate('active')).toBe(false);
       expect(service.getSelectionCount('active')).toBe(0);
     });
@@ -249,7 +249,7 @@ describe('BulkOperationsService', () => {
       service.selectAll('active', messages);
 
       expect(service.getSelectionCount('active')).toBe(5);
-      expect(service.isAllSelected('active')).toBe(true);
+      expect(service.isAllSelected('active', messages)).toBe(true);
       expect(service.isIndeterminate('active')).toBe(false);
     });
 
@@ -269,7 +269,7 @@ describe('BulkOperationsService', () => {
       service.selectAll('active', []);
 
       expect(service.getSelectionCount('active')).toBe(0);
-      expect(service.isAllSelected('active')).toBe(false);
+      expect(service.isAllSelected('active', [])).toBe(false);
       expect(service.isIndeterminate('active')).toBe(false);
     });
 
@@ -294,7 +294,7 @@ describe('BulkOperationsService', () => {
       service.clearSelection('active');
 
       expect(service.getSelectionCount('active')).toBe(0);
-      expect(service.isAllSelected('active')).toBe(false);
+      expect(service.isAllSelected('active', messages)).toBe(false);
       expect(service.isIndeterminate('active')).toBe(false);
     });
 
@@ -345,9 +345,9 @@ describe('BulkOperationsService', () => {
       service.clearAllSelections();
 
       const state = service.currentState;
-      expect(state.active.allSelected).toBe(false);
+      expect(service.isAllSelected('active', activeMessages)).toBe(false);
       expect(state.active.indeterminate).toBe(false);
-      expect(state.deadletter.allSelected).toBe(false);
+      expect(service.isAllSelected('deadletter', deadletterMessages)).toBe(false);
       expect(state.deadletter.indeterminate).toBe(false);
     });
   });
@@ -367,7 +367,7 @@ describe('BulkOperationsService', () => {
 
       const tabState = service.getTabState('deadletter');
       expect(tabState.selectedSequenceNumbers.size).toBe(2);
-      expect(tabState.allSelected).toBe(true);
+      expect(service.isAllSelected('deadletter', messages)).toBe(true);
     });
   });
 
@@ -422,16 +422,25 @@ describe('BulkOperationsService', () => {
     it('should return true when all messages are selected', () => {
       const messages = createMockMessages(3);
       service.selectAll('active', messages);
-      expect(service.isAllSelected('active')).toBe(true);
+      expect(service.isAllSelected('active', messages)).toBe(true);
     });
 
     it('should return false when some messages are selected', () => {
       service.selectMessage('active', 1, 5);
-      expect(service.isAllSelected('active')).toBe(false);
+      expect(service.isAllSelected('active', createMockMessages(5))).toBe(false);
     });
 
     it('should return false when no messages are selected', () => {
-      expect(service.isAllSelected('active')).toBe(false);
+      expect(service.isAllSelected('active', createMockMessages(5))).toBe(false);
+    });
+
+    it('is recomputed from the visible list: all of a 3-hit search selected is not all of the 20 loaded', () => {
+      const loaded = createMockMessages(20);
+      const hits = loaded.slice(0, 3);
+      service.selectAll('active', hits);
+
+      expect(service.isAllSelected('active', hits)).toBe(true);
+      expect(service.isAllSelected('active', loaded)).toBe(false);
     });
   });
 
@@ -459,7 +468,7 @@ describe('BulkOperationsService', () => {
       service.selectAll('active', messages);
 
       expect(service.getSelectionCount('active')).toBe(1000);
-      expect(service.isAllSelected('active')).toBe(true);
+      expect(service.isAllSelected('active', messages)).toBe(true);
     });
 
     it('should handle sequence numbers with large values', () => {

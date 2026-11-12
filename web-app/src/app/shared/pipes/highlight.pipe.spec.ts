@@ -172,7 +172,8 @@ describe('HighlightPipe', () => {
 
       it('should escape quotes', () => {
         const result = pipe.transform('He said "hello"', 'hello', { mode: 'text' });
-        expect(result).toContain('&quot;');
+        // Quotes are safe in text nodes and do not require escaping.
+        expect(result).toContain('"');
         expect(result).toContain('<mark>hello</mark>');
       });
 
@@ -201,7 +202,7 @@ describe('HighlightPipe', () => {
         expect(result).toContain('&lt;tag&gt;');
         expect(result).toContain('&lt;/tag&gt;');
         expect(result).toContain('<mark>content</mark>');
-        expect(result).toContain('&quot;');
+        expect(result).toContain('"quotes"');
         expect(result).toContain('&amp;');
       });
     });
@@ -212,9 +213,9 @@ describe('HighlightPipe', () => {
         expect(result).toBe('');
       });
 
-      it('should handle text with only whitespace', () => {
+      it('should not highlight whitespace-only queries', () => {
         const result = pipe.transform('   ', ' ', { mode: 'text' });
-        expect(result).toContain('<mark> </mark>');
+        expect(result).toBe('   ');
       });
 
       it('should handle very long text', () => {
@@ -298,10 +299,11 @@ describe('HighlightPipe', () => {
 
       it('should sanitize dangerous content', () => {
         const result = pipe.transform('<img src=x onerror=alert(1)>', 'img', { mode: 'text' });
-        // Should not contain dangerous attributes
-        expect(result).not.toContain('onerror');
-        expect(result).not.toContain('alert');
-        // But should contain escaped version
+        // The markup must remain text, so it cannot execute as an element.
+        expect(result).not.toContain('<img');
+        // The original content is preserved as escaped text.
+        expect(result).toContain('onerror');
+        expect(result).toContain('alert');
         expect(result).toContain('&lt;');
       });
     });

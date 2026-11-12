@@ -7,15 +7,38 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_call:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ${{ github.workflow }}-ci-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # Agent harness - hook, workflow and script self-tests, vault citations
+  # Seconds, no .NET or npm install needed; jq and node ship on ubuntu runners.
+  # ---------------------------------------------------------------------------
+  harness:
+    name: Harness self-tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Self-tests
+        shell: bash
+        run: |
+          set -e
+          for t in .claude/hooks/*.test.sh .claude/workflows/*.test.sh scripts/*.test.sh; do
+            echo "== $t"
+            bash "$t"
+          done
+          bash scripts/check-vault-refs.sh
+
   # ---------------------------------------------------------------------------
   # .NET — build and run unit tests
   # ---------------------------------------------------------------------------
@@ -39,13 +62,37 @@ jobs:
         run: dotnet build ServiceBusExplorer.slnx --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test ServiceBusExplorer.slnx --configuration Release --no-build --verbosity normal
+        run: |
+          dotnet test src/ServiceBusExplorer.Core.Tests --configuration Release --no-build --verbosity normal
+          dotnet test src/ServiceBusExplorer.Api.Tests --configuration Release --no-build --verbosity normal
 
   # ---------------------------------------------------------------------------
-  # Angular / web app — install, lint, build
+  # Integration - the providers against brokers in containers the run starts
+  # ---------------------------------------------------------------------------
+  integration:
+    name: Integration tests (Docker)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build
+        run: dotnet build src/ServiceBusExplorer.IntegrationTests --configuration Release
+
+      - name: Test
+        run: dotnet test src/ServiceBusExplorer.IntegrationTests --configuration Release --no-build --verbosity normal
+
+  # ---------------------------------------------------------------------------
+  # Angular / web app — install, test, build
   # ---------------------------------------------------------------------------
   web:
-    name: Web build
+    name: Web test & build
     runs-on: ubuntu-latest
 
     steps:
@@ -62,6 +109,14 @@ jobs:
       - name: Install dependencies
         working-directory: web-app
         run: npm ci
+
+      - name: Test
+        working-directory: web-app
+        run: npm test -- --watch=false
+
+      - name: Electron shell tests
+        working-directory: web-app
+        run: npm run test:electron
 
       - name: Build
         working-directory: web-app

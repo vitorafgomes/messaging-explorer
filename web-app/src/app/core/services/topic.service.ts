@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 import { ApiService } from './api.service';
+import { apiPath } from './api-path';
 import { TopicInfo, SubscriptionInfo, MessageInfo, SendMessageRequest, BatchOperationResult, DeleteBatchRequest, ResubmitBatchRequest } from '../models';
 
 /**
@@ -36,7 +37,7 @@ export class TopicService {
    * @returns Observable with topic/exchange information
    */
   getTopic(name: string): Observable<TopicInfo> {
-    return this.api.get<TopicInfo>(`topics/${name}`);
+    return this.api.get<TopicInfo>(apiPath`topics/${name}`);
   }
 
   /**
@@ -54,7 +55,7 @@ export class TopicService {
    * @returns Observable that completes when the topic/exchange is deleted
    */
   deleteTopic(name: string): Observable<void> {
-    return this.api.delete<void>(`topics/${name}`);
+    return this.api.delete<void>(apiPath`topics/${name}`);
   }
 
   /**
@@ -64,7 +65,7 @@ export class TopicService {
    * @returns Observable with success status
    */
   sendMessage(topicName: string, message: SendMessageRequest): Observable<{ success: boolean }> {
-    return this.api.post<{ success: boolean }>(`topics/${topicName}/messages`, message);
+    return this.api.post<{ success: boolean }>(apiPath`topics/${topicName}/messages`, message);
   }
 
   /**
@@ -74,7 +75,7 @@ export class TopicService {
    * @returns Observable with success status and count of sent messages
    */
   sendMessages(topicName: string, messages: SendMessageRequest[]): Observable<{ success: boolean; count: number }> {
-    return this.api.post<{ success: boolean; count: number }>(`topics/${topicName}/messages/batch`, messages);
+    return this.api.post<{ success: boolean; count: number }>(apiPath`topics/${topicName}/messages/batch`, messages);
   }
 
   // =========================================================================
@@ -89,7 +90,7 @@ export class TopicService {
    * @returns Observable array of subscription/binding information
    */
   getSubscriptions(topicName: string): Observable<SubscriptionInfo[]> {
-    return this.api.get<SubscriptionInfo[]>(`topics/${topicName}/subscriptions`);
+    return this.api.get<SubscriptionInfo[]>(apiPath`topics/${topicName}/subscriptions`);
   }
 
   /**
@@ -99,7 +100,7 @@ export class TopicService {
    * @returns Observable with subscription/binding information
    */
   getSubscription(topicName: string, subscriptionName: string): Observable<SubscriptionInfo> {
-    return this.api.get<SubscriptionInfo>(`topics/${topicName}/subscriptions/${subscriptionName}`);
+    return this.api.get<SubscriptionInfo>(apiPath`topics/${topicName}/subscriptions/${subscriptionName}`);
   }
 
   /**
@@ -109,7 +110,7 @@ export class TopicService {
    * @returns Observable that completes when the subscription/binding is created
    */
   createSubscription(topicName: string, subscriptionName: string): Observable<void> {
-    return this.api.post<void>(`topics/${topicName}/subscriptions`, { name: subscriptionName });
+    return this.api.post<void>(apiPath`topics/${topicName}/subscriptions`, { name: subscriptionName });
   }
 
   /**
@@ -119,7 +120,7 @@ export class TopicService {
    * @returns Observable that completes when the subscription/binding is deleted
    */
   deleteSubscription(topicName: string, subscriptionName: string): Observable<void> {
-    return this.api.delete<void>(`topics/${topicName}/subscriptions/${subscriptionName}`);
+    return this.api.delete<void>(apiPath`topics/${topicName}/subscriptions/${subscriptionName}`);
   }
 
   // =========================================================================
@@ -134,7 +135,7 @@ export class TopicService {
    * @returns Observable array of messages
    */
   peekMessages(topicName: string, subscriptionName: string, count: number = 10): Observable<MessageInfo[]> {
-    return this.api.get<MessageInfo[]>(`topics/${topicName}/subscriptions/${subscriptionName}/messages?count=${count}`);
+    return this.api.get<MessageInfo[]>(apiPath`topics/${topicName}/subscriptions/${subscriptionName}/messages?count=${count}`);
   }
 
   /**
@@ -147,7 +148,7 @@ export class TopicService {
    * @returns Observable array of dead letter messages
    */
   peekDeadLetterMessages(topicName: string, subscriptionName: string, count: number = 10): Observable<MessageInfo[]> {
-    return this.api.get<MessageInfo[]>(`topics/${topicName}/subscriptions/${subscriptionName}/deadletter?count=${count}`);
+    return this.api.get<MessageInfo[]>(apiPath`topics/${topicName}/subscriptions/${subscriptionName}/deadletter?count=${count}`);
   }
 
   /**
@@ -158,7 +159,7 @@ export class TopicService {
    * @returns Observable array of received messages
    */
   receiveMessages(topicName: string, subscriptionName: string, count: number = 10): Observable<MessageInfo[]> {
-    return this.api.post<MessageInfo[]>(`topics/${topicName}/subscriptions/${subscriptionName}/messages/receive?count=${count}`, {});
+    return this.api.post<MessageInfo[]>(apiPath`topics/${topicName}/subscriptions/${subscriptionName}/messages/receive?count=${count}`, {});
   }
 
   /**
@@ -171,7 +172,7 @@ export class TopicService {
    * @returns Observable with success status
    */
   resubmitDeadLetterMessage(topicName: string, subscriptionName: string, sequenceNumber: number): Observable<{ success: boolean }> {
-    const url = `topics/${topicName}/subscriptions/${subscriptionName}/deadletter/${sequenceNumber}/resubmit`;
+    const url = apiPath`topics/${topicName}/subscriptions/${subscriptionName}/deadletter/${sequenceNumber}/resubmit`;
     return this.api.post<{ success: boolean }>(url, {});
   }
 
@@ -186,7 +187,7 @@ export class TopicService {
    */
   resubmitDeadLetterMessages(topicName: string, subscriptionName: string, sequenceNumbers: number[]): Observable<BatchOperationResult> {
     const request: ResubmitBatchRequest = { sequenceNumbers };
-    return this.api.post<BatchOperationResult>(`topics/${topicName}/subscriptions/${subscriptionName}/deadletter/resubmit-batch`, request);
+    return this.api.post<BatchOperationResult>(apiPath`topics/${topicName}/subscriptions/${subscriptionName}/deadletter/resubmit-batch`, request);
   }
 
   /**
@@ -201,7 +202,7 @@ export class TopicService {
   deleteMessages(topicName: string, subscriptionName: string, sequenceNumbers: number[], isDeadLetter: boolean = false, all: boolean = false): Observable<BatchOperationResult> {
     const request: DeleteBatchRequest = { sequenceNumbers, all };
     const path = isDeadLetter ? 'deadletter' : 'messages';
-    return this.api.post<BatchOperationResult>(`topics/${topicName}/subscriptions/${subscriptionName}/${path}/delete-batch`, request);
+    return this.api.post<BatchOperationResult>(apiPath`topics/${topicName}/subscriptions/${subscriptionName}/${path}/delete-batch`, request);
   }
 
   /**
@@ -213,16 +214,16 @@ export class TopicService {
    */
   purgeMessages(topicName: string, subscriptionName: string, type: string = 'active'): Observable<{ success: boolean }> {
     if (type === 'deadletter') {
-      return this.api.delete<{ success: boolean }>(`topics/${topicName}/subscriptions/${subscriptionName}/deadletter`);
+      return this.api.delete<{ success: boolean }>(apiPath`topics/${topicName}/subscriptions/${subscriptionName}/deadletter`);
     } else if (type === 'all') {
       // For 'all', we need to purge both active and dead-letter messages
       // We'll purge active first, then dead-letter
-      return this.api.delete<{ success: boolean }>(`topics/${topicName}/subscriptions/${subscriptionName}/messages`).pipe(
-        switchMap(() => this.api.delete<{ success: boolean }>(`topics/${topicName}/subscriptions/${subscriptionName}/deadletter`))
+      return this.api.delete<{ success: boolean }>(apiPath`topics/${topicName}/subscriptions/${subscriptionName}/messages`).pipe(
+        switchMap(() => this.api.delete<{ success: boolean }>(apiPath`topics/${topicName}/subscriptions/${subscriptionName}/deadletter`))
       );
     }
     // Default: purge only active messages
-    return this.api.delete<{ success: boolean }>(`topics/${topicName}/subscriptions/${subscriptionName}/messages`);
+    return this.api.delete<{ success: boolean }>(apiPath`topics/${topicName}/subscriptions/${subscriptionName}/messages`);
   }
 
   /**
@@ -232,6 +233,6 @@ export class TopicService {
    * @returns Observable with success status
    */
   purgeDeadLetterMessages(topicName: string, subscriptionName: string): Observable<{ success: boolean }> {
-    return this.api.delete<{ success: boolean }>(`topics/${topicName}/subscriptions/${subscriptionName}/deadletter`);
+    return this.api.delete<{ success: boolean }>(apiPath`topics/${topicName}/subscriptions/${subscriptionName}/deadletter`);
   }
 }

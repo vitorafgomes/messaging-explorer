@@ -1,0 +1,38 @@
+---
+title: "Decisions that look like defects"
+version: "1.0"
+date: 2026-11-12
+changes: "Founded on 2026-11-12 with the entries the founding survey could back with a test"
+page_type: established-patterns
+status: active
+description: "Behaviour in Messaging Explorer that reads as a bug and is intended: what it is, why it is right, where it lives and the test that locks it. A reviewer checks this page before reporting."
+updated: 2026-11-12
+source:
+  - "src/ServiceBusExplorer.Api/Program.cs"
+  - "src/ServiceBusExplorer.Api.Tests/"
+  - "src/ServiceBusExplorer.Core.Tests/"
+reliability: medium
+---
+
+# Decisions that look like defects
+
+> Behaviour that reads as a bug and is intended. Check here before reporting a finding; add an entry when a finding is answered "not a defect", in the change that answers it.
+
+An entry is a claim about the code today: when the code under it changes, the entry is checked again, and an entry with no test behind it is weaker than one with a test. **Not on this page:** a limitation that is real and accepted for now. Those are the "Known gaps" of each service page and [[pages/roadmap/followups]]. Most of what the founding survey found belongs there, not here.
+
+## API
+
+- **`/health` answers without the API key.** The Electron shell and a developer need to know the process is up before a key exchange is possible; the route returns a constant. `src/ServiceBusExplorer.Api/Program.cs:186`, locked by `src/ServiceBusExplorer.Api.Tests/AuthMiddlewareTests.cs:38`.
+- **`OPTIONS` passes the key middleware.** A CORS preflight never carries custom headers; the CORS middleware before it decides, and the real request still needs the key. `src/ServiceBusExplorer.Api/Program.cs:192`, locked by `src/ServiceBusExplorer.Api.Tests/CorsTests.cs:26`.
+- **An export with `includeSecrets=true` returns raw secrets.** It is the user's backup of their own connections, asked for explicitly, and it logs a warning. `src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs:422`, locked by `src/ServiceBusExplorer.Api.Tests/ConnectionMaskingTests.cs:61`.
+- **Enums travel as strings.** The Angular client sends `"AzureServiceBus"`, not `0`. `src/ServiceBusExplorer.Api/Program.cs:59`.
+
+## Bulk operations
+
+- **A bulk operation can report a possible duplicate and still be correct.** Operations are at-least-once by design ([[pages/invariants/bulk-operations-are-at-least-once]]); the alternative is completing before the send, which can lose the message. Locked by `src/ServiceBusExplorer.Core.Tests/Providers/Azure/AzureServiceBusProviderBatchTests.cs:196`.
+- **A selected message can come back "Not found within scan window".** The scan is bounded on purpose; an unbounded scan of a large dead-letter queue holds locks until they expire. Locked by `src/ServiceBusExplorer.Core.Tests/Providers/Azure/AzureServiceBusProviderBatchTests.cs:110`.
+- **An empty selection returns an empty result, not an error.** Locked by `src/ServiceBusExplorer.Core.Tests/Providers/Azure/AzureServiceBusProviderBatchTests.cs:226`.
+
+## RabbitMQ
+
+- **Sessions return empty and setting session state throws `NotSupportedException`.** RabbitMQ has no sessions. Locked by `src/ServiceBusExplorer.Core.Tests/Providers/RabbitMQSessionTests.cs:14` and `:40` of the same file. Whether the UI hides the feature through a capability flag is a separate question on [[pages/invariants/provider-boundaries]].

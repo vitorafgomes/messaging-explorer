@@ -126,4 +126,22 @@ describe('SessionService', () => {
       expect(result).toEqual({ success: true });
     });
   });
+
+  describe('names in the URL', () => {
+    it('sends queue, topic, subscription and session names with / and a space as one segment each', () => {
+      service.getQueueSessions('q/1').subscribe();
+      service.getSubscriptionSessions('t/1', 's/2').subscribe();
+      service.setQueueSessionState('q/1', 'id/with space', 'x').subscribe();
+      service.setSubscriptionSessionState('t/1', 's/2', 'id/with space', 'x').subscribe();
+
+      expect(apiServiceMock.get.mock.calls.map(c => c[0])).toEqual([
+        'sessions/q%2F1?maxSessions=50',
+        'sessions/t%2F1/subscriptions/s%2F2?maxSessions=50'
+      ]);
+      expect(apiServiceMock.put.mock.calls.map(c => c[0])).toEqual([
+        'sessions/q%2F1/state/id%2Fwith%20space',
+        'sessions/t%2F1/subscriptions/s%2F2/id%2Fwith%20space/state'
+      ]);
+    });
+  });
 });

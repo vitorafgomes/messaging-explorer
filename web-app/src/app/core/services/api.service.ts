@@ -3,16 +3,33 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, from, switchMap } from 'rxjs';
 import { environment } from '../../../environments/environment';
 
+interface ElectronApi {
+  getApiPort?: () => Promise<number>;
+  getApiSecret?: () => Promise<string>;
+}
+
 @Injectable({
   providedIn: 'root'
 })
 export class ApiService {
   private baseUrl = environment.apiUrl;
   private apiSecret: string | null = null;
-  private ready: Promise<void>;
+  private ready: Promise<void> | null = null;
 
   constructor(private http: HttpClient) {
-    this.ready = this.initialize();
+    // The browser app has no asynchronous bootstrap work. Keeping its requests
+    // synchronous avoids an unnecessary microtask before every HTTP call.
+    // Electron still waits for its dynamically assigned API port and secret.
+    if (this.getElectronApi()) {
+      this.ready = this.initialize();
+    }
+  }
+
+  private getElectronApi(): ElectronApi | null {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+    return (window as Window & typeof globalThis & { electronAPI?: ElectronApi }).electronAPI ?? null;
   }
 
   private async initialize(): Promise<void> {
@@ -20,7 +37,7 @@ export class ApiService {
   }
 
   private async initializeApiPort(): Promise<void> {
-    const electronAPI = typeof window !== 'undefined' ? (window as any).electronAPI : null;
+    const electronAPI = this.getElectronApi();
     if (!electronAPI?.getApiPort) {
       return;
     }
@@ -35,9 +52,10 @@ export class ApiService {
   }
 
   private async initializeApiSecret(): Promise<void> {
-    if (typeof window !== 'undefined' && (window as any).electronAPI?.getApiSecret) {
+    const electronAPI = this.getElectronApi();
+    if (electronAPI?.getApiSecret) {
       try {
-        this.apiSecret = await (window as any).electronAPI.getApiSecret();
+        this.apiSecret = await electronAPI.getApiSecret();
       } catch (e) {
         console.warn('[API SERVICE] Failed to get API secret:', e);
       }
@@ -52,7 +70,7 @@ export class ApiService {
   }
 
   private waitForReady<T>(request: () => Observable<T>): Observable<T> {
-    return from(this.ready).pipe(switchMap(() => request()));
+    return this.ready ? from(this.ready).pipe(switchMap(() => request())) : request();
   }
 
   get<T>(endpoint: string): Observable<T> {

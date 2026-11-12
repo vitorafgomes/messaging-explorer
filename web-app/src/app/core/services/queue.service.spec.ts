@@ -7,6 +7,8 @@ import { BatchOperationResult } from '../models';
 describe('QueueService', () => {
   let service: QueueService;
   let apiPost: ReturnType<typeof vi.fn>;
+  let apiGet: ReturnType<typeof vi.fn>;
+  let apiDelete: ReturnType<typeof vi.fn>;
 
   const emptyResult: BatchOperationResult = {
     successCount: 0,
@@ -17,7 +19,9 @@ describe('QueueService', () => {
 
   beforeEach(() => {
     apiPost = vi.fn().mockReturnValue(of(emptyResult));
-    const apiServiceMock = { post: apiPost } as unknown as ApiService;
+    apiGet = vi.fn().mockReturnValue(of([]));
+    apiDelete = vi.fn().mockReturnValue(of({ success: true }));
+    const apiServiceMock = { post: apiPost, get: apiGet, delete: apiDelete } as unknown as ApiService;
 
     TestBed.configureTestingModule({
       providers: [
@@ -54,6 +58,63 @@ describe('QueueService', () => {
         'queues/orders/messages/delete-batch',
         { sequenceNumbers: [7], all: false }
       );
+    });
+  });
+
+  describe('names in the URL', () => {
+    it('purging a queue named orders#1 purges that queue and never deletes the queue orders', () => {
+      service.purgeMessages('orders#1').subscribe();
+
+      expect(apiDelete.mock.calls).toEqual([['queues/orders%231/messages']]);
+    });
+
+    it('deleting a queue named a/messages deletes that queue and never purges the queue a', () => {
+      service.deleteQueue('a/messages').subscribe();
+
+      expect(apiDelete.mock.calls).toEqual([['queues/a%2Fmessages']]);
+    });
+
+    it.each([
+      ['a/messages', 'a%2Fmessages'],
+      ['a/deadletter', 'a%2Fdeadletter'],
+      ['orders#1', 'orders%231'],
+      ['what?now', 'what%3Fnow'],
+      ['50%off', '50%25off'],
+      ['my queue', 'my%20queue'],
+      ['a.b-c_d', 'a.b-c_d']
+    ])('sends the queue name %s as the single segment %s on every operation', (name, segment) => {
+      service.getQueue(name).subscribe();
+      service.peekMessages(name, 5).subscribe();
+      service.peekDeadLetterMessages(name, 5).subscribe();
+      service.purgeMessages(name, 'all').subscribe();
+      service.purgeDeadLetterMessages(name).subscribe();
+      service.deleteMessages(name, [1], false).subscribe();
+      service.resubmitDeadLetterMessages(name, [2]).subscribe();
+      service.resubmitDeadLetterMessage(name, 3).subscribe();
+      service.moveMessages(name, 'target', [4], true).subscribe();
+      service.receiveMessages(name, 6).subscribe();
+      service.sendMessage(name, { body: 'b' } as never).subscribe();
+      service.sendMessages(name, []).subscribe();
+
+      expect(apiGet.mock.calls.map(c => c[0])).toEqual([
+        `queues/${segment}`,
+        `queues/${segment}/messages?count=5`,
+        `queues/${segment}/deadletter?count=5`
+      ]);
+      expect(apiDelete.mock.calls.map(c => c[0])).toEqual([
+        `queues/${segment}/messages`,
+        `queues/${segment}/deadletter`,
+        `queues/${segment}/deadletter`
+      ]);
+      expect(apiPost.mock.calls.map(c => c[0])).toEqual([
+        `queues/${segment}/messages/delete-batch`,
+        `queues/${segment}/deadletter/resubmit-batch`,
+        `queues/${segment}/deadletter/3/resubmit`,
+        `queues/${segment}/deadletter/move-batch`,
+        `queues/${segment}/messages/receive?count=6`,
+        `queues/${segment}/messages`,
+        `queues/${segment}/messages/batch`
+      ]);
     });
   });
 });

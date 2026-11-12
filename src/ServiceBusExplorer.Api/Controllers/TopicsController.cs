@@ -4,7 +4,7 @@ using ServiceBusExplorer.Core.Models;
 
 namespace ServiceBusExplorer.Api.Controllers;
 
-[ApiController]
+[ApiController, RawTargetRouteValues]
 [Route("api/[controller]")]
 public class TopicsController : ControllerBase
 {
@@ -149,7 +149,7 @@ public class TopicsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Search subscription messages failed for {TopicName}/{SubscriptionName}", topicName, subscriptionName);
-            return StatusCode(500, new { success = false, error = "An internal error occurred." });
+            return StatusCode(500, new { message = "An internal error occurred." });
         }
     }
 
@@ -167,7 +167,7 @@ public class TopicsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Search subscription dead-letter messages failed for {TopicName}/{SubscriptionName}", topicName, subscriptionName);
-            return StatusCode(500, new { success = false, error = "An internal error occurred." });
+            return StatusCode(500, new { message = "An internal error occurred." });
         }
     }
 
@@ -228,7 +228,7 @@ public class TopicsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Resubmit dead-letter failed for {TopicName}/{SubscriptionName} seq {SequenceNumber}", topicName, subscriptionName, sequenceNumber);
-            return StatusCode(500, new { success = false, error = "An internal error occurred." });
+            return StatusCode(500, new { message = "An internal error occurred." });
         }
     }
 
@@ -247,7 +247,7 @@ public class TopicsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Resubmit dead-letter batch failed for {TopicName}/{SubscriptionName}", topicName, subscriptionName);
-            return StatusCode(500, new { success = false, error = "An internal error occurred." });
+            return StatusCode(500, new { message = "An internal error occurred." });
         }
     }
 
@@ -266,7 +266,7 @@ public class TopicsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Purge messages failed for {TopicName}/{SubscriptionName}", topicName, subscriptionName);
-            return StatusCode(500, new { success = false, error = "An internal error occurred." });
+            return StatusCode(500, new { message = "An internal error occurred." });
         }
     }
 
@@ -285,7 +285,7 @@ public class TopicsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Purge dead-letter messages failed for {TopicName}/{SubscriptionName}", topicName, subscriptionName);
-            return StatusCode(500, new { success = false, error = "An internal error occurred." });
+            return StatusCode(500, new { message = "An internal error occurred." });
         }
     }
 
@@ -304,7 +304,7 @@ public class TopicsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Delete messages batch failed for {TopicName}/{SubscriptionName}", topicName, subscriptionName);
-            return StatusCode(500, new { success = false, error = "An internal error occurred." });
+            return StatusCode(500, new { message = "An internal error occurred." });
         }
     }
 
@@ -323,7 +323,7 @@ public class TopicsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Delete dead-letter messages batch failed for {TopicName}/{SubscriptionName}", topicName, subscriptionName);
-            return StatusCode(500, new { success = false, error = "An internal error occurred." });
+            return StatusCode(500, new { message = "An internal error occurred." });
         }
     }
 
@@ -342,7 +342,7 @@ public class TopicsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Move messages failed from {TopicName}/{SubscriptionName} to {TargetQueueName}", topicName, subscriptionName, request.TargetQueueName);
-            return StatusCode(500, new { success = false, error = "An internal error occurred." });
+            return StatusCode(500, new { message = "An internal error occurred." });
         }
     }
 
@@ -361,7 +361,7 @@ public class TopicsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Move dead-letter messages failed from {TopicName}/{SubscriptionName} to {TargetQueueName}", topicName, subscriptionName, request.TargetQueueName);
-            return StatusCode(500, new { success = false, error = "An internal error occurred." });
+            return StatusCode(500, new { message = "An internal error occurred." });
         }
     }
 }

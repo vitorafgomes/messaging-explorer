@@ -4,7 +4,7 @@ using ServiceBusExplorer.Core.Models;
 
 namespace ServiceBusExplorer.Api.Controllers;
 
-[ApiController]
+[ApiController, RawTargetRouteValues]
 [Route("api/[controller]")]
 public class QueuesController : ControllerBase
 {
@@ -90,7 +90,7 @@ public class QueuesController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Search messages failed for queue {QueueName}", name);
-            return StatusCode(500, new { success = false, error = "An internal error occurred." });
+            return StatusCode(500, new { message = "An internal error occurred." });
         }
     }
 
@@ -108,7 +108,7 @@ public class QueuesController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Search dead-letter messages failed for queue {QueueName}", name);
-            return StatusCode(500, new { success = false, error = "An internal error occurred." });
+            return StatusCode(500, new { message = "An internal error occurred." });
         }
     }
 
@@ -191,7 +191,7 @@ public class QueuesController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Resubmit dead-letter message failed for queue {QueueName} seq {SequenceNumber}", name, sequenceNumber);
-            return StatusCode(500, new { success = false, error = "An internal error occurred." });
+            return StatusCode(500, new { message = "An internal error occurred." });
         }
     }
 
@@ -210,7 +210,7 @@ public class QueuesController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Resubmit batch dead-letter failed for queue {QueueName}", name);
-            return StatusCode(500, new { success = false, error = "An internal error occurred." });
+            return StatusCode(500, new { message = "An internal error occurred." });
         }
     }
 
@@ -229,7 +229,7 @@ public class QueuesController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Purge messages failed for queue {QueueName}", name);
-            return StatusCode(500, new { success = false, error = "An internal error occurred." });
+            return StatusCode(500, new { message = "An internal error occurred." });
         }
     }
 
@@ -248,7 +248,7 @@ public class QueuesController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Purge dead-letter messages failed for queue {QueueName}", name);
-            return StatusCode(500, new { success = false, error = "An internal error occurred." });
+            return StatusCode(500, new { message = "An internal error occurred." });
         }
     }
 
@@ -267,7 +267,7 @@ public class QueuesController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Delete messages batch failed for queue {QueueName}", name);
-            return StatusCode(500, new { success = false, error = "An internal error occurred." });
+            return StatusCode(500, new { message = "An internal error occurred." });
         }
     }
 
@@ -286,7 +286,7 @@ public class QueuesController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Delete dead-letter messages batch failed for queue {QueueName}", name);
-            return StatusCode(500, new { success = false, error = "An internal error occurred." });
+            return StatusCode(500, new { message = "An internal error occurred." });
         }
     }
 
@@ -305,7 +305,7 @@ public class QueuesController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Move messages failed from queue {QueueName} to {TargetQueueName}", name, request.TargetQueueName);
-            return StatusCode(500, new { success = false, error = "An internal error occurred." });
+            return StatusCode(500, new { message = "An internal error occurred." });
         }
     }
 
@@ -324,7 +324,7 @@ public class QueuesController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Move dead-letter messages failed from queue {QueueName} to {TargetQueueName}", name, request.TargetQueueName);
-            return StatusCode(500, new { success = false, error = "An internal error occurred." });
+            return StatusCode(500, new { message = "An internal error occurred." });
         }
     }
 }

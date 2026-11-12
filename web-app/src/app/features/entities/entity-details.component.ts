@@ -9,14 +9,14 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { delay } from 'rxjs/operators';
 import { EntitySelection, QueueInfo, TopicInfo, SubscriptionInfo, SubscriptionRuleInfo, TreeNode, SubscriptionNodeData, SessionInfo } from '../../core/models';
-import { EntitySelectionService, QueueService, TopicService, SessionService } from '../../core/services';
+import { EntitySelectionService, QueueService, TopicService, SessionService, ConnectionService } from '../../core/services';
 import { SendMessageDialogComponent } from '../messages/send-message-dialog.component';
 import { ImportMessagesDialogComponent } from '../messages/import-messages-dialog.component';
 import { ViewMessagesDialogComponent } from '../messages/view-messages-dialog.component';
-import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog.component';
 import { TransferMonitorComponent } from './transfer-monitor.component';
 import { ContinuousResubmitDialogComponent, ContinuousResubmitDialogData } from '../messages/continuous-resubmit-dialog.component';
-import { NgApexchartsModule } from 'ng-apexcharts';
+import { MetricsDashboardComponent } from './metrics-dashboard.component';
 import type {
   ApexAxisChartSeries,
   ApexChart,
@@ -40,7 +40,7 @@ import type {
     MatMenuModule,
     MatIconModule,
     MatTooltipModule,
-    NgApexchartsModule,
+    MetricsDashboardComponent,
     TransferMonitorComponent
   ],
   template: `
@@ -436,56 +436,8 @@ import type {
                     </div>
                   </div>
 
-                <!-- Metrics Tab -->
                 <div class="metrics-tab" [hidden]="activeTopicTab() !== 'metrics'" id="topic-metrics-tab">
-                    <!-- Time Range Selector Header -->
-                    <div class="metrics-header">
-                      <div class="time-range-selector">
-                        @for (range of timeRanges; track range.value) {
-                          <button
-                            class="time-range-btn"
-                            [class.selected]="selectedTimeRange === range.value"
-                            (click)="selectTimeRange(range.value)">
-                            {{ range.label }}
-                          </button>
-                        }
-                      </div>
-                    </div>
-
-                    <!-- Charts Grid -->
-                    <div class="charts-grid">
-                      <!-- Requests Chart -->
-                      <div class="chart-container">
-                        <h3 class="chart-title">Requests</h3>
-                        <apx-chart
-                          [series]="requestsChartOptions.series!"
-                          [chart]="requestsChartOptions.chart!"
-                          [xaxis]="requestsChartOptions.xaxis!"
-                          [yaxis]="requestsChartOptions.yaxis!"
-                          [stroke]="requestsChartOptions.stroke!"
-                          [tooltip]="requestsChartOptions.tooltip!"
-                          [legend]="requestsChartOptions.legend!"
-                          [dataLabels]="requestsChartOptions.dataLabels!"
-                          [grid]="requestsChartOptions.grid!">
-                        </apx-chart>
-                      </div>
-
-                      <!-- Messages Chart -->
-                      <div class="chart-container">
-                        <h3 class="chart-title">Messages</h3>
-                        <apx-chart
-                          [series]="messagesChartOptions.series!"
-                          [chart]="messagesChartOptions.chart!"
-                          [xaxis]="messagesChartOptions.xaxis!"
-                          [yaxis]="messagesChartOptions.yaxis!"
-                          [stroke]="messagesChartOptions.stroke!"
-                          [tooltip]="messagesChartOptions.tooltip!"
-                          [legend]="messagesChartOptions.legend!"
-                          [dataLabels]="messagesChartOptions.dataLabels!"
-                          [grid]="messagesChartOptions.grid!">
-                        </apx-chart>
-                      </div>
-                    </div>
+                  <app-metrics-dashboard />
                   </div>
               </div>
             </div>
@@ -3069,6 +3021,7 @@ import type {
 })
 export class EntityDetailsComponent {
   private selectionService = inject(EntitySelectionService);
+  private connectionService = inject(ConnectionService);
   private queueService = inject(QueueService);
   private topicService = inject(TopicService);
   private sessionService = inject(SessionService);
@@ -3124,49 +3077,15 @@ export class EntityDetailsComponent {
   // Description tab style selector
   descriptionStyle: 'cards' | 'infobox' | 'list' | 'hybrid' = 'cards';
 
-  // Metrics dashboard - Time range selector
-  timeRanges = [
-    { label: '1 hour', value: '1h' },
-    { label: '6 hours', value: '6h' },
-    { label: '12 hours', value: '12h' },
-    { label: '1 day', value: '1d' },
-    { label: '7 days', value: '7d' },
-    { label: '30 days', value: '30d' }
-  ];
+  // Retained while the metrics dashboard is progressively extracted.
   selectedTimeRange = '1h';
-
-  // Metrics dashboard - Chart options
-  requestsChartOptions: {
-    series?: ApexAxisChartSeries;
-    chart?: ApexChart;
-    xaxis?: ApexXAxis;
-    yaxis?: ApexYAxis;
-    stroke?: ApexStroke;
-    tooltip?: ApexTooltip;
-    legend?: ApexLegend;
-    dataLabels?: ApexDataLabels;
-    grid?: ApexGrid;
-  } = {};
-
-  messagesChartOptions: {
-    series?: ApexAxisChartSeries;
-    chart?: ApexChart;
-    xaxis?: ApexXAxis;
-    yaxis?: ApexYAxis;
-    stroke?: ApexStroke;
-    tooltip?: ApexTooltip;
-    legend?: ApexLegend;
-    dataLabels?: ApexDataLabels;
-    grid?: ApexGrid;
-  } = {};
+  requestsChartOptions: { series?: ApexAxisChartSeries; chart?: ApexChart; xaxis?: ApexXAxis; yaxis?: ApexYAxis; stroke?: ApexStroke; tooltip?: ApexTooltip; legend?: ApexLegend; dataLabels?: ApexDataLabels; grid?: ApexGrid } = {};
+  messagesChartOptions: { series?: ApexAxisChartSeries; chart?: ApexChart; xaxis?: ApexXAxis; yaxis?: ApexYAxis; stroke?: ApexStroke; tooltip?: ApexTooltip; legend?: ApexLegend; dataLabels?: ApexDataLabels; grid?: ApexGrid } = {};
 
   // Use observables directly with async pipe
   state$ = this.selectionService.state$;
 
   constructor() {
-    // Initialize charts
-    this.initializeCharts();
-
     // Load topic data when selection changes
     this.state$.pipe(
       takeUntilDestroyed(this.destroyRef)
@@ -3507,46 +3426,38 @@ export class EntityDetailsComponent {
     });
   }
 
+  /**
+   * Asks before a purge, naming the entity, its topic for a subscription, the connection
+   * target and the count: the live one when the panel has it, otherwise the one read
+   * when the entity was loaded.
+   */
   purgeMessages(type: string = 'active') {
     if (!this.selection) return;
 
-    const entityName = this.selection.node.name;
-    let messageCount = 0;
-    let messageType = '';
+    const name = this.selection.node.name;
+    const kind = this.selection.type === 'subscription' ? 'subscription' : 'queue';
+    const entity = this.queue ?? this.subscription;
+    const topicName = this.subscription?.topicName ?? (this.selection.node.data as SubscriptionNodeData | undefined)?.topicName;
+    const where = kind === 'subscription' ? `subscription "${name}" of topic "${topicName}"` : `queue "${name}"`;
+    const messageType = type === 'all' ? 'active and dead-letter' : type === 'deadletter' ? 'dead-letter' : 'active';
+    const live = type === 'all'
+      ? (this.liveActiveCount() !== null && this.liveDeadLetterCount() !== null)
+      : (type === 'deadletter' ? this.liveDeadLetterCount() : this.liveActiveCount()) !== null;
+    const active = this.liveActiveCount() ?? entity?.activeMessageCount ?? 0;
+    const deadLetter = this.liveDeadLetterCount() ?? entity?.deadLetterMessageCount ?? 0;
+    const count = type === 'all' ? active + deadLetter : type === 'deadletter' ? deadLetter : active;
+    const countText = live ? `${count.toLocaleString()} now` : `${count.toLocaleString()} when the ${kind} was loaded`;
 
-    if (this.selection.type === 'queue' && this.queue) {
-      if (type === 'active') {
-        messageCount = this.queue.activeMessageCount;
-        messageType = 'active';
-      } else if (type === 'deadletter') {
-        messageCount = this.queue.deadLetterMessageCount;
-        messageType = 'dead-letter';
-      } else if (type === 'all') {
-        messageCount = this.queue.activeMessageCount + this.queue.deadLetterMessageCount;
-        messageType = 'all';
-      }
-    } else if (this.selection.type === 'subscription' && this.subscription) {
-      if (type === 'active') {
-        messageCount = this.subscription.activeMessageCount;
-        messageType = 'active';
-      } else if (type === 'deadletter') {
-        messageCount = this.subscription.deadLetterMessageCount;
-        messageType = 'dead-letter';
-      } else if (type === 'all') {
-        messageCount = this.subscription.activeMessageCount + this.subscription.deadLetterMessageCount;
-        messageType = 'all';
-      }
-    }
-
-    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
-      data: {
-        title: 'Purge Messages',
-        message: `Are you sure you want to delete all ${messageCount} ${messageType} messages? This action cannot be undone.`,
-        confirmText: 'Purge',
-        confirmColor: 'warn',
-        icon: 'delete_sweep'
-      }
-    });
+    const confirmData: ConfirmDialogData = {
+      title: `Purge ${messageType} messages?`,
+      message: `This deletes every ${messageType} message in ${where} on ${this.connectionService.currentTarget}: ${countText}. It cannot be undone.`,
+      confirmText: `Purge ${count.toLocaleString()} messages`,
+      confirmColor: 'warn',
+      icon: 'delete_sweep',
+      requireAcknowledgement: true,
+      acknowledgementText: `I understand this deletes every ${messageType} message in ${name}`
+    };
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, { data: confirmData });
 
     dialogRef.afterClosed().pipe(
       takeUntilDestroyed(this.destroyRef)

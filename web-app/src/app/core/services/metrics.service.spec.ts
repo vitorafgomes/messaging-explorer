@@ -291,6 +291,25 @@ describe('MetricsService', () => {
     });
   });
 
+  describe('names in the URL', () => {
+    it('sends queue, topic and subscription names with /, #, ?, % and a space as one segment each', () => {
+      service.getQueueMetrics('a/b#c').subscribe();
+      service.getTopicMetrics('what?now 50%').subscribe();
+      service.getSubscriptionMetrics('t/1', 's/2').subscribe();
+
+      const urls = httpMock.match(() => true).map(req => {
+        req.flush(createApiResponse());
+        return req.request.url.replace(/&_t=\d+$/, '');
+      });
+
+      expect(urls).toEqual([
+        'http://localhost:5917/api/metrics/queues/a%2Fb%23c?timeRange=0',
+        'http://localhost:5917/api/metrics/topics/what%3Fnow%2050%25?timeRange=0',
+        'http://localhost:5917/api/metrics/topics/t%2F1/subscriptions/s%2F2?timeRange=0'
+      ]);
+    });
+  });
+
   // TODO: These refresh tests need proper timer management for zoneless Angular 21
   describe.skip('getQueueMetricsWithRefresh', () => {
     it('should emit metrics immediately on subscription', () => {

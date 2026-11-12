@@ -75,7 +75,9 @@ export class MessageSearchService {
       return [];
     }
 
-    const searchText = options.caseSensitive ? query : query.toLowerCase();
+    // Regular-expression patterns are syntax, not text. Lowercasing a pattern
+    // changes its meaning (for example, `\S` becomes `\s`).
+    const searchText = options.mode === 'regex' || options.caseSensitive ? query : query.toLowerCase();
     const filterProp = options.property;
 
     return messages.filter(msg => {
@@ -172,7 +174,9 @@ export class MessageSearchService {
           end: index + query.length,
           text: text.substring(index, index + query.length)
         });
-        index = textToSearch.indexOf(searchText, index + 1);
+        // Matches must not overlap: overlapping ranges cannot be rendered
+        // safely by the highlighting pipe.
+        index = textToSearch.indexOf(searchText, index + searchText.length);
       }
     }
 
