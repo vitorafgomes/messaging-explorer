@@ -93,6 +93,9 @@ public class AzureProviderCapabilities : IProviderCapabilities
     public bool SupportsEntityUpdate => true;
 
     /// <inheritdoc />
+    public bool SupportsSubscriptionRules => true;
+
+    /// <inheritdoc />
     /// <remarks>
     /// Azure Service Bus does not use exchange types - this is a RabbitMQ concept.
     /// </remarks>

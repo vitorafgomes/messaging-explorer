@@ -149,6 +149,155 @@ public sealed class AzureServiceBusProviderTests(AzureServiceBusFixture fixture)
         Assert.Null(await _management.GetTopicAsync(topic));
     }
 
+    private const string RuleRefusal = "The broker refused this rule. Check the expression.";
+
+    private static SubscriptionRuleInfo DefaultRule => new() { Name = "$Default", FilterType = RuleFilterType.True };
+
+    private async Task<string> TopicWithSubscriptionAsync(string tag)
+    {
+        var topic = Name(_topics, tag);
+        await _management.CreateTopicAsync(topic);
+        await _management.CreateSubscriptionAsync(topic, "audit");
+        return topic;
+    }
+
+    private async Task<List<string?>> RuleNamesAsync(string topic) =>
+        (await _management.GetRulesAsync(topic, "audit")).Select(r => r.Name).ToList();
+
+    [Fact]
+    public async Task The_default_rule_of_a_subscription_is_listed_and_read_as_a_true_filter()
+    {
+        var topic = await TopicWithSubscriptionAsync("default-rule");
+
+        var listed = Assert.Single(await _management.GetRulesAsync(topic, "audit"));
+        var read = Assert.Single((await _management.GetSubscriptionAsync(topic, "audit"))!.Rules);
+
+        Assert.Equivalent(DefaultRule, listed, strict: true);
+        Assert.Equivalent(DefaultRule, read, strict: true);
+    }
+
+    [Fact]
+    public async Task A_sql_rule_with_an_action_and_a_correlation_rule_with_typed_properties_are_added_and_read_back_with_their_types()
+    {
+        var topic = await TopicWithSubscriptionAsync("add-rules");
+        var sql = new SubscriptionRuleInfo
+        {
+            Name = "physical-goods",
+            FilterType = RuleFilterType.Sql,
+            SqlExpression = "category = 'physical' AND total > 0",
+            SqlAction = "SET priority = 'normal'"
+        };
+        var correlation = new SubscriptionRuleInfo
+        {
+            Name = "by-tenant",
+            FilterType = RuleFilterType.Correlation,
+            Correlation = new CorrelationFilterInfo
+            {
+                CorrelationId = "c-1", MessageId = "m-1", To = "billing", ReplyTo = "replies", Subject = "order.created",
+                SessionId = "s-1", ReplyToSessionId = "rs-1", ContentType = "application/json",
+                ApplicationProperties =
+                [
+                    new() { Name = "tenant", Type = RulePropertyType.String, Value = "contoso-uk" },
+                    new() { Name = "priority", Type = RulePropertyType.Int64, Value = "3" },
+                    new() { Name = "urgent", Type = RulePropertyType.Boolean, Value = "true" }
+                ]
+            }
+        };
+
+        var createdSql = await _management.CreateRuleAsync(topic, "audit", sql);
+        var createdCorrelation = await _management.CreateRuleAsync(topic, "audit", correlation);
+        var listed = await _management.GetRulesAsync(topic, "audit");
+        var stored = Assert.IsType<CorrelationRuleFilter>((await fixture.Admin.GetRuleAsync(topic, "audit", "by-tenant")).Value.Filter);
+
+        Assert.Equivalent(sql, createdSql, strict: true);
+        Assert.Equivalent(correlation, createdCorrelation, strict: true);
+        Assert.Equivalent(new[] { DefaultRule, sql, correlation }, listed, strict: true);
+        Assert.Equal(new Dictionary<string, object> { ["tenant"] = "contoso-uk", ["priority"] = 3L, ["urgent"] = true }, stored.ApplicationProperties);
+    }
+
+    [Fact]
+    public async Task Replacing_a_rule_keeps_its_name_and_changes_its_filter_and_its_action()
+    {
+        var topic = await TopicWithSubscriptionAsync("replace-rule");
+        await _management.CreateRuleAsync(topic, "audit", new SubscriptionRuleInfo { Name = "orders", FilterType = RuleFilterType.Sql, SqlExpression = "total > 0", SqlAction = "SET checked = TRUE" });
+        var expected = new SubscriptionRuleInfo { Name = "orders", FilterType = RuleFilterType.Correlation, Correlation = new CorrelationFilterInfo { Subject = "order.created" } };
+
+        var replaced = await _management.UpdateRuleAsync(topic, "audit", "orders",
+            new SubscriptionRuleInfo { FilterType = RuleFilterType.Correlation, Correlation = new CorrelationFilterInfo { Subject = "order.created" } });
+        var listed = (await _management.GetRulesAsync(topic, "audit")).Single(r => r.Name == "orders");
+
+        Assert.Equivalent(expected, replaced, strict: true);
+        Assert.Equivalent(expected, listed, strict: true);
+    }
+
+    [Fact]
+    public async Task Deleting_a_rule_and_then_the_last_one_leaves_the_subscription_with_no_rule()
+    {
+        var topic = await TopicWithSubscriptionAsync("delete-rules");
+        await _management.CreateRuleAsync(topic, "audit", new SubscriptionRuleInfo { Name = "orders", FilterType = RuleFilterType.False });
+
+        await _management.DeleteRuleAsync(topic, "audit", "$Default");
+        var afterOne = await RuleNamesAsync(topic);
+        await _management.DeleteRuleAsync(topic, "audit", "orders");
+        var afterLast = await RuleNamesAsync(topic);
+
+        Assert.Equal(["orders"], afterOne);
+        Assert.Empty(afterLast);
+    }
+
+    [Fact]
+    public async Task A_rule_whose_expression_or_action_does_not_parse_is_refused_with_the_fixed_text_and_nothing_is_created()
+    {
+        var topic = await TopicWithSubscriptionAsync("bad-rule");
+
+        var filter = await Assert.ThrowsAsync<InvalidEntityConfigurationException>(() => _management.CreateRuleAsync(topic, "audit",
+            new SubscriptionRuleInfo { Name = "bad-filter", FilterType = RuleFilterType.Sql, SqlExpression = "this is (( not sql" }));
+        var action = await Assert.ThrowsAsync<InvalidEntityConfigurationException>(() => _management.CreateRuleAsync(topic, "audit",
+            new SubscriptionRuleInfo { Name = "bad-action", FilterType = RuleFilterType.True, SqlAction = "this is (( not sql" }));
+
+        Assert.Equal((RuleRefusal, RuleRefusal), (filter.Message, action.Message));
+        Assert.Equal(["$Default"], await RuleNamesAsync(topic));
+    }
+
+    [Fact]
+    public async Task A_rule_name_that_exists_is_already_exists()
+    {
+        var topic = await TopicWithSubscriptionAsync("duplicate-rule");
+
+        await Assert.ThrowsAsync<EntityAlreadyExistsException>(() => _management.CreateRuleAsync(topic, "audit", DefaultRule));
+    }
+
+    [Fact]
+    public async Task A_missing_rule_subscription_or_topic_is_not_found()
+    {
+        var topic = await TopicWithSubscriptionAsync("missing-rule");
+        var rule = new SubscriptionRuleInfo { Name = "orders", FilterType = RuleFilterType.True };
+
+        await Assert.ThrowsAsync<EntityNotFoundException>(() => _management.UpdateRuleAsync(topic, "audit", "orders", rule));
+        await Assert.ThrowsAsync<EntityNotFoundException>(() => _management.DeleteRuleAsync(topic, "audit", "orders"));
+        await Assert.ThrowsAsync<EntityNotFoundException>(() => _management.CreateRuleAsync(topic, "missing", rule));
+        await Assert.ThrowsAsync<EntityNotFoundException>(() => _management.GetRulesAsync(topic, "missing"));
+        await Assert.ThrowsAsync<EntityNotFoundException>(() => _management.GetRulesAsync(AzureServiceBusFixture.UniqueName("no-topic"), "audit"));
+    }
+
+    [Fact]
+    public async Task A_subscription_created_with_an_invalid_filter_does_not_exist_afterwards_and_can_be_created_again()
+    {
+        var topic = Name(_topics, "bad-filter");
+        await _management.CreateTopicAsync(topic);
+
+        var refused = await Assert.ThrowsAsync<InvalidEntityConfigurationException>(() =>
+            _management.CreateSubscriptionAsync(topic, "filtered", new SubscriptionCreateOptions { FilterExpression = "this is (( not sql" }));
+        Assert.Equal("The broker refused this configuration.", refused.Message);
+        Assert.Null(await _management.GetSubscriptionAsync(topic, "filtered"));
+
+        await _management.CreateSubscriptionAsync(topic, "filtered", new SubscriptionCreateOptions { FilterExpression = "category = 'physical'" });
+        var created = await _management.GetSubscriptionAsync(topic, "filtered");
+
+        var rule = Assert.Single(created!.Rules);
+        Assert.Equal(("CustomFilter", RuleFilterType.Sql, "category = 'physical'"), (rule.Name, rule.FilterType, rule.SqlExpression));
+    }
+
     [Fact]
     public async Task Body_content_type_subject_ids_session_and_a_string_property_survive_send_then_peek()
     {

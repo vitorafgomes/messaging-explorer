@@ -119,7 +119,13 @@ public class EntityAdministrationTests
     }
 
     private static Func<MethodInfo, object?[], object?> Fails(string method, Exception error) =>
-        (m, _) => m.Name == method ? Task.FromException(error) : null;
+        (m, _) => m.Name != method ? null
+            : m.ReturnType == typeof(Task) ? Task.FromException(error)
+            : typeof(Task).GetMethods().Single(f => f.Name == nameof(Task.FromException) && f.IsGenericMethod)
+                .MakeGenericMethod(m.ReturnType.GetGenericArguments()[0]).Invoke(null, new object?[] { error });
+
+    private static Func<MethodInfo, object?[], object?> Answers<T>(string method, T value) =>
+        (m, _) => m.Name == method ? Task.FromResult(value) : null;
 
     private static T Options<T>(object?[] args) => Assert.IsType<T>(args.OfType<T>().Single());
 
@@ -427,5 +433,258 @@ public class EntityAdministrationTests
         Assert.Equal(HttpStatusCode.Created, answered.Status);
         var options = Options<QueueCreateOptions>(Assert.Single(answered.Calls).Args);
         Assert.Equal((TimeSpan.FromMinutes(6), 5000), (options.LockDuration, options.MaxDeliveryCount));
+    }
+
+    private const string Rules = "/api/topics/events/subscriptions/audit/rules";
+
+    private static SubscriptionRuleInfo SqlRule() => new()
+    {
+        Name = "physical-goods",
+        FilterType = RuleFilterType.Sql,
+        SqlExpression = "category = 'physical' AND total > 0",
+        SqlAction = "SET priority = 'normal'"
+    };
+
+    private static SubscriptionRuleInfo CorrelationRule() => new()
+    {
+        Name = "by-tenant",
+        FilterType = RuleFilterType.Correlation,
+        Correlation = new CorrelationFilterInfo
+        {
+            Subject = "order.created",
+            ApplicationProperties =
+            [
+                new() { Name = "tenant", Type = RulePropertyType.String, Value = "contoso-uk" },
+                new() { Name = "priority", Type = RulePropertyType.Int64, Value = "3" },
+                new() { Name = "ratio", Type = RulePropertyType.Double, Value = "2.5" },
+                new() { Name = "urgent", Type = RulePropertyType.Boolean, Value = "true" }
+            ]
+        }
+    };
+
+    private const string SqlRuleJson =
+        """{"name":"physical-goods","filterType":"Sql","sqlExpression":"category = 'physical' AND total > 0","correlation":null,"sqlAction":"SET priority = 'normal'"}""";
+
+    private const string CorrelationRuleJson =
+        """{"name":"by-tenant","filterType":"Correlation","sqlExpression":null,"correlation":{"correlationId":null,"messageId":null,"to":null,"replyTo":null,"subject":"order.created","sessionId":null,"replyToSessionId":null,"contentType":null,"applicationProperties":[{"name":"tenant","type":"String","value":"contoso-uk"},{"name":"priority","type":"Int64","value":"3"},{"name":"ratio","type":"Double","value":"2.5"},{"name":"urgent","type":"Boolean","value":"true"}]},"sqlAction":null}""";
+
+    [Fact]
+    public async Task The_rules_of_a_subscription_are_answered_with_their_filter_type_in_the_contract_shape()
+    {
+        var answered = await SendAsync("GET", Rules, null,
+            Answers<IReadOnlyList<SubscriptionRuleInfo>>(nameof(IMessagingProvider.GetRulesAsync), [SqlRule(), CorrelationRule()]));
+
+        Assert.Equal(HttpStatusCode.OK, answered.Status);
+        Assert.Equal($"[{SqlRuleJson},{CorrelationRuleJson}]", answered.Body);
+        Assert.Equal(("events", "audit"), (answered.Calls[0].Args[0], answered.Calls[0].Args[1]));
+    }
+
+    [Fact]
+    public async Task A_subscription_is_answered_with_its_rules_in_the_same_shape()
+    {
+        var subscription = new SubscriptionInfo { TopicName = "events", Name = "audit", Rules = [SqlRule(), CorrelationRule()] };
+
+        var answered = await SendAsync("GET", "/api/topics/events/subscriptions/audit", null,
+            Answers<SubscriptionInfo?>(nameof(IMessagingProvider.GetSubscriptionAsync), subscription));
+
+        Assert.Equal(HttpStatusCode.OK, answered.Status);
+        Assert.Equal($"[{SqlRuleJson},{CorrelationRuleJson}]", Json(answered.Body).GetProperty("rules").GetRawText());
+    }
+
+    [Fact]
+    public async Task A_rabbitmq_subscription_is_answered_with_its_routing_key_as_a_read_only_RoutingKey_rule()
+    {
+        var subscription = new SubscriptionInfo { TopicName = "orders", Name = "billing", Rules = [new() { Name = "RoutingKey", FilterType = RuleFilterType.RoutingKey, SqlExpression = "orders.*" }] };
+
+        var answered = await SendAsync("GET", "/api/topics/orders/subscriptions/billing", null,
+            Answers<SubscriptionInfo?>(nameof(IMessagingProvider.GetSubscriptionAsync), subscription), ProviderType.RabbitMQ);
+
+        Assert.Equal(HttpStatusCode.OK, answered.Status);
+        Assert.Equal("""[{"name":"RoutingKey","filterType":"RoutingKey","sqlExpression":"orders.*","correlation":null,"sqlAction":null}]""",
+            Json(answered.Body).GetProperty("rules").GetRawText());
+    }
+
+    [Fact]
+    public async Task Adding_a_rule_hands_the_provider_the_rule_of_the_body_and_answers_201_with_the_rule_as_stored()
+    {
+        const string body = """
+            {"name":"by-tenant","filterType":"Correlation","correlation":{"subject":"order.created","applicationProperties":[
+            {"name":"tenant","type":"String","value":"contoso-uk"},{"name":"priority","type":"Int64","value":"3"},
+            {"name":"ratio","type":"Double","value":"2.5"},{"name":"urgent","type":"Boolean","value":"true"}]},"sqlAction":null}
+            """;
+
+        var answered = await SendAsync("POST", Rules, body, Answers(nameof(IMessagingProvider.CreateRuleAsync), CorrelationRule()));
+
+        Assert.Equal(HttpStatusCode.Created, answered.Status);
+        Assert.EndsWith("/api/Topics/events/subscriptions/audit/rules", answered.Location?.ToString());
+        Assert.Equal(CorrelationRuleJson, answered.Body);
+        var call = Assert.Single(answered.Calls);
+        Assert.Equal((nameof(IMessagingProvider.CreateRuleAsync), "events", "audit"), (call.Method, call.Args[0], call.Args[1]));
+        Assert.Equivalent(CorrelationRule(), Options<SubscriptionRuleInfo>(call.Args), strict: true);
+    }
+
+    [Fact]
+    public async Task Replacing_a_rule_hands_the_provider_the_rule_name_of_the_path_and_answers_200_with_the_rule_as_stored()
+    {
+        const string body = """{"filterType":"Sql","sqlExpression":"category = 'physical' AND total > 0","sqlAction":"SET priority = 'normal'"}""";
+
+        var answered = await SendAsync("PUT", $"{Rules}/physical-goods", body, Answers(nameof(IMessagingProvider.UpdateRuleAsync), SqlRule()));
+
+        Assert.Equal(HttpStatusCode.OK, answered.Status);
+        Assert.Equal(SqlRuleJson, answered.Body);
+        var call = Assert.Single(answered.Calls);
+        Assert.Equal((nameof(IMessagingProvider.UpdateRuleAsync), "events", "audit", "physical-goods"), (call.Method, call.Args[0], call.Args[1], call.Args[2]));
+        var sent = Options<SubscriptionRuleInfo>(call.Args);
+        Assert.Equal(((string?)null, RuleFilterType.Sql, "category = 'physical' AND total > 0", "SET priority = 'normal'"), (sent.Name, sent.FilterType, sent.SqlExpression, sent.SqlAction));
+    }
+
+    [Fact]
+    public async Task A_replacement_whose_body_has_the_rule_name_of_the_path_is_accepted()
+    {
+        var answered = await SendAsync("PUT", $"{Rules}/physical-goods", """{"name":"physical-goods","filterType":"True"}""",
+            Answers(nameof(IMessagingProvider.UpdateRuleAsync), SqlRule()));
+
+        Assert.Equal(HttpStatusCode.OK, answered.Status);
+        Assert.Equal("physical-goods", Assert.Single(answered.Calls).Args[2]);
+    }
+
+    [Fact]
+    public async Task A_replacement_whose_body_names_another_rule_is_refused_naming_the_field_before_the_provider_is_called()
+    {
+        var answered = await SendAsync("PUT", $"{Rules}/physical-goods", """{"name":"digital-goods","filterType":"True"}""");
+
+        Assert.Equal(HttpStatusCode.BadRequest, answered.Status);
+        Assert.Equal("""{"message":"name must be absent or equal to the rule name in the path; a rule cannot be renamed."}""", answered.Body);
+        Assert.Empty(answered.Calls);
+    }
+
+    [Fact]
+    public async Task Deleting_a_rule_deletes_that_rule_and_answers_204()
+    {
+        var answered = await SendAsync("DELETE", $"{Rules}/physical-goods", null);
+
+        Assert.Equal(HttpStatusCode.NoContent, answered.Status);
+        var call = Assert.Single(answered.Calls);
+        Assert.Equal((nameof(IMessagingProvider.DeleteRuleAsync), "events", "audit", "physical-goods"), (call.Method, call.Args[0], call.Args[1], call.Args[2]));
+    }
+
+    [Fact]
+    public async Task A_filter_type_or_a_property_type_outside_the_set_reaches_the_provider_as_missing_instead_of_failing_binding()
+    {
+        const string body = """
+            {"name":"orders","filterType":"Bogus","correlation":{"applicationProperties":[{"name":"total","type":"Decimal","value":"1"},{"name":"count","type":"1","value":"1"}]}}
+            """;
+
+        var answered = await SendAsync("POST", Rules, body, Answers(nameof(IMessagingProvider.CreateRuleAsync), SqlRule()));
+
+        Assert.Equal(HttpStatusCode.Created, answered.Status);
+        var sent = Options<SubscriptionRuleInfo>(Assert.Single(answered.Calls).Args);
+        Assert.Null(sent.FilterType);
+        Assert.Equal(new RulePropertyType?[] { null, null }, sent.Correlation!.ApplicationProperties!.Select(p => p.Type));
+    }
+
+    [Theory]
+    [InlineData("POST", Rules, """{"name":"orders","filterType":"True"}""", "CreateRuleAsync")]
+    [InlineData("PUT", Rules + "/orders", """{"filterType":"True"}""", "UpdateRuleAsync")]
+    public async Task A_rule_outside_the_contract_answers_400_with_the_field_the_provider_named(string method, string path, string body, string providerMethod)
+    {
+        var violations = new[] { "sqlExpression is required for filterType Sql and must be 1 to 1024 characters." };
+
+        var answered = await SendAsync(method, path, body, Fails(providerMethod, new InvalidEntityConfigurationException(violations)));
+
+        Assert.Equal(HttpStatusCode.BadRequest, answered.Status);
+        Assert.Equal("""{"message":"sqlExpression is required for filterType Sql and must be 1 to 1024 characters."}""", answered.Body);
+    }
+
+    [Theory]
+    [InlineData("POST", Rules, """{"name":"orders","filterType":"Sql","sqlExpression":"this is (( not sql"}""", "CreateRuleAsync")]
+    [InlineData("PUT", Rules + "/orders", """{"filterType":"Sql","sqlExpression":"this is (( not sql"}""", "UpdateRuleAsync")]
+    public async Task A_rule_the_broker_refuses_answers_400_with_the_fixed_text_and_nothing_of_the_broker(string method, string path, string body, string providerMethod)
+    {
+        var answered = await SendAsync(method, path, body, Fails(providerMethod, InvalidEntityConfigurationException.RuleRefused(new ArgumentException(Sentinel))));
+
+        Assert.Equal(HttpStatusCode.BadRequest, answered.Status);
+        Assert.Equal("""{"message":"The broker refused this rule. Check the expression."}""", answered.Body);
+    }
+
+    [Fact]
+    public async Task Adding_a_rule_whose_name_exists_answers_409()
+    {
+        var answered = await SendAsync("POST", Rules, """{"name":"orders","filterType":"True"}""",
+            Fails(nameof(IMessagingProvider.CreateRuleAsync), new EntityAlreadyExistsException(new Exception(Sentinel))));
+
+        Assert.Equal(HttpStatusCode.Conflict, answered.Status);
+        Assert.Equal("""{"message":"A rule with this name already exists."}""", answered.Body);
+    }
+
+    [Theory]
+    [InlineData("GET", Rules, null, "GetRulesAsync", "The subscription was not found.")]
+    [InlineData("POST", Rules, """{"name":"orders","filterType":"True"}""", "CreateRuleAsync", "The subscription was not found.")]
+    [InlineData("PUT", Rules + "/orders", """{"filterType":"True"}""", "UpdateRuleAsync", "The rule was not found.")]
+    [InlineData("DELETE", Rules + "/orders", null, "DeleteRuleAsync", "The rule was not found.")]
+    public async Task A_missing_subscription_or_rule_answers_404(string method, string path, string? body, string providerMethod, string message)
+    {
+        var answered = await SendAsync(method, path, body, Fails(providerMethod, new EntityNotFoundException(new Exception(Sentinel))));
+
+        Assert.Equal(HttpStatusCode.NotFound, answered.Status);
+        Assert.Equal($$"""{"message":"{{message}}"}""", answered.Body);
+    }
+
+    [Theory]
+    [InlineData("GET", Rules, null, "GetRulesAsync")]
+    [InlineData("POST", Rules, """{"name":"orders","filterType":"True"}""", "CreateRuleAsync")]
+    [InlineData("PUT", Rules + "/orders", """{"filterType":"True"}""", "UpdateRuleAsync")]
+    [InlineData("DELETE", Rules + "/orders", null, "DeleteRuleAsync")]
+    public async Task Any_other_rule_failure_such_as_a_busy_broker_answers_500_with_the_constant_body(string method, string path, string? body, string providerMethod)
+    {
+        var answered = await SendAsync(method, path, body, Fails(providerMethod, new TimeoutException(Sentinel)));
+
+        Assert.Equal(HttpStatusCode.InternalServerError, answered.Status);
+        Assert.Equal(ConstantBody, answered.Body);
+    }
+
+    [Theory]
+    [InlineData("GET", Rules, null, "GetRulesAsync")]
+    [InlineData("POST", Rules, """{"name":"orders","filterType":"True"}""", "CreateRuleAsync")]
+    [InlineData("PUT", Rules + "/orders", """{"filterType":"True"}""", "UpdateRuleAsync")]
+    [InlineData("DELETE", Rules + "/orders", null, "DeleteRuleAsync")]
+    public async Task A_provider_without_rules_answers_400_does_not_support_subscription_rules(string method, string path, string? body, string providerMethod)
+    {
+        var answered = await SendAsync(method, path, body, Fails(providerMethod, new NotSupportedException(Sentinel)), ProviderType.RabbitMQ);
+
+        Assert.Equal(HttpStatusCode.BadRequest, answered.Status);
+        Assert.Equal("""{"message":"This provider does not support subscription rules."}""", answered.Body);
+    }
+
+    [Theory]
+    [InlineData("GET", Rules)]
+    [InlineData("POST", Rules)]
+    [InlineData("PUT", Rules + "/orders")]
+    [InlineData("DELETE", Rules + "/orders")]
+    public async Task A_rule_request_without_the_api_key_is_refused_with_401(string method, string path)
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(new HttpMethod(method), path);
+        if (method is "POST" or "PUT") request.Content = new StringContent("""{"name":"orders","filterType":"True"}""", Encoding.UTF8, "application/json");
+
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("AzureServiceBus", true)]
+    [InlineData("RabbitMQ", false)]
+    public async Task The_capabilities_say_whether_the_provider_has_subscription_rules(string providerType, bool expected)
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Api-Key", ApiFactory.TestApiSecret);
+
+        using var response = await client.GetAsync($"/api/connections/providers/{providerType}/capabilities");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(expected, Json(await response.Content.ReadAsStringAsync()).GetProperty("supportsSubscriptionRules").GetBoolean());
     }
 }

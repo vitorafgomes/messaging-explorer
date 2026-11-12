@@ -285,7 +285,7 @@ public sealed class RabbitMQProviderDefectTests(RabbitMqFixture fixture) : IAsyn
         var subscription = Assert.Single(await _provider.GetSubscriptionsAsync(source));
 
         Assert.Equal(destination, subscription.Name);
-        Assert.Equal("k", Assert.Single(subscription.Rules).FilterExpression);
+        Assert.Equal("k", Assert.Single(subscription.Rules).SqlExpression);
     }
 
     /// <summary>Correct: a user whose password has a non-ASCII character reaches the management API as it reaches AMQP.</summary>

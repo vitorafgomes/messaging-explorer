@@ -1,3 +1,4 @@
+using System.Globalization;
 using Azure.Messaging.ServiceBus;
 using Azure.Messaging.ServiceBus.Administration;
 using Microsoft.Extensions.Logging;
@@ -635,31 +636,7 @@ public class AzureServiceBusProvider : IMessagingProvider
     public async Task CreateSubscriptionAsync(string topicName, string subscriptionName, SubscriptionCreateOptions? options)
     {
         EnsureConnected();
-
         await CreateSubscriptionCoreAsync(_adminClient!, topicName, subscriptionName, options);
-
-        if (options == null)
-        {
-            return;
-        }
-
-        // If a filter expression is provided, replace the default rule with a SQL filter
-        if (!string.IsNullOrWhiteSpace(options.FilterExpression))
-        {
-            // Delete the default true filter rule
-            try
-            {
-                await _adminClient!.DeleteRuleAsync(topicName, subscriptionName, "$Default");
-            }
-            catch (ServiceBusException)
-            {
-                // Rule might not exist
-            }
-
-            // Create the new filter rule
-            var rule = new CreateRuleOptions("CustomFilter", new SqlRuleFilter(options.FilterExpression));
-            await _adminClient!.CreateRuleAsync(topicName, subscriptionName, rule);
-        }
     }
 
     /// <inheritdoc />
@@ -672,7 +649,9 @@ public class AzureServiceBusProvider : IMessagingProvider
     /// <summary>
     /// Creates a subscription with the broker's defaults when <paramref name="options"/> is null, otherwise with
     /// every option that is set; failures the caller can act on arrive as the provider-neutral exceptions. A
-    /// missing topic arrives as <see cref="EntityNotFoundException"/>. The filter expression is not read here.
+    /// missing topic arrives as <see cref="EntityNotFoundException"/>. With a filter expression the subscription and
+    /// its one SQL rule, named <c>CustomFilter</c>, are created in a single call instead of the default rule, so an
+    /// expression the broker refuses creates nothing.
     /// </summary>
     internal static async Task CreateSubscriptionCoreAsync(ServiceBusAdministrationClient adminClient, string topicName, string subscriptionName, SubscriptionCreateOptions? options)
     {
@@ -701,7 +680,10 @@ public class AzureServiceBusProvider : IMessagingProvider
             if (!string.IsNullOrEmpty(options.ForwardDeadLetteredMessagesTo)) subscription.ForwardDeadLetteredMessagesTo = options.ForwardDeadLetteredMessagesTo;
             if (options.UserMetadata != null) subscription.UserMetadata = options.UserMetadata;
 
-            await adminClient.CreateSubscriptionAsync(subscription);
+            if (string.IsNullOrWhiteSpace(options.FilterExpression))
+                await adminClient.CreateSubscriptionAsync(subscription);
+            else
+                await adminClient.CreateSubscriptionAsync(subscription, new CreateRuleOptions(FilteredSubscriptionRuleName, new SqlRuleFilter(options.FilterExpression)));
         }
         catch (Exception ex) when (ToProviderNeutral(ex) is { } neutral)
         {
@@ -805,44 +787,203 @@ public class AzureServiceBusProvider : IMessagingProvider
         };
     }
 
-    private static SubscriptionRuleInfo MapToSubscriptionRuleInfo(RuleProperties rule)
+    /// <summary>
+    /// A rule as the API shows it. True and false filters derive from the SQL filter, so they are matched first and
+    /// carry no expression; a correlation filter keeps every field, and each property value its invariant-culture text.
+    /// </summary>
+    internal static SubscriptionRuleInfo MapToSubscriptionRuleInfo(RuleProperties rule)
     {
-        var ruleInfo = new SubscriptionRuleInfo
+        var mapped = new SubscriptionRuleInfo { Name = rule.Name, SqlAction = (rule.Action as SqlRuleAction)?.SqlExpression };
+        switch (rule.Filter)
         {
-            Name = rule.Name
-        };
-
-        // Map filter
-        if (rule.Filter is SqlRuleFilter sqlFilter)
-        {
-            ruleInfo.FilterType = "SqlFilter";
-            ruleInfo.FilterExpression = sqlFilter.SqlExpression;
-        }
-        else if (rule.Filter is CorrelationRuleFilter correlationFilter)
-        {
-            ruleInfo.FilterType = "CorrelationFilter";
-            ruleInfo.FilterExpression = $"CorrelationId: {correlationFilter.CorrelationId ?? "N/A"}";
-            ruleInfo.CorrelationProperties = correlationFilter.ApplicationProperties?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-        }
-        else if (rule.Filter is TrueRuleFilter)
-        {
-            ruleInfo.FilterType = "TrueFilter";
-            ruleInfo.FilterExpression = "1=1 (matches all messages)";
-        }
-        else if (rule.Filter is FalseRuleFilter)
-        {
-            ruleInfo.FilterType = "FalseFilter";
-            ruleInfo.FilterExpression = "1=0 (matches no messages)";
-        }
-
-        // Map action
-        if (rule.Action is SqlRuleAction sqlAction)
-        {
-            ruleInfo.ActionExpression = sqlAction.SqlExpression;
+            case TrueRuleFilter:
+                mapped.FilterType = RuleFilterType.True;
+                break;
+            case FalseRuleFilter:
+                mapped.FilterType = RuleFilterType.False;
+                break;
+            case SqlRuleFilter sql:
+                mapped.FilterType = RuleFilterType.Sql;
+                mapped.SqlExpression = sql.SqlExpression;
+                break;
+            case CorrelationRuleFilter correlation:
+                mapped.FilterType = RuleFilterType.Correlation;
+                mapped.Correlation = new CorrelationFilterInfo
+                {
+                    CorrelationId = correlation.CorrelationId,
+                    MessageId = correlation.MessageId,
+                    To = correlation.To,
+                    ReplyTo = correlation.ReplyTo,
+                    Subject = correlation.Subject,
+                    SessionId = correlation.SessionId,
+                    ReplyToSessionId = correlation.ReplyToSessionId,
+                    ContentType = correlation.ContentType,
+                    ApplicationProperties = correlation.ApplicationProperties.Select(p => MapToRuleApplicationProperty(p.Key, p.Value)).ToList()
+                };
+                break;
         }
 
-        return ruleInfo;
+        return mapped;
     }
+
+    private static RuleApplicationProperty MapToRuleApplicationProperty(string name, object? value) => value switch
+    {
+        string text => new() { Name = name, Type = RulePropertyType.String, Value = text },
+        long whole => new() { Name = name, Type = RulePropertyType.Int64, Value = whole.ToString(CultureInfo.InvariantCulture) },
+        double number => new() { Name = name, Type = RulePropertyType.Double, Value = number.ToString(CultureInfo.InvariantCulture) },
+        bool flag => new() { Name = name, Type = RulePropertyType.Boolean, Value = flag ? "true" : "false" },
+        _ => new() { Name = name, Type = RulePropertyType.Other, Value = Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty }
+    };
+
+    #endregion
+
+    #region Subscription Rules
+
+    private const string FilteredSubscriptionRuleName = "CustomFilter";
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<SubscriptionRuleInfo>> GetRulesAsync(string topicName, string subscriptionName, CancellationToken cancellationToken = default)
+    {
+        EnsureConnected();
+        return await GetRulesCoreAsync(_adminClient!, topicName, subscriptionName, cancellationToken);
+    }
+
+    /// <summary>
+    /// Lists the rules of a subscription in one paged enumeration. A missing topic can list as empty, so only an
+    /// empty list asks whether the subscription exists; a missing one throws <see cref="EntityNotFoundException"/>.
+    /// </summary>
+    internal static async Task<IReadOnlyList<SubscriptionRuleInfo>> GetRulesCoreAsync(ServiceBusAdministrationClient adminClient, string topicName, string subscriptionName, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var rules = new List<SubscriptionRuleInfo>();
+            await foreach (var rule in adminClient.GetRulesAsync(topicName, subscriptionName, cancellationToken))
+                rules.Add(MapToSubscriptionRuleInfo(rule));
+
+            if (rules.Count == 0 && !(await adminClient.SubscriptionExistsAsync(topicName, subscriptionName, cancellationToken)).Value)
+                throw new EntityNotFoundException();
+            return rules;
+        }
+        catch (ServiceBusException ex) when (ex.Reason == ServiceBusFailureReason.MessagingEntityNotFound)
+        {
+            throw new EntityNotFoundException(ex);
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<SubscriptionRuleInfo> CreateRuleAsync(string topicName, string subscriptionName, SubscriptionRuleInfo rule, CancellationToken cancellationToken = default)
+    {
+        EnsureConnected();
+        return await CreateRuleCoreAsync(_adminClient!, topicName, subscriptionName, rule, cancellationToken);
+    }
+
+    /// <summary>
+    /// Checks the rule against the Azure Service Bus rules, then adds it in one call and maps what the broker stored.
+    /// The expression and the action reach the broker only as values of the rule object.
+    /// </summary>
+    internal static async Task<SubscriptionRuleInfo> CreateRuleCoreAsync(ServiceBusAdministrationClient adminClient, string topicName, string subscriptionName, SubscriptionRuleInfo rule, CancellationToken cancellationToken)
+    {
+        ThrowIfInvalid(EntityConfigurationValidator.ValidateRule(rule.Name, rule));
+
+        try
+        {
+            var options = new CreateRuleOptions(rule.Name, ToRuleFilter(rule)) { Action = ToRuleAction(rule) };
+            return MapToSubscriptionRuleInfo((await adminClient.CreateRuleAsync(topicName, subscriptionName, options, cancellationToken)).Value);
+        }
+        catch (Exception ex) when (ToRuleNeutral(ex) is { } neutral)
+        {
+            throw neutral;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<SubscriptionRuleInfo> UpdateRuleAsync(string topicName, string subscriptionName, string ruleName, SubscriptionRuleInfo rule, CancellationToken cancellationToken = default)
+    {
+        EnsureConnected();
+        return await UpdateRuleCoreAsync(_adminClient!, topicName, subscriptionName, ruleName, rule, cancellationToken);
+    }
+
+    /// <summary>
+    /// Checks the rule, then reads the stored rule once, replaces its filter and action and writes it back once under
+    /// the same name. The write is last-write-wins: the SDK sends it with <c>If-Match: *</c>.
+    /// </summary>
+    internal static async Task<SubscriptionRuleInfo> UpdateRuleCoreAsync(ServiceBusAdministrationClient adminClient, string topicName, string subscriptionName, string ruleName, SubscriptionRuleInfo rule, CancellationToken cancellationToken)
+    {
+        ThrowIfInvalid(EntityConfigurationValidator.ValidateRule(ruleName, rule));
+
+        try
+        {
+            RuleProperties stored = (await adminClient.GetRuleAsync(topicName, subscriptionName, ruleName, cancellationToken)).Value;
+            stored.Filter = ToRuleFilter(rule);
+            stored.Action = ToRuleAction(rule);
+            return MapToSubscriptionRuleInfo((await adminClient.UpdateRuleAsync(topicName, subscriptionName, stored, cancellationToken)).Value);
+        }
+        catch (Exception ex) when (ToRuleNeutral(ex) is { } neutral)
+        {
+            throw neutral;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task DeleteRuleAsync(string topicName, string subscriptionName, string ruleName, CancellationToken cancellationToken = default)
+    {
+        EnsureConnected();
+        await DeleteRuleCoreAsync(_adminClient!, topicName, subscriptionName, ruleName, cancellationToken);
+    }
+
+    /// <summary>Deletes one rule, the last one included; a missing rule or subscription throws <see cref="EntityNotFoundException"/>.</summary>
+    internal static async Task DeleteRuleCoreAsync(ServiceBusAdministrationClient adminClient, string topicName, string subscriptionName, string ruleName, CancellationToken cancellationToken)
+    {
+        ThrowIfInvalid(EntityConfigurationValidator.ValidateRuleName(ruleName));
+
+        try
+        {
+            await adminClient.DeleteRuleAsync(topicName, subscriptionName, ruleName, cancellationToken);
+        }
+        catch (Exception ex) when (ToRuleNeutral(ex) is { } neutral)
+        {
+            throw neutral;
+        }
+    }
+
+    /// <summary>
+    /// As <see cref="ToProviderNeutral"/>, except that a refusal carries the fixed rule text: the broker answers a
+    /// filter or an action that does not parse with HTTP 400, which the SDK raises as <see cref="ArgumentException"/>.
+    /// </summary>
+    private static Exception? ToRuleNeutral(Exception ex) => ToProviderNeutral(ex) switch
+    {
+        InvalidEntityConfigurationException => InvalidEntityConfigurationException.RuleRefused(ex),
+        var neutral => neutral
+    };
+
+    private static RuleFilter ToRuleFilter(SubscriptionRuleInfo rule) => rule.FilterType switch
+    {
+        RuleFilterType.Sql => new SqlRuleFilter(rule.SqlExpression),
+        RuleFilterType.True => new TrueRuleFilter(),
+        RuleFilterType.False => new FalseRuleFilter(),
+        _ => ToCorrelationRuleFilter(rule.Correlation!)
+    };
+
+    private static CorrelationRuleFilter ToCorrelationRuleFilter(CorrelationFilterInfo correlation)
+    {
+        var filter = new CorrelationRuleFilter
+        {
+            CorrelationId = correlation.CorrelationId,
+            MessageId = correlation.MessageId,
+            To = correlation.To,
+            ReplyTo = correlation.ReplyTo,
+            Subject = correlation.Subject,
+            SessionId = correlation.SessionId,
+            ReplyToSessionId = correlation.ReplyToSessionId,
+            ContentType = correlation.ContentType
+        };
+        foreach (var property in correlation.ApplicationProperties ?? [])
+            filter.ApplicationProperties[property.Name!] = EntityConfigurationValidator.ParsePropertyValue(property.Type, property.Value)!;
+        return filter;
+    }
+
+    private static SqlRuleAction? ToRuleAction(SubscriptionRuleInfo rule) =>
+        string.IsNullOrWhiteSpace(rule.SqlAction) ? null : new SqlRuleAction(rule.SqlAction);
 
     #endregion
 
