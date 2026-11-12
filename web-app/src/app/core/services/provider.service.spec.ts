@@ -115,6 +115,44 @@ describe('ProviderService holds the capabilities of the connected provider', () 
     });
   });
 
+  describe('the rules editor is offered only when the API explicitly says supportsSubscriptionRules is true', () => {
+    const azureConnected = { connected: true, namespace: 'ns.example.net', providerType: 'AzureServiceBus' } as unknown as ConnectionStatus;
+
+    it('an Azure API that answers supportsSubscriptionRules: true enables it', () => {
+      capabilitiesResponse = () => of({ supportsSubscriptionRules: true });
+
+      status$.next(azureConnected);
+
+      expect(service.capabilities()?.supportsSubscriptionRules).toBe(true);
+    });
+
+    it('an older Azure API that does not send the flag leaves it off, although the Azure default is true', () => {
+      capabilitiesResponse = () => of({ supportsSessions: true });
+
+      status$.next(azureConnected);
+
+      expect(service.capabilities()?.supportsSubscriptionRules, 'the API did not send the flag').toBe(false);
+    });
+
+    it('while the capabilities load, and when the call fails with a 500, it is off', () => {
+      const pending = new Subject<ProviderCapabilities>();
+      capabilitiesResponse = () => pending;
+      status$.next(azureConnected);
+      expect(service.capabilities()?.supportsSubscriptionRules, 'while the capabilities load').toBe(false);
+
+      pending.error(new HttpErrorResponse({ status: 500, statusText: 'Internal Server Error' }));
+      expect(service.capabilities()?.supportsSubscriptionRules, 'after a 500').toBe(false);
+    });
+
+    it('RabbitMQ: off when its API says false', () => {
+      capabilitiesResponse = () => of({ supportsSubscriptionRules: false });
+
+      status$.next(rabbitConnected);
+
+      expect(service.capabilities()?.supportsSubscriptionRules).toBe(false);
+    });
+  });
+
   it('on disconnect the state resets, and a late answer for the old connection does not bring it back', () => {
     const late = new Subject<ProviderCapabilities>();
     capabilitiesResponse = () => late;

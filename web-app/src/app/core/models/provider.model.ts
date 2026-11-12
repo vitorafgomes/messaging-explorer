@@ -26,6 +26,8 @@ export interface ProviderCapabilities {
   supportsAutoForwarding: boolean;
   /** Entities can be created with options, edited and enabled or disabled. An older API does not send it; only an explicit true enables it. */
   supportsEntityUpdate?: boolean;
+  /** Subscription rules can be added, replaced and deleted. An older API does not send it; only an explicit true enables it. */
+  supportsSubscriptionRules?: boolean;
   supportedExchangeTypes: string[];
   maxMessageSizeInBytes: number;
   maxTimeToLive: string;

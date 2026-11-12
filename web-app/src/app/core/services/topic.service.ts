@@ -5,7 +5,7 @@ import { ApiService } from './api.service';
 import { apiPath } from './api-path';
 import {
   TopicInfo, SubscriptionInfo, MessageInfo, SendMessageRequest, BatchOperationResult, DeleteBatchRequest, ResubmitBatchRequest,
-  TopicCreateOptions, TopicUpdate, SubscriptionCreateOptions, SubscriptionUpdate
+  TopicCreateOptions, TopicUpdate, SubscriptionCreateOptions, SubscriptionUpdate, SubscriptionRuleInfo, SubscriptionRuleWrite
 } from '../models';
 
 /**
@@ -143,6 +143,30 @@ export class TopicService {
    */
   deleteSubscription(topicName: string, subscriptionName: string): Observable<void> {
     return this.api.delete<void>(apiPath`topics/${topicName}/subscriptions/${subscriptionName}`);
+  }
+
+  // =========================================================================
+  // Subscription Rules
+  // =========================================================================
+
+  /** Reads the rules of a subscription. */
+  getRules(topicName: string, subscriptionName: string): Observable<SubscriptionRuleInfo[]> {
+    return this.api.get<SubscriptionRuleInfo[]>(apiPath`topics/${topicName}/subscriptions/${subscriptionName}/rules`);
+  }
+
+  /** Adds a rule; answers the rule as stored. */
+  createRule(topicName: string, subscriptionName: string, rule: SubscriptionRuleWrite): Observable<SubscriptionRuleInfo> {
+    return this.api.post<SubscriptionRuleInfo>(apiPath`topics/${topicName}/subscriptions/${subscriptionName}/rules`, rule);
+  }
+
+  /** Replaces the whole rule (filter and action) under the same name; a rule cannot be renamed. */
+  replaceRule(topicName: string, subscriptionName: string, ruleName: string, rule: SubscriptionRuleWrite): Observable<SubscriptionRuleInfo> {
+    return this.api.put<SubscriptionRuleInfo>(apiPath`topics/${topicName}/subscriptions/${subscriptionName}/rules/${ruleName}`, rule);
+  }
+
+  /** Deletes a rule. */
+  deleteRule(topicName: string, subscriptionName: string, ruleName: string): Observable<void> {
+    return this.api.delete<void>(apiPath`topics/${topicName}/subscriptions/${subscriptionName}/rules/${ruleName}`);
   }
 
   // =========================================================================
