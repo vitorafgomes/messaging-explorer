@@ -49,7 +49,7 @@ They apply to every new screen and to every screen a change touches. A change is
 
 ## The prototype
 
-`vault/prototypes/web-app/index.html` draws the target layout as five artboards in one self-contained file, with its screenshots and a README beside it: a queue, a subscription, the purge confirmation, the messages list and the three states, each in light and dark. It is the picture of the rules above.
+`vault/prototypes/web-app/index.html` draws the target layout as 38 artboards in one self-contained file, with its screenshots and a README beside it: every screen and dialog the app has, the window on macOS, Windows and at the minimum size, and seven screens that are proposed and not built, marked as such. The review that produced them is [[pages/roadmap/ui-review-2026-11]].
 
 The prototype is the spec. Where the application and an artboard differ, the artboard is what the screen should become, and what an artboard draws that the application lacks is owed. A change to a screen updates its artboard and its screenshot in the same change. A layout question is settled on the prototype first, because it costs minutes there and days in a 3,760-line component.
 

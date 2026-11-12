@@ -22,12 +22,27 @@ Each entry carries the date it was first written down. What was planned and is a
 
 - **2026-07-06 - Search across entities.** One screen that searches every queue and subscription. The per-entity search endpoints exist; this needs a fan-out on the server and a client, which the web app does not have even for one entity.
 - **2026-04-08 - Several namespaces at once (connection tabs).** Waits on the active provider leaving the static slot ([[pages/services/api]]); deferred once for that reason ([[pages/history/product]]).
-- **2026-07-06 - Edit an entity's configuration.** Only create and delete exist; nothing changes the properties of a queue, topic or subscription.
-- **2026-04-08 - Subscription rules editor.** SQL and correlation filters are read-only today.
-- **2026-07-06 - Monitoring history.** The API serves a snapshot and a history; the screen shows only the present.
+- **2026-07-06 - Edit an entity's configuration.** Nothing changes the properties of a queue, topic or subscription, and no screen creates or deletes one either: the API can, the app never calls it. Item 1 of [[pages/roadmap/azure-service-bus-administration]].
+- **2026-04-08 - Subscription rules editor.** SQL and correlation filters are read-only today. Item 2 of [[pages/roadmap/azure-service-bus-administration]].
+- **2026-07-06 - Monitoring history.** The API keeps 120 snapshots; the screen charts the totals of the last 20 polls and has no history per entity. Item 5 of [[pages/roadmap/azure-service-bus-administration]].
 - **2026-04-08 - Metrics and alerts.** Real charts from Azure Monitor per entity, and thresholds that notify (dead-letter above N, active above N). Waits on metrics following the active connection instead of one configured namespace.
 - **2026-07-06 - Command palette and keyboard shortcuts** for navigation.
 - **2026-04-19 - Azure resource discovery** after sign-in, the unbuilt half of [[pages/decisions/0003-azure-authentication-strategy]].
+
+## From the comparison with Service Bus Explorer (2026-11-12)
+
+The owner asked what the reference tool for Azure Service Bus has that this product lacks. Ideas only: current SDKs, performance and security decided at design time. What exists, what to build per layer and the order are on [[pages/roadmap/azure-service-bus-administration]]; the numbers are its items.
+
+- **2026-11-12 - Enable and disable an entity** (active, disabled, send disabled, receive disabled). Item 3.
+- **2026-11-12 - Export and import the definitions of a namespace** (queues, topics, subscriptions, rules), to recreate them elsewhere. Item 4.
+- **2026-11-12 - Counts of every entity on one screen**, sortable, filterable, with the dead-letter threshold the user sets. Item 5.
+- **2026-11-12 - Browse sessions**: the messages of one session, the state editor, sessions on queues. Item 6, which starts with a defect: listing sessions locks each one.
+- **2026-11-12 - Scheduled and deferred messages**: list, cancel a scheduled one, mark a deferred one. Item 7.
+- **2026-11-12 - Transfer dead-letter queue** reachable from the messages dialog. Item 8.
+- **2026-11-12 - Send many messages** with a count, a cap and a split by batch size. Item 9.
+- **2026-11-12 - Live view of arriving messages**, by polling a peek, never a receiver. Item 10; last.
+- **2026-11-12 - Sort the message list, copy the body, filter the tree by name, dates on the queue panel.** Item 11.
+- **2026-11-12 - Sovereign clouds** as a fixed list on the connection. Item 12; only on request.
 
 ## Smaller, unordered
 

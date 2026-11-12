@@ -10,215 +10,340 @@
     --surface: #faf9fd; --surface-container: #efedf1; --surface-container-high: #e9e7ec; --on-surface: #1a1b1f;
     --on-surface-variant: #44474e; --outline: #74777f; --outline-variant: #c4c6d0;
     --error: #ba1a1a; --on-error: #ffffff; --error-container: #ffdad6; --on-error-container: #410002;
-    --warning: #7a5900; --warning-container: #ffdfa0; --success: #1b6d2f; --success-container: #b6f2b6;
+    --warning: #7a5900; --warning-container: #ffdfa0; --on-warning-container: #3d2e00; --success: #1b6d2f; --success-container: #b6f2b6; --on-success-container: #002106;
     --shadow: 0 1px 2px rgba(0,0,0,.2), 0 1px 3px 1px rgba(0,0,0,.1);
+    --mono: "Roboto Mono", ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
   }
   html.dark {
     --primary: #abc7ff; --on-primary: #002f65; --primary-container: #00458e; --on-primary-container: #d7e3ff;
     --surface: #121316; --surface-container: #1e1f23; --surface-container-high: #292a2d; --on-surface: #e3e2e6;
     --on-surface-variant: #c4c6d0; --outline: #8e9099; --outline-variant: #44474e;
     --error: #ffb4ab; --on-error: #690005; --error-container: #93000a; --on-error-container: #ffdad6;
-    --warning: #f5bf3a; --warning-container: #5c4300; --success: #9bd69b; --success-container: #00531c;
+    --warning: #f5bf3a; --warning-container: #5c4300; --on-warning-container: #ffdfa0; --success: #9bd69b; --success-container: #00531c; --on-success-container: #d0f5d0;
     --shadow: 0 1px 3px rgba(0,0,0,.6);
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body { margin: 0; font: 14px/20px Roboto, "Helvetica Neue", Arial, sans-serif; background: var(--surface); color: var(--on-surface); }
-  h1, h2, h3, p { margin: 0; }
+  h1, h2, h3, h4, p { margin: 0; }
   svg.i { width: 20px; height: 20px; fill: currentColor; flex: none; }
+  svg.i.s { width: 16px; height: 16px; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  .toolbar :focus-visible { outline-color: var(--on-primary); }
 
   /* prototype chrome: not part of the product */
-  .proto-bar { display: flex; gap: 8px; align-items: center; padding: 8px 16px; background: var(--surface-container-high); border-bottom: 1px solid var(--outline-variant); position: sticky; top: 0; z-index: 5; flex-wrap: wrap; }
+  .proto-bar { padding: 8px 16px; background: var(--surface-container-high); border-bottom: 1px solid var(--outline-variant); }
+  .proto-bar .line { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 2px 0; }
+  .proto-bar .grp { width: 96px; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--on-surface-variant); }
   .proto-bar strong { margin-right: 8px; }
-  .proto-bar button { font: inherit; padding: 4px 12px; border-radius: 16px; border: 1px solid var(--outline); background: transparent; color: var(--on-surface); cursor: pointer; }
+  .proto-bar button { font-size: 13px; padding: 2px 10px; border-radius: 16px; border: 1px solid var(--outline); background: transparent; color: var(--on-surface); cursor: pointer; }
   .proto-bar button[aria-pressed="true"] { background: var(--primary-container); color: var(--on-primary-container); border-color: transparent; }
   .proto-bar .grow { flex: 1; }
+  html.shot .proto-bar { display: none; }
   .board { display: none; padding: 16px; }
   .board.on { display: block; }
   .board > .why { max-width: 900px; margin: 0 0 16px; color: var(--on-surface-variant); }
   .board > .why b { color: var(--on-surface); }
-  .frame { border: 1px solid var(--outline-variant); border-radius: 12px; overflow: hidden; max-width: 1180px; box-shadow: var(--shadow); }
+  .tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .6px; padding: 0 8px; border-radius: 4px; margin-right: 8px; border: 1px dashed var(--outline); color: var(--on-surface); vertical-align: 1px; }
+  .tag.today { border: 1px solid var(--error); color: var(--error); }
+  .frame { border: 1px solid var(--outline-variant); border-radius: 12px; overflow: hidden; max-width: 1180px; box-shadow: var(--shadow); position: relative; background: var(--surface); }
+  .frame.proposed { border: 2px dashed var(--outline); }
+  .legend { max-width: 1180px; margin: 12px 0 0; padding: 0 0 0 20px; color: var(--on-surface-variant); }
+  .legend b { color: var(--on-surface); }
+  .pin { position: absolute; z-index: 4; border: 2px dashed var(--error); border-radius: 6px; pointer-events: none; }
+  .pin.ok { border-color: var(--success); }
+  .pin > span { position: absolute; right: -2px; bottom: -2px; font-size: 11px; line-height: 16px; font-weight: 700; padding: 0 5px; border-radius: 4px 0 4px 0; white-space: nowrap; background: var(--error); color: var(--on-error); }
+  .pin.ok > span { background: var(--success); color: var(--surface); }
 
-  /* product */
-  .toolbar { display: flex; align-items: center; gap: 12px; height: 56px; padding: 0 16px; background: var(--primary); color: var(--on-primary); }
-  .toolbar .brand { font-size: 20px; font-weight: 500; }
-  .toolbar .grow { flex: 1; }
-  .chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 8px; font-weight: 500; font-size: 13px; }
+  /* product: shell */
+  .toolbar { display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 8px 0 16px; background: var(--primary); color: var(--on-primary); }
+  .toolbar .brand { font-size: 16px; font-weight: 500; white-space: nowrap; margin-right: 8px; }
+  .toolbar .grow { flex: 1; min-width: 0; }
+  .toolbar .nav { display: flex; height: 100%; }
+  .toolbar .nav button { border: 0; background: transparent; color: inherit; padding: 0 12px; font-weight: 500; cursor: pointer; opacity: .8; border-bottom: 3px solid transparent; border-top: 3px solid transparent; }
+  .toolbar .nav button[aria-current="page"] { opacity: 1; border-bottom-color: var(--on-primary); }
+  .toolbar .upd { height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid currentColor; background: transparent; color: inherit; display: inline-flex; gap: 6px; align-items: center; cursor: pointer; white-space: nowrap; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 8px; font-weight: 500; font-size: 13px; white-space: nowrap; }
   .chip.env-prod { background: var(--error-container); color: var(--on-error-container); }
-  .chip.env-dev { background: var(--success-container); color: #002106; }
-  html.dark .chip.env-dev { color: #d0f5d0; }
-  .chip.target { background: rgba(255,255,255,.18); color: inherit; }
+  .chip.env-dev { background: var(--success-container); color: var(--on-success-container); }
+  .chip.env-none { background: var(--surface-container-high); color: var(--on-surface-variant); box-shadow: inset 0 0 0 1px var(--outline); }
+  .chip.target { background: rgba(255,255,255,.18); color: inherit; min-width: 0; overflow: hidden; text-overflow: ellipsis; display: block; line-height: 28px; flex: 0 1 auto; }
   html.dark .chip.target { background: rgba(0,0,0,.2); }
-  .icon-btn { display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; border: 0; background: transparent; color: inherit; cursor: pointer; }
+  .icon-btn { display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; border: 0; background: transparent; color: inherit; cursor: pointer; flex: none; }
   .icon-btn:hover { background: rgba(127,127,127,.18); }
+  .icon-btn.sm { width: 32px; height: 32px; }
 
   .shell { display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 560px; }
-  .tree { background: var(--surface-container); border-right: 1px solid var(--outline-variant); padding: 8px; }
-  .tree h3 { font-size: 12px; letter-spacing: .5px; text-transform: uppercase; color: var(--on-surface-variant); padding: 12px 8px 4px; font-weight: 500; }
-  .node { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 16px; cursor: default; }
-  .node.sub { margin-left: 20px; }
+  .tree { background: var(--surface-container); border-right: 1px solid var(--outline-variant); padding: 8px; min-width: 0; }
+  .tree h3 { display: flex; justify-content: space-between; font-size: 12px; letter-spacing: .5px; text-transform: uppercase; color: var(--on-surface-variant); padding: 12px 8px 4px; font-weight: 500; }
+  .tree .filter { min-width: 0; display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 4px 0 10px; border: 1px solid var(--outline); border-radius: 18px; color: var(--on-surface-variant); }
+  .tree .filter input { flex: 1; min-width: 0; border: 0; background: transparent; outline: 0; color: var(--on-surface); }
+  .tree .filter:focus-within { outline: 2px solid var(--primary); }
+  .node { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 16px; cursor: pointer; width: 100%; border: 0; background: transparent; text-align: left; }
+  .node:hover { background: var(--surface-container-high); }
+  .node.sub { margin-left: 20px; width: calc(100% - 20px); }
   .node.sel { background: var(--primary-container); color: var(--on-primary-container); }
+  .node.off .name { color: var(--on-surface-variant); text-decoration: line-through; }
   .node .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .count { font-size: 12px; padding: 0 8px; border-radius: 10px; background: var(--surface-container-high); color: var(--on-surface-variant); }
-  .count.dlq { background: var(--warning-container); color: var(--warning); }
-  html.dark .count.dlq { color: #ffdfa0; }
+  .node mark { background: var(--warning-container); color: var(--on-warning-container); border-radius: 2px; }
+  .count { font-size: 12px; padding: 0 8px; border-radius: 10px; background: var(--surface-container-high); color: var(--on-surface-variant); font-variant-numeric: tabular-nums; }
+  .node.sel .count:not(.dlq) { background: var(--surface); }
+  .count.dlq { background: var(--warning-container); color: var(--on-warning-container); }
 
   .panel { padding: 24px; min-width: 0; }
   .head { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
   .head .title { flex: 1; min-width: 240px; }
-  .head .kind { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--on-surface-variant); }
+  .kind, .head .kind { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--on-surface-variant); }
   .head h2 { font-size: 24px; line-height: 32px; font-weight: 400; overflow-wrap: anywhere; }
   .head .path { color: var(--on-surface-variant); }
-  .actions { display: flex; gap: 8px; align-items: center; }
-  .btn { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px; border-radius: 20px; font: 500 14px/20px inherit; border: 0; cursor: pointer; }
+  .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px; border-radius: 20px; font-weight: 500; border: 0; cursor: pointer; white-space: nowrap; }
+  .btn.sm { height: 32px; padding: 0 14px; }
   .btn.filled { background: var(--primary); color: var(--on-primary); }
   .btn.tonal { background: var(--primary-container); color: var(--on-primary-container); }
   .btn.outlined { background: transparent; color: var(--primary); border: 1px solid var(--outline); }
   .btn.danger { background: var(--error); color: var(--on-error); }
+  .btn.danger-text { background: transparent; color: var(--error); border: 1px solid var(--error); }
   .btn.text { background: transparent; color: var(--primary); padding: 0 12px; }
+  .btn[disabled] { opacity: .38; cursor: default; }
 
-  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 20px; }
-  .card { background: var(--surface-container); border: 1px solid var(--outline-variant); border-radius: 12px; padding: 16px; }
-  .card.click { cursor: pointer; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .card { background: var(--surface-container); border: 1px solid var(--outline-variant); border-radius: 12px; padding: 16px; min-width: 0; text-align: left; }
+  button.card { cursor: pointer; }
   .card .label { display: flex; align-items: center; gap: 6px; color: var(--on-surface-variant); font-size: 12px; }
-  .card .value { font-size: 32px; line-height: 40px; font-weight: 400; }
+  .card .value { font-size: 32px; line-height: 40px; font-weight: 400; font-variant-numeric: tabular-nums; }
   .card .sub { font-size: 12px; color: var(--on-surface-variant); }
-  .card.warn { background: var(--warning-container); border-color: transparent; }
-  .card.warn .label, .card.warn .sub { color: var(--warning); }
-  html.dark .card.warn, html.dark .card.warn .label, html.dark .card.warn .sub { color: #ffdfa0; }
+  .card.warn { background: var(--warning-container); border-color: transparent; color: var(--on-warning-container); }
+  .card.warn .label, .card.warn .sub { color: var(--on-warning-container); }
+  .card h4 { font-size: 16px; font-weight: 500; margin-bottom: 4px; }
   .live { display: inline-flex; align-items: center; gap: 4px; }
   .live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--success); }
 
-  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--outline-variant); margin-bottom: 16px; }
-  .tab { padding: 12px 16px; font-weight: 500; color: var(--on-surface-variant); border-bottom: 2px solid transparent; }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--outline-variant); margin-bottom: 16px; flex-wrap: wrap; }
+  .tab { padding: 12px 16px; font-weight: 500; color: var(--on-surface-variant); border: 0; border-bottom: 2px solid transparent; background: transparent; cursor: pointer; }
   .tab.on { color: var(--primary); border-bottom-color: var(--primary); }
-  .tab.off { opacity: .38; }
+  .tab.off { opacity: .38; cursor: default; }
   .props { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0 24px; }
   .prop { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--outline-variant); }
-  .prop span:first-child { color: var(--on-surface-variant); }
-  .prop span:last-child { font-weight: 500; text-align: right; }
+  .prop > span:first-child { color: var(--on-surface-variant); }
+  .prop > span:last-child { font-weight: 500; text-align: right; overflow-wrap: anywhere; min-width: 0; }
 
   .menu { position: relative; }
-  .menu .list { position: absolute; right: 0; top: 44px; min-width: 250px; background: var(--surface-container); border-radius: 8px; box-shadow: var(--shadow); padding: 8px 0; z-index: 2; }
-  .menu .item { display: flex; align-items: center; gap: 12px; padding: 10px 16px; }
-  .menu .item.danger { color: var(--error); }
-  .menu .sep { height: 1px; background: var(--outline-variant); margin: 8px 0; }
-  .menu .note { padding: 4px 16px 8px; font-size: 12px; color: var(--on-surface-variant); }
+  .menu .list, .list.inline { min-width: 250px; background: var(--surface-container); border-radius: 8px; box-shadow: var(--shadow); padding: 8px 0; }
+  .menu .list { position: absolute; right: 0; top: 44px; z-index: 2; }
+  .list .item { display: flex; align-items: center; gap: 12px; padding: 10px 16px; width: 100%; border: 0; background: transparent; text-align: left; cursor: pointer; }
+  .list .item:hover { background: var(--surface-container-high); }
+  .list .item.danger { color: var(--error); }
+  .list .sep { height: 1px; background: var(--outline-variant); margin: 8px 0; }
+  .list .note { padding: 4px 16px 8px; font-size: 12px; color: var(--on-surface-variant); }
 
-  .scrim { background: rgba(0,0,0,.45); padding: 48px 16px; display: grid; place-items: center; min-height: 480px; }
-  .dialog { background: var(--surface-container-high); border-radius: 24px; padding: 24px; width: min(560px, 100%); box-shadow: var(--shadow); }
-  .dialog h3 { font-size: 22px; line-height: 28px; font-weight: 400; margin-bottom: 16px; display: flex; gap: 12px; align-items: center; }
-  .dialog h3 svg { color: var(--error); width: 28px; height: 28px; }
+  /* product: dialogs and forms */
+  .scrim { background: rgba(0,0,0,.45); padding: 40px 16px; display: grid; place-items: center; min-height: 480px; }
+  .scrim.multi { grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 24px; align-items: start; justify-items: center; padding: 40px 24px; }
+  .dialog { background: var(--surface-container-high); border-radius: 24px; padding: 24px; width: min(560px, 100%); box-shadow: var(--shadow); min-width: 0; }
+  .dialog.wide { width: min(760px, 100%); }
+  .dialog.xl { width: min(1040px, 100%); }
+  .dialog h3 { font-size: 22px; line-height: 28px; font-weight: 400; margin-bottom: 4px; display: flex; gap: 12px; align-items: center; }
+  .dialog h3 svg { width: 28px; height: 28px; }
+  .dialog h3 svg.danger { color: var(--error); }
+  .dialog .ctx { color: var(--on-surface-variant); margin-bottom: 16px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .dialog h4, .panel h4.sec { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--on-surface-variant); font-weight: 500; margin: 16px 0 8px; }
   .facts { border: 1px solid var(--outline-variant); border-radius: 12px; margin: 12px 0 16px; }
   .facts .prop { padding: 10px 16px; }
   .facts .prop:last-child { border-bottom: 0; }
   .field { margin-top: 12px; }
-  .field label { display: block; font-size: 12px; color: var(--on-surface-variant); margin-bottom: 4px; }
-  .field input { width: 100%; height: 48px; border-radius: 4px; border: 1px solid var(--outline); background: transparent; color: var(--on-surface); padding: 0 12px; font: inherit; }
-  .dialog .foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
-  .btn[disabled] { opacity: .38; cursor: default; }
+  .field label, .f > label, .f > span.l { display: block; font-size: 12px; color: var(--on-surface-variant); margin-bottom: 4px; }
+  .field input, .f input:not([type=checkbox]):not([type=radio]), .f select, .f textarea { width: 100%; height: 40px; border-radius: 4px; border: 1px solid var(--outline); background: transparent; color: var(--on-surface); padding: 0 12px; }
+  .field input { height: 48px; }
+  .f textarea { height: auto; padding: 8px 12px; font-family: var(--mono); font-size: 13px; resize: vertical; }
+  .f select { appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--on-surface-variant) 50%), linear-gradient(135deg, var(--on-surface-variant) 50%, transparent 50%); background-position: calc(100% - 17px) 17px, calc(100% - 12px) 17px; background-size: 5px 5px; background-repeat: no-repeat; padding-right: 32px; }
+  .f select option { background: var(--surface-container); color: var(--on-surface); }
+  .f .hint { font-size: 12px; color: var(--on-surface-variant); margin-top: 4px; }
+  .f .hint.err { color: var(--error); }
+  .f { min-width: 0; }
+  .g2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+  .g3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 16px; }
+  .g4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 16px; }
+  .stack { display: grid; gap: 12px; }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .row .grow { flex: 1; }
+  .check { display: flex; gap: 8px; align-items: flex-start; }
+  .check input { accent-color: var(--primary); width: 18px; height: 18px; margin: 1px 0 0; flex: none; }
+  .seg { justify-self: start; width: fit-content; max-width: 100%; display: inline-flex; border: 1px solid var(--outline); border-radius: 20px; overflow: hidden; flex-wrap: wrap; }
+  .seg button { height: 32px; padding: 0 12px; font-size: 13px; border: 0; border-right: 1px solid var(--outline); background: transparent; cursor: pointer; }
+  .seg button:last-child { border-right: 0; }
+  .seg button[aria-pressed="true"] { background: var(--primary-container); color: var(--on-primary-container); font-weight: 500; }
+  .dialog .foot, .foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; flex-wrap: wrap; align-items: center; }
+  .foot .grow { flex: 1; }
+  .banner { display: flex; gap: 12px; padding: 12px 16px; border-radius: 12px; align-items: flex-start; background: var(--surface-container); border: 1px solid var(--outline-variant); }
+  .banner.warn { background: var(--warning-container); color: var(--on-warning-container); border-color: transparent; }
+  .banner.err { background: var(--error-container); color: var(--on-error-container); border-color: transparent; }
+  .banner .grow { flex: 1; min-width: 0; }
+  .bar { height: 4px; border-radius: 2px; background: var(--outline-variant); overflow: hidden; }
+  .bar > i { display: block; height: 100%; background: var(--primary); }
+  .code { font-family: var(--mono); font-size: 13px; line-height: 20px; background: var(--surface); border: 1px solid var(--outline-variant); border-radius: 8px; padding: 12px; white-space: pre; overflow: auto; margin: 0; }
+  .code .add { background: var(--success-container); color: var(--on-success-container); display: block; }
+  .code .del { background: var(--error-container); color: var(--on-error-container); display: block; }
+  .muted { color: var(--on-surface-variant); }
+  .small { font-size: 12px; }
+  .kbd { font-family: var(--mono); font-size: 12px; border: 1px solid var(--outline); border-radius: 4px; padding: 0 5px; }
 
   .msgbar { display: flex; align-items: center; gap: 12px; padding: 8px 16px; background: var(--primary-container); color: var(--on-primary-container); border-radius: 12px; margin-bottom: 12px; flex-wrap: wrap; }
   .msgbar .grow { flex: 1; }
+  .msgbar .btn.tonal { background: var(--surface); color: var(--on-surface); }
+  .prop > span:last-child:has(.kbd) { white-space: nowrap; flex: none; }
   table { width: 100%; border-collapse: collapse; }
-  th { text-align: left; font-weight: 500; color: var(--on-surface-variant); font-size: 12px; padding: 8px 12px; border-bottom: 1px solid var(--outline-variant); }
+  th { text-align: left; font-weight: 500; color: var(--on-surface-variant); font-size: 12px; padding: 8px 12px; border-bottom: 1px solid var(--outline-variant); white-space: nowrap; }
   td { padding: 10px 12px; border-bottom: 1px solid var(--outline-variant); vertical-align: top; }
+  table.dense td { padding: 6px 12px; }
+  td.acts { text-align: right; white-space: nowrap; }
+  th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.dlq b { background: var(--warning-container); color: var(--on-warning-container); padding: 0 8px; border-radius: 10px; font-weight: 500; }
   tr.sel td { background: var(--primary-container); color: var(--on-primary-container); }
-  .mono { font-family: "Roboto Mono", Consolas, monospace; font-size: 13px; }
-  .pill { display: inline-block; padding: 0 8px; border-radius: 8px; font-size: 12px; font-weight: 500; }
-  .pill.ok { background: var(--success-container); color: #002106; }
-  html.dark .pill.ok { color: #d0f5d0; }
-  .pill.dup { background: var(--warning-container); color: var(--warning); }
-  html.dark .pill.dup { color: #ffdfa0; }
+  tr.grp td { background: var(--surface-container); font-weight: 500; }
+  .tscroll { overflow-x: auto; }
+  .mono { font-family: var(--mono); font-size: 13px; }
+  .pill { display: inline-block; padding: 0 8px; border-radius: 8px; font-size: 12px; font-weight: 500; white-space: nowrap; }
+  .pill.ok { background: var(--success-container); color: var(--on-success-container); }
+  .pill.dup { background: var(--warning-container); color: var(--on-warning-container); }
   .pill.fail { background: var(--error-container); color: var(--on-error-container); }
+  .pill.neutral { background: var(--surface-container-high); color: var(--on-surface-variant); }
+  .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 400px); gap: 16px; }
+  .split > aside, .box { border: 1px solid var(--outline-variant); border-radius: 12px; padding: 16px; min-width: 0; }
+  .spark { width: 100%; height: 48px; display: block; }
+  .spark path { fill: none; stroke: var(--primary); stroke-width: 2; }
+  .chart { width: 100%; height: 160px; display: block; }
+  .chart .ax { stroke: var(--outline-variant); stroke-width: 1; }
+  .chart .l1 { fill: none; stroke: var(--primary); stroke-width: 2; }
+  .chart .l2 { fill: none; stroke: var(--warning); stroke-width: 2; stroke-dasharray: 5 3; }
+  .chart text { fill: var(--on-surface-variant); font-size: 11px; }
 
   .states { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
   .state { border: 1px solid var(--outline-variant); border-radius: 12px; padding: 32px 16px; text-align: center; min-height: 220px; display: grid; place-content: center; gap: 8px; justify-items: center; }
-  .state svg { width: 40px; height: 40px; color: var(--on-surface-variant); }
-  .state.err svg { color: var(--error); }
+  .state > svg { width: 40px; height: 40px; color: var(--on-surface-variant); }
+  .state.err > svg { color: var(--error); }
   .state p { color: var(--on-surface-variant); max-width: 260px; }
+  .state h3 { font-size: 16px; font-weight: 500; }
   .spin { width: 36px; height: 36px; border-radius: 50%; border: 4px solid var(--outline-variant); border-top-color: var(--primary); animation: r 1s linear infinite; }
   @keyframes r { to { transform: rotate(360deg); } }
-  @media (max-width: 760px) { .shell { grid-template-columns: 1fr; } .tree { border-right: 0; border-bottom: 1px solid var(--outline-variant); } }
+
+  /* connections */
+  .conn-group { border: 1px solid var(--outline-variant); border-radius: 12px; margin-bottom: 12px; overflow: hidden; }
+  .conn-group > header { display: flex; gap: 8px; align-items: center; padding: 10px 16px; background: var(--surface-container); font-weight: 500; }
+  .conn-env { display: flex; gap: 8px; align-items: center; padding: 8px 16px; border-top: 1px solid var(--outline-variant); color: var(--on-surface-variant); }
+  .conn { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) 140px 340px; gap: 12px; align-items: center; padding: 8px 16px 8px 40px; border-top: 1px solid var(--outline-variant); }
+  .conn > .row { justify-content: flex-end; flex-wrap: nowrap; gap: 8px; }
+  .conn .nm { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .conn .host { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--on-surface-variant); }
+  .conn.active { background: var(--primary-container); color: var(--on-primary-container); }
+  .conn.active .host { color: inherit; }
+
+  /* platform window frames */
+  .macbar { display: flex; gap: 18px; align-items: center; height: 24px; padding: 0 12px; background: var(--surface-container-high); border: 1px solid var(--outline-variant); border-bottom: 0; border-radius: 8px 8px 0 0; font-size: 13px; max-width: 1180px; }
+  .macbar b { font-weight: 700; }
+  .macbar .miss { color: var(--error); text-decoration: line-through; }
+  .macbar .new { color: var(--success); font-weight: 500; }
+  .win-mac { border-radius: 10px; }
+  .lights { position: absolute; display: flex; gap: 8px; z-index: 3; }
+  .lights i { width: 12px; height: 12px; border-radius: 50%; display: block; box-shadow: inset 0 0 0 .5px rgba(0,0,0,.25); }
+  .lights i:nth-child(1) { background: #ff5f57; } .lights i:nth-child(2) { background: #febc2e; } .lights i:nth-child(3) { background: #28c840; }
+  .win-title { display: flex; align-items: center; height: 32px; padding-left: 12px; background: var(--surface-container-high); font-size: 12px; gap: 8px; }
+  .win-title .ctl { margin-left: auto; display: flex; }
+  .win-title .ctl span { width: 46px; height: 32px; display: grid; place-items: center; }
+  .win-menu { display: flex; gap: 16px; height: 26px; align-items: center; padding: 0 12px; font-size: 13px; background: var(--surface-container); border-bottom: 1px solid var(--outline-variant); }
+  .fixed-1000 { width: 1000px; height: 700px; max-width: none; }
+  .fixed-1000 .shell { grid-template-columns: 240px minmax(0, 1fr); min-height: 0; height: 644px; }
+  .fixed-1000 .panel { padding: 16px; overflow: hidden; }
+  @media (max-width: 760px) { .shell, .split { grid-template-columns: 1fr; } .tree { border-right: 0; border-bottom: 1px solid var(--outline-variant); } .g2, .g3, .g4 { grid-template-columns: 1fr; } .conn { grid-template-columns: 1fr; padding-left: 16px; } }
 </style>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="i-queue" viewBox="0 0 24 24"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h10v2H4z"/></symbol>
-  <symbol id="i-topic" viewBox="0 0 24 24"><path d="M12 3 3 8l9 5 9-5zm-7 9.5L12 16l7-3.5V15l-7 3.5L5 15z"/></symbol>
+  <symbol id="i-topic" viewBox="0 0 24 24"><path d="M12 3 3 8l9 5 9-5zm-7 9.500L12 16l7-3.500V15l-7 3.500L5 15z"/></symbol>
   <symbol id="i-sub" viewBox="0 0 24 24"><path d="M6 4h12v2H6zm2 5h8v2H8zm-4 5h16v6H4z"/></symbol>
-  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M12 5C7 5 2.7 8.1 1 12c1.7 3.9 6 7 11 7s9.3-3.1 11-7c-1.7-3.9-6-7-11-7zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8z"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M12 5C7 5 2.700 8.100 1 12c1.700 3.900 6 7 11 7s9.300-3.100 11-7c-1.700-3.900-6-7-11-7zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8z"/></symbol>
   <symbol id="i-send" viewBox="0 0 24 24"><path d="M3 20v-6l8-2-8-2V4l19 8z"/></symbol>
   <symbol id="i-more" viewBox="0 0 24 24"><path d="M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 6a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 6a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/></symbol>
   <symbol id="i-warn" viewBox="0 0 24 24"><path d="M1 21h22L12 2zm12-3h-2v-2h2zm0-4h-2v-4h2z"/></symbol>
   <symbol id="i-trash" viewBox="0 0 24 24"><path d="M6 7h12l-1 14H7zm3-4h6l1 2h4v2H4V5h4z"/></symbol>
-  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M17.6 6.4A8 8 0 1 0 20 12h-2a6 6 0 1 1-1.8-4.2L13 11h7V4z"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M17.600 6.400A8 8 0 1 0 20 12h-2a6 6 0 1 1-1.800-4.200L13 11h7V4z"/></symbol>
   <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 12h-4a3 3 0 0 1-6 0H5V5h14z"/></symbol>
-  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2zm6-6V11a6 6 0 0 0-5-5.9V4a1 1 0 1 0-2 0v1.1A6 6 0 0 0 6 11v5l-2 2v1h16v-1z"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2zm6-6V11a6 6 0 0 0-5-5.900V4a1 1 0 1 0-2 0v1.100A6 6 0 0 0 6 11v5l-2 2v1h16v-1z"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6.400 5 5 6.400 10.600 12 5 17.600 6.400 19 12 13.400 17.600 19 19 17.600 13.400 12 19 6.400 17.600 5 12 10.600z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M9 16.200 4.800 12l-1.400 1.400L9 19 21 7l-1.400-1.400z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><path d="M10 4a6 6 0 1 0 3.700 10.700l4.800 4.800 1.400-1.400-4.800-4.800A6 6 0 0 0 10 4zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8z"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 17h-2v-2h2zm2.100-7.800-.900.900c-.700.700-1.200 1.400-1.200 2.900h-2v-.500c0-1.100.500-2.100 1.200-2.800l1.200-1.300c.400-.300.600-.800.600-1.400a2 2 0 0 0-4 0H8a4 4 0 0 1 8 0c0 .900-.400 1.700-.900 2.200z"/></symbol>
+  <symbol id="i-tune" viewBox="0 0 24 24"><path d="M3 17v2h6v-2zM3 5v2h10V5zm10 16v-2h8v-2h-8v-2h-2v6zM7 9v2H3v2h4v2h2V9zm14 4v-2H11v2zm-6-4h2V7h4V5h-4V3h-2z"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 15h-2v-6h2zm0-8h-2V7h2z"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M5 20h14v-2H5zM19 9h-4V3H9v6H5l7 7z"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M5 20h14v-2H5zm0-10h4v6h6v-6h4l-7-7z"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M3 17.200V21h3.800l11-11-3.800-3.800zM20.700 7a1 1 0 0 0 0-1.400l-2.300-2.300a1 1 0 0 0-1.400 0l-1.800 1.800 3.800 3.800z"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm.500-13H11v6l5.200 3.200.800-1.300-4.500-2.700z"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M7.400 8.600 12 13.200l4.600-4.600L18 10l-6 6-6-6z"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="M8.600 16.600 13.200 12 8.600 7.400 10 6l6 6-6 6z"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8z"/></symbol>
+  <symbol id="i-swap" viewBox="0 0 24 24"><path d="M7 7h10l-3-3 1.400-1.400L20.800 8l-5.400 5.400L14 12l3-3H7zm10 10H7l3 3-1.400 1.400L3.200 16l5.400-5.400L10 12l-3 3h10z"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><path d="M18 8h-1V6A5 5 0 0 0 7 6v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2zM9 6a3 3 0 0 1 6 0v2H9z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11z"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9 5.500 5.500 0 0 1-9-9z"/></symbol>
 </svg>
 
-<div class="proto-bar" role="toolbar" aria-label="Prototype controls">
-  <strong>UI prototype</strong>
-  <button data-board="queue" aria-pressed="true">1. Queue</button>
-  <button data-board="sub" aria-pressed="false">2. Subscription</button>
-  <button data-board="purge" aria-pressed="false">3. Purge confirmation</button>
-  <button data-board="messages" aria-pressed="false">4. Messages</button>
-  <button data-board="states" aria-pressed="false">5. States</button>
-  <span class="grow"></span>
-  <button id="theme" aria-pressed="false">Dark theme</button>
-</div>
+<nav class="proto-bar" aria-label="Prototype controls">
+  <div class="line"><strong>UI prototype</strong><span class="muted small">Every artboard has an address: index.html#name, with ,dark for the dark theme.</span><span class="grow"></span><button id="theme" aria-pressed="false">Dark theme</button></div>
+  <div class="line"><span class="grp">Entities</span>
+    <button data-board="queue" aria-pressed="true">1. Queue</button><button data-board="sub" aria-pressed="false">2. Subscription</button><button data-board="purge" aria-pressed="false">3. Purge confirmation</button><button data-board="messages" aria-pressed="false">4. Messages</button><button data-board="states" aria-pressed="false">5. States</button><button data-board="topic" aria-pressed="false">6. Tree and topic</button><button data-board="rabbit" aria-pressed="false">7. RabbitMQ</button><button data-board="create" aria-pressed="false">8. Create entity</button></div>
+  <div class="line"><span class="grp">Connections</span>
+    <button data-board="connections" aria-pressed="false">9. Connections</button><button data-board="conn-azure" aria-pressed="false">10. Azure connection</button><button data-board="conn-rabbit" aria-pressed="false">11. RabbitMQ connection</button><button data-board="groups" aria-pressed="false">12. Groups</button><button data-board="conn-transfer" aria-pressed="false">13. Export and import connections</button></div>
+  <div class="line"><span class="grp">Messages</span>
+    <button data-board="detail" aria-pressed="false">14. Message detail</button><button data-board="send" aria-pressed="false">15. Send</button><button data-board="move" aria-pressed="false">16. Move</button><button data-board="msg-import" aria-pressed="false">17. Import</button><button data-board="msg-export" aria-pressed="false">18. Export</button><button data-board="resubmit" aria-pressed="false">19. Continuous resubmit</button><button data-board="diff" aria-pressed="false">20. Diff</button><button data-board="bulk" aria-pressed="false">21. Bulk progress and results</button></div>
+  <div class="line"><span class="grp">App</span>
+    <button data-board="monitoring" aria-pressed="false">22. Monitoring</button><button data-board="metrics" aria-pressed="false">23. Entity metrics</button><button data-board="settings" aria-pressed="false">24. Settings</button><button data-board="updates" aria-pressed="false">25. Update states</button><button data-board="bug" aria-pressed="false">26. Bug report</button><button data-board="about" aria-pressed="false">27. About</button></div>
+  <div class="line"><span class="grp">Platform</span>
+    <button data-board="mac-today" aria-pressed="false">28. macOS today</button><button data-board="mac" aria-pressed="false">29. macOS target</button><button data-board="win" aria-pressed="false">30. Windows and Linux</button><button data-board="min" aria-pressed="false">31. Minimum size</button></div>
+  <div class="line"><span class="grp">Proposed</span>
+    <button data-board="p-edit" aria-pressed="false">32. Edit entity</button><button data-board="p-rules" aria-pressed="false">33. Rules editor</button><button data-board="p-status" aria-pressed="false">34. Entity status</button><button data-board="p-counts" aria-pressed="false">35. Counts dashboard</button><button data-board="p-sessions" aria-pressed="false">36. Sessions</button><button data-board="p-scheduled" aria-pressed="false">37. Scheduled</button><button data-board="p-defs" aria-pressed="false">38. Entity definitions</button></div>
+</nav>
 
 <!-- 1. QUEUE -->
 <section class="board on" id="queue">
-  <p class="why"><b>A queue uses the same panel as a subscription.</b> Same cards with live counts, same tabs, same actions. The toolbar says which environment and which broker. Purge is not beside View messages: it is under the overflow menu, in the error colour (shown open here).</p>
+  <p class="why"><b>A queue uses the same panel as a subscription.</b> Same cards with live counts, same tabs, same actions. The toolbar says which environment and which broker, and carries the navigation. Purge is not beside View messages: it is under the overflow menu, in the error colour (shown open here).</p>
   <div class="frame">
-    <div class="toolbar">
-      <span class="brand">Messaging Explorer</span>
-      <span class="chip env-prod">PRODUCTION</span>
-      <span class="chip target">contoso-prod.servicebus.windows.net</span>
-      <span class="grow"></span>
-      <button class="icon-btn" aria-label="Notifications"><svg class="i"><use href="#i-bell"/></svg></button>
-    </div>
+    <div class="toolbar" data-env="prod" data-nav="entities"></div>
     <div class="shell">
-      <nav class="tree" aria-label="Entities">
-        <h3>Queues</h3>
-        <div class="node sel"><svg class="i"><use href="#i-queue"/></svg><span class="name">orders</span><span class="count">1,204</span><span class="count dlq">37</span></div>
-        <div class="node"><svg class="i"><use href="#i-queue"/></svg><span class="name">billing/invoices</span><span class="count">0</span></div>
-        <div class="node"><svg class="i"><use href="#i-queue"/></svg><span class="name">notifications</span><span class="count">58</span></div>
-        <h3>Topics</h3>
-        <div class="node"><svg class="i"><use href="#i-topic"/></svg><span class="name">order-events</span></div>
-        <div class="node sub"><svg class="i"><use href="#i-sub"/></svg><span class="name">warehouse</span><span class="count">12</span></div>
-        <div class="node sub"><svg class="i"><use href="#i-sub"/></svg><span class="name">email</span><span class="count">0</span><span class="count dlq">4</span></div>
-      </nav>
+      <nav class="tree" aria-label="Entities" data-sel="orders"></nav>
       <main class="panel">
         <div class="head">
-          <div class="title">
-            <div class="kind">Queue</div>
-            <h2>orders</h2>
-          </div>
+          <div class="title"><div class="kind">Queue</div><h2>orders</h2></div>
           <div class="actions">
             <button class="btn filled"><svg class="i"><use href="#i-eye"/></svg>View messages</button>
             <button class="btn tonal"><svg class="i"><use href="#i-send"/></svg>Send</button>
             <div class="menu">
-              <button class="icon-btn" aria-label="More actions" aria-expanded="true"><svg class="i"><use href="#i-more"/></svg></button>
+              <button class="icon-btn" aria-label="More actions" aria-expanded="true" title="More actions"><svg class="i"><use href="#i-more"/></svg></button>
               <div class="list" role="menu">
-                <div class="item" role="menuitem">Import messages</div>
-                <div class="item" role="menuitem">Resubmit dead-letter (37)</div>
+                <button class="item" role="menuitem">Import messages</button>
+                <button class="item" role="menuitem">Resubmit dead-letter (37)</button>
                 <div class="sep"></div>
                 <div class="note">Cannot be undone</div>
-                <div class="item danger" role="menuitem"><svg class="i"><use href="#i-trash"/></svg>Purge active messages</div>
-                <div class="item danger" role="menuitem"><svg class="i"><use href="#i-trash"/></svg>Purge dead-letter</div>
-                <div class="item danger" role="menuitem"><svg class="i"><use href="#i-trash"/></svg>Delete queue</div>
+                <button class="item danger" role="menuitem"><svg class="i"><use href="#i-trash"/></svg>Purge active messages</button>
+                <button class="item danger" role="menuitem"><svg class="i"><use href="#i-trash"/></svg>Purge dead-letter</button>
+                <button class="item danger" role="menuitem"><svg class="i"><use href="#i-trash"/></svg>Delete queue</button>
               </div>
             </div>
           </div>
         </div>
         <div class="cards">
-          <div class="card click"><div class="label"><span class="live">Live</span> Active</div><div class="value">1,204</div><div class="sub">+18 in the last minute</div></div>
-          <div class="card click warn"><div class="label"><svg class="i"><use href="#i-warn"/></svg>Dead-letter</div><div class="value">37</div><div class="sub">Open to resubmit or delete</div></div>
+          <button class="card"><div class="label"><span class="live">Live</span> Active</div><div class="value">1,204</div><div class="sub">+18 in the last minute</div></button>
+          <button class="card warn"><div class="label"><svg class="i s"><use href="#i-warn"/></svg>Dead-letter</div><div class="value">37</div><div class="sub">Open to resubmit or delete</div></button>
           <div class="card"><div class="label">Scheduled</div><div class="value">0</div><div class="sub">&nbsp;</div></div>
           <div class="card"><div class="label">Size</div><div class="value">4.2 MB</div><div class="sub">of 1 GB</div></div>
         </div>
-        <div class="tabs" role="tablist"><div class="tab on" role="tab">Properties</div><div class="tab" role="tab">Sessions</div><div class="tab off" role="tab" title="Only a subscription has rules">Rules</div></div>
+        <div class="tabs" role="tablist"><button class="tab on" role="tab" aria-selected="true">Properties</button><button class="tab" role="tab">Sessions</button><button class="tab off" role="tab" aria-disabled="true" title="Only a subscription has rules">Rules</button></div>
         <div class="props">
           <div class="prop"><span>Lock duration</span><span>2 minutes</span></div>
           <div class="prop"><span>Max delivery count</span><span>7</span></div>
@@ -238,41 +363,24 @@
 <section class="board" id="sub">
   <p class="why"><b>The same panel, for a subscription.</b> It differs from the queue only where the broker differs: the parent topic in the header, the Rules tab, and a warning that a resubmit from here publishes to the topic.</p>
   <div class="frame">
-    <div class="toolbar">
-      <span class="brand">Messaging Explorer</span>
-      <span class="chip env-dev">DEVELOPMENT</span>
-      <span class="chip target">contoso-dev.servicebus.windows.net</span>
-      <span class="grow"></span>
-      <button class="icon-btn" aria-label="Notifications"><svg class="i"><use href="#i-bell"/></svg></button>
-    </div>
+    <div class="toolbar" data-env="dev" data-nav="entities"></div>
     <div class="shell">
-      <nav class="tree" aria-label="Entities">
-        <h3>Queues</h3>
-        <div class="node"><svg class="i"><use href="#i-queue"/></svg><span class="name">orders</span><span class="count">3</span></div>
-        <h3>Topics</h3>
-        <div class="node"><svg class="i"><use href="#i-topic"/></svg><span class="name">order-events</span></div>
-        <div class="node sub"><svg class="i"><use href="#i-sub"/></svg><span class="name">warehouse</span><span class="count">12</span></div>
-        <div class="node sub sel"><svg class="i"><use href="#i-sub"/></svg><span class="name">email</span><span class="count">0</span><span class="count dlq">4</span></div>
-      </nav>
+      <nav class="tree" aria-label="Entities" data-sel="email"></nav>
       <main class="panel">
         <div class="head">
-          <div class="title">
-            <div class="kind">Subscription</div>
-            <h2>email</h2>
-            <div class="path">in topic order-events</div>
-          </div>
+          <div class="title"><div class="kind">Subscription</div><h2>email</h2><div class="path">in topic order-events</div></div>
           <div class="actions">
             <button class="btn filled"><svg class="i"><use href="#i-eye"/></svg>View messages</button>
             <button class="btn tonal"><svg class="i"><use href="#i-send"/></svg>Send to topic</button>
-            <button class="icon-btn" aria-label="More actions"><svg class="i"><use href="#i-more"/></svg></button>
+            <button class="icon-btn" aria-label="More actions" title="More actions"><svg class="i"><use href="#i-more"/></svg></button>
           </div>
         </div>
         <div class="cards">
-          <div class="card click"><div class="label"><span class="live">Live</span> Active</div><div class="value">0</div><div class="sub">No change in the last minute</div></div>
-          <div class="card click warn"><div class="label"><svg class="i"><use href="#i-warn"/></svg>Dead-letter</div><div class="value">4</div><div class="sub">A resubmit publishes to the topic: every subscription receives it</div></div>
+          <button class="card"><div class="label"><span class="live">Live</span> Active</div><div class="value">0</div><div class="sub">No change in the last minute</div></button>
+          <button class="card warn"><div class="label"><svg class="i s"><use href="#i-warn"/></svg>Dead-letter</div><div class="value">4</div><div class="sub">A resubmit publishes to the topic: every subscription receives it</div></button>
           <div class="card"><div class="label">Transfer</div><div class="value">0</div><div class="sub">&nbsp;</div></div>
         </div>
-        <div class="tabs" role="tablist"><div class="tab on" role="tab">Properties</div><div class="tab" role="tab">Sessions</div><div class="tab" role="tab">Rules (1)</div></div>
+        <div class="tabs" role="tablist"><button class="tab on" role="tab" aria-selected="true">Properties</button><button class="tab" role="tab">Sessions</button><button class="tab" role="tab">Rules (1)</button></div>
         <div class="props">
           <div class="prop"><span>Lock duration</span><span>1 minute</span></div>
           <div class="prop"><span>Max delivery count</span><span>10</span></div>
@@ -288,11 +396,11 @@
 
 <!-- 3. PURGE -->
 <section class="board" id="purge">
-  <p class="why"><b>A destructive confirmation names what it destroys.</b> The entity, its parent, the connection and its environment, and the count read at this moment. The button stays disabled until the entity name is typed.</p>
+  <p class="why"><b>A destructive confirmation names what it destroys.</b> The entity, its parent, the connection and its environment, and the count read at this moment. The button stays disabled until the entity name is typed. Every other destructive or disruptive action in this prototype reuses this dialog.</p>
   <div class="frame">
     <div class="scrim">
       <div class="dialog" role="alertdialog" aria-labelledby="pt">
-        <h3 id="pt"><svg class="i"><use href="#i-warn"/></svg>Purge active messages?</h3>
+        <h3 id="pt"><svg class="i danger"><use href="#i-warn"/></svg>Purge active messages?</h3>
         <p>This deletes every active message in the queue. It cannot be undone.</p>
         <div class="facts">
           <div class="prop"><span>Queue</span><span>orders</span></div>
@@ -309,48 +417,1180 @@
 
 <!-- 4. MESSAGES -->
 <section class="board" id="messages">
-  <p class="why"><b>A selection says exactly what it covers, and a result says what happened to each message.</b> "3 selected of 20 loaded, 37 in the dead-letter queue" replaces a stored "all" flag. A message that was sent and could not be removed from the source is a possible duplicate, never offered for retry.</p>
+  <p class="why"><b>A selection says exactly what it covers, and a result says what happened to each message.</b> "3 selected of 20 loaded, 37 in the dead-letter queue" replaces a stored "all" flag. A message that was sent and could not be removed from the source is a possible duplicate, never offered for retry. Delete sits apart from the routine actions.</p>
   <div class="frame">
     <div class="panel">
       <div class="head">
-        <div class="title"><div class="kind">Queue - dead-letter</div><h2>orders</h2><div class="path">contoso-prod.servicebus.windows.net</div></div>
-        <div class="actions"><button class="btn outlined"><svg class="i"><use href="#i-refresh"/></svg>Refresh</button></div>
+        <div class="title"><div class="kind">Queue</div><h2>orders</h2><div class="path row"><span class="chip env-prod">PRODUCTION</span>contoso-prod.servicebus.windows.net</div></div>
+        <div class="actions"><button class="btn outlined"><svg class="i"><use href="#i-refresh"/></svg>Refresh</button><button class="icon-btn" aria-label="Close" title="Close"><svg class="i"><use href="#i-close"/></svg></button></div>
+      </div>
+      <div class="tabs" role="tablist"><button class="tab" role="tab">Active (1,204)</button><button class="tab on" role="tab" aria-selected="true">Dead-letter (37)</button></div>
+      <div class="row" style="margin-bottom:12px">
+        <div class="f" style="flex:1;min-width:220px"><input aria-label="Search in any field" placeholder="Search in any field"></div>
+        <label class="check"><input type="checkbox">Regular expression</label>
+        <button class="btn outlined sm">Add filter</button>
+        <button class="btn text sm">Load 20 more</button>
       </div>
       <div class="msgbar">
         <strong>3 selected</strong><span>of 20 loaded, 37 in the dead-letter queue</span>
         <span class="grow"></span>
-        <button class="btn text">Select all 37</button>
-        <button class="btn tonal">Resubmit 3</button>
-        <button class="btn tonal">Move 3</button>
-        <button class="btn danger">Delete 3</button>
+        <button class="btn text sm">Select all 37</button>
+        <button class="btn tonal sm">Resubmit 3</button>
+        <button class="btn tonal sm">Move 3</button>
+        <button class="btn tonal sm">Export 3</button>
+        <button class="btn tonal sm" disabled title="Compare needs exactly two messages">Compare</button>
+        <span style="width:1px;height:24px;background:var(--outline)"></span>
+        <button class="btn danger sm">Delete 3</button>
       </div>
-      <table>
-        <thead><tr><th style="width:32px"></th><th>Sequence</th><th>Message id</th><th>Enqueued (UTC)</th><th>Dead-letter reason</th><th>Last result</th></tr></thead>
+      <div class="tscroll"><table>
+        <thead><tr><th style="width:32px"><input type="checkbox" aria-label="Select the 20 loaded"></th><th class="num">Sequence</th><th>Message id</th><th>Enqueued (UTC)</th><th>Dead-letter reason</th><th>Last result</th></tr></thead>
         <tbody>
-          <tr class="sel"><td><input type="checkbox" checked aria-label="Select 9007"></td><td class="mono">9007</td><td class="mono">a1f4-77c2</td><td>2026-11-12 08:14</td><td>MaxDeliveryCountExceeded</td><td><span class="pill ok">Resubmitted</span></td></tr>
-          <tr class="sel"><td><input type="checkbox" checked aria-label="Select 9008"></td><td class="mono">9008</td><td class="mono">b93e-1c05</td><td>2026-11-12 08:14</td><td>MaxDeliveryCountExceeded</td><td><span class="pill dup">Possible duplicate - do not retry</span></td></tr>
-          <tr class="sel"><td><input type="checkbox" checked aria-label="Select 9011"></td><td class="mono">9011</td><td class="mono">c220-9af1</td><td>2026-11-12 08:15</td><td>TTLExpiredException</td><td><span class="pill fail">Failed: lock lost - retry</span></td></tr>
-          <tr><td><input type="checkbox" aria-label="Select 9012"></td><td class="mono">9012</td><td class="mono">d7b0-4e88</td><td>2026-11-12 08:15</td><td>MaxDeliveryCountExceeded</td><td></td></tr>
+          <tr class="sel"><td><input type="checkbox" checked aria-label="Select 9007"></td><td class="mono num">9007</td><td class="mono">a1f4-77c2</td><td>2026-11-12 08:14</td><td>MaxDeliveryCountExceeded</td><td><span class="pill ok">Resubmitted</span></td></tr>
+          <tr class="sel"><td><input type="checkbox" checked aria-label="Select 9008"></td><td class="mono num">9008</td><td class="mono">b93e-1c05</td><td>2026-11-12 08:14</td><td>MaxDeliveryCountExceeded</td><td><span class="pill dup">Possible duplicate - do not retry</span></td></tr>
+          <tr class="sel"><td><input type="checkbox" checked aria-label="Select 9011"></td><td class="mono num">9011</td><td class="mono">c220-9af1</td><td>2026-11-12 08:15</td><td>TTLExpiredException</td><td><span class="pill fail">Failed: lock lost - retry</span></td></tr>
+          <tr><td><input type="checkbox" aria-label="Select 9012"></td><td class="mono num">9012</td><td class="mono">d7b0-4e88</td><td>2026-11-12 08:15</td><td>MaxDeliveryCountExceeded</td><td></td></tr>
         </tbody>
-      </table>
+      </table></div>
     </div>
   </div>
 </section>
 
 <!-- 5. STATES -->
 <section class="board" id="states">
-  <p class="why"><b>Loading, empty and error are three different screens.</b> An error says what failed and offers a retry. It is never an empty list, and never a spinner that does not end.</p>
-  <div class="frame"><div class="panel"><div class="states">
-    <div class="state"><div class="spin" role="status" aria-label="Loading"></div><h3>Loading queues</h3><p>contoso-prod.servicebus.windows.net</p></div>
-    <div class="state"><svg class="i"><use href="#i-inbox"/></svg><h3>No queues in this namespace</h3><p>The namespace answered and holds no queue.</p><button class="btn tonal">Create a queue</button></div>
-    <div class="state err"><svg class="i"><use href="#i-warn"/></svg><h3>Could not load the queues</h3><p>The broker refused the credentials. Nothing is shown because nothing was read.</p><button class="btn outlined"><svg class="i"><use href="#i-refresh"/></svg>Try again</button></div>
-  </div></div></div>
+  <p class="why"><b>Loading, empty and error are three different screens.</b> An error says what failed and offers a retry. It is never an empty list, and never a spinner that does not end. The second and third rows are the cases a screen has of its own.</p>
+  <div class="frame"><div class="panel">
+    <h4 class="sec" style="margin-top:0">Entity list</h4>
+    <div class="states">
+      <div class="state"><div class="spin" role="status" aria-label="Loading"></div><h3>Loading queues</h3><p>contoso-prod.servicebus.windows.net</p></div>
+      <div class="state"><svg class="i"><use href="#i-inbox"/></svg><h3>No queues in this namespace</h3><p>The namespace answered and holds no queue.</p><button class="btn tonal">Create a queue</button></div>
+      <div class="state err"><svg class="i"><use href="#i-warn"/></svg><h3>Could not load the queues</h3><p>The broker refused the credentials. Nothing is shown because nothing was read.</p><button class="btn outlined"><svg class="i"><use href="#i-refresh"/></svg>Try again</button></div>
+    </div>
+    <h4 class="sec">Connection and messages</h4>
+    <div class="states">
+      <div class="state"><svg class="i"><use href="#i-link"/></svg><h3>Not connected</h3><p>Entities, messages and monitoring need a connection.</p><button class="btn filled">Open connections</button></div>
+      <div class="state"><svg class="i"><use href="#i-search"/></svg><h3>No message matches the filter</h3><p>20 loaded, 0 match "invoice". The queue holds 1,204: the filter only sees what is loaded.</p><div class="row"><button class="btn tonal">Load 20 more</button><button class="btn text">Clear filter</button></div></div>
+      <div class="state err"><svg class="i"><use href="#i-warn"/></svg><h3>The local API stopped answering</h3><p>The app cannot reach its own service on this machine. Your broker was not touched.</p><button class="btn outlined"><svg class="i"><use href="#i-refresh"/></svg>Restart the service</button></div>
+    </div>
+    <h4 class="sec">Monitoring and capability</h4>
+    <div class="states">
+      <div class="state"><svg class="i"><use href="#i-chart"/></svg><h3>No metrics for this namespace yet</h3><p>Azure Monitor returned no data points for the last hour.</p><button class="btn text">Show the last 24 hours</button></div>
+      <div class="state"><svg class="i"><use href="#i-info"/></svg><h3>This broker has no sessions</h3><p>RabbitMQ does not offer sessions. The tab is shown disabled with this reason, never an empty list.</p></div>
+      <div class="state err"><svg class="i"><use href="#i-lock"/></svg><h3>Sign-in expired</h3><p>The Microsoft sign-in for contoso-dev ended. Sign in again to continue; nothing was changed.</p><button class="btn filled">Sign in again</button></div>
+    </div>
+  </div></div>
+</section>
+
+<!-- 6. TREE AND TOPIC -->
+<section class="board" id="topic">
+  <p class="why"><b>The tree filters by name and counts everything; a topic uses the same panel shape.</b> The filter keeps a parent whose child matches and says how many entities it hides. A topic's properties are text, because today's form has inputs and no save (rule 8). Its subscriptions are listed with the same two counts the tree shows.</p>
+  <div class="frame">
+    <div class="toolbar" data-env="prod" data-nav="entities"></div>
+    <div class="shell">
+      <nav class="tree" aria-label="Entities" data-sel="order-events" data-filter="ord"></nav>
+      <main class="panel">
+        <div class="head">
+          <div class="title"><div class="kind">Topic</div><h2>order-events</h2></div>
+          <div class="actions">
+            <button class="btn filled"><svg class="i"><use href="#i-send"/></svg>Send</button>
+            <button class="btn tonal"><svg class="i"><use href="#i-plus"/></svg>Subscription</button>
+            <button class="icon-btn" aria-label="More actions" title="More actions"><svg class="i"><use href="#i-more"/></svg></button>
+          </div>
+        </div>
+        <div class="cards">
+          <div class="card"><div class="label">Subscriptions</div><div class="value">2</div><div class="sub">1 with dead-letter</div></div>
+          <div class="card"><div class="label">Scheduled</div><div class="value">3</div><div class="sub">Next at 09:30 UTC</div></div>
+          <div class="card"><div class="label">Size</div><div class="value">1.1 MB</div><div class="sub">of 1 GB</div></div>
+        </div>
+        <div class="tabs" role="tablist"><button class="tab on" role="tab" aria-selected="true">Subscriptions (2)</button><button class="tab" role="tab">Properties</button><button class="tab" role="tab">Metrics</button></div>
+        <table class="dense">
+          <thead><tr><th>Subscription</th><th class="num">Active</th><th class="num">Dead-letter</th><th class="num">Rules</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>warehouse</td><td class="num">12</td><td class="num">0</td><td class="num">2</td><td>Active</td></tr>
+            <tr><td>email</td><td class="num">0</td><td class="num dlq"><b>4</b></td><td class="num">1</td><td>Active</td></tr>
+          </tbody>
+        </table>
+        <h4 class="sec">Properties</h4>
+        <div class="props">
+          <div class="prop"><span>Message time to live</span><span>14 days</span></div>
+          <div class="prop"><span>Duplicate detection</span><span>10 minutes</span></div>
+          <div class="prop"><span>Max size</span><span>1 GB</span></div>
+          <div class="prop"><span>Partitioning</span><span>No</span></div>
+          <div class="prop"><span>Ordering</span><span>Yes</span></div>
+          <div class="prop"><span>Status</span><span>Active</span></div>
+        </div>
+      </main>
+    </div>
+  </div>
+</section>
+
+<!-- 7. RABBITMQ -->
+<section class="board" id="rabbit">
+  <p class="why"><b>RabbitMQ uses the same panel, with the words RabbitMQ uses.</b> Ready and unacknowledged instead of active and dead-letter, bindings instead of rules. What this broker cannot do is a disabled tab with its reason, never a missing one. Delete exchange is in the menu, not a red button beside Publish.</p>
+  <div class="frame">
+    <div class="toolbar" data-env="dev" data-nav="entities" data-target="rabbit.dev.contoso.example:5672 /orders"></div>
+    <div class="shell">
+      <nav class="tree" aria-label="Entities" data-kind="rabbit" data-sel="orders.created"></nav>
+      <main class="panel">
+        <div class="head">
+          <div class="title"><div class="kind">Queue - quorum</div><h2>orders.created</h2><div class="path">virtual host /orders</div></div>
+          <div class="actions">
+            <button class="btn filled"><svg class="i"><use href="#i-eye"/></svg>View messages</button>
+            <button class="btn tonal"><svg class="i"><use href="#i-send"/></svg>Publish</button>
+            <button class="icon-btn" aria-label="More actions" title="More actions"><svg class="i"><use href="#i-more"/></svg></button>
+          </div>
+        </div>
+        <div class="cards">
+          <button class="card"><div class="label"><span class="live">Live</span> Ready</div><div class="value">58</div><div class="sub">2.4 published per second</div></button>
+          <div class="card"><div class="label">Unacknowledged</div><div class="value">6</div><div class="sub">1.9 delivered per second</div></div>
+          <div class="card"><div class="label">Consumers</div><div class="value">3</div><div class="sub">&nbsp;</div></div>
+          <div class="card"><div class="label">Dead-letter exchange</div><div class="value" style="font-size:20px">orders.dlx</div><div class="sub">routing key created.failed</div></div>
+        </div>
+        <div class="tabs" role="tablist"><button class="tab on" role="tab" aria-selected="true">Properties</button><button class="tab" role="tab">Bindings (2)</button><button class="tab" role="tab">Arguments (3)</button><button class="tab off" role="tab" aria-disabled="true" title="RabbitMQ has no sessions">Sessions</button></div>
+        <div class="props">
+          <div class="prop"><span>Durable</span><span>Yes</span></div>
+          <div class="prop"><span>Auto delete</span><span>No</span></div>
+          <div class="prop"><span>Exclusive</span><span>No</span></div>
+          <div class="prop"><span>Message time to live</span><span>1 hour</span></div>
+          <div class="prop"><span>Max length</span><span>100,000</span></div>
+          <div class="prop"><span>Overflow</span><span>reject-publish</span></div>
+          <div class="prop"><span>Node</span><span>rabbit@node-1</span></div>
+          <div class="prop"><span>State</span><span>running</span></div>
+        </div>
+      </main>
+    </div>
+  </div>
+  <div class="frame" style="margin-top:16px">
+    <main class="panel">
+      <div class="head">
+        <div class="title"><div class="kind">Exchange - topic</div><h2>orders</h2><div class="path">virtual host /orders</div></div>
+        <div class="actions"><button class="btn filled"><svg class="i"><use href="#i-send"/></svg>Publish</button><button class="icon-btn" aria-label="More actions" title="More actions"><svg class="i"><use href="#i-more"/></svg></button></div>
+      </div>
+      <div class="cards">
+        <div class="card"><div class="label">Bound queues</div><div class="value">2</div><div class="sub">&nbsp;</div></div>
+        <div class="card"><div class="label">Rate in</div><div class="value">2.40</div><div class="sub">messages per second</div></div>
+        <div class="card"><div class="label">Rate out</div><div class="value">2.40</div><div class="sub">messages per second</div></div>
+      </div>
+      <table class="dense"><thead><tr><th>Bound queue</th><th>Routing key</th><th>Arguments</th></tr></thead><tbody>
+        <tr><td>orders.created</td><td class="mono">order.created.#</td><td class="muted">none</td></tr>
+        <tr><td>orders.audit</td><td class="mono">order.#</td><td class="muted">none</td></tr>
+      </tbody></table>
+    </main>
+  </div>
+</section>
+
+<!-- 8. CREATE -->
+<section class="board" id="create">
+  <p class="why"><span class="tag">NO SCREEN TODAY</span><b>Create a queue, a topic or a subscription.</b> The services already call the API with a name; no screen offers it. Each dialog says where the entity will be created, with the environment, and shows the defaults the broker will apply as text, since only the name can be sent today.</p>
+  <div class="frame">
+    <div class="scrim multi">
+      <div class="dialog" role="dialog" aria-labelledby="cq">
+        <h3 id="cq">Create queue</h3>
+        <div class="ctx"><span class="chip env-prod">PRODUCTION</span>contoso-prod.servicebus.windows.net</div>
+        <div class="f"><label for="cqn">Queue name</label><input id="cqn" value="orders-retry"><div class="hint">Letters, digits, dot, dash, underscore and slash. 260 characters at most.</div></div>
+        <h4>Broker defaults</h4>
+        <div class="facts"><div class="prop"><span>Lock duration</span><span>1 minute</span></div><div class="prop"><span>Max delivery count</span><span>10</span></div><div class="prop"><span>Sessions</span><span>No</span></div></div>
+        <div class="foot"><button class="btn text">Cancel</button><button class="btn filled">Create queue</button></div>
+      </div>
+      <div class="dialog" role="dialog" aria-labelledby="ct">
+        <h3 id="ct">Create topic</h3>
+        <div class="ctx"><span class="chip env-prod">PRODUCTION</span>contoso-prod.servicebus.windows.net</div>
+        <div class="f"><label for="ctn">Topic name</label><input id="ctn" value="order-events" aria-invalid="true" aria-describedby="cte" style="border-color:var(--error)"><div class="hint err" id="cte">A topic named order-events already exists in this namespace.</div></div>
+        <div class="foot"><button class="btn text">Cancel</button><button class="btn filled" disabled>Create topic</button></div>
+      </div>
+      <div class="dialog" role="dialog" aria-labelledby="cs">
+        <h3 id="cs">Create subscription</h3>
+        <div class="ctx"><span class="chip env-prod">PRODUCTION</span>contoso-prod.servicebus.windows.net</div>
+        <div class="facts"><div class="prop"><span>Topic</span><span>order-events</span></div></div>
+        <div class="f"><label for="csn">Subscription name</label><input id="csn" value="analytics"></div>
+        <div class="banner" style="margin-top:12px"><svg class="i"><use href="#i-info"/></svg><span>It starts with the default rule and receives every message published to the topic from now on.</span></div>
+        <div class="foot"><button class="btn text">Cancel</button><button class="btn filled">Create subscription</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 9. CONNECTIONS -->
+<section class="board" id="connections">
+  <p class="why"><b>Connections are a list, grouped by client and environment, and the environment is marked everywhere.</b> A production environment is red here, in the toolbar and in every confirmation. A connection outside any environment says so instead of looking safe. One primary action; manage groups, import and export are in the menu beside it; delete is in each row's menu.</p>
+  <div class="frame">
+    <div class="toolbar" data-env="prod" data-nav="connections"></div>
+    <main class="panel">
+      <div class="head" style="align-items:center">
+        <div class="title"><h2>Connections</h2></div>
+        <div class="actions">
+          <div class="f" style="width:240px"><input aria-label="Filter connections" placeholder="Filter connections"></div>
+          <button class="btn filled"><svg class="i"><use href="#i-plus"/></svg>New connection</button>
+          <div class="menu">
+            <button class="icon-btn" aria-label="More: manage groups, import, export" title="Manage groups, import, export"><svg class="i"><use href="#i-more"/></svg></button>
+          </div>
+        </div>
+      </div>
+      <div class="conn-group">
+        <header><button class="icon-btn sm" aria-label="Collapse Contoso" aria-expanded="true"><svg class="i"><use href="#i-down"/></svg></button><svg class="i"><use href="#i-folder"/></svg>Contoso<span class="muted small" style="font-weight:400">4 connections</span></header>
+        <div class="conn-env"><span class="chip env-prod">PRODUCTION</span>Production</div>
+        <div class="conn active"><span class="nm">contoso-prod</span><span class="host">contoso-prod.servicebus.windows.net</span><span><span class="pill neutral">Azure Service Bus</span></span><span class="row"><span class="pill ok">Connected</span><button class="btn outlined sm">Disconnect</button><button class="icon-btn sm" aria-label="Edit contoso-prod" title="Edit"><svg class="i"><use href="#i-edit"/></svg></button><button class="icon-btn sm" aria-label="More for contoso-prod" title="More"><svg class="i"><use href="#i-more"/></svg></button></span></div>
+        <div class="conn"><span class="nm">contoso-prod-events</span><span class="host">rabbit.prod.contoso.example:5672 /events</span><span><span class="pill neutral">RabbitMQ</span></span><span class="row"><button class="btn tonal sm">Connect</button><button class="icon-btn sm" aria-label="Edit contoso-prod-events" title="Edit"><svg class="i"><use href="#i-edit"/></svg></button><button class="icon-btn sm" aria-label="More for contoso-prod-events" title="More"><svg class="i"><use href="#i-more"/></svg></button></span></div>
+        <div class="conn-env"><span class="chip env-dev">DEVELOPMENT</span>Development</div>
+        <div class="conn"><span class="nm">contoso-dev</span><span class="host">contoso-dev.servicebus.windows.net</span><span><span class="pill neutral">Azure Service Bus</span></span><span class="row"><button class="btn tonal sm">Connect</button><button class="icon-btn sm" aria-label="Edit contoso-dev" title="Edit"><svg class="i"><use href="#i-edit"/></svg></button><button class="icon-btn sm" aria-label="More for contoso-dev" title="More"><svg class="i"><use href="#i-more"/></svg></button></span></div>
+        <div class="conn"><span class="nm">contoso-dev-rabbit</span><span class="host">rabbit.dev.contoso.example:5672 /orders</span><span><span class="pill neutral">RabbitMQ</span></span><span class="row"><span class="pill fail">Sign-in failed</span><button class="btn tonal sm">Retry</button><button class="icon-btn sm" aria-label="Edit contoso-dev-rabbit" title="Edit"><svg class="i"><use href="#i-edit"/></svg></button><button class="icon-btn sm" aria-label="More for contoso-dev-rabbit" title="More"><svg class="i"><use href="#i-more"/></svg></button></span></div>
+      </div>
+      <div class="conn-group">
+        <header><svg class="i"><use href="#i-folder"/></svg>Not grouped<span class="muted small" style="font-weight:400">1 connection</span></header>
+        <div class="conn"><span class="nm">local-emulator</span><span class="host">localhost:5672 /</span><span><span class="pill neutral">RabbitMQ</span></span><span class="row"><span class="chip env-none">NO ENVIRONMENT</span><button class="btn tonal sm">Connect</button><button class="icon-btn sm" aria-label="Edit local-emulator" title="Edit"><svg class="i"><use href="#i-edit"/></svg></button><button class="icon-btn sm" aria-label="More for local-emulator" title="More"><svg class="i"><use href="#i-more"/></svg></button></span></div>
+      </div>
+      <p class="muted small">One connection is active at a time. Connecting to another disconnects contoso-prod first.</p>
+    </main>
+  </div>
+</section>
+
+<!-- 10. AZURE CONNECTION -->
+<section class="board" id="conn-azure">
+  <p class="why"><b>One dialog, five ways to authenticate to Azure Service Bus.</b> The type is chosen first and the dialog shows only the fields that type needs (the selector works here). A secret is typed once and afterwards shown as a mask; the hint says where it is kept, which today is a plain file. The test result stays in the dialog. The model has five types and the dialog offers four today: Default credential is missing.</p>
+  <div class="frame">
+    <div class="scrim multi" style="grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)">
+      <div class="dialog wide" role="dialog" aria-labelledby="ca" style="width:100%">
+        <h3 id="ca">Edit connection</h3>
+        <div class="g2">
+          <div class="f"><label for="can">Connection name</label><input id="can" value="contoso-prod"></div>
+          <div class="f"><label for="cap">Provider</label><select id="cap"><option>Azure Service Bus</option><option>RabbitMQ</option></select></div>
+        </div>
+        <h4>Authentication</h4>
+        <div class="seg" role="group" aria-label="Authentication type" id="authSeg">
+          <button aria-pressed="false" data-auth="ms">Microsoft sign-in</button><button aria-pressed="false" data-auth="cs">Connection string</button><button aria-pressed="true" data-auth="sp">Service principal</button><button aria-pressed="false" data-auth="cli">Azure CLI</button><button aria-pressed="false" data-auth="def">Default credential</button>
+        </div>
+        <div class="stack" style="margin-top:12px">
+          <div class="f" data-for="ms sp cli def"><label for="cans">Fully qualified namespace</label><input id="cans" value="contoso-prod.servicebus.windows.net"><div class="hint">The host only, without https://</div></div>
+          <div class="g2" data-for="ms sp"><div class="f"><label for="cat">Tenant id <span data-for="ms">(optional)</span></label><input id="cat" value="00000000-0000-0000-0000-000000000001"></div><div class="f" data-for="sp"><label for="cac">Client id</label><input id="cac" value="00000000-0000-0000-0000-000000000002"></div></div>
+          <div class="f" data-for="sp"><label for="cas">Client secret</label><input id="cas" type="password" placeholder="Stored: ************"><div class="hint">Leave empty to keep the stored secret. It is kept in plain text in workspace.json on this machine.</div></div>
+          <div class="f" data-for="cs" hidden><label for="cacs">Connection string</label><input id="cacs" type="password" placeholder="Stored: ************"><div class="hint">Needs the Manage claim to list and create entities. Kept in plain text in workspace.json on this machine.</div></div>
+          <div class="banner" data-for="ms" hidden><svg class="i"><use href="#i-info"/></svg><span>Save opens your browser to sign in. Nothing is stored but the namespace and the tenant.</span></div>
+          <div class="banner" data-for="cli" hidden><svg class="i"><use href="#i-info"/></svg><span>Uses the session of <span class="mono">az login</span> on this machine. If it has expired, the connection fails and says so.</span></div>
+          <div class="banner" data-for="def" hidden><svg class="i"><use href="#i-info"/></svg><span>Tries the credentials found on this machine in the order the Azure SDK defines (environment, managed identity, developer tools). The test below says which one answered.</span></div>
+        </div>
+        <h4>Organisation</h4>
+        <div class="g2">
+          <div class="f"><label for="cag">Client</label><select id="cag"><option>Contoso</option><option>No client</option></select></div>
+          <div class="f"><label for="cae">Environment</label><select id="cae"><option>Production</option><option>Development</option><option>No environment</option></select><div class="hint">Marked as production: the app shows it in red and asks for a typed name before a purge.</div></div>
+        </div>
+        <div class="banner" style="margin-top:16px" role="status"><svg class="i" style="color:var(--success)"><use href="#i-check"/></svg><span><b>Connection works.</b> 3 queues and 1 topic listed with the Manage claim, in 412 ms.</span></div>
+        <div class="foot"><button class="btn outlined">Test connection</button><span class="grow"></span><button class="btn text">Cancel</button><button class="btn filled">Save</button></div>
+      </div>
+      <div class="dialog" style="width:100%" aria-label="Fields by authentication type">
+        <h3>Fields by type</h3>
+        <p class="muted" style="margin-bottom:8px">What the dialog shows for each choice.</p>
+        <div class="facts" style="margin:0">
+          <div class="prop"><span>Sign in with Microsoft</span><span>Namespace, tenant id (optional). Opens the browser.</span></div>
+          <div class="prop"><span>Connection string</span><span>Connection string (secret).</span></div>
+          <div class="prop"><span>Service principal</span><span>Namespace, tenant id, client id, client secret (secret).</span></div>
+          <div class="prop"><span>Azure CLI</span><span>Namespace. Uses the az login session.</span></div>
+          <div class="prop"><span>Default credential</span><span>Namespace. In the model, not offered by the dialog today.</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 11. RABBITMQ CONNECTION -->
+<section class="board" id="conn-rabbit">
+  <p class="why"><b>The same dialog for RabbitMQ, with a failed test.</b> The password field starts empty, not filled with a default. A failed test says which of the two ports refused and what to check, beside the field it concerns, and Save stays available because a broker can be offline when its connection is written down.</p>
+  <div class="frame">
+    <div class="scrim">
+      <div class="dialog wide" role="dialog" aria-labelledby="cr">
+        <h3 id="cr">New connection</h3>
+        <div class="g2">
+          <div class="f"><label for="crn">Connection name</label><input id="crn" value="contoso-dev-rabbit"></div>
+          <div class="f"><label for="crp">Provider</label><select id="crp"><option>RabbitMQ</option><option>Azure Service Bus</option></select></div>
+        </div>
+        <h4>Broker</h4>
+        <div class="g3">
+          <div class="f" style="grid-column:span 2"><label for="crh">Host name</label><input id="crh" value="rabbit.dev.contoso.example"></div>
+          <div class="f"><label for="crport">AMQP port</label><input id="crport" value="5672" inputmode="numeric"></div>
+          <div class="f"><label for="cru">User name</label><input id="cru" value="orders-app"></div>
+          <div class="f"><label for="crpw">Password</label><input id="crpw" type="password" value="xxxxxxxxxxxx"><div class="hint">Kept in plain text in workspace.json on this machine.</div></div>
+          <div class="f"><label for="crv">Virtual host</label><input id="crv" value="/orders"></div>
+          <div class="f"><label for="crm">Management port</label><input id="crm" value="15672" inputmode="numeric" aria-invalid="true" style="border-color:var(--error)"><div class="hint err">No answer on this port.</div></div>
+        </div>
+        <h4>Organisation</h4>
+        <div class="g2">
+          <div class="f"><label for="crg">Client</label><select id="crg"><option>Contoso</option></select></div>
+          <div class="f"><label for="cre">Environment</label><select id="cre"><option>Development</option></select></div>
+        </div>
+        <div class="banner err" style="margin-top:16px" role="alert"><svg class="i"><use href="#i-warn"/></svg><span><b>The test failed on the management API.</b> AMQP on 5672 accepted the user. HTTP on 15672 timed out after 5 seconds: listing queues, counts and bindings needs it. Check the port and that the management plugin is enabled.</span></div>
+        <div class="foot"><button class="btn outlined">Test again</button><span class="grow"></span><button class="btn text">Cancel</button><button class="btn filled">Save</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 12. GROUPS -->
+<section class="board" id="groups">
+  <p class="why"><b>Groups are clients, and environments inside a client.</b> One list instead of two tabs with two forms. An environment carries the production mark that colours the rest of the app (the mark is new: today an environment is only a name). Deleting a group says how many connections lose it, and deletes no connection.</p>
+  <div class="frame">
+    <div class="scrim multi">
+      <div class="dialog wide" role="dialog" aria-labelledby="gr" style="width:100%">
+        <h3 id="gr">Manage groups</h3>
+        <table class="dense">
+          <thead><tr><th>Client / environment</th><th>Production</th><th class="num">Connections</th><th></th></tr></thead>
+          <tbody>
+            <tr class="grp"><td>Contoso</td><td></td><td class="num">4</td><td class="acts"><button class="icon-btn sm" aria-label="Rename Contoso" title="Rename"><svg class="i"><use href="#i-edit"/></svg></button><button class="icon-btn sm" aria-label="Delete Contoso" title="Delete"><svg class="i"><use href="#i-trash"/></svg></button></td></tr>
+            <tr><td style="padding-left:32px">Production</td><td><label class="check"><input type="checkbox" checked aria-label="Production is a production environment"><span class="chip env-prod">PRODUCTION</span></label></td><td class="num">2</td><td class="acts"><button class="icon-btn sm" aria-label="Rename Production" title="Rename"><svg class="i"><use href="#i-edit"/></svg></button><button class="icon-btn sm" aria-label="Delete Production" title="Delete"><svg class="i"><use href="#i-trash"/></svg></button></td></tr>
+            <tr><td style="padding-left:32px">Development</td><td><label class="check"><input type="checkbox" aria-label="Development is a production environment"><span class="muted">No</span></label></td><td class="num">2</td><td class="acts"><button class="icon-btn sm" aria-label="Rename Development" title="Rename"><svg class="i"><use href="#i-edit"/></svg></button><button class="icon-btn sm" aria-label="Delete Development" title="Delete"><svg class="i"><use href="#i-trash"/></svg></button></td></tr>
+            <tr><td style="padding-left:32px" colspan="3"><div class="f"><input aria-label="New environment in Contoso" placeholder="New environment in Contoso"></div></td><td class="acts"><button class="btn tonal sm">Add</button></td></tr>
+            <tr class="grp"><td>Fabrikam</td><td></td><td class="num">0</td><td class="acts"><button class="icon-btn sm" aria-label="Rename Fabrikam" title="Rename"><svg class="i"><use href="#i-edit"/></svg></button><button class="icon-btn sm" aria-label="Delete Fabrikam" title="Delete"><svg class="i"><use href="#i-trash"/></svg></button></td></tr>
+            <tr><td colspan="3"><div class="f"><input aria-label="New client" placeholder="New client"></div></td><td class="acts"><button class="btn tonal sm">Add</button></td></tr>
+          </tbody>
+        </table>
+        <div class="foot"><button class="btn filled">Done</button></div>
+      </div>
+      <div class="dialog" role="alertdialog" aria-labelledby="gd" style="width:100%">
+        <h3 id="gd"><svg class="i danger"><use href="#i-warn"/></svg>Delete the group Production?</h3>
+        <p>The group is removed. Its connections are kept and lose their environment mark.</p>
+        <div class="facts"><div class="prop"><span>Client</span><span>Contoso</span></div><div class="prop"><span>Connections affected</span><span>contoso-prod, contoso-prod-events</span></div><div class="prop"><span>They will show</span><span><span class="chip env-none">NO ENVIRONMENT</span></span></div></div>
+        <div class="foot"><button class="btn text">Cancel</button><button class="btn danger">Delete group</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 13. EXPORT AND IMPORT CONNECTIONS -->
+<section class="board" id="conn-transfer">
+  <p class="why"><b>Export is masked unless asked otherwise; import says what it will do before it does it.</b> The export with secrets is the one exception to the masking rule, so it is a second, explicit choice with its consequence spelled out. The import previews what is new and what is replaced, and a masked secret in the file never overwrites a stored one. Today the import asks through a browser confirm box.</p>
+  <div class="frame">
+    <div class="scrim multi">
+      <div class="dialog" role="dialog" aria-labelledby="ce" style="width:100%">
+        <h3 id="ce">Export connections</h3>
+        <p class="ctx">5 connections and 3 groups, to a JSON file you choose.</p>
+        <div class="stack">
+          <label class="check"><input type="radio" name="exp"><span><b>Masked</b><br><span class="muted">Connection strings, passwords and client secrets are replaced by ***. Safe to share; secrets are typed again after an import.</span></span></label>
+          <label class="check"><input type="radio" name="exp" checked><span><b>With secrets</b><br><span class="muted">A full copy, for a backup or a move to another machine.</span></span></label>
+          <div class="banner warn" role="alert"><svg class="i"><use href="#i-warn"/></svg><span>The file will hold 2 connection strings, 2 passwords and 1 client secret in plain text, including those of <b>contoso-prod</b>. Anyone who reads it can use them.</span></div>
+        </div>
+        <div class="foot"><button class="btn text">Cancel</button><button class="btn danger">Export with secrets</button></div>
+      </div>
+      <div class="dialog" role="dialog" aria-labelledby="ci" style="width:100%">
+        <h3 id="ci">Import connections</h3>
+        <p class="ctx"><span class="mono">connections-2026-11-12.json</span><button class="btn text sm">Choose another file</button></p>
+        <table class="dense">
+          <thead><tr><th>In the file</th><th>Here</th><th>Result</th></tr></thead>
+          <tbody>
+            <tr><td>contoso-prod</td><td>exists</td><td><span class="pill dup">Replaced, stored secret kept</span></td></tr>
+            <tr><td>contoso-dev</td><td>exists</td><td><span class="pill dup">Replaced, stored secret kept</span></td></tr>
+            <tr><td>fabrikam-test</td><td class="muted">new</td><td><span class="pill ok">Added, secret to type</span></td></tr>
+            <tr><td>Group Fabrikam / Test</td><td class="muted">new</td><td><span class="pill ok">Added</span></td></tr>
+          </tbody>
+        </table>
+        <p class="muted small" style="margin-top:8px">The file is masked. A connection that is new arrives without its secret and cannot connect until it is edited. Nothing here is deleted.</p>
+        <div class="foot"><button class="btn text">Cancel</button><button class="btn filled">Import 3 connections and 1 group</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M3.900 12A3.100 3.100 0 0 1 7 8.900h4V7H7a5 5 0 0 0 0 10h4v-1.900H7A3.100 3.100 0 0 1 3.900 12zM8 13h8v-2H8zm9-6h-4v1.900h4a3.100 3.100 0 0 1 0 6.200h-4V17h4a5 5 0 0 0 0-10z"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20h16v-2H4zm2-4h3V9H6zm5 0h3V4h-3zm5 0h3v-5h-3z"/></symbol>
+</svg>
+
+<!-- 14. MESSAGE DETAIL -->
+<section class="board" id="detail">
+  <p class="why"><b>One message: body first, everything else beside it.</b> The body is formatted when it parses and says so when it does not. System properties, application properties and the dead-letter reason are text that can be copied. Resubmit and edit are routine; delete is apart. The monospace font is one stack that exists on every platform.</p>
+  <div class="frame">
+    <div class="panel">
+      <div class="head">
+        <div class="title"><div class="kind">Message in orders / dead-letter</div><h2 class="mono" style="font-size:20px">Sequence 9011</h2><div class="path row"><span class="chip env-prod">PRODUCTION</span>contoso-prod.servicebus.windows.net</div></div>
+        <div class="actions"><button class="btn tonal"><svg class="i"><use href="#i-refresh"/></svg>Resubmit</button><button class="btn outlined"><svg class="i"><use href="#i-edit"/></svg>Edit and resubmit</button><button class="btn outlined"><svg class="i"><use href="#i-download"/></svg>Export</button><span style="width:1px;height:24px;background:var(--outline-variant)"></span><button class="btn danger-text"><svg class="i"><use href="#i-trash"/></svg>Delete</button><button class="icon-btn" aria-label="Close" title="Close"><svg class="i"><use href="#i-close"/></svg></button></div>
+      </div>
+      <div class="banner warn" style="margin-bottom:16px"><svg class="i"><use href="#i-warn"/></svg><span><b>TTLExpiredException.</b> The message expired and was removed. Dead-lettered 2026-11-12 08:15 UTC after 1 delivery.</span></div>
+      <div class="split">
+        <div style="min-width:0">
+          <div class="row" style="margin-bottom:8px"><b>Body</b><span class="muted small">application/json, 214 bytes, valid JSON</span><span class="grow"></span><div class="seg" role="group" aria-label="Body view"><button aria-pressed="true">Formatted</button><button aria-pressed="false">Raw</button></div><button class="icon-btn sm" aria-label="Copy body" title="Copy body"><svg class="i"><use href="#i-copy"/></svg></button></div>
+<pre class="code" tabindex="0">{
+  "orderId": "ORD-000482",
+  "customer": { "id": "C-1001", "tier": "standard" },
+  "lines": [
+    { "sku": "KB-104", "quantity": 1, "unitPrice": 49.90 },
+    { "sku": "MS-220", "quantity": 2, "unitPrice": 19.50 }
+  ],
+  "total": 88.90,
+  "currency": "EUR"
+}</pre>
+          <h4 class="sec">Application properties (3)</h4>
+          <table class="dense"><thead><tr><th>Key</th><th>Value</th><th>Type</th></tr></thead><tbody>
+            <tr><td class="mono">tenant</td><td class="mono">contoso-eu</td><td class="muted">string</td></tr>
+            <tr><td class="mono">schemaVersion</td><td class="mono">3</td><td class="muted">int</td></tr>
+            <tr><td class="mono">source</td><td class="mono">checkout-api</td><td class="muted">string</td></tr>
+          </tbody></table>
+        </div>
+        <aside>
+          <b>Properties</b>
+          <div class="prop"><span>Message id</span><span class="mono">c220-9af1</span></div>
+          <div class="prop"><span>Correlation id</span><span class="mono">7d1e-0b42</span></div>
+          <div class="prop"><span>Session id</span><span class="mono">C-1001</span></div>
+          <div class="prop"><span>Subject</span><span>order.created</span></div>
+          <div class="prop"><span>Enqueued (UTC)</span><span>2026-11-12 08:15:02</span></div>
+          <div class="prop"><span>Expires (UTC)</span><span>2026-11-12 08:15:32</span></div>
+          <div class="prop"><span>Delivery count</span><span>1</span></div>
+          <div class="prop"><span>Enqueued sequence</span><span class="mono">9011</span></div>
+          <div class="prop"><span>Dead-letter source</span><span>orders</span></div>
+        </aside>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 15. SEND -->
+<section class="board" id="send">
+  <p class="why"><b>Send says where, and when.</b> The target and its environment are in the header. A queue that requires sessions makes the session id a required field instead of failing at the broker. A scheduled time is shown in UTC and in local time, and the button says what will happen. One scrolling form replaces three tabs that hid the delivery options.</p>
+  <div class="frame">
+    <div class="scrim">
+      <div class="dialog xl" role="dialog" aria-labelledby="sd">
+        <h3 id="sd">Send message</h3>
+        <div class="ctx"><span class="chip env-prod">PRODUCTION</span><span>Queue <b>orders</b> on contoso-prod.servicebus.windows.net</span></div>
+        <div class="split" style="grid-template-columns:minmax(0,1.3fr) minmax(0,1fr)">
+          <div class="stack" style="align-content:start">
+            <div class="row"><div class="f" style="flex:1"><label for="stpl">Template</label><select id="stpl"><option>order.created sample</option><option>None</option></select></div><div class="f" style="width:190px"><label for="sct">Content type</label><select id="sct"><option>application/json</option><option>text/plain</option><option>application/xml</option></select></div></div>
+            <div class="f"><label for="sbody">Body</label><textarea id="sbody" rows="11">{
+  "orderId": "ORD-000483",
+  "customer": { "id": "C-1001" },
+  "total": 12.00,
+  "currency": "EUR"
+}</textarea><div class="row"><span class="hint">Valid JSON, 96 bytes</span><span class="grow"></span><button class="btn text sm">Format</button></div></div>
+            <h4 style="margin:0">Application properties</h4>
+            <div class="row"><div class="f" style="flex:1"><input aria-label="Property name" value="tenant" class="mono"></div><div class="f" style="flex:1"><input aria-label="Property value" value="contoso-eu" class="mono"></div><button class="icon-btn sm" aria-label="Remove property tenant" title="Remove"><svg class="i"><use href="#i-close"/></svg></button></div>
+            <div><button class="btn text sm"><svg class="i"><use href="#i-plus"/></svg>Add property</button></div>
+          </div>
+          <div class="stack" style="align-content:start">
+            <h4 style="margin:0">Properties</h4>
+            <div class="g2">
+              <div class="f"><label for="smid">Message id</label><input id="smid" placeholder="Generated if empty"></div>
+              <div class="f"><label for="scid">Correlation id</label><input id="scid"></div>
+              <div class="f"><label for="ssid">Session id (required)</label><input id="ssid" value="C-1001"><div class="hint">This queue requires sessions.</div></div>
+              <div class="f"><label for="ssub">Subject</label><input id="ssub" value="order.created"></div>
+              <div class="f"><label for="sto">To</label><input id="sto"></div>
+              <div class="f"><label for="srt">Reply to</label><input id="srt"></div>
+            </div>
+            <h4 style="margin:0">Delivery</h4>
+            <div class="stack">
+              <label class="check"><input type="radio" name="when">Send now</label>
+              <label class="check"><input type="radio" name="when" checked>Schedule</label>
+              <div class="f"><label for="sat">Deliver at (local time)</label><input id="sat" value="2026-11-12 09:30"><div class="hint">09:30 UTC, in 1 hour 12 minutes. It can be cancelled from the Scheduled tab until then.</div></div>
+              <div class="g2"><div class="f"><label for="sttl">Time to live</label><input id="sttl" value="30" inputmode="numeric"></div><div class="f"><label for="sttlu">Unit</label><select id="sttlu"><option>minutes</option><option>seconds</option><option>hours</option><option>days</option></select></div></div>
+              <div class="hint muted small">Empty uses the queue default: 14 days.</div>
+            </div>
+          </div>
+        </div>
+        <div class="foot"><button class="btn outlined">Save as template</button><span class="grow"></span><button class="btn text">Cancel</button><button class="btn filled"><svg class="i"><use href="#i-clock"/></svg>Schedule for 09:30 UTC</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 16. MOVE -->
+<section class="board" id="move">
+  <p class="why"><b>Move says where from, where to, and what at-least-once means.</b> Source and target are both named with the count. The sentence about duplicates is the contract of every bulk operation, stated before the button, not after a failure.</p>
+  <div class="frame">
+    <div class="scrim">
+      <div class="dialog" role="dialog" aria-labelledby="mv">
+        <h3 id="mv">Move 3 messages</h3>
+        <div class="ctx"><span class="chip env-prod">PRODUCTION</span>contoso-prod.servicebus.windows.net</div>
+        <div class="facts"><div class="prop"><span>From</span><span>orders / dead-letter</span></div><div class="prop"><span>Messages</span><span class="mono">9007, 9008, 9011</span></div></div>
+        <div class="f"><label for="mvt">Target queue</label><select id="mvt"><option>orders-retry</option><option>billing/invoices</option><option>notifications</option></select><div class="hint">orders-retry holds 0 active messages now. The source queue is not offered.</div></div>
+        <div class="banner" style="margin-top:16px"><svg class="i"><use href="#i-info"/></svg><span>Each message is sent to the target first and removed from the source after. If the removal fails, the message exists in both places and is reported as a possible duplicate.</span></div>
+        <div class="foot"><button class="btn text">Cancel</button><button class="btn filled"><svg class="i"><use href="#i-swap"/></svg>Move 3 to orders-retry</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 17. IMPORT MESSAGES -->
+<section class="board" id="msg-import">
+  <p class="why"><b>Import shows what the file holds before anything is sent.</b> Rows that cannot be sent are counted and listed with the reason, and the button carries the number that will go. Columns size to their content instead of fixed pixel widths.</p>
+  <div class="frame">
+    <div class="scrim">
+      <div class="dialog wide" role="dialog" aria-labelledby="im">
+        <h3 id="im">Import messages</h3>
+        <div class="ctx"><span class="chip env-dev">DEVELOPMENT</span><span>into queue <b>orders</b> on contoso-dev.servicebus.windows.net</span></div>
+        <div class="row"><span class="mono">orders-export-2026-11-10.json</span><span class="muted small">48 KB</span><button class="btn text sm">Choose another file</button></div>
+        <div class="row" style="margin:12px 0"><span class="pill ok">118 ready</span><span class="pill fail">2 cannot be sent</span><span class="muted small">Showing the first 3 of 120</span></div>
+        <div class="tscroll"><table class="dense">
+          <thead><tr><th class="num">#</th><th>Message id</th><th>Subject</th><th>Content type</th><th>Body</th><th>Check</th></tr></thead>
+          <tbody>
+            <tr><td class="num">1</td><td class="mono">a1f4-77c2</td><td>order.created</td><td>application/json</td><td class="mono">{"orderId":"ORD-000101", ...</td><td><span class="pill ok">Ready</span></td></tr>
+            <tr><td class="num">2</td><td class="mono">b93e-1c05</td><td>order.created</td><td>application/json</td><td class="mono">{"orderId":"ORD-000102", ...</td><td><span class="pill ok">Ready</span></td></tr>
+            <tr><td class="num">3</td><td class="mono muted">none</td><td class="muted">none</td><td class="muted">none</td><td class="muted">empty</td><td><span class="pill fail">Empty body</span></td></tr>
+          </tbody>
+        </table></div>
+        <div class="stack" style="margin-top:16px">
+          <label class="check"><input type="checkbox" checked><span>Generate new message ids<br><span class="muted small">Keeps duplicate detection from dropping messages that were already in this queue.</span></span></label>
+          <label class="check"><input type="checkbox" checked>Skip the 2 rows that cannot be sent</label>
+        </div>
+        <div class="foot"><button class="btn text">Cancel</button><button class="btn filled"><svg class="i"><use href="#i-upload"/></svg>Import 118 messages</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 18. EXPORT MESSAGES -->
+<section class="board" id="msg-export">
+  <p class="why"><b>Export states its scope the same way the selection does.</b> What is exported is the selection or what is loaded, with the numbers, never an unstated "all". A message body can hold personal data, and the file leaves the app, so the dialog says so once, without colour.</p>
+  <div class="frame">
+    <div class="scrim">
+      <div class="dialog" role="dialog" aria-labelledby="ex">
+        <h3 id="ex">Export messages</h3>
+        <div class="ctx"><span>From <b>orders / dead-letter</b> on contoso-prod.servicebus.windows.net</span></div>
+        <h4 style="margin-top:0">Scope</h4>
+        <div class="stack">
+          <label class="check"><input type="radio" name="scope" checked>The 3 selected messages</label>
+          <label class="check"><input type="radio" name="scope">The 20 loaded messages</label>
+          <label class="check"><input type="radio" name="scope" disabled><span class="muted">All 37 in the dead-letter queue: load them first</span></label>
+        </div>
+        <h4>Format</h4>
+        <div class="seg" role="group" aria-label="Format"><button aria-pressed="true">JSON</button><button aria-pressed="false">CSV</button><button aria-pressed="false">Excel</button></div>
+        <div class="stack" style="margin-top:12px">
+          <label class="check"><input type="checkbox" checked>Include application properties</label>
+          <label class="check"><input type="checkbox" checked>Indent the JSON</label>
+        </div>
+        <p class="muted small" style="margin-top:12px">The file holds the message bodies as they are. The messages stay in the queue.</p>
+        <div class="foot"><button class="btn text">Cancel</button><button class="btn filled"><svg class="i"><use href="#i-download"/></svg>Export 3 messages</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 19. CONTINUOUS RESUBMIT -->
+<section class="board" id="resubmit">
+  <p class="why"><b>A long resubmit shows its three outcomes while it runs.</b> Resubmitted, possible duplicate and failed are counted apart, per batch and in total, and a possible duplicate is never retried. Stop ends after the current batch and says what is left. For a subscription the dialog repeats that the messages go to the topic.</p>
+  <div class="frame">
+    <div class="scrim">
+      <div class="dialog wide" role="dialog" aria-labelledby="rs">
+        <h3 id="rs">Resubmit dead-letter messages</h3>
+        <div class="ctx"><span class="chip env-prod">PRODUCTION</span><span>Subscription <b>email</b> in topic order-events</span></div>
+        <div class="banner warn"><svg class="i"><use href="#i-warn"/></svg><span>A resubmit publishes to the topic <b>order-events</b>: every subscription receives each message again, not only email.</span></div>
+        <div class="row" style="margin:16px 0 8px"><b>Batch 4, running</b><span class="muted">150 of 400 read at start</span><span class="grow"></span><span class="muted small">Batch size 50</span></div>
+        <div class="bar" role="progressbar" aria-valuenow="37" aria-valuemin="0" aria-valuemax="100" aria-label="Progress"><i style="width:37%"></i></div>
+        <div class="cards" style="margin:16px 0">
+          <div class="card"><div class="label">Resubmitted</div><div class="value">147</div></div>
+          <div class="card warn"><div class="label">Possible duplicates</div><div class="value">1</div><div class="sub">Sent, not removed. Not retried.</div></div>
+          <div class="card"><div class="label">Failed</div><div class="value">2</div><div class="sub">Still in the dead-letter queue</div></div>
+        </div>
+        <table class="dense">
+          <thead><tr><th class="num">Batch</th><th class="num">Read</th><th class="num">Resubmitted</th><th class="num">Duplicates</th><th class="num">Failed</th><th>Note</th></tr></thead>
+          <tbody>
+            <tr><td class="num">3</td><td class="num">50</td><td class="num">47</td><td class="num dlq"><b>1</b></td><td class="num">2</td><td>9208 lock lost, 9211 lock lost, 9214 possible duplicate</td></tr>
+            <tr><td class="num">2</td><td class="num">50</td><td class="num">50</td><td class="num">0</td><td class="num">0</td><td class="muted">none</td></tr>
+            <tr><td class="num">1</td><td class="num">50</td><td class="num">50</td><td class="num">0</td><td class="num">0</td><td class="muted">none</td></tr>
+          </tbody>
+        </table>
+        <div class="foot"><span class="muted small">Stop ends after batch 4. About 250 messages would stay in the dead-letter queue.</span><span class="grow"></span><button class="btn outlined"><svg class="i"><use href="#i-stop"/></svg>Stop after this batch</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 20. DIFF -->
+<section class="board" id="diff">
+  <p class="why"><b>Two messages side by side, differences first.</b> Each side is named by its sequence number. Added and removed lines carry a sign as well as a colour, so the comparison does not depend on telling red from green.</p>
+  <div class="frame">
+    <div class="scrim">
+      <div class="dialog xl" role="dialog" aria-labelledby="df">
+        <h3 id="df">Compare messages</h3>
+        <div class="ctx">orders / dead-letter<span class="grow" style="flex:1"></span><label class="check"><input type="checkbox" checked>Only differences in tables</label></div>
+        <div class="tabs" role="tablist"><button class="tab on" role="tab" aria-selected="true">Body (2 lines differ)</button><button class="tab" role="tab">Properties (3 differ)</button><button class="tab" role="tab">Application properties (same)</button></div>
+        <div class="g2">
+          <div style="min-width:0"><div class="row" style="margin-bottom:6px"><b class="mono">Sequence 9007</b><span class="muted small">enqueued 08:14:51</span></div>
+<pre class="code" tabindex="0">  {
+    "orderId": "ORD-000481",
+<span class="del">-   "total": 61.40,</span>    "currency": "EUR",
+<span class="del">-   "customer": { "id": "C-0977" }</span>  }</pre></div>
+          <div style="min-width:0"><div class="row" style="margin-bottom:6px"><b class="mono">Sequence 9011</b><span class="muted small">enqueued 08:15:02</span></div>
+<pre class="code" tabindex="0">  {
+    "orderId": "ORD-000481",
+<span class="add">+   "total": 88.90,</span>    "currency": "EUR",
+<span class="add">+   "customer": { "id": "C-1001" }</span>  }</pre></div>
+        </div>
+        <h4>Properties that differ</h4>
+        <table class="dense"><thead><tr><th>Property</th><th>9007</th><th>9011</th></tr></thead><tbody>
+          <tr><td>Message id</td><td class="mono">a1f4-77c2</td><td class="mono">c220-9af1</td></tr>
+          <tr><td>Session id</td><td class="mono">C-0977</td><td class="mono">C-1001</td></tr>
+          <tr><td>Dead-letter reason</td><td>MaxDeliveryCountExceeded</td><td>TTLExpiredException</td></tr>
+        </tbody></table>
+        <div class="foot"><button class="btn filled">Close</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 21. BULK -->
+<section class="board" id="bulk">
+  <p class="why"><b>A bulk operation reports per message, while it runs and when it ends.</b> Progress counts the three outcomes as they happen, and cancel says what it does. The result lists every sequence number that did not succeed with its reason; retry is offered for failures only, and the report can be saved.</p>
+  <div class="frame">
+    <div class="scrim multi">
+      <div class="dialog" role="dialog" aria-labelledby="bp" style="width:100%">
+        <h3 id="bp">Resubmitting 37 messages</h3>
+        <div class="ctx"><span class="chip env-prod">PRODUCTION</span>orders / dead-letter to orders</div>
+        <div class="row" style="margin-bottom:8px"><b>22 of 37</b><span class="grow"></span><span class="muted small">about 6 seconds left</span></div>
+        <div class="bar" role="progressbar" aria-valuenow="59" aria-valuemin="0" aria-valuemax="100" aria-label="Progress"><i style="width:59%"></i></div>
+        <div class="row" style="margin-top:16px"><span class="pill ok">20 resubmitted</span><span class="pill dup">1 possible duplicate</span><span class="pill fail">1 failed</span></div>
+        <p class="muted small" style="margin-top:16px">Cancel stops before the next message. The 22 already processed stay as they are; the other 15 stay in the dead-letter queue.</p>
+        <div class="foot"><button class="btn outlined">Cancel the rest</button></div>
+      </div>
+      <div class="dialog" role="dialog" aria-labelledby="br" style="width:100%">
+        <h3 id="br">Resubmit finished with 3 to review</h3>
+        <div class="ctx"><span class="chip env-prod">PRODUCTION</span>orders / dead-letter to orders</div>
+        <div class="row"><span class="pill ok">34 resubmitted</span><span class="pill dup">1 possible duplicate</span><span class="pill fail">2 failed</span></div>
+        <table class="dense" style="margin-top:12px">
+          <thead><tr><th class="num">Sequence</th><th>Outcome</th><th>Reason</th></tr></thead>
+          <tbody>
+            <tr><td class="mono num">9008</td><td><span class="pill dup">Possible duplicate</span></td><td>Sent to orders; the removal from the dead-letter queue timed out. It may exist in both.</td></tr>
+            <tr><td class="mono num">9011</td><td><span class="pill fail">Failed</span></td><td>Lock lost before sending. Nothing was sent.</td></tr>
+            <tr><td class="mono num">9019</td><td><span class="pill fail">Failed</span></td><td>Message not found: another client removed it.</td></tr>
+          </tbody>
+        </table>
+        <div class="foot"><button class="btn text">Save report</button><span class="grow"></span><button class="btn outlined">Retry the 2 failed</button><button class="btn filled">Close</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 22. MONITORING -->
+<section class="board" id="monitoring">
+  <p class="why"><b>Monitoring is reachable from the toolbar and reads as one table.</b> In the desktop app today no menu or control leads to this screen. Totals on top, the trend of the two numbers that matter, then every entity with right-aligned counts and the change since the last refresh. Dead-letter is the only coloured column.</p>
+  <div class="frame">
+    <div class="toolbar" data-env="prod" data-nav="monitoring"></div>
+    <main class="panel">
+      <div class="head" style="align-items:center">
+        <div class="title"><h2>Monitoring</h2><div class="path">Updated 08:18:40 UTC, every 10 seconds</div></div>
+        <div class="actions"><div class="f" style="width:180px"><select aria-label="Refresh interval"><option>Every 10 seconds</option><option>Every 30 seconds</option><option>Every minute</option></select></div><button class="btn outlined"><svg class="i"><use href="#i-pause"/></svg>Pause</button><button class="icon-btn" aria-label="Refresh now" title="Refresh now"><svg class="i"><use href="#i-refresh"/></svg></button></div>
+      </div>
+      <div class="cards">
+        <div class="card"><div class="label">Active</div><div class="value">1,274</div><div class="sub">+18 since the last refresh</div></div>
+        <div class="card warn"><div class="label"><svg class="i s"><use href="#i-warn"/></svg>Dead-letter</div><div class="value">41</div><div class="sub">in 2 entities</div></div>
+        <div class="card"><div class="label">Scheduled</div><div class="value">3</div><div class="sub">&nbsp;</div></div>
+        <div class="card"><div class="label">Entities</div><div class="value">6</div><div class="sub">3 queues, 1 topic, 2 subscriptions</div></div>
+      </div>
+      <div class="box" style="margin-bottom:16px">
+        <div class="row"><b>Last 15 minutes</b><span class="grow"></span><span class="small"><span style="color:var(--primary)">&#9472;&#9472;</span> Active</span><span class="small"><span style="color:var(--warning)">&#9476;&#9476;</span> Dead-letter</span></div>
+        <svg class="chart" viewBox="0 0 800 160" preserveAspectRatio="none" role="img" aria-label="Active rose from 1,100 to 1,274 and dead-letter from 30 to 41 in 15 minutes"><line class="ax" x1="0" y1="40" x2="800" y2="40"/><line class="ax" x1="0" y1="80" x2="800" y2="80"/><line class="ax" x1="0" y1="120" x2="800" y2="120"/><path class="l1" d="M0 96 L80 92 L160 94 L240 80 L320 82 L400 70 L480 66 L560 58 L640 60 L720 48 L800 42"/><path class="l2" d="M0 138 L160 138 L240 134 L400 134 L480 128 L640 128 L720 122 L800 122"/></svg>
+      </div>
+      <div class="tscroll"><table class="dense">
+        <thead><tr><th>Entity</th><th>Type</th><th class="num">Active</th><th class="num">Dead-letter</th><th class="num">Scheduled</th><th class="num">Transfer</th><th class="num">Change</th></tr></thead>
+        <tbody>
+          <tr><td>orders</td><td class="muted">Queue</td><td class="num">1,204</td><td class="num dlq"><b>37</b></td><td class="num">0</td><td class="num">0</td><td class="num">+18</td></tr>
+          <tr><td>billing/invoices</td><td class="muted">Queue</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num muted">0</td></tr>
+          <tr><td>notifications</td><td class="muted">Queue</td><td class="num">58</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">-4</td></tr>
+          <tr><td>order-events / warehouse</td><td class="muted">Subscription</td><td class="num">12</td><td class="num">0</td><td class="num muted">n/a</td><td class="num">0</td><td class="num">+4</td></tr>
+          <tr><td>order-events / email</td><td class="muted">Subscription</td><td class="num">0</td><td class="num dlq"><b>4</b></td><td class="num muted">n/a</td><td class="num">0</td><td class="num muted">0</td></tr>
+        </tbody>
+      </table></div>
+    </main>
+  </div>
+</section>
+
+<!-- 23. ENTITY METRICS -->
+<section class="board" id="metrics">
+  <p class="why"><b>The Metrics tab of an entity, for a queue as for a subscription.</b> A time range, two charts with a labelled axis and a legend that does not depend on colour alone, and a line that says where the numbers come from and how old they are.</p>
+  <div class="frame">
+    <div class="toolbar" data-env="prod" data-nav="entities"></div>
+    <div class="shell">
+      <nav class="tree" aria-label="Entities" data-sel="orders"></nav>
+      <main class="panel">
+        <div class="head"><div class="title"><div class="kind">Queue</div><h2>orders</h2></div><div class="actions"><button class="btn filled"><svg class="i"><use href="#i-eye"/></svg>View messages</button><button class="btn tonal"><svg class="i"><use href="#i-send"/></svg>Send</button><button class="icon-btn" aria-label="More actions" title="More actions"><svg class="i"><use href="#i-more"/></svg></button></div></div>
+        <div class="tabs" role="tablist"><button class="tab" role="tab">Properties</button><button class="tab" role="tab">Sessions</button><button class="tab on" role="tab" aria-selected="true">Metrics</button></div>
+        <div class="row" style="margin-bottom:12px"><div class="seg" role="group" aria-label="Time range"><button aria-pressed="true">1 hour</button><button aria-pressed="false">6 hours</button><button aria-pressed="false">24 hours</button><button aria-pressed="false">7 days</button></div><span class="grow"></span><span class="muted small">Azure Monitor, 1 minute grain, read 08:18 UTC</span></div>
+        <div class="g2">
+          <div class="box"><div class="row"><b>Messages</b><span class="grow"></span><span class="small"><span style="color:var(--primary)">&#9472;&#9472;</span> Incoming</span><span class="small"><span style="color:var(--warning)">&#9476;&#9476;</span> Outgoing</span></div>
+            <svg class="chart" viewBox="0 0 400 160" preserveAspectRatio="none" role="img" aria-label="Incoming above outgoing for the last 20 minutes"><line class="ax" x1="0" y1="40" x2="400" y2="40"/><line class="ax" x1="0" y1="80" x2="400" y2="80"/><line class="ax" x1="0" y1="120" x2="400" y2="120"/><path class="l1" d="M0 110 L50 100 L100 104 L150 80 L200 86 L250 60 L300 54 L350 40 L400 44"/><path class="l2" d="M0 114 L50 108 L100 110 L150 96 L200 100 L250 90 L300 92 L350 84 L400 88"/></svg>
+            <div class="row small muted"><span>07:18</span><span class="grow"></span><span>peak 212 per minute</span><span class="grow"></span><span>08:18</span></div></div>
+          <div class="box"><div class="row"><b>Requests</b><span class="grow"></span><span class="small"><span style="color:var(--primary)">&#9472;&#9472;</span> Successful</span><span class="small"><span style="color:var(--warning)">&#9476;&#9476;</span> Throttled</span></div>
+            <svg class="chart" viewBox="0 0 400 160" preserveAspectRatio="none" role="img" aria-label="Successful requests steady, no throttling"><line class="ax" x1="0" y1="40" x2="400" y2="40"/><line class="ax" x1="0" y1="80" x2="400" y2="80"/><line class="ax" x1="0" y1="120" x2="400" y2="120"/><path class="l1" d="M0 70 L50 66 L100 72 L150 64 L200 68 L250 60 L300 66 L350 58 L400 62"/><path class="l2" d="M0 150 L400 150"/></svg>
+            <div class="row small muted"><span>07:18</span><span class="grow"></span><span>peak 640 per minute</span><span class="grow"></span><span>08:18</span></div></div>
+        </div>
+      </main>
+    </div>
+  </div>
+</section>
+
+<!-- 24. SETTINGS -->
+<section class="board" id="settings">
+  <p class="why"><span class="tag">NO SCREEN TODAY</span><b>One place for what is scattered.</b> The theme is a toolbar button, the update channel hides behind the version number, developer mode is a shortcut, and "Clear All Data (Testing)" is a File menu item with a keyboard shortcut. Here each has a label; the file that holds the secrets is named; and clearing data is a danger zone with the board 3 confirmation.</p>
+  <div class="frame">
+    <div class="toolbar" data-env="prod" data-nav="settings"></div>
+    <main class="panel" style="max-width:820px">
+      <div class="head"><div class="title"><h2>Settings</h2></div></div>
+      <h4 class="sec">Appearance</h4>
+      <div class="row"><span style="width:180px">Theme</span><div class="seg" role="group" aria-label="Theme"><button aria-pressed="true">Follow the system</button><button aria-pressed="false">Light</button><button aria-pressed="false">Dark</button></div></div>
+      <h4 class="sec">Updates</h4>
+      <div class="stack">
+        <div class="row"><span style="width:180px">Version</span><span><b>2.4.0</b>, up to date, checked 08:02</span><button class="btn text sm">Check now</button></div>
+        <div class="row"><span style="width:180px">Channel</span><div class="seg" role="group" aria-label="Update channel"><button aria-pressed="true">Stable</button><button aria-pressed="false">Beta</button></div><span class="muted small">Beta gets a release earlier and may be rougher.</span></div>
+      </div>
+      <h4 class="sec">Data on this machine</h4>
+      <div class="stack">
+        <div class="row"><span style="width:180px">Connections file</span><span class="mono" style="overflow-wrap:anywhere;min-width:0">workspace.json in the app data folder</span><button class="btn text sm">Show in folder</button></div>
+        <div class="banner"><svg class="i"><use href="#i-lock"/></svg><span>Connection strings, passwords and client secrets are kept in that file in plain text. Protect it as you protect the brokers it opens.</span></div>
+      </div>
+      <h4 class="sec">Keyboard</h4>
+      <div class="props">
+        <div class="prop"><span>New connection</span><span><span class="kbd">Ctrl</span> <span class="kbd">N</span></span></div>
+        <div class="prop"><span>Select all loaded messages</span><span><span class="kbd">Ctrl</span> <span class="kbd">A</span></span></div>
+        <div class="prop"><span>Filter the entity tree</span><span><span class="kbd">Ctrl</span> <span class="kbd">K</span></span></div>
+      </div>
+      <p class="muted small" style="margin-top:4px">On macOS the same list shows Cmd.</p>
+      <h4 class="sec">Advanced</h4>
+      <label class="check"><input type="checkbox"><span>Developer mode<br><span class="muted small">Shows the debug panel on the connections screen.</span></span></label>
+      <div class="banner err" style="margin-top:16px"><svg class="i"><use href="#i-warn"/></svg><span class="grow"><b>Clear all data</b><br>Deletes the 5 connections and 3 groups stored on this machine. No broker is touched.</span><button class="btn danger">Clear all data</button></div>
+    </main>
+  </div>
+</section>
+
+<!-- 25. UPDATE STATES -->
+<section class="board" id="updates">
+  <p class="why"><b>Five update states, each with one sentence and one action.</b> Each card shows the toolbar control and what Settings says. A failure names the cause and keeps the app usable. A package that cannot replace itself (a deb, a portable exe, an unsigned macOS build) never shows a Restart button that will fail: it links to the download.</p>
+  <div class="frame"><div class="panel">
+    <div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">
+      <div class="card"><div class="kind">1. Available</div><div class="toolbar" style="border-radius:8px;margin:8px 0;height:48px"><span class="grow"></span><button class="upd"><svg class="i s"><use href="#i-download"/></svg>Update to 2.5.0</button></div><h4>Version 2.5.0 is available</h4><p class="muted">You have 2.4.0. The download is 96 MB and runs in the background.</p><div class="foot" style="margin-top:12px"><button class="btn text sm">Release notes</button><button class="btn tonal sm">Download</button></div></div>
+      <div class="card"><div class="kind">2. Downloading</div><div class="toolbar" style="border-radius:8px;margin:8px 0;height:48px"><span class="grow"></span><span class="upd" style="cursor:default;border-color:transparent">Downloading 2.5.0, 42%</span></div><h4>Downloading 2.5.0</h4><div class="bar" style="margin:8px 0" role="progressbar" aria-valuenow="42" aria-valuemin="0" aria-valuemax="100" aria-label="Download"><i style="width:42%"></i></div><p class="muted">40 of 96 MB. You can keep working.</p><div class="foot" style="margin-top:12px"><button class="btn text sm">Cancel download</button></div></div>
+      <div class="card"><div class="kind">3. Ready</div><div class="toolbar" style="border-radius:8px;margin:8px 0;height:48px"><span class="grow"></span><button class="upd" style="background:var(--on-primary);color:var(--primary);border-color:transparent"><svg class="i s"><use href="#i-refresh"/></svg>Restart to update</button></div><h4>2.5.0 is ready to install</h4><p class="muted">Restarting closes the connection to contoso-prod. A bulk operation in progress is asked about first. Otherwise it installs when you quit.</p><div class="foot" style="margin-top:12px"><button class="btn text sm">Later</button><button class="btn filled sm">Restart now</button></div></div>
+      <div class="card"><div class="kind">4. Failed</div><div class="toolbar" style="border-radius:8px;margin:8px 0;height:48px"><span class="grow"></span><button class="upd"><svg class="i s"><use href="#i-warn"/></svg>Update failed</button></div><h4>The update could not be downloaded</h4><p class="muted">The connection to the release server dropped at 42%. You are still on 2.4.0 and nothing was changed.</p><div class="foot" style="margin-top:12px"><button class="btn text sm">Copy the error</button><button class="btn tonal sm">Try again</button></div></div>
+      <div class="card"><div class="kind">5. Cannot update itself</div><div class="toolbar" style="border-radius:8px;margin:8px 0;height:48px"><span class="grow"></span><button class="upd"><svg class="i s"><use href="#i-download"/></svg>2.5.0 available</button></div><h4>Version 2.5.0 is available to download</h4><p class="muted">This package (deb) is updated by installing the new one. The app cannot replace it for you.</p><div class="foot" style="margin-top:12px"><button class="btn text sm">Release notes</button><button class="btn tonal sm">Open the download page</button></div></div>
+    </div>
+  </div></div>
+</section>
+
+<!-- 26. BUG REPORT -->
+<section class="board" id="bug">
+  <p class="why"><b>A report shows exactly what leaves the machine.</b> The app sends nothing: it opens a public GitHub issue in the browser with this text. So the text is visible and editable first, with a reminder that queue names and hosts in an error message become public.</p>
+  <div class="frame">
+    <div class="scrim">
+      <div class="dialog wide" role="dialog" aria-labelledby="bg">
+        <h3 id="bg">Report a problem</h3>
+        <div class="seg" role="group" aria-label="Kind of report" style="margin-bottom:12px"><button aria-pressed="true">Bug</button><button aria-pressed="false">Feature idea</button></div>
+        <div class="stack">
+          <div class="f"><label for="bgt">Title</label><input id="bgt" value="Dead-letter count stays at 4 after a purge"></div>
+          <div class="f"><label for="bgd">What happened, and what you expected</label><textarea id="bgd" rows="3" style="font-family:inherit;font-size:14px">I purged the dead-letter queue of a subscription. The card still showed 4 until I selected another entity and came back.</textarea></div>
+          <label class="check"><input type="checkbox" checked>Attach the details below</label>
+<pre class="code" tabindex="0">Version: 2.4.0 (stable)
+Platform: linux
+Last errors (2):
+  2026-11-12T08:16:03Z HttpErrorResponse 504 /api/topics/[name]/subscriptions/[name]
+  2026-11-12T08:16:09Z TimeoutError</pre>
+          <div class="banner"><svg class="i"><use href="#i-info"/></svg><span>This opens a <b>public</b> issue on GitHub in your browser. Entity names in the errors above were replaced by [name]; read the text once more before you post.</span></div>
+        </div>
+        <div class="foot"><button class="btn text">Cancel</button><button class="btn outlined">Copy the text</button><button class="btn filled">Open the issue on GitHub</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 27. ABOUT -->
+<section class="board" id="about">
+  <p class="why"><b>About is a dialog of the app, with what a bug report needs.</b> Today it is a native message box with a version and a tagline. The target shows the version, the channel, the platform and the runtimes, can copy them, and links to the licence and the source.</p>
+  <div class="frame">
+    <div class="scrim">
+      <div class="dialog" role="dialog" aria-labelledby="ab">
+        <h3 id="ab">Messaging Explorer</h3>
+        <p class="ctx">Explore and manage Azure Service Bus and RabbitMQ.</p>
+        <div class="facts"><div class="prop"><span>Version</span><span>2.4.0, stable channel</span></div><div class="prop"><span>Platform</span><span>linux x64, AppImage</span></div><div class="prop"><span>Electron</span><span>41</span></div><div class="prop"><span>.NET runtime</span><span>10.0</span></div><div class="prop"><span>Licence</span><span>MIT</span></div></div>
+        <div class="row"><button class="btn text sm">Source on GitHub</button><button class="btn text sm">Release notes</button><button class="btn text sm">Licences</button></div>
+        <div class="foot"><button class="btn outlined"><svg class="i"><use href="#i-copy"/></svg>Copy details</button><button class="btn filled">Close</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 28. MACOS TODAY -->
+<section class="board" id="mac-today">
+  <p class="why"><span class="tag today">INFERRED FROM CODE, NOT REPRODUCED</span><b>What a Mac user most likely sees today.</b> The window asks macOS for a hidden title bar and the page does nothing to make room for it. Drawn from the window options and the toolbar template; nobody has run this build on a Mac here.</p>
+  <div class="macbar" aria-label="macOS menu bar"><b>Messaging Explorer</b><span>File</span><span class="miss">Edit</span><span>View</span><span class="miss">Window</span><span>Help</span></div>
+  <div class="frame win-mac" style="border-radius:0 0 10px 10px">
+    <div class="lights" style="left:15px;top:15px"><i></i><i></i><i></i></div>
+    <div class="pin" style="left:6px;top:6px;width:150px;height:32px"><span>1</span></div>
+    <div class="pin" style="left:240px;top:6px;right:160px;height:44px"><span>2</span></div>
+    <div class="toolbar" style="padding-left:16px"><span class="brand" style="font-weight:600">Messaging Explorer</span><span class="small" style="opacity:.6">v2.4.0</span><span class="chip target">contoso-prod</span><span class="grow"></span><button class="icon-btn" aria-label="Notifications"><svg class="i"><use href="#i-bell"/></svg></button><button class="icon-btn" aria-label="Help"><svg class="i"><use href="#i-help"/></svg></button><button class="icon-btn" aria-label="Theme"><svg class="i"><use href="#i-moon"/></svg></button></div>
+    <div class="shell" style="min-height:300px">
+      <nav class="tree" aria-label="Entities" data-sel="orders" data-plain="1"></nav>
+      <main class="panel"><div class="head"><div class="title"><div class="kind">Queue</div><h2>orders</h2></div></div><p class="muted">The rest of the screen is the same on every platform.</p></main>
+    </div>
+  </div>
+  <ol class="legend">
+    <li><b>The close, minimise and zoom buttons sit on the first letters of the title.</b> The window uses a hidden inset title bar with the buttons at 15, 15; the toolbar starts its text at 16 px.</li>
+    <li><b>The window cannot be dragged.</b> With a hidden title bar the page must declare a drag region, and no style in the app does.</li>
+    <li><b>No Edit menu: Cmd+C, Cmd+V, Cmd+X and Cmd+A may do nothing in text fields</b>, so a connection string cannot be pasted. No Window menu either: no Cmd+M, no Cmd+W.</li>
+    <li><b>No way to reach Monitoring.</b> The side navigation is hidden in the desktop app on every platform, and the menu only leads to Connections.</li>
+    <li><b>The vibrancy asked for is never visible</b>: the window and the page both paint an opaque background. A blue window shows for a moment before the page, even in the dark theme.</li>
+    <li><b>Smaller risks:</b> F11 and F12 as shortcuts, a tray icon resized from one bitmap (blurred on Retina, not a template image), Consolas and Courier New named first for code, a custom scrollbar in the tree, and an auto-update that needs a signed app.</li>
+  </ol>
+</section>
+
+<!-- 29. MACOS TARGET -->
+<section class="board" id="mac">
+  <p class="why"><b>The same shell on macOS, with room for the window buttons.</b> The toolbar is the title bar: 84 px reserved on the left, the buttons centred on its height, the toolbar as the drag region with every control excluded from it. The menu bar gains Edit and Window. Nothing else on the screen changes by platform.</p>
+  <div class="macbar" aria-label="macOS menu bar"><b>Messaging Explorer</b><span>File</span><span class="new">Edit</span><span>View</span><span class="new">Window</span><span>Help</span></div>
+  <div class="frame win-mac" style="border-radius:0 0 10px 10px">
+    <div class="lights" style="left:16px;top:22px"><i></i><i></i><i></i></div>
+    <div class="pin ok" style="left:4px;top:4px;width:78px;height:48px"><span>1</span></div>
+    <div class="pin ok" style="left:88px;top:4px;right:4px;height:48px"><span>2</span></div>
+    <div class="toolbar" data-env="prod" data-nav="entities" data-mac="1"></div>
+    <div class="shell" style="min-height:300px">
+      <nav class="tree" aria-label="Entities" data-sel="orders"></nav>
+      <main class="panel"><div class="head"><div class="title"><div class="kind">Queue</div><h2>orders</h2></div><div class="actions"><button class="btn filled"><svg class="i"><use href="#i-eye"/></svg>View messages</button><button class="btn tonal"><svg class="i"><use href="#i-send"/></svg>Send</button><button class="icon-btn" aria-label="More actions" title="More actions"><svg class="i"><use href="#i-more"/></svg></button></div></div>
+      <div class="props"><div class="prop"><span>Select all loaded messages</span><span><span class="kbd">Cmd</span> <span class="kbd">A</span></span></div><div class="prop"><span>New connection</span><span><span class="kbd">Cmd</span> <span class="kbd">N</span></span></div><div class="prop"><span>Full screen</span><span><span class="kbd">Ctrl</span> <span class="kbd">Cmd</span> <span class="kbd">F</span></span></div></div></main>
+    </div>
+  </div>
+  <ol class="legend">
+    <li><b>Inset.</b> On macOS the toolbar gets a left padding of 84 px, from a class the app sets when the shell reports the platform. In full screen the buttons hide and the padding goes back to 16 px.</li>
+    <li><b>Drag region.</b> The toolbar drags the window; buttons, chips with a menu and the navigation are excluded so they stay clickable. A double click on the bar zooms, as on any Mac window.</li>
+    <li><b>Height.</b> The toolbar stays 56 px and the buttons are centred on it (about 22 px from the top) instead of sitting at 15 px for a 28 px bar.</li>
+    <li><b>Menus.</b> Edit (undo, redo, cut, copy, paste, select all) and Window (minimise, zoom, close) come from the standard roles; full screen uses the standard role and shortcut; Quit lives only in the application menu.</li>
+    <li><b>Background.</b> Either drop the vibrancy request or stop painting the window blue: the window background follows the theme surface so there is no flash.</li>
+    <li><b>Details.</b> Shortcut hints say Cmd; code uses one monospace stack that starts with fonts a Mac has; the tree keeps the system overlay scrollbar; the tray icon is a template image with a 2x file.</li>
+  </ol>
+</section>
+
+<!-- 30. WINDOWS AND LINUX -->
+<section class="board" id="win">
+  <p class="why"><b>On Windows and Linux the native frame stays, and the toolbar does not repeat it.</b> The title bar already says Messaging Explorer, so the toolbar starts with the navigation and gives that width to the broker name. The menu gains Edit, loses the testing item, and Help opens the app's own About.</p>
+  <div class="frame" style="border-radius:8px">
+    <div class="win-title"><svg class="i s" style="color:var(--primary)"><use href="#i-topic"/></svg>Messaging Explorer<span class="ctl"><span aria-hidden="true">&#9472;</span><span aria-hidden="true">&#9633;</span><span aria-hidden="true">&#10005;</span></span></div>
+    <div class="win-menu"><span>File</span><span>Edit</span><span>View</span><span>Help</span></div>
+    <div class="toolbar" data-env="dev" data-nav="entities" data-nobrand="1"></div>
+    <div class="shell" style="min-height:300px">
+      <nav class="tree" aria-label="Entities" data-sel="orders"></nav>
+      <main class="panel"><div class="head"><div class="title"><div class="kind">Queue</div><h2>orders</h2></div><div class="actions"><button class="btn filled"><svg class="i"><use href="#i-eye"/></svg>View messages</button><button class="btn tonal"><svg class="i"><use href="#i-send"/></svg>Send</button><button class="icon-btn" aria-label="More actions" title="More actions"><svg class="i"><use href="#i-more"/></svg></button></div></div>
+      <p class="muted">Closing the window keeps the app in the tray on Windows and minimises it on Linux. The first time, a notification says so and says where Quit is.</p></main>
+    </div>
+  </div>
+</section>
+
+<!-- 31. MINIMUM SIZE -->
+<section class="board" id="min">
+  <p class="why"><b>The whole shell at the smallest window the app allows: 1000 by 700.</b> The tree narrows to 240 px, the broker name shortens with an ellipsis and keeps its tooltip, the four cards and the three property columns still fit, the update button keeps its label, and nothing scrolls sideways. The convention asks for 1024; the window allows 1000, so 1000 is what is drawn.</p>
+  <div class="frame fixed-1000">
+    <div class="toolbar" data-env="prod" data-nav="entities" data-target="contoso-prod-westeurope-orders.servicebus.windows.net" data-upd="Update to 2.5.0"></div>
+    <div class="shell">
+      <nav class="tree" aria-label="Entities" data-sel="orders"></nav>
+      <main class="panel">
+        <div class="head">
+          <div class="title"><div class="kind">Queue</div><h2>orders</h2></div>
+          <div class="actions"><button class="btn filled"><svg class="i"><use href="#i-eye"/></svg>View messages</button><button class="btn tonal"><svg class="i"><use href="#i-send"/></svg>Send</button><button class="icon-btn" aria-label="More actions" title="More actions"><svg class="i"><use href="#i-more"/></svg></button></div>
+        </div>
+        <div class="cards">
+          <button class="card"><div class="label"><span class="live">Live</span> Active</div><div class="value">1,204</div><div class="sub">+18 in the last minute</div></button>
+          <button class="card warn"><div class="label"><svg class="i s"><use href="#i-warn"/></svg>Dead-letter</div><div class="value">37</div><div class="sub">Open to resubmit or delete</div></button>
+          <div class="card"><div class="label">Scheduled</div><div class="value">0</div><div class="sub">&nbsp;</div></div>
+          <div class="card"><div class="label">Size</div><div class="value">4.2 MB</div><div class="sub">of 1 GB</div></div>
+        </div>
+        <div class="tabs" role="tablist"><button class="tab on" role="tab" aria-selected="true">Properties</button><button class="tab" role="tab">Sessions</button><button class="tab" role="tab">Metrics</button><button class="tab off" role="tab" aria-disabled="true">Rules</button></div>
+        <div class="props">
+          <div class="prop"><span>Lock duration</span><span>2 minutes</span></div><div class="prop"><span>Max delivery count</span><span>7</span></div><div class="prop"><span>Message time to live</span><span>14 days</span></div><div class="prop"><span>Requires session</span><span>Yes</span></div><div class="prop"><span>Dead-letter on expiry</span><span>Yes</span></div><div class="prop"><span>Partitioning</span><span>No</span></div><div class="prop"><span>Forward to</span><span>none</span></div><div class="prop"><span>Created</span><span>2026-03-14 09:12 UTC</span></div>
+        </div>
+      </main>
+    </div>
+  </div>
+</section>
+
+<!-- 32. PROPOSED: EDIT ENTITY -->
+<section class="board" id="p-edit">
+  <p class="why"><span class="tag">PROPOSED - NOT BUILT</span><b>Edit the properties of an existing queue, topic or subscription.</b> Only what the broker lets change is an input; what is fixed at creation is text with the reason. The dialog lists the changes before saving and the button counts them. On a production connection the save asks once more with the board 3 dialog.</p>
+  <div class="frame proposed">
+    <div class="scrim multi" style="grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)">
+      <div class="dialog wide" role="dialog" aria-labelledby="pe" style="width:100%">
+        <h3 id="pe">Edit queue</h3>
+        <div class="ctx"><span class="chip env-prod">PRODUCTION</span><span><b>orders</b> on contoso-prod.servicebus.windows.net</span></div>
+        <div class="g2">
+          <div class="row" style="flex-wrap:nowrap;align-items:flex-end"><div class="f" style="flex:1"><label for="pel">Lock duration</label><input id="pel" value="5" inputmode="numeric" style="border-color:var(--primary);border-width:2px"></div><div class="f" style="width:110px"><select aria-label="Lock duration unit"><option>minutes</option><option>seconds</option></select></div></div>
+          <div class="f"><label for="pem">Max delivery count</label><input id="pem" value="10" inputmode="numeric" style="border-color:var(--primary);border-width:2px"></div>
+          <div class="row" style="flex-wrap:nowrap;align-items:flex-end"><div class="f" style="flex:1"><label for="pet">Message time to live</label><input id="pet" value="14" inputmode="numeric"></div><div class="f" style="width:110px"><select aria-label="Time to live unit"><option>days</option><option>hours</option></select></div></div>
+          <div class="f"><label for="pef">Forward to</label><select id="pef"><option>none</option><option>orders-retry</option></select></div>
+        </div>
+        <div class="stack" style="margin-top:12px"><label class="check"><input type="checkbox" checked>Dead-letter a message when it expires</label><label class="check"><input type="checkbox" checked>Batched operations</label></div>
+        <h4>Fixed at creation</h4>
+        <div class="props"><div class="prop"><span>Requires session</span><span>Yes</span></div><div class="prop"><span>Partitioning</span><span>No</span></div><div class="prop"><span>Duplicate detection</span><span>No</span></div></div>
+        <div class="banner" style="margin-top:16px"><span class="grow"><b>2 changes</b><br>Lock duration: 2 minutes to 5 minutes<br>Max delivery count: 7 to 10</span><button class="btn text sm">Undo all</button></div>
+        <div class="foot"><button class="btn text">Cancel</button><button class="btn filled">Save 2 changes</button></div>
+      </div>
+      <div class="dialog" role="alertdialog" aria-labelledby="pec" style="width:100%">
+        <h3 id="pec"><svg class="i danger"><use href="#i-warn"/></svg>Change a production queue?</h3>
+        <p>The new values apply at once to every sender and receiver of this queue.</p>
+        <div class="facts"><div class="prop"><span>Queue</span><span>orders</span></div><div class="prop"><span>Connection</span><span>contoso-prod.servicebus.windows.net</span></div><div class="prop"><span>Environment</span><span><span class="chip env-prod">PRODUCTION</span></span></div><div class="prop"><span>Changes</span><span>Lock duration, max delivery count</span></div></div>
+        <div class="field"><label for="peack">Type the queue name to confirm</label><input id="peack" placeholder="orders" autocomplete="off"></div>
+        <div class="foot"><button class="btn text">Back</button><button class="btn danger" disabled>Apply 2 changes</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 33. PROPOSED: RULES -->
+<section class="board" id="p-rules">
+  <p class="why"><span class="tag">PROPOSED - NOT BUILT</span><b>Add, edit and delete the rules of a subscription.</b> Today the Rules tab only reads them. A rule is a SQL filter or a correlation filter, with an optional action. Deleting the last rule is called what it is: the subscription stops receiving.</p>
+  <div class="frame proposed">
+    <main class="panel">
+      <div class="head"><div class="title"><div class="kind">Subscription</div><h2>warehouse</h2><div class="path row"><span class="chip env-prod">PRODUCTION</span>in topic order-events</div></div></div>
+      <div class="tabs" role="tablist"><button class="tab" role="tab">Properties</button><button class="tab" role="tab">Sessions</button><button class="tab on" role="tab" aria-selected="true">Rules (2)</button></div>
+      <div class="row" style="margin-bottom:8px"><span class="muted">A message is delivered when at least one rule matches.</span><span class="grow"></span><button class="btn tonal sm"><svg class="i"><use href="#i-plus"/></svg>Add rule</button></div>
+      <table class="dense">
+        <thead><tr><th>Rule</th><th>Filter</th><th>Expression</th><th>Action</th><th></th></tr></thead>
+        <tbody>
+          <tr><td>physical-goods</td><td><span class="pill neutral">SQL</span></td><td class="mono">category = 'physical' AND total &gt; 0</td><td class="mono">SET priority = 'normal'</td><td class="acts"><button class="icon-btn sm" aria-label="Edit rule physical-goods" title="Edit"><svg class="i"><use href="#i-edit"/></svg></button><button class="icon-btn sm" aria-label="Delete rule physical-goods" title="Delete"><svg class="i"><use href="#i-trash"/></svg></button></td></tr>
+          <tr><td>eu-orders</td><td><span class="pill neutral">Correlation</span></td><td class="mono">Subject = order.created, tenant = contoso-eu</td><td class="muted">none</td><td class="acts"><button class="icon-btn sm" aria-label="Edit rule eu-orders" title="Edit"><svg class="i"><use href="#i-edit"/></svg></button><button class="icon-btn sm" aria-label="Delete rule eu-orders" title="Delete"><svg class="i"><use href="#i-trash"/></svg></button></td></tr>
+        </tbody>
+      </table>
+    </main>
+    <div class="scrim multi" style="min-height:0">
+      <div class="dialog" role="dialog" aria-labelledby="pr1" style="width:100%">
+        <h3 id="pr1">Edit rule</h3>
+        <div class="stack">
+          <div class="f"><label for="prn">Rule name</label><input id="prn" value="physical-goods" disabled style="opacity:.6"><div class="hint">A rule cannot be renamed. Saving replaces it under the same name.</div></div>
+          <div class="seg" role="group" aria-label="Filter type"><button aria-pressed="true">SQL filter</button><button aria-pressed="false">Correlation filter</button></div>
+          <div class="f"><label for="prs">SQL filter</label><textarea id="prs" rows="3">category = 'physical' AND total &gt; 0</textarea><div class="hint">Checked by the broker on save. An invalid expression is refused and nothing changes.</div></div>
+          <div class="f"><label for="pra">Action (optional)</label><textarea id="pra" rows="2">SET priority = 'normal'</textarea></div>
+        </div>
+        <div class="foot"><button class="btn text">Cancel</button><button class="btn filled">Save rule</button></div>
+      </div>
+      <div class="dialog" role="dialog" aria-labelledby="pr2" style="width:100%">
+        <h3 id="pr2">Add rule</h3>
+        <div class="stack">
+          <div class="f"><label for="prn2">Rule name</label><input id="prn2" value="uk-orders"></div>
+          <div class="seg" role="group" aria-label="Filter type"><button aria-pressed="false">SQL filter</button><button aria-pressed="true">Correlation filter</button></div>
+          <div class="g2"><div class="f"><label for="prc1">Subject</label><input id="prc1" value="order.created"></div><div class="f"><label for="prc2">Correlation id</label><input id="prc2"></div><div class="f"><label for="prc3">To</label><input id="prc3"></div><div class="f"><label for="prc4">Session id</label><input id="prc4"></div></div>
+          <div class="row"><div class="f" style="flex:1"><input aria-label="Custom property name" value="tenant" class="mono"></div><div class="f" style="flex:1"><input aria-label="Custom property value" value="contoso-uk" class="mono"></div><button class="icon-btn sm" aria-label="Remove property tenant" title="Remove"><svg class="i"><use href="#i-close"/></svg></button></div>
+          <div class="hint muted small">Every filled field must match. Empty fields are ignored.</div>
+        </div>
+        <div class="foot"><button class="btn text">Cancel</button><button class="btn filled">Add rule</button></div>
+      </div>
+      <div class="dialog" role="alertdialog" aria-labelledby="pr3" style="width:100%">
+        <h3 id="pr3"><svg class="i danger"><use href="#i-warn"/></svg>Delete the last rule?</h3>
+        <p>With no rule, the subscription <b>email</b> receives no message at all until a rule is added. Messages published meanwhile are not kept for it.</p>
+        <div class="facts"><div class="prop"><span>Rule</span><span>$Default</span></div><div class="prop"><span>Subscription</span><span>email in order-events</span></div><div class="prop"><span>Environment</span><span><span class="chip env-prod">PRODUCTION</span></span></div></div>
+        <div class="field"><label for="prack">Type the rule name to confirm</label><input id="prack" placeholder="$Default" autocomplete="off"></div>
+        <div class="foot"><button class="btn text">Cancel</button><button class="btn danger" disabled>Delete rule</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 34. PROPOSED: STATUS -->
+<section class="board" id="p-status">
+  <p class="why"><span class="tag">PROPOSED - NOT BUILT</span><b>Enable or disable an entity, and say what each status stops.</b> The four statuses are four choices with their consequence in words. Anything but Active interrupts someone, so the change goes through the typed confirmation, with the counts at that moment. A disabled entity is marked in the tree and in its panel.</p>
+  <div class="frame proposed">
+    <div class="scrim multi">
+      <div class="dialog" role="dialog" aria-labelledby="ps" style="width:100%">
+        <h3 id="ps">Change status</h3>
+        <div class="ctx"><span class="chip env-prod">PRODUCTION</span><span>Queue <b>orders</b>, now Active</span></div>
+        <div class="stack">
+          <label class="check"><input type="radio" name="st"><span><b>Active</b><br><span class="muted">Senders and receivers work.</span></span></label>
+          <label class="check"><input type="radio" name="st" checked><span><b>Send disabled</b><br><span class="muted">Senders are refused. Receivers keep draining the 1,204 active messages.</span></span></label>
+          <label class="check"><input type="radio" name="st"><span><b>Receive disabled</b><br><span class="muted">Receivers are refused, in this app too. Senders keep adding messages.</span></span></label>
+          <label class="check"><input type="radio" name="st"><span><b>Disabled</b><br><span class="muted">Senders and receivers are both refused. Messages stay where they are.</span></span></label>
+        </div>
+        <div class="foot"><button class="btn text">Cancel</button><button class="btn filled">Continue</button></div>
+      </div>
+      <div class="dialog" role="alertdialog" aria-labelledby="psc" style="width:100%">
+        <h3 id="psc"><svg class="i danger"><use href="#i-warn"/></svg>Disable sending to orders?</h3>
+        <p>Every application that sends to this queue starts failing at once. It lasts until the status is set back to Active.</p>
+        <div class="facts"><div class="prop"><span>Queue</span><span>orders</span></div><div class="prop"><span>Connection</span><span>contoso-prod.servicebus.windows.net</span></div><div class="prop"><span>Environment</span><span><span class="chip env-prod">PRODUCTION</span></span></div><div class="prop"><span>Status</span><span>Active to Send disabled</span></div><div class="prop"><span>Messages now</span><span>1,204 active, 37 dead-letter</span></div></div>
+        <div class="field"><label for="psack">Type the queue name to confirm</label><input id="psack" placeholder="orders" autocomplete="off"></div>
+        <div class="foot"><button class="btn text">Back</button><button class="btn danger" disabled>Disable sending</button></div>
+      </div>
+      <div class="dialog" style="width:100%" aria-label="How a disabled entity is shown">
+        <h3>Afterwards</h3>
+        <p class="muted" style="margin-bottom:8px">In the tree and at the top of the panel.</p>
+        <div class="tree" style="border:1px solid var(--outline-variant);border-radius:12px"><button class="node off"><svg class="i"><use href="#i-queue"/></svg><span class="name">orders</span><span class="pill fail">Send disabled</span><span class="count">1,204</span></button></div>
+        <div class="banner warn" style="margin-top:12px"><svg class="i"><use href="#i-warn"/></svg><span class="grow">Sending to this queue is disabled since 08:20 UTC.</span><button class="btn text sm">Set Active</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 35. PROPOSED: COUNTS -->
+<section class="board" id="p-counts">
+  <p class="why"><span class="tag">PROPOSED - NOT BUILT</span><b>Every queue and subscription with its four counts, in one sortable table.</b> It grows out of the Monitoring table: a filter, a switch for entities with dead-letter only, the transfer dead-letter count, a refresh interval with the time of the last read, and a total row. Dead-letter is the one highlighted column; a row opens the entity.</p>
+  <div class="frame proposed">
+    <div class="toolbar" data-env="prod" data-nav="monitoring"></div>
+    <main class="panel">
+      <div class="head" style="align-items:center">
+        <div class="title"><h2>All entities</h2><div class="path">5 of 5 shown, read 08:18:40 UTC, next in 22 seconds</div></div>
+        <div class="actions"><div class="f" style="width:200px"><input aria-label="Filter by name" placeholder="Filter by name"></div><label class="check" style="align-items:center"><input type="checkbox">Only with dead-letter</label><div class="f" style="width:180px"><select aria-label="Refresh interval"><option>Every 30 seconds</option><option>Every 10 seconds</option><option>Off</option></select></div><button class="icon-btn" aria-label="Refresh now" title="Refresh now"><svg class="i"><use href="#i-refresh"/></svg></button></div>
+      </div>
+      <div class="tscroll"><table class="dense">
+        <thead><tr><th><button class="btn text sm" style="padding:0;height:auto">Entity</button></th><th>Type</th><th>Status</th><th class="num">Active</th><th class="num" aria-sort="descending"><button class="btn text sm" style="padding:0;height:auto">Dead-letter &#9660;</button></th><th class="num">Scheduled</th><th class="num">Transfer</th><th class="num">Transfer dead-letter</th></tr></thead>
+        <tbody>
+          <tr><td><button class="btn text sm" style="padding:0;height:auto">orders</button></td><td class="muted">Queue</td><td>Active</td><td class="num">1,204</td><td class="num dlq"><b>37</b></td><td class="num">0</td><td class="num">0</td><td class="num">0</td></tr>
+          <tr><td><button class="btn text sm" style="padding:0;height:auto">order-events / email</button></td><td class="muted">Subscription</td><td>Active</td><td class="num">0</td><td class="num dlq"><b>4</b></td><td class="num muted">n/a</td><td class="num">0</td><td class="num">0</td></tr>
+          <tr><td><button class="btn text sm" style="padding:0;height:auto">notifications</button></td><td class="muted">Queue</td><td><span class="pill fail">Send disabled</span></td><td class="num">58</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">0</td></tr>
+          <tr><td><button class="btn text sm" style="padding:0;height:auto">order-events / warehouse</button></td><td class="muted">Subscription</td><td>Active</td><td class="num">12</td><td class="num">0</td><td class="num muted">n/a</td><td class="num">0</td><td class="num">0</td></tr>
+          <tr><td><button class="btn text sm" style="padding:0;height:auto">billing/invoices</button></td><td class="muted">Queue</td><td>Active</td><td class="num">0</td><td class="num">0</td><td class="num">3</td><td class="num">0</td><td class="num">0</td></tr>
+          <tr class="grp"><td>Total</td><td></td><td></td><td class="num">1,274</td><td class="num">41</td><td class="num">3</td><td class="num">0</td><td class="num">0</td></tr>
+        </tbody>
+      </table></div>
+      <p class="muted small" style="margin-top:8px">A refresh that fails keeps the last numbers, greys them and says when they were read. It never shows zeros.</p>
+    </main>
+  </div>
+</section>
+
+<!-- 36. PROPOSED: SESSIONS -->
+<section class="board" id="p-sessions">
+  <p class="why"><span class="tag">PROPOSED - NOT BUILT FOR QUEUES</span><b>Browse sessions: the list, the messages of one session, and its state.</b> A subscription has a first version of this tab today; a queue has none. The list is on the left, one session on the right, with its state as text and its messages in the same table as everywhere else. Peeking takes no lock.</p>
+  <div class="frame proposed">
+    <main class="panel">
+      <div class="head"><div class="title"><div class="kind">Queue</div><h2>orders</h2><div class="path row"><span class="chip env-prod">PRODUCTION</span>contoso-prod.servicebus.windows.net</div></div></div>
+      <div class="tabs" role="tablist"><button class="tab" role="tab">Properties</button><button class="tab on" role="tab" aria-selected="true">Sessions (3 with messages)</button><button class="tab" role="tab">Metrics</button></div>
+      <div class="split" style="grid-template-columns:minmax(0,1fr) minmax(0,1.4fr)">
+        <div style="min-width:0">
+          <div class="row" style="margin-bottom:8px"><div class="f" style="flex:1"><input aria-label="Filter sessions" placeholder="Filter by session id"></div><button class="icon-btn" aria-label="Refresh sessions" title="Refresh"><svg class="i"><use href="#i-refresh"/></svg></button></div>
+          <table class="dense">
+            <thead><tr><th>Session id</th><th class="num">Messages</th><th>Locked until (UTC)</th></tr></thead>
+            <tbody>
+              <tr class="sel"><td class="mono">C-1001</td><td class="num">14</td><td>08:19:10</td></tr>
+              <tr><td class="mono">C-0977</td><td class="num">3</td><td class="muted">not locked</td></tr>
+              <tr><td class="mono">C-0412</td><td class="num">1</td><td class="muted">not locked</td></tr>
+            </tbody>
+          </table>
+          <p class="muted small" style="margin-top:8px">Only sessions that hold messages are listed. 100 at most are read; the filter asks the broker again.</p>
+        </div>
+        <aside>
+          <div class="row"><b class="mono">C-1001</b><span class="pill dup">Locked by a receiver until 08:19:10</span><span class="grow"></span><button class="btn tonal sm"><svg class="i"><use href="#i-eye"/></svg>Open all 14</button></div>
+          <h4 class="sec">Session state</h4>
+<pre class="code" tabindex="0">{ "step": "payment-pending", "attempt": 2 }</pre>
+          <p class="muted small" style="margin:4px 0 0">36 bytes, read 08:18:40. Read only here.</p>
+          <h4 class="sec">Messages (first 3 of 14)</h4>
+          <table class="dense"><thead><tr><th class="num">Sequence</th><th>Subject</th><th>Enqueued (UTC)</th></tr></thead><tbody>
+            <tr><td class="mono num">9101</td><td>order.created</td><td>08:15:02</td></tr>
+            <tr><td class="mono num">9104</td><td>order.paid</td><td>08:15:40</td></tr>
+            <tr><td class="mono num">9110</td><td>order.packed</td><td>08:17:12</td></tr>
+          </tbody></table>
+        </aside>
+      </div>
+    </main>
+  </div>
+</section>
+
+<!-- 37. PROPOSED: SCHEDULED -->
+<section class="board" id="p-scheduled">
+  <p class="why"><span class="tag">PROPOSED - NOT BUILT</span><b>See the scheduled messages and cancel one before it is delivered.</b> A third tab beside Active and Dead-letter. The time is shown in UTC with how long is left. Cancelling deletes the message, so it sits apart, in the error colour, and names what it removes.</p>
+  <div class="frame proposed">
+    <div class="panel">
+      <div class="head"><div class="title"><div class="kind">Queue</div><h2>billing/invoices</h2><div class="path row"><span class="chip env-prod">PRODUCTION</span>contoso-prod.servicebus.windows.net</div></div><div class="actions"><button class="btn outlined"><svg class="i"><use href="#i-refresh"/></svg>Refresh</button></div></div>
+      <div class="tabs" role="tablist"><button class="tab" role="tab">Active (0)</button><button class="tab" role="tab">Dead-letter (0)</button><button class="tab on" role="tab" aria-selected="true">Scheduled (3)</button></div>
+      <div class="msgbar"><strong>1 selected</strong><span>of 3 scheduled</span><span class="grow"></span><button class="btn tonal sm">Export 1</button><span style="width:1px;height:24px;background:var(--outline)"></span><button class="btn danger sm">Cancel 1 scheduled message</button></div>
+      <table>
+        <thead><tr><th style="width:32px"></th><th class="num">Sequence</th><th>Message id</th><th>Subject</th><th>Scheduled for (UTC)</th><th>In</th></tr></thead>
+        <tbody>
+          <tr class="sel"><td><input type="checkbox" checked aria-label="Select 12001"></td><td class="mono num">12001</td><td class="mono">e410-22ab</td><td>invoice.reminder</td><td>2026-11-12 09:30:00</td><td>1 hour 12 minutes</td></tr>
+          <tr><td><input type="checkbox" aria-label="Select 12002"></td><td class="mono num">12002</td><td class="mono">e411-90cd</td><td>invoice.reminder</td><td>2026-11-13 09:30:00</td><td>1 day 1 hour</td></tr>
+          <tr><td><input type="checkbox" aria-label="Select 12003"></td><td class="mono num">12003</td><td class="mono">e412-07ef</td><td>invoice.close-month</td><td>2026-11-30 23:00:00</td><td>18 days</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="scrim" style="min-height:0">
+      <div class="dialog" role="alertdialog" aria-labelledby="psd">
+        <h3 id="psd"><svg class="i danger"><use href="#i-warn"/></svg>Cancel 1 scheduled message?</h3>
+        <p>The message is deleted and will not be delivered. It cannot be undone; export it first to keep a copy.</p>
+        <div class="facts"><div class="prop"><span>Queue</span><span>billing/invoices</span></div><div class="prop"><span>Connection</span><span>contoso-prod.servicebus.windows.net</span></div><div class="prop"><span>Environment</span><span><span class="chip env-prod">PRODUCTION</span></span></div><div class="prop"><span>Message</span><span class="mono">12001, due 09:30:00 UTC</span></div></div>
+        <div class="foot"><button class="btn text">Keep it</button><button class="btn danger">Cancel the message</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 38. PROPOSED: DEFINITIONS -->
+<section class="board" id="p-defs">
+  <p class="why"><span class="tag">PROPOSED - NOT BUILT</span><b>Export the definitions of a namespace's entities, and import them into another.</b> Definitions only: queues, topics, subscriptions and rules with their properties, never a message and never a secret. The import shows a plan first, creates what is missing, changes nothing that exists, deletes nothing, and into production it asks for the namespace name.</p>
+  <div class="frame proposed">
+    <div class="scrim multi">
+      <div class="dialog" role="dialog" aria-labelledby="pd1" style="width:100%">
+        <h3 id="pd1">Export entity definitions</h3>
+        <div class="ctx"><span class="chip env-dev">DEVELOPMENT</span>contoso-dev.servicebus.windows.net</div>
+        <div class="stack">
+          <label class="check"><input type="checkbox" checked><span><b>Queues</b> <span class="muted">3 of 3</span></span></label>
+          <label class="check"><input type="checkbox" checked><span><b>Topics</b> <span class="muted">1 of 1</span></span></label>
+          <label class="check" style="margin-left:26px"><input type="checkbox" checked><span>Subscriptions <span class="muted">2</span></span></label>
+          <label class="check" style="margin-left:26px"><input type="checkbox" checked><span>Rules <span class="muted">3</span></span></label>
+          <button class="btn text sm" style="justify-self:start">Choose entities one by one</button>
+        </div>
+        <p class="muted small" style="margin-top:12px">One JSON file with names and properties. No message, no connection string, no key.</p>
+        <div class="foot"><button class="btn text">Cancel</button><button class="btn filled"><svg class="i"><use href="#i-download"/></svg>Export 9 definitions</button></div>
+      </div>
+      <div class="dialog wide" role="dialog" aria-labelledby="pd2" style="width:100%">
+        <h3 id="pd2">Import entity definitions</h3>
+        <div class="ctx"><span class="chip env-prod">PRODUCTION</span><span>into contoso-prod.servicebus.windows.net, from <span class="mono">contoso-dev-entities.json</span></span></div>
+        <table class="dense">
+          <thead><tr><th>Entity</th><th>Type</th><th>Here</th><th>Plan</th></tr></thead>
+          <tbody>
+            <tr><td>orders</td><td class="muted">Queue</td><td>exists, same</td><td><span class="pill neutral">Skip</span></td></tr>
+            <tr><td>orders-retry</td><td class="muted">Queue</td><td class="muted">missing</td><td><span class="pill ok">Create</span></td></tr>
+            <tr><td>notifications</td><td class="muted">Queue</td><td>exists, lock duration differs</td><td><span class="pill dup">Skip, not changed</span></td></tr>
+            <tr><td>order-events / analytics</td><td class="muted">Subscription</td><td class="muted">missing</td><td><span class="pill ok">Create with 1 rule</span></td></tr>
+          </tbody>
+        </table>
+        <p class="muted small" style="margin-top:8px">2 to create, 2 skipped. Nothing that exists is changed or deleted. A difference is edited by hand (board 32).</p>
+        <div class="field"><label for="pdack">Type the namespace name to confirm</label><input id="pdack" placeholder="contoso-prod" autocomplete="off"></div>
+        <div class="foot"><button class="btn text">Cancel</button><button class="btn filled" disabled>Create 2 entities</button></div>
+      </div>
+    </div>
+  </div>
 </section>
 
 <script>
-  document.querySelectorAll('.proto-bar button[data-board]').forEach(function (b) {
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function ic(n) { return '<svg class="i"><use href="#i-' + n + '"/></svg>'; }
+
+  /* the shell toolbar, drawn once for every board that carries data-nav */
+  document.querySelectorAll('.toolbar[data-nav]').forEach(function (t) {
+    var d = t.dataset, env = { prod: 'PRODUCTION', dev: 'DEVELOPMENT' }[d.env];
+    var target = d.target || (d.env === 'dev' ? 'contoso-dev.servicebus.windows.net' : 'contoso-prod.servicebus.windows.net');
+    var nav = [['connections', 'Connections'], ['entities', 'Entities'], ['monitoring', 'Monitoring']].map(function (n) {
+      return '<button' + (n[0] === d.nav ? ' aria-current="page"' : '') + '>' + n[1] + '</button>';
+    }).join('');
+    if (d.mac) { t.style.paddingLeft = '84px'; }
+    t.innerHTML = (d.nobrand ? '' : '<span class="brand">Messaging Explorer</span>') +
+      '<nav class="nav" aria-label="Main">' + nav + '</nav>' +
+      '<span class="chip env-' + d.env + '">' + env + '</span>' +
+      '<span class="chip target" title="' + esc(target) + '">' + esc(target) + '</span><span class="grow"></span>' +
+      (d.upd ? '<button class="upd"><svg class="i s"><use href="#i-download"/></svg>' + esc(d.upd) + '</button>' : '') +
+      '<button class="icon-btn" aria-label="Dead-letter alerts" title="Dead-letter alerts">' + ic('bell') + '</button>' +
+      '<button class="icon-btn" aria-label="Help" title="Help">' + ic('help') + '</button>' +
+      '<button class="icon-btn" aria-label="Settings" title="Settings"' + (d.nav === 'settings' ? ' style="background:rgba(127,127,127,.3)"' : '') + '>' + ic('tune') + '</button>';
+  });
+
+  /* the entity tree, drawn once for every board that carries data-sel */
+  var TREES = {
+    azure: [['Queues', [['queue', 'orders', '1,204', '37'], ['queue', 'billing/invoices', '0'], ['queue', 'notifications', '58']]],
+            ['Topics', [['topic', 'order-events'], ['sub', 'warehouse', '12'], ['sub', 'email', '0', '4']]]],
+    rabbit: [['Exchanges', [['topic', 'orders'], ['topic', 'orders.dlx']]],
+             ['Queues', [['queue', 'orders.created', '58'], ['queue', 'orders.audit', '1,930'], ['queue', 'orders.failed', '4']]]]
+  };
+  document.querySelectorAll('.tree[data-sel]').forEach(function (el) {
+    var d = el.dataset, f = (d.filter || '').toLowerCase(), hidden = 0, html = '';
+    if (!d.plain) {
+      html += '<div class="row" style="flex-wrap:nowrap;gap:4px"><label class="filter" style="flex:1"><svg class="i s"><use href="#i-search"/></svg><input aria-label="Filter entities by name" placeholder="Filter by name" value="' + esc(d.filter || '') + '"></label>' +
+        '<button class="icon-btn sm" aria-label="Create entity" title="Create entity">' + ic('plus') + '</button><button class="icon-btn sm" aria-label="Refresh entities" title="Refresh entities">' + ic('refresh') + '</button></div>';
+    }
+    TREES[d.kind || 'azure'].forEach(function (sec) {
+      var rows = '', shown = 0, total = 0, parentShown = false;
+      sec[1].forEach(function (n) {
+        var isSub = n[0] === 'sub';
+        if (!isSub) { total++; }
+        var match = !f || n[1].toLowerCase().indexOf(f) >= 0 || (isSub && parentShown);
+        if (!isSub) { parentShown = match; }
+        if (!match) { hidden++; return; }
+        if (!isSub) { shown++; }
+        var name = esc(n[1]);
+        if (f && n[1].toLowerCase().indexOf(f) >= 0) { var i = n[1].toLowerCase().indexOf(f); name = esc(n[1].slice(0, i)) + '<mark>' + esc(n[1].slice(i, i + f.length)) + '</mark>' + esc(n[1].slice(i + f.length)); }
+        rows += '<button class="node' + (isSub ? ' sub' : '') + (n[1] === d.sel ? ' sel' : '') + '"' + (n[1] === d.sel ? ' aria-current="true"' : '') + '>' + ic(n[0]) + '<span class="name">' + name + '</span>' +
+          (n[2] !== undefined ? '<span class="count" title="Active">' + n[2] + '</span>' : '') + (n[3] ? '<span class="count dlq" title="Dead-letter">' + n[3] + '</span>' : '') + '</button>';
+      });
+      html += '<h3><span>' + sec[0] + '</span><span>' + (f ? shown + ' of ' + total : total) + '</span></h3>' + rows;
+    });
+    if (f) { html += '<p class="muted small" style="padding:12px 8px 0">' + hidden + ' hidden by the filter. <button class="btn text sm" style="height:auto;padding:0">Clear</button></p>'; }
+    el.innerHTML = html;
+  });
+
+  /* prototype chrome: artboard switch, theme, address */
+  var boards = document.querySelectorAll('.proto-bar button[data-board]');
+  boards.forEach(function (b) {
     b.addEventListener('click', function () {
-      document.querySelectorAll('.proto-bar button[data-board]').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+      boards.forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
       document.querySelectorAll('.board').forEach(function (s) { s.classList.toggle('on', s.id === b.dataset.board); });
     });
   });
@@ -359,14 +1599,28 @@
     var dark = document.documentElement.classList.toggle('dark');
     theme.setAttribute('aria-pressed', String(dark));
   });
-  var wanted = location.hash.slice(1).split(',');
-  wanted.forEach(function (w) {
-    var b = document.querySelector('.proto-bar button[data-board="' + w + '"]');
-    if (b) { b.click(); }
-    if (w === 'dark') { theme.click(); }
-  });
+  function readHash() {
+    location.hash.slice(1).split(',').forEach(function (w) {
+      var b = document.querySelector('.proto-bar button[data-board="' + w + '"]');
+      if (b) { b.click(); }
+      if (w === 'dark' && !document.documentElement.classList.contains('dark')) { theme.click(); }
+      if (w === 'shot') { document.documentElement.classList.add('shot'); }
+    });
+  }
+  readHash();
+  window.addEventListener('hashchange', readHash);
+  document.documentElement.dataset.h = document.documentElement.scrollHeight;
+
+  /* the two controls that work */
   var ack = document.getElementById('ack');
   ack.addEventListener('input', function () { document.getElementById('purgeBtn').disabled = ack.value !== 'orders'; });
+  var seg = document.querySelectorAll('#authSeg button');
+  function showAuth(a) {
+    seg.forEach(function (x) { x.setAttribute('aria-pressed', String(x.dataset.auth === a)); });
+    document.querySelectorAll('#conn-azure [data-for]').forEach(function (e) { e.hidden = e.dataset.for.split(' ').indexOf(a) < 0; });
+  }
+  seg.forEach(function (b) { b.addEventListener('click', function () { showAuth(b.dataset.auth); }); });
+  showAuth('sp');
 </script>
 </body>
 </html>
