@@ -486,4 +486,69 @@ public class AzureServiceBusProviderBatchTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => AzureServiceBusProvider.MoveCoreAsync(receiver.Object, sender.Object, targets, cts.Token));
     }
+
+    [Fact]
+    public async Task ResubmitCore_reports_not_found_for_target_beyond_window_and_terminates()
+    {
+        var receiver = BuildReceiver(new List<IReadOnlyList<ServiceBusReceivedMessage>>
+        {
+            new[] { Msg(1), Msg(2), Msg(3) }
+        });
+
+        var sender = new Mock<ServiceBusSender>();
+        sender
+            .Setup(s => s.CreateMessageBatchAsync(It.IsAny<CancellationToken>()))
+            .Returns(() => new ValueTask<ServiceBusMessageBatch>(NewTestBatch()));
+        sender
+            .Setup(s => s.SendMessagesAsync(It.IsAny<ServiceBusMessageBatch>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var result = await AzureServiceBusProvider.ResubmitCoreAsync(receiver.Object, sender.Object, new long[] { 1, 999 }, CancellationToken.None);
+
+        Assert.Equal(1, result.SuccessCount);
+        var failure = Assert.Single(result.Failures);
+        Assert.Equal((999L, "Not found within scan window"), (failure.SequenceNumber, failure.Error));
+    }
+
+    [Fact]
+    public async Task ResubmitCore_throws_when_caller_token_is_already_cancelled_and_sends_nothing()
+    {
+        var targets = new long[] { 1, 2 };
+        var receiver = BuildReceiver(new List<IReadOnlyList<ServiceBusReceivedMessage>> { targets.Select(Msg).ToList() });
+        var sender = new Mock<ServiceBusSender>();
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => AzureServiceBusProvider.ResubmitCoreAsync(receiver.Object, sender.Object, targets, cts.Token));
+        sender.Verify(s => s.SendMessagesAsync(It.IsAny<ServiceBusMessageBatch>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DrainAll_throws_when_caller_token_is_already_cancelled_and_receives_nothing()
+    {
+        var receiver = BuildReceiver(new List<IReadOnlyList<ServiceBusReceivedMessage>> { new[] { Msg(1) } });
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => AzureServiceBusProvider.DrainAllAsync(receiver.Object, cts.Token));
+        receiver.Verify(r => r.ReceiveMessagesAsync(It.IsAny<int>(), It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DeleteMessagesCore_throws_when_caller_token_is_already_cancelled_and_completes_nothing()
+    {
+        var targets = new long[] { 1, 2 };
+        var receiver = BuildReceiver(new List<IReadOnlyList<ServiceBusReceivedMessage>> { targets.Select(Msg).ToList() });
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => AzureServiceBusProvider.DeleteMessagesCoreAsync(receiver.Object, targets, cts.Token));
+        receiver.Verify(r => r.CompleteMessageAsync(It.IsAny<ServiceBusReceivedMessage>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
 }

@@ -8,6 +8,8 @@ using Microsoft.Extensions.DependencyInjection;
 using ServiceBusExplorer.Core.Abstractions;
 using ServiceBusExplorer.Core.Models;
 using ServiceBusExplorer.Core.Providers;
+using ServiceBusExplorer.Core.Providers.Azure;
+using ServiceBusExplorer.Core.Providers.RabbitMQ;
 using ServiceBusExplorer.Core.Services;
 using static ServiceBusExplorer.Api.Tests.ErrorBodyTests;
 
@@ -36,6 +38,7 @@ public class EntityAdministrationTests
             switch (m.Name)
             {
                 case "get_ProviderType": return Type;
+                case "get_Capabilities": return Type == ProviderType.RabbitMQ ? RabbitMQProviderCapabilities.Instance : AzureProviderCapabilities.Instance;
                 case "get_CurrentTarget": return "fake-target";
                 case "get_IsConnected": return false;
                 case "DisconnectAsync": return Task.CompletedTask;
@@ -51,9 +54,9 @@ public class EntityAdministrationTests
         }
     }
 
-    private sealed record Answered(HttpStatusCode Status, string Body, Uri? Location, List<(string Method, object?[] Args)> Calls);
+    internal sealed record Answered(HttpStatusCode Status, string Body, Uri? Location, List<(string Method, object?[] Args)> Calls);
 
-    private static async Task<Answered> SendAsync(string method, string path, string? json, Func<MethodInfo, object?[], object?>? answer = null, ProviderType providerType = ProviderType.AzureServiceBus)
+    internal static async Task<Answered> SendAsync(string method, string path, string? json, Func<MethodInfo, object?[], object?>? answer = null, ProviderType providerType = ProviderType.AzureServiceBus)
     {
         var provider = DispatchProxy.Create<IMessagingProvider, RecordingProvider>();
         var recorder = (RecordingProvider)(object)provider;
@@ -118,7 +121,7 @@ public class EntityAdministrationTests
         Assert.Equal((nameof(IMessagingProvider.CreateSubscriptionAsync), 2, "events", "audit"), (call.Method, call.Args.Length, call.Args[0], call.Args[1]));
     }
 
-    private static Func<MethodInfo, object?[], object?> Fails(string method, Exception error) =>
+    internal static Func<MethodInfo, object?[], object?> Fails(string method, Exception error) =>
         (m, _) => m.Name != method ? null
             : m.ReturnType == typeof(Task) ? Task.FromException(error)
             : typeof(Task).GetMethods().Single(f => f.Name == nameof(Task.FromException) && f.IsGenericMethod)

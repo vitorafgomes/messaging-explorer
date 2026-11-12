@@ -522,17 +522,16 @@ public class RabbitMQProvider : IMessagingProvider
     #region Message Operations
 
     /// <inheritdoc />
-    public Task<IEnumerable<IMessage>> PeekMessagesAsync(string entityName, int count = 10, bool isDeadLetter = false, string? subscriptionName = null)
+    public Task<IEnumerable<IMessage>> PeekMessagesAsync(string entityName, int count = 10, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null)
     {
+        if (subQueue == MessageSubQueue.TransferDeadLetter)
+            return Task.FromException<IEnumerable<IMessage>>(TransferDeadLetterNotSupported());
+
         EnsureConnected();
 
         // Determine the queue to peek from
-        var queueName = subscriptionName ?? entityName;
-
-        if (isDeadLetter)
-        {
-            queueName = $"{queueName}.dlq";
-        }
+        var queueName = QueueOf(subscriptionName ?? entityName, subQueue);
+        var isDeadLetter = subQueue == MessageSubQueue.DeadLetter;
 
         // Use AMQP BasicGet directly for reliable message reading
         // Peek mode: get message, read body, then nack with requeue=true
@@ -669,15 +668,14 @@ public class RabbitMQProvider : IMessagingProvider
     }
 
     /// <inheritdoc />
-    public async Task<BatchOperationResult> DeleteMessagesAsync(string entityName, long[] sequenceNumbers, bool isDeadLetter = false, string? subscriptionName = null, bool all = false, CancellationToken cancellationToken = default)
+    public async Task<BatchOperationResult> DeleteMessagesAsync(string entityName, long[] sequenceNumbers, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, bool all = false, CancellationToken cancellationToken = default)
     {
+        if (subQueue == MessageSubQueue.TransferDeadLetter)
+            throw TransferDeadLetterNotSupported();
+
         EnsureConnected();
 
-        var queueName = subscriptionName ?? entityName;
-        if (isDeadLetter)
-        {
-            queueName = $"{queueName}.dlq";
-        }
+        var queueName = QueueOf(subscriptionName ?? entityName, subQueue);
 
         var result = new BatchOperationResult();
 
@@ -736,8 +734,13 @@ public class RabbitMQProvider : IMessagingProvider
     }
 
     /// <inheritdoc />
-    public async Task<BatchOperationResult> ResubmitDeadLetterMessagesAsync(string entityName, long[] sequenceNumbers, string? subscriptionName = null, CancellationToken cancellationToken = default)
+    public async Task<BatchOperationResult> ResubmitDeadLetterMessagesAsync(string entityName, long[] sequenceNumbers, MessageSubQueue subQueue = MessageSubQueue.DeadLetter, string? subscriptionName = null, CancellationToken cancellationToken = default)
     {
+        if (subQueue == MessageSubQueue.TransferDeadLetter)
+            throw TransferDeadLetterNotSupported();
+        if (subQueue == MessageSubQueue.Active)
+            throw new ArgumentOutOfRangeException(nameof(subQueue), "A resubmit reads a dead-letter queue.");
+
         EnsureConnected();
 
         var result = new BatchOperationResult();
@@ -802,15 +805,14 @@ public class RabbitMQProvider : IMessagingProvider
     }
 
     /// <inheritdoc />
-    public async Task<BatchOperationResult> MoveMessagesAsync(string sourceEntityName, string targetQueueName, long[] sequenceNumbers, bool isDeadLetter = false, string? subscriptionName = null, CancellationToken cancellationToken = default)
+    public async Task<BatchOperationResult> MoveMessagesAsync(string sourceEntityName, string targetQueueName, long[] sequenceNumbers, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, CancellationToken cancellationToken = default)
     {
+        if (subQueue == MessageSubQueue.TransferDeadLetter)
+            throw TransferDeadLetterNotSupported();
+
         EnsureConnected();
 
-        var sourceQueue = sourceEntityName;
-        if (isDeadLetter)
-        {
-            sourceQueue = $"{sourceEntityName}.dlq";
-        }
+        var sourceQueue = QueueOf(sourceEntityName, subQueue);
 
         var targetIndices = new HashSet<long>(sequenceNumbers);
         var maxIndex = sequenceNumbers.Max();
@@ -856,17 +858,14 @@ public class RabbitMQProvider : IMessagingProvider
     }
 
     /// <inheritdoc />
-    public Task PurgeMessagesAsync(string entityName, bool isDeadLetter = false, string? subscriptionName = null, CancellationToken cancellationToken = default)
+    public Task PurgeMessagesAsync(string entityName, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, CancellationToken cancellationToken = default)
     {
+        if (subQueue == MessageSubQueue.TransferDeadLetter)
+            return Task.FromException(TransferDeadLetterNotSupported());
+
         EnsureConnected();
 
-        var queueName = subscriptionName ?? entityName;
-
-        if (isDeadLetter)
-        {
-            // Convention: DLX queue is named "{queueName}.dlq"
-            queueName = $"{queueName}.dlq";
-        }
+        var queueName = QueueOf(subscriptionName ?? entityName, subQueue);
 
         // Use AMQP channel directly for purge - more reliable than Management API
         _channel!.QueuePurge(queueName);
@@ -1070,9 +1069,24 @@ public class RabbitMQProvider : IMessagingProvider
     public Task<MessageSearchResult> SearchMessagesAsync(
         string entityName,
         MessageSearchRequest request,
-        bool isDeadLetter = false,
+        MessageSubQueue subQueue = MessageSubQueue.Active,
         string? subscriptionName = null)
-        => Task.FromResult(new MessageSearchResult());
+        => subQueue == MessageSubQueue.TransferDeadLetter
+            ? Task.FromException<MessageSearchResult>(TransferDeadLetterNotSupported())
+            : Task.FromResult(new MessageSearchResult());
+
+    /// <inheritdoc />
+    public Task<BatchOperationResult> CancelScheduledMessagesAsync(string queueName, long[] sequenceNumbers, CancellationToken cancellationToken = default) =>
+        Task.FromException<BatchOperationResult>(new NotSupportedException("RabbitMQ does not support scheduled messages."));
+
+    /// <summary>
+    /// The RabbitMQ queue of a sub-queue: the queue itself, or its dead-letter queue, named "{queue}.dlq" by convention.
+    /// </summary>
+    private static string QueueOf(string queueName, MessageSubQueue subQueue) =>
+        subQueue == MessageSubQueue.DeadLetter ? $"{queueName}.dlq" : queueName;
+
+    private static NotSupportedException TransferDeadLetterNotSupported() =>
+        new("RabbitMQ does not support the transfer dead-letter queue.");
 
     #endregion
 

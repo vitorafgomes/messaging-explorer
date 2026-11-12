@@ -117,7 +117,7 @@ public sealed class RabbitMQProviderDefectTests(RabbitMqFixture fixture) : IAsyn
         var queue = await CreateQueueAsync("no-dlq");
         fixture.PublishToQueue(queue, "kept");
 
-        await Assert.ThrowsAsync<OperationInterruptedException>(() => _provider.PeekMessagesAsync(queue, 1, isDeadLetter: true));
+        await Assert.ThrowsAsync<OperationInterruptedException>(() => _provider.PeekMessagesAsync(queue, 1, subQueue: MessageSubQueue.DeadLetter));
 
         Assert.True(_provider.IsConnected);
         await Assert.ThrowsAsync<AlreadyClosedException>(() => _provider.PeekMessagesAsync(queue, 1));

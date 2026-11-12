@@ -10,6 +10,7 @@ using ServiceBusExplorer.Api.Controllers;
 using ServiceBusExplorer.Core.Abstractions;
 using ServiceBusExplorer.Core.Models;
 using ServiceBusExplorer.Core.Providers;
+using ServiceBusExplorer.Core.Providers.Azure;
 using ServiceBusExplorer.Core.Services;
 
 namespace ServiceBusExplorer.Api.Tests;
@@ -22,6 +23,8 @@ public class EntityNameRoutingTests
 {
     /// <summary>
     /// A provider or metrics service that records each entity call as "Method(entity, sub=..., dl=..., session=...)".
+    /// The sub-queue is written dl=False for the queue itself and dl=True for its dead-letter queue, except on the
+    /// dead-letter resubmit, which only reads a dead-letter queue; the transfer dead-letter queue is written transfer.
     /// </summary>
     public class Recorder : DispatchProxy
     {
@@ -33,6 +36,7 @@ public class EntityNameRoutingTests
             switch (m.Name)
             {
                 case "get_ProviderType": return ProviderType.AzureServiceBus;
+                case "get_Capabilities": return AzureProviderCapabilities.Instance;
                 case "get_CurrentTarget": return "fake-target";
                 case "get_IsConnected": return false;
                 case "DisconnectAsync": return Task.CompletedTask;
@@ -42,7 +46,11 @@ public class EntityNameRoutingTests
             var named = m.GetParameters().Zip(args!, (p, a) => (p.Name!, a)).ToDictionary(x => x.Item1, x => x.a);
             var parts = new List<string> { (string)args![0]! };
             if (named.TryGetValue("subscriptionName", out var sub) && sub is not null) parts.Add($"sub={sub}");
-            if (named.TryGetValue("isDeadLetter", out var dl)) parts.Add($"dl={dl}");
+            if (named.TryGetValue("subQueue", out var subQueue))
+            {
+                if (subQueue is MessageSubQueue.TransferDeadLetter) parts.Add("transfer");
+                else if (m.Name != nameof(IMessagingProvider.ResubmitDeadLetterMessagesAsync)) parts.Add($"dl={subQueue is MessageSubQueue.DeadLetter}");
+            }
             if (named.TryGetValue("sessionId", out var session)) parts.Add($"session={session}");
             if (named.TryGetValue("ruleName", out var rule)) parts.Add($"rule={rule}");
             Calls.Add($"{m.Name}({string.Join(", ", parts)})");
@@ -201,6 +209,38 @@ public class EntityNameRoutingTests
             $"CreateRuleAsync({name}, sub={name})",
             $"UpdateRuleAsync({name}, sub={name}, rule={name})",
             $"DeleteRuleAsync({name}, sub={name}, rule={name})",
+        }, calls);
+    }
+
+    [Theory]
+    [InlineData("a/transferdeadletter", "a%2Ftransferdeadletter")]
+    [InlineData("orders#1", "orders%231")]
+    [InlineData("what?now", "what%3Fnow")]
+    [InlineData("a%2Fb", "a%252Fb")]
+    public async Task A_name_with_reserved_characters_reaches_the_provider_unchanged_on_every_transfer_dead_letter_and_cancel_route(string name, string segment)
+    {
+        var calls = await SendAsync(
+            ("GET", $"/api/queues/{segment}/transferdeadletter?count=5"),
+            ("POST", $"/api/queues/{segment}/transferdeadletter/search"),
+            ("POST", $"/api/queues/{segment}/transferdeadletter/delete-batch"),
+            ("POST", $"/api/queues/{segment}/transferdeadletter/resubmit-batch"),
+            ("POST", $"/api/queues/{segment}/messages/cancel-scheduled"),
+            ("GET", $"/api/topics/{segment}/subscriptions/{segment}/transferdeadletter"),
+            ("POST", $"/api/topics/{segment}/subscriptions/{segment}/transferdeadletter/search"),
+            ("POST", $"/api/topics/{segment}/subscriptions/{segment}/transferdeadletter/delete-batch"),
+            ("POST", $"/api/topics/{segment}/subscriptions/{segment}/transferdeadletter/resubmit-batch"));
+
+        Assert.Equal(new[]
+        {
+            $"PeekMessagesAsync({name}, transfer)",
+            $"SearchMessagesAsync({name}, transfer)",
+            $"DeleteMessagesAsync({name}, transfer)",
+            $"ResubmitDeadLetterMessagesAsync({name}, transfer)",
+            $"CancelScheduledMessagesAsync({name})",
+            $"PeekMessagesAsync({name}, sub={name}, transfer)",
+            $"SearchMessagesAsync({name}, sub={name}, transfer)",
+            $"DeleteMessagesAsync({name}, sub={name}, transfer)",
+            $"ResubmitDeadLetterMessagesAsync({name}, sub={name}, transfer)",
         }, calls);
     }
 

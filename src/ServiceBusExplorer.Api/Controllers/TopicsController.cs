@@ -122,8 +122,15 @@ public class TopicsController : ControllerBase
         if (provider == null)
             return NoProviderConnected();
 
-        await provider.SendMessageAsync(name, message);
-        return Ok(new { success = true });
+        try
+        {
+            await provider.SendMessageAsync(name, message);
+            return Ok(new { success = true });
+        }
+        catch (EntityDisabledException)
+        {
+            return EntityAdministrationResults.EntityDisabled();
+        }
     }
 
     // Subscriptions
@@ -303,57 +310,54 @@ public class TopicsController : ControllerBase
     }
 
     [HttpPost("{topicName}/subscriptions/{subscriptionName}/messages/search")]
-    public async Task<ActionResult<MessageSearchResult>> SearchSubscriptionMessages(
-        string topicName, string subscriptionName, [FromBody] MessageSearchRequest request)
-    {
-        var provider = GetProvider();
-        if (provider == null) return NoProviderConnected();
-        try
-        {
-            var result = await provider.SearchMessagesAsync(topicName, request, subscriptionName: subscriptionName);
-            return Ok(result);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Search subscription messages failed for {TopicName}/{SubscriptionName}", topicName, subscriptionName);
-            return StatusCode(500, new { message = "An internal error occurred." });
-        }
-    }
+    public Task<ActionResult<MessageSearchResult>> SearchSubscriptionMessages(
+        string topicName, string subscriptionName, [FromBody] MessageSearchRequest request) =>
+        Search(topicName, subscriptionName, request, MessageSubQueue.Active);
 
     [HttpPost("{topicName}/subscriptions/{subscriptionName}/deadletter/search")]
-    public async Task<ActionResult<MessageSearchResult>> SearchSubscriptionDeadLetterMessages(
-        string topicName, string subscriptionName, [FromBody] MessageSearchRequest request)
+    public Task<ActionResult<MessageSearchResult>> SearchSubscriptionDeadLetterMessages(
+        string topicName, string subscriptionName, [FromBody] MessageSearchRequest request) =>
+        Search(topicName, subscriptionName, request, MessageSubQueue.DeadLetter);
+
+    [HttpPost("{topicName}/subscriptions/{subscriptionName}/transferdeadletter/search")]
+    public Task<ActionResult<MessageSearchResult>> SearchSubscriptionTransferDeadLetterMessages(
+        string topicName, string subscriptionName, [FromBody] MessageSearchRequest request) =>
+        Search(topicName, subscriptionName, request, MessageSubQueue.TransferDeadLetter);
+
+    private async Task<ActionResult<MessageSearchResult>> Search(string topicName, string subscriptionName, MessageSearchRequest request, MessageSubQueue subQueue)
     {
         var provider = GetProvider();
         if (provider == null) return NoProviderConnected();
+        if (EntityAdministrationResults.SubQueueNotSupported(provider, subQueue) is { } notSupported) return notSupported;
         try
         {
-            var result = await provider.SearchMessagesAsync(topicName, request, isDeadLetter: true, subscriptionName: subscriptionName);
+            var result = await provider.SearchMessagesAsync(topicName, request, subQueue, subscriptionName);
             return Ok(result);
+        }
+        catch (EntityDisabledException)
+        {
+            return EntityAdministrationResults.EntityDisabled();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Search subscription dead-letter messages failed for {TopicName}/{SubscriptionName}", topicName, subscriptionName);
+            _logger.LogError(ex, "Search {SubQueue} subscription messages failed for {TopicName}/{SubscriptionName}", subQueue, topicName, subscriptionName);
             return StatusCode(500, new { message = "An internal error occurred." });
         }
     }
 
     [HttpGet("{topicName}/subscriptions/{subscriptionName}/messages")]
-    public async Task<ActionResult<IEnumerable<IMessage>>> PeekMessages(string topicName, string subscriptionName, [FromQuery] int count = 10)
-    {
-        if (count < 1) count = 1;
-        if (count > 1000) count = 1000;
-
-        var provider = GetProvider();
-        if (provider == null)
-            return NoProviderConnected();
-
-        var messages = await provider.PeekMessagesAsync(topicName, count, subscriptionName: subscriptionName);
-        return Ok(messages);
-    }
+    public Task<ActionResult<IEnumerable<IMessage>>> PeekMessages(string topicName, string subscriptionName, [FromQuery] int count = 10) =>
+        Peek(topicName, subscriptionName, count, MessageSubQueue.Active);
 
     [HttpGet("{topicName}/subscriptions/{subscriptionName}/deadletter")]
-    public async Task<ActionResult<IEnumerable<IMessage>>> PeekDeadLetterMessages(string topicName, string subscriptionName, [FromQuery] int count = 10)
+    public Task<ActionResult<IEnumerable<IMessage>>> PeekDeadLetterMessages(string topicName, string subscriptionName, [FromQuery] int count = 10) =>
+        Peek(topicName, subscriptionName, count, MessageSubQueue.DeadLetter);
+
+    [HttpGet("{topicName}/subscriptions/{subscriptionName}/transferdeadletter")]
+    public Task<ActionResult<IEnumerable<IMessage>>> PeekTransferDeadLetterMessages(string topicName, string subscriptionName, [FromQuery] int count = 10) =>
+        Peek(topicName, subscriptionName, count, MessageSubQueue.TransferDeadLetter);
+
+    private async Task<ActionResult<IEnumerable<IMessage>>> Peek(string topicName, string subscriptionName, int count, MessageSubQueue subQueue)
     {
         if (count < 1) count = 1;
         if (count > 1000) count = 1000;
@@ -361,9 +365,17 @@ public class TopicsController : ControllerBase
         var provider = GetProvider();
         if (provider == null)
             return NoProviderConnected();
+        if (EntityAdministrationResults.SubQueueNotSupported(provider, subQueue) is { } notSupported) return notSupported;
 
-        var messages = await provider.PeekMessagesAsync(topicName, count, isDeadLetter: true, subscriptionName: subscriptionName);
-        return Ok(messages);
+        try
+        {
+            var messages = await provider.PeekMessagesAsync(topicName, count, subQueue, subscriptionName);
+            return Ok(messages);
+        }
+        catch (EntityDisabledException)
+        {
+            return EntityAdministrationResults.EntityDisabled();
+        }
     }
 
     [HttpPost("{topicName}/subscriptions/{subscriptionName}/messages/receive")]
@@ -376,8 +388,15 @@ public class TopicsController : ControllerBase
         if (provider == null)
             return NoProviderConnected();
 
-        var messages = await provider.ReceiveMessagesAsync(topicName, count, subscriptionName);
-        return Ok(messages);
+        try
+        {
+            var messages = await provider.ReceiveMessagesAsync(topicName, count, subscriptionName);
+            return Ok(messages);
+        }
+        catch (EntityDisabledException)
+        {
+            return EntityAdministrationResults.EntityDisabled();
+        }
     }
 
     [HttpPost("{topicName}/subscriptions/{subscriptionName}/deadletter/{sequenceNumber}/resubmit")]
@@ -392,6 +411,10 @@ public class TopicsController : ControllerBase
             await provider.ResubmitDeadLetterMessageAsync(topicName, sequenceNumber, subscriptionName);
             return Ok(new { success = true });
         }
+        catch (EntityDisabledException)
+        {
+            return EntityAdministrationResults.EntityDisabled();
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Resubmit dead-letter failed for {TopicName}/{SubscriptionName} seq {SequenceNumber}", topicName, subscriptionName, sequenceNumber);
@@ -400,45 +423,45 @@ public class TopicsController : ControllerBase
     }
 
     [HttpPost("{topicName}/subscriptions/{subscriptionName}/deadletter/resubmit-batch")]
-    public async Task<ActionResult> ResubmitDeadLetterMessages(string topicName, string subscriptionName, [FromBody] ResubmitBatchRequest request)
+    public Task<ActionResult> ResubmitDeadLetterMessages(string topicName, string subscriptionName, [FromBody] ResubmitBatchRequest request) =>
+        ResubmitBatch(topicName, subscriptionName, request, MessageSubQueue.DeadLetter);
+
+    [HttpPost("{topicName}/subscriptions/{subscriptionName}/transferdeadletter/resubmit-batch")]
+    public Task<ActionResult> ResubmitTransferDeadLetterMessages(string topicName, string subscriptionName, [FromBody] ResubmitBatchRequest request) =>
+        ResubmitBatch(topicName, subscriptionName, request, MessageSubQueue.TransferDeadLetter);
+
+    private async Task<ActionResult> ResubmitBatch(string topicName, string subscriptionName, ResubmitBatchRequest request, MessageSubQueue subQueue)
     {
         var provider = GetProvider();
         if (provider == null)
             return NoProviderConnected();
+        if (EntityAdministrationResults.SubQueueNotSupported(provider, subQueue) is { } notSupported) return notSupported;
 
         try
         {
-            var result = await provider.ResubmitDeadLetterMessagesAsync(topicName, request.SequenceNumbers, subscriptionName, cancellationToken: HttpContext.RequestAborted);
+            var result = await provider.ResubmitDeadLetterMessagesAsync(topicName, request.SequenceNumbers, subQueue, subscriptionName, cancellationToken: HttpContext.RequestAborted);
             return Ok(result);
+        }
+        catch (EntityDisabledException)
+        {
+            return EntityAdministrationResults.EntityDisabled();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Resubmit dead-letter batch failed for {TopicName}/{SubscriptionName}", topicName, subscriptionName);
+            _logger.LogError(ex, "Resubmit {SubQueue} batch failed for {TopicName}/{SubscriptionName}", subQueue, topicName, subscriptionName);
             return StatusCode(500, new { message = "An internal error occurred." });
         }
     }
 
     [HttpDelete("{topicName}/subscriptions/{subscriptionName}/messages")]
-    public async Task<ActionResult> PurgeMessages(string topicName, string subscriptionName)
-    {
-        var provider = GetProvider();
-        if (provider == null)
-            return NoProviderConnected();
-
-        try
-        {
-            await provider.PurgeMessagesAsync(topicName, subscriptionName: subscriptionName, cancellationToken: HttpContext.RequestAborted);
-            return Ok(new { success = true });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Purge messages failed for {TopicName}/{SubscriptionName}", topicName, subscriptionName);
-            return StatusCode(500, new { message = "An internal error occurred." });
-        }
-    }
+    public Task<ActionResult> PurgeMessages(string topicName, string subscriptionName) =>
+        Purge(topicName, subscriptionName, MessageSubQueue.Active);
 
     [HttpDelete("{topicName}/subscriptions/{subscriptionName}/deadletter")]
-    public async Task<ActionResult> PurgeDeadLetterMessages(string topicName, string subscriptionName)
+    public Task<ActionResult> PurgeDeadLetterMessages(string topicName, string subscriptionName) =>
+        Purge(topicName, subscriptionName, MessageSubQueue.DeadLetter);
+
+    private async Task<ActionResult> Purge(string topicName, string subscriptionName, MessageSubQueue subQueue)
     {
         var provider = GetProvider();
         if (provider == null)
@@ -446,75 +469,66 @@ public class TopicsController : ControllerBase
 
         try
         {
-            await provider.PurgeMessagesAsync(topicName, isDeadLetter: true, subscriptionName: subscriptionName, cancellationToken: HttpContext.RequestAborted);
+            await provider.PurgeMessagesAsync(topicName, subQueue, subscriptionName, cancellationToken: HttpContext.RequestAborted);
             return Ok(new { success = true });
+        }
+        catch (EntityDisabledException)
+        {
+            return EntityAdministrationResults.EntityDisabled();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Purge dead-letter messages failed for {TopicName}/{SubscriptionName}", topicName, subscriptionName);
+            _logger.LogError(ex, "Purge {SubQueue} messages failed for {TopicName}/{SubscriptionName}", subQueue, topicName, subscriptionName);
             return StatusCode(500, new { message = "An internal error occurred." });
         }
     }
 
     [HttpPost("{topicName}/subscriptions/{subscriptionName}/messages/delete-batch")]
-    public async Task<ActionResult> DeleteMessages(string topicName, string subscriptionName, [FromBody] DeleteBatchRequest request)
-    {
-        var provider = GetProvider();
-        if (provider == null)
-            return NoProviderConnected();
-
-        try
-        {
-            var result = await provider.DeleteMessagesAsync(topicName, request.SequenceNumbers, subscriptionName: subscriptionName, all: request.All, cancellationToken: HttpContext.RequestAborted);
-            return Ok(result);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Delete messages batch failed for {TopicName}/{SubscriptionName}", topicName, subscriptionName);
-            return StatusCode(500, new { message = "An internal error occurred." });
-        }
-    }
+    public Task<ActionResult> DeleteMessages(string topicName, string subscriptionName, [FromBody] DeleteBatchRequest request) =>
+        DeleteBatch(topicName, subscriptionName, request, MessageSubQueue.Active);
 
     [HttpPost("{topicName}/subscriptions/{subscriptionName}/deadletter/delete-batch")]
-    public async Task<ActionResult> DeleteDeadLetterMessages(string topicName, string subscriptionName, [FromBody] DeleteBatchRequest request)
+    public Task<ActionResult> DeleteDeadLetterMessages(string topicName, string subscriptionName, [FromBody] DeleteBatchRequest request) =>
+        DeleteBatch(topicName, subscriptionName, request, MessageSubQueue.DeadLetter);
+
+    [HttpPost("{topicName}/subscriptions/{subscriptionName}/transferdeadletter/delete-batch")]
+    public Task<ActionResult> DeleteTransferDeadLetterMessages(string topicName, string subscriptionName, [FromBody] DeleteBatchRequest request) =>
+        DeleteBatch(topicName, subscriptionName, request, MessageSubQueue.TransferDeadLetter);
+
+    private async Task<ActionResult> DeleteBatch(string topicName, string subscriptionName, DeleteBatchRequest request, MessageSubQueue subQueue)
     {
         var provider = GetProvider();
         if (provider == null)
             return NoProviderConnected();
+        if (EntityAdministrationResults.SubQueueNotSupported(provider, subQueue) is { } notSupported) return notSupported;
+        if (request.All && subQueue == MessageSubQueue.TransferDeadLetter)
+            return EntityAdministrationResults.DeleteAllOfTransferDeadLetter();
 
         try
         {
-            var result = await provider.DeleteMessagesAsync(topicName, request.SequenceNumbers, isDeadLetter: true, subscriptionName: subscriptionName, all: request.All, cancellationToken: HttpContext.RequestAborted);
+            var result = await provider.DeleteMessagesAsync(topicName, request.SequenceNumbers, subQueue, subscriptionName, all: request.All, cancellationToken: HttpContext.RequestAborted);
             return Ok(result);
+        }
+        catch (EntityDisabledException)
+        {
+            return EntityAdministrationResults.EntityDisabled();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Delete dead-letter messages batch failed for {TopicName}/{SubscriptionName}", topicName, subscriptionName);
+            _logger.LogError(ex, "Delete {SubQueue} messages batch failed for {TopicName}/{SubscriptionName}", subQueue, topicName, subscriptionName);
             return StatusCode(500, new { message = "An internal error occurred." });
         }
     }
 
     [HttpPost("{topicName}/subscriptions/{subscriptionName}/messages/move-batch")]
-    public async Task<ActionResult> MoveMessages(string topicName, string subscriptionName, [FromBody] MoveBatchRequest request)
-    {
-        var provider = GetProvider();
-        if (provider == null)
-            return NoProviderConnected();
-
-        try
-        {
-            var result = await provider.MoveMessagesAsync(topicName, request.TargetQueueName, request.SequenceNumbers, subscriptionName: subscriptionName, cancellationToken: HttpContext.RequestAborted);
-            return Ok(result);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Move messages failed from {TopicName}/{SubscriptionName} to {TargetQueueName}", topicName, subscriptionName, request.TargetQueueName);
-            return StatusCode(500, new { message = "An internal error occurred." });
-        }
-    }
+    public Task<ActionResult> MoveMessages(string topicName, string subscriptionName, [FromBody] MoveBatchRequest request) =>
+        MoveBatch(topicName, subscriptionName, request, MessageSubQueue.Active);
 
     [HttpPost("{topicName}/subscriptions/{subscriptionName}/deadletter/move-batch")]
-    public async Task<ActionResult> MoveDeadLetterMessages(string topicName, string subscriptionName, [FromBody] MoveBatchRequest request)
+    public Task<ActionResult> MoveDeadLetterMessages(string topicName, string subscriptionName, [FromBody] MoveBatchRequest request) =>
+        MoveBatch(topicName, subscriptionName, request, MessageSubQueue.DeadLetter);
+
+    private async Task<ActionResult> MoveBatch(string topicName, string subscriptionName, MoveBatchRequest request, MessageSubQueue subQueue)
     {
         var provider = GetProvider();
         if (provider == null)
@@ -522,12 +536,16 @@ public class TopicsController : ControllerBase
 
         try
         {
-            var result = await provider.MoveMessagesAsync(topicName, request.TargetQueueName, request.SequenceNumbers, isDeadLetter: true, subscriptionName: subscriptionName, cancellationToken: HttpContext.RequestAborted);
+            var result = await provider.MoveMessagesAsync(topicName, request.TargetQueueName, request.SequenceNumbers, subQueue, subscriptionName, cancellationToken: HttpContext.RequestAborted);
             return Ok(result);
+        }
+        catch (EntityDisabledException)
+        {
+            return EntityAdministrationResults.EntityDisabled();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Move dead-letter messages failed from {TopicName}/{SubscriptionName} to {TargetQueueName}", topicName, subscriptionName, request.TargetQueueName);
+            _logger.LogError(ex, "Move {SubQueue} messages failed from {TopicName}/{SubscriptionName} to {TargetQueueName}", subQueue, topicName, subscriptionName, request.TargetQueueName);
             return StatusCode(500, new { message = "An internal error occurred." });
         }
     }
