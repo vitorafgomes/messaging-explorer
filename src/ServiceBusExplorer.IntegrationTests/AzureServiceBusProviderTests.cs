@@ -336,4 +336,151 @@ public sealed class AzureServiceBusProviderTests(AzureServiceBusFixture fixture)
         Assert.Empty(await fixture.DrainAsync(source));
         Assert.Empty(await fixture.DrainAsync(target));
     }
+
+    [Fact]
+    public async Task A_queue_created_with_options_has_those_options()
+    {
+        var target = await CreateQueueAsync("fwd-target");
+        var queue = Name(_queues, "create-options");
+
+        await _management.CreateQueueAsync(queue, new QueueCreateOptions
+        {
+            LockDuration = TimeSpan.FromSeconds(45),
+            MaxDeliveryCount = 7,
+            DefaultMessageTimeToLive = TimeSpan.FromMinutes(30),
+            DeadLetteringOnMessageExpiration = true,
+            RequiresDuplicateDetection = true,
+            DuplicateDetectionHistoryTimeWindow = TimeSpan.FromMinutes(5),
+            ForwardTo = target,
+            ForwardDeadLetteredMessagesTo = target
+        });
+        var read = Assert.IsType<QueueInfo>(await _management.GetQueueAsync(queue));
+
+        Assert.Equal(
+            (TimeSpan.FromSeconds(45), 7, TimeSpan.FromMinutes(30), true, true, TimeSpan.FromMinutes(5)),
+            (read.LockDuration, read.MaxDeliveryCount, read.DefaultMessageTimeToLive, read.DeadLetteringOnMessageExpiration, read.RequiresDuplicateDetection, read.DuplicateDetectionHistoryTimeWindow));
+        Assert.Equal((target, target), (read.ForwardTo, read.ForwardDeadLetteredMessagesTo));
+    }
+
+    [Fact]
+    public async Task Creating_a_queue_that_exists_reports_that_it_already_exists()
+    {
+        var queue = await CreateQueueAsync("exists");
+
+        await Assert.ThrowsAsync<EntityAlreadyExistsException>(() => _management.CreateQueueAsync(queue, new QueueCreateOptions { MaxDeliveryCount = 3 }));
+    }
+
+    [Fact]
+    public async Task Editing_a_queue_changes_lock_duration_max_delivery_count_and_time_to_live_and_keeps_the_rest()
+    {
+        var queue = Name(_queues, "edit");
+        await _management.CreateQueueAsync(queue, new QueueCreateOptions
+        {
+            LockDuration = TimeSpan.FromSeconds(45),
+            MaxDeliveryCount = 3,
+            DefaultMessageTimeToLive = TimeSpan.FromMinutes(30),
+            DeadLetteringOnMessageExpiration = true,
+            RequiresDuplicateDetection = true,
+            DuplicateDetectionHistoryTimeWindow = TimeSpan.FromMinutes(5)
+        });
+
+        await _management.UpdateQueueAsync(queue, new QueueUpdateOptions
+        {
+            LockDuration = TimeSpan.FromMinutes(2),
+            MaxDeliveryCount = 10,
+            DefaultMessageTimeToLive = TimeSpan.FromMinutes(45)
+        });
+        var read = Assert.IsType<QueueInfo>(await _management.GetQueueAsync(queue));
+
+        Assert.Equal((TimeSpan.FromMinutes(2), 10, TimeSpan.FromMinutes(45)), (read.LockDuration, read.MaxDeliveryCount, read.DefaultMessageTimeToLive));
+        Assert.Equal((true, true, TimeSpan.FromMinutes(5), "Active"), (read.DeadLetteringOnMessageExpiration, read.RequiresDuplicateDetection, read.DuplicateDetectionHistoryTimeWindow, read.Status));
+    }
+
+    [Fact]
+    public async Task An_empty_forward_target_clears_the_forwarding_of_a_queue()
+    {
+        var target = await CreateQueueAsync("fwd-target");
+        var queue = Name(_queues, "fwd-clear");
+        await _management.CreateQueueAsync(queue, new QueueCreateOptions { ForwardTo = target });
+        var forwarding = Assert.IsType<QueueInfo>(await _management.GetQueueAsync(queue)).ForwardTo;
+
+        await _management.UpdateQueueAsync(queue, new QueueUpdateOptions { ForwardTo = "" });
+        var read = Assert.IsType<QueueInfo>(await _management.GetQueueAsync(queue));
+
+        Assert.Equal(target, forwarding);
+        Assert.True(string.IsNullOrEmpty(read.ForwardTo), $"ForwardTo is still '{read.ForwardTo}'");
+    }
+
+    [Fact]
+    public async Task A_queue_disabled_for_sending_reads_send_disabled_and_reads_active_once_enabled_again()
+    {
+        var queue = await CreateQueueAsync("status");
+
+        await _management.UpdateQueueAsync(queue, new QueueUpdateOptions { Status = "SendDisabled" });
+        var disabled = (await _management.GetQueueAsync(queue))?.Status;
+        await _management.UpdateQueueAsync(queue, new QueueUpdateOptions { Status = "Active" });
+        var enabled = (await _management.GetQueueAsync(queue))?.Status;
+
+        Assert.Equal(("SendDisabled", "Active"), (disabled, enabled));
+    }
+
+    [Fact]
+    public async Task A_topic_created_with_options_has_those_options_and_an_edit_changes_only_what_it_sends()
+    {
+        var topic = Name(_topics, "topic-options");
+
+        await _management.CreateTopicAsync(topic, new TopicCreateOptions
+        {
+            DefaultMessageTimeToLive = TimeSpan.FromMinutes(30),
+            RequiresDuplicateDetection = true,
+            DuplicateDetectionHistoryTimeWindow = TimeSpan.FromMinutes(5)
+        });
+        var created = Assert.IsType<TopicInfo>(await _management.GetTopicAsync(topic));
+        await _management.UpdateTopicAsync(topic, new TopicUpdateOptions { DefaultMessageTimeToLive = TimeSpan.FromMinutes(45), Status = "SendDisabled" });
+        var edited = Assert.IsType<TopicInfo>(await _management.GetTopicAsync(topic));
+
+        Assert.Equal(
+            (TimeSpan.FromMinutes(30), true, TimeSpan.FromMinutes(5), "Active"),
+            (created.DefaultMessageTimeToLive, created.RequiresDuplicateDetection, created.DuplicateDetectionHistoryTimeWindow, created.Status));
+        Assert.Equal(
+            (TimeSpan.FromMinutes(45), "SendDisabled", true, TimeSpan.FromMinutes(5)),
+            (edited.DefaultMessageTimeToLive, edited.Status, edited.RequiresDuplicateDetection, edited.DuplicateDetectionHistoryTimeWindow));
+    }
+
+    [Fact]
+    public async Task A_subscription_created_with_options_has_those_options_and_an_edit_changes_only_what_it_sends()
+    {
+        var target = await CreateQueueAsync("fwd-target");
+        var topic = Name(_topics, "sub-options");
+        await _management.CreateTopicAsync(topic);
+
+        await _management.CreateSubscriptionAsync(topic, "audit", new SubscriptionCreateOptions
+        {
+            LockDuration = TimeSpan.FromSeconds(45),
+            MaxDeliveryCount = 7,
+            DefaultMessageTimeToLive = TimeSpan.FromMinutes(30),
+            DeadLetteringOnMessageExpiration = true,
+            ForwardTo = target
+        });
+        var created = await _management.GetSubscriptionAsync(topic, "audit");
+        await _management.UpdateSubscriptionAsync(topic, "audit", new SubscriptionUpdateOptions
+        {
+            LockDuration = TimeSpan.FromMinutes(2),
+            MaxDeliveryCount = 10,
+            ForwardTo = "",
+            Status = "ReceiveDisabled"
+        });
+        var edited = await _management.GetSubscriptionAsync(topic, "audit");
+
+        Assert.NotNull(created);
+        Assert.NotNull(edited);
+        Assert.Equal(
+            (TimeSpan.FromSeconds(45), 7, TimeSpan.FromMinutes(30), true, "Active"),
+            (created.LockDuration, created.MaxDeliveryCount, created.DefaultMessageTimeToLive, created.DeadLetteringOnMessageExpiration, created.Status));
+        Assert.Equal(target, created.ForwardTo);
+        Assert.Equal(
+            (TimeSpan.FromMinutes(2), 10, "ReceiveDisabled", TimeSpan.FromMinutes(30), true),
+            (edited.LockDuration, edited.MaxDeliveryCount, edited.Status, edited.DefaultMessageTimeToLive, edited.DeadLetteringOnMessageExpiration));
+        Assert.True(string.IsNullOrEmpty(edited.ForwardTo), $"ForwardTo is still '{edited.ForwardTo}'");
+    }
 }

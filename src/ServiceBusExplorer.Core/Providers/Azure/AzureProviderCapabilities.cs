@@ -88,6 +88,12 @@ public class AzureProviderCapabilities : IProviderCapabilities
 
     /// <inheritdoc />
     /// <remarks>
+    /// Azure Service Bus updates queues, topics and subscriptions through the administration client.
+    /// </remarks>
+    public bool SupportsEntityUpdate => true;
+
+    /// <inheritdoc />
+    /// <remarks>
     /// Azure Service Bus does not use exchange types - this is a RabbitMQ concept.
     /// </remarks>
     public IReadOnlyCollection<string> SupportedExchangeTypes => Array.Empty<string>();

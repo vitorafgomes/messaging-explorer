@@ -17,6 +17,13 @@ export class TreeDataBuilderService {
   private readonly topicService = inject(TopicService);
   private readonly logger = inject(LoggerService);
   private readonly notificationService = inject(DeadLetterNotificationService);
+  private lastTree: TreeNode[] = [];
+
+  /** Queue and topic names of the tree built last. */
+  loadedNames(): { queues: string[]; topics: string[] } {
+    const names = (id: string) => this.lastTree.find(c => c.id === id)?.children?.map(n => n.name) ?? [];
+    return { queues: names('category-queues'), topics: names('category-topics') };
+  }
 
   buildTree(): Observable<TreeNode[]> {
     this.logger.log('[TreeDataBuilder] Building tree...');
@@ -31,7 +38,8 @@ export class TreeDataBuilderService {
             this.logger.log('[TreeDataBuilder] Topics with subs loaded:', topicsWithSubs.map(t => ({ name: t.name, subs: t.subscriptions?.length || 0 })));
             const allSubscriptions = topicsWithSubs.flatMap(t => t.subscriptions || []);
             this.notificationService.updateFromSubscriptions(allSubscriptions);
-            return this.createTreeStructure(queues, topicsWithSubs);
+            this.lastTree = this.createTreeStructure(queues, topicsWithSubs);
+            return this.lastTree;
           })
         );
       })
