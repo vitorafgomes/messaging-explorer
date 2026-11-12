@@ -4,7 +4,7 @@ const { spawn } = require('child_process');
 const { autoUpdater } = require('electron-updater');
 const crypto = require('crypto');
 const Store = require('electron-store');
-const { isSafeExternalUrl, normalizeUpdateChannel, waitForHealth, stopProcess } = require('./shell-helpers');
+const { isSafeExternalUrl, normalizeUpdateChannel, applyUpdateChannel, waitForHealth, stopProcess } = require('./shell-helpers');
 
 // Generate a per-session API secret for Electron <-> .NET API authentication
 const API_SECRET = crypto.randomBytes(32).toString('hex');
@@ -980,7 +980,7 @@ ipcMain.handle('get-api-port', () => apiPort);
 // === Auto Updater ===
 autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = true;
-autoUpdater.channel = normalizeUpdateChannel(store.get('updateChannel', 'latest')) ?? 'latest';
+applyUpdateChannel(autoUpdater, normalizeUpdateChannel(store.get('updateChannel', 'latest')) ?? 'latest');
 
 function sendUpdateStatus(status, data = {}) {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -1051,7 +1051,7 @@ ipcMain.handle('set-update-channel', (event, requested) => {
     return { status: 'error', message: 'Unknown update channel' };
   }
   store.set('updateChannel', channel);
-  autoUpdater.channel = channel;
+  applyUpdateChannel(autoUpdater, channel);
   console.log(`[Updater] Channel changed to: ${channel}`);
   return { status: 'ok', channel };
 });
