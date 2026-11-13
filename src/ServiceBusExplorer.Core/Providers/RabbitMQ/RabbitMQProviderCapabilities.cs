@@ -101,6 +101,9 @@ public class RabbitMQProviderCapabilities : IProviderCapabilities
     public bool SupportsTransferDeadLetter => false;
 
     /// <inheritdoc />
+    public bool SupportsDefinitions => false;
+
+    /// <inheritdoc />
     /// <remarks>
     /// A RabbitMQ binding has a routing key, not rules; the provider refuses every rule operation.
     /// </remarks>

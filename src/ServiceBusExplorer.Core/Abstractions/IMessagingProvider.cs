@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using ServiceBusExplorer.Core.Models;
 using ServiceBusExplorer.Core.Providers;
 
@@ -242,6 +243,28 @@ public interface IMessagingProvider : IAsyncDisposable
 
     #endregion
 
+    #region Entity Definitions
+
+    /// <summary>
+    /// Reads every queue, topic, subscription and rule with its configuration into one versioned document. It holds no
+    /// secret. One failed read fails the whole export; a partial document is never returned. A provider without
+    /// definitions throws <see cref="NotSupportedException"/> and declares it in
+    /// <see cref="IProviderCapabilities.SupportsDefinitions"/>; so does <see cref="ImportDefinitionsAsync"/>.
+    /// </summary>
+    Task<EntityDefinitionsDocument> ExportDefinitionsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Checks the whole document before anything else and throws <see cref="InvalidEntityConfigurationException"/>
+    /// naming each refused field, creating nothing. Then answers, for every queue, topic and subscription of the
+    /// document, whether it would be created, exists with the same configuration, or exists and differs. Unless
+    /// <paramref name="dryRun"/> is true, it then creates what does not exist, topics before queues before
+    /// subscriptions, each subscription with its rules. It never changes or deletes an entity that exists; one
+    /// failure is reported on its entity and does not stop the others.
+    /// </summary>
+    Task<DefinitionsImportResult> ImportDefinitionsAsync(EntityDefinitionsDocument document, bool dryRun, CancellationToken cancellationToken = default);
+
+    #endregion
+
     #region Message Operations
 
     /// <summary>
@@ -427,13 +450,15 @@ public enum MessageSubQueue
 public class QueueCreateOptions
 {
     /// <summary>
-    /// Whether the queue should be durable (survives restarts).
+    /// Whether the queue should be durable (survives restarts). RabbitMQ only; not part of a definitions document.
     /// </summary>
+    [JsonIgnore]
     public bool Durable { get; set; } = true;
 
     /// <summary>
-    /// Whether the queue should auto-delete when no longer in use.
+    /// Whether the queue should auto-delete when no longer in use. RabbitMQ only; not part of a definitions document.
     /// </summary>
+    [JsonIgnore]
     public bool AutoDelete { get; set; } = false;
 
     /// <summary>
@@ -507,8 +532,14 @@ public class QueueCreateOptions
     public string? UserMetadata { get; set; }
 
     /// <summary>
-    /// Provider-specific additional options.
+    /// The status to create with, one of Active, Disabled, SendDisabled, ReceiveDisabled; null creates it Active. Azure Service Bus only.
     /// </summary>
+    public string? Status { get; set; }
+
+    /// <summary>
+    /// Provider-specific additional options. Untyped, so never part of a definitions document.
+    /// </summary>
+    [JsonIgnore]
     public Dictionary<string, object>? AdditionalOptions { get; set; }
 }
 
@@ -518,13 +549,15 @@ public class QueueCreateOptions
 public class TopicCreateOptions
 {
     /// <summary>
-    /// Whether the topic should be durable (survives restarts).
+    /// Whether the topic should be durable (survives restarts). RabbitMQ only; not part of a definitions document.
     /// </summary>
+    [JsonIgnore]
     public bool Durable { get; set; } = true;
 
     /// <summary>
-    /// Whether the topic should auto-delete when no longer in use.
+    /// Whether the topic should auto-delete when no longer in use. RabbitMQ only; not part of a definitions document.
     /// </summary>
+    [JsonIgnore]
     public bool AutoDelete { get; set; } = false;
 
     /// <summary>
@@ -544,8 +577,9 @@ public class TopicCreateOptions
 
     /// <summary>
     /// The exchange type for RabbitMQ (direct, fanout, topic, headers).
-    /// Ignored for Azure Service Bus.
+    /// Ignored for Azure Service Bus; not part of a definitions document.
     /// </summary>
+    [JsonIgnore]
     public string? ExchangeType { get; set; }
 
     /// <summary>
@@ -579,8 +613,14 @@ public class TopicCreateOptions
     public string? UserMetadata { get; set; }
 
     /// <summary>
-    /// Provider-specific additional options.
+    /// The status to create with, one of Active, Disabled, SendDisabled; null creates it Active. Azure Service Bus only.
     /// </summary>
+    public string? Status { get; set; }
+
+    /// <summary>
+    /// Provider-specific additional options. Untyped, so never part of a definitions document.
+    /// </summary>
+    [JsonIgnore]
     public Dictionary<string, object>? AdditionalOptions { get; set; }
 }
 
@@ -616,14 +656,16 @@ public class SubscriptionCreateOptions
 
     /// <summary>
     /// The routing key for RabbitMQ bindings.
-    /// Ignored for Azure Service Bus (use filter expression instead).
+    /// Ignored for Azure Service Bus (use filter expression instead); not part of a definitions document.
     /// </summary>
+    [JsonIgnore]
     public string? RoutingKey { get; set; }
 
     /// <summary>
     /// The filter expression for Azure Service Bus subscriptions.
-    /// Ignored for RabbitMQ (use routing key instead).
+    /// Ignored for RabbitMQ (use routing key instead). Not part of a definitions document, which carries the rules.
     /// </summary>
+    [JsonIgnore]
     public string? FilterExpression { get; set; }
 
     /// <summary>
@@ -657,8 +699,14 @@ public class SubscriptionCreateOptions
     public string? UserMetadata { get; set; }
 
     /// <summary>
-    /// Provider-specific additional options.
+    /// The status to create with, one of Active, Disabled, ReceiveDisabled; null creates it Active. Azure Service Bus only.
     /// </summary>
+    public string? Status { get; set; }
+
+    /// <summary>
+    /// Provider-specific additional options. Untyped, so never part of a definitions document.
+    /// </summary>
+    [JsonIgnore]
     public Dictionary<string, object>? AdditionalOptions { get; set; }
 }
 

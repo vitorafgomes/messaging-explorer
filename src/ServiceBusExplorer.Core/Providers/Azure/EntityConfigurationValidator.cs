@@ -26,6 +26,9 @@ internal static class EntityConfigurationValidator
     private const int MaxCorrelationFieldLength = 128;
     private const int MaxPropertyNameLength = 128;
     private const int MaxScheduledSequenceNumbers = 500;
+    internal const int MaxDefinitionEntities = 5000;
+    internal const int MaxDefinitionRules = 10000;
+    private const int MaxReportedViolations = 20;
     private const string DefaultRuleName = "$Default";
     private const NumberStyles DoubleStyles = NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint | NumberStyles.AllowExponent;
 
@@ -43,6 +46,7 @@ internal static class EntityConfigurationValidator
             options.DuplicateDetectionHistoryTimeWindow, options.MaxSizeInMegabytes, options.AutoDeleteOnIdle, options.UserMetadata);
         CheckForward(errors, "forwardTo", options.ForwardTo, name, "the queue itself");
         CheckForward(errors, "forwardDeadLetteredMessagesTo", options.ForwardDeadLetteredMessagesTo, name, "the queue itself");
+        CheckStatus(errors, options.Status, QueueStatuses);
         return errors;
     }
 
@@ -64,6 +68,7 @@ internal static class EntityConfigurationValidator
         if (options is null) return errors;
         CheckSettings(errors, options.DefaultMessageTimeToLive, null, null,
             options.DuplicateDetectionHistoryTimeWindow, options.MaxSizeInMegabytes, options.AutoDeleteOnIdle, options.UserMetadata);
+        CheckStatus(errors, options.Status, TopicStatuses);
         return errors;
     }
 
@@ -110,6 +115,7 @@ internal static class EntityConfigurationValidator
             null, null, options.AutoDeleteOnIdle, options.UserMetadata);
         CheckForward(errors, "forwardTo", options.ForwardTo, topicName, "the topic of the subscription");
         CheckForward(errors, "forwardDeadLetteredMessagesTo", options.ForwardDeadLetteredMessagesTo, topicName, "the topic of the subscription");
+        CheckStatus(errors, options.Status, SubscriptionStatuses);
         return errors;
     }
 
@@ -125,6 +131,87 @@ internal static class EntityConfigurationValidator
         CheckForward(errors, "forwardDeadLetteredMessagesTo", options.ForwardDeadLetteredMessagesTo, topicName, "the topic of the subscription");
         CheckStatus(errors, options.Status, SubscriptionStatuses);
         return errors;
+    }
+
+    /// <summary>
+    /// A definitions document read from a file, as untrusted input: its version, its size, and every queue, topic,
+    /// subscription and rule by the same rules as a create. A name may appear once among the queues and topics, once
+    /// among the subscriptions of a topic and once among the rules of a subscription, in any case. Each violation names
+    /// its place in the document; at most twenty are listed.
+    /// </summary>
+    public static IReadOnlyList<string> ValidateDefinitions(EntityDefinitionsDocument document)
+    {
+        var errors = new List<string>();
+        if (document.Version != EntityDefinitionsDocument.CurrentVersion)
+            errors.Add($"version must be {EntityDefinitionsDocument.CurrentVersion}.");
+        if (document.Entities is null)
+            errors.Add("entities is required.");
+        if (errors.Count > 0) return errors;
+
+        var queues = document.Entities!.Queues ?? [];
+        var topics = document.Entities.Topics ?? [];
+        var subscriptions = topics.SelectMany(t => t?.Subscriptions ?? []).ToList();
+        if (queues.Count + topics.Count + subscriptions.Count > MaxDefinitionEntities)
+            return [$"entities must hold at most {MaxDefinitionEntities} queues, topics and subscriptions."];
+        if (subscriptions.Sum(s => s?.Rules?.Count ?? 0) > MaxDefinitionRules)
+            return [$"entities must hold at most {MaxDefinitionRules} rules."];
+
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < queues.Count; i++)
+        {
+            var at = $"entities.queues[{i}]";
+            if (Present(errors, at, queues[i]) is not { } queue) continue;
+            AddAt(errors, at, ValidateQueueCreate(queue.Name, queue.Options));
+            CheckUnique(errors, at, names, queue.Name, "another queue or topic");
+        }
+
+        for (var i = 0; i < topics.Count; i++)
+        {
+            var at = $"entities.topics[{i}]";
+            if (Present(errors, at, topics[i]) is not { } topic) continue;
+            AddAt(errors, at, ValidateTopicCreate(topic.Name, topic.Options));
+            CheckUnique(errors, at, names, topic.Name, "another queue or topic");
+
+            var subscriptionNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var topicSubscriptions = topic.Subscriptions ?? [];
+            for (var j = 0; j < topicSubscriptions.Count; j++)
+            {
+                var subscriptionAt = $"{at}.subscriptions[{j}]";
+                if (Present(errors, subscriptionAt, topicSubscriptions[j]) is not { } subscription) continue;
+                AddAt(errors, subscriptionAt, ValidateSubscriptionCreate(topic.Name ?? string.Empty, subscription.Name, subscription.Options));
+                CheckUnique(errors, subscriptionAt, subscriptionNames, subscription.Name, "another subscription of the topic");
+
+                var ruleNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var rules = subscription.Rules ?? [];
+                for (var k = 0; k < rules.Count; k++)
+                {
+                    var ruleAt = $"{subscriptionAt}.rules[{k}]";
+                    if (Present(errors, ruleAt, rules[k]) is not { } rule) continue;
+                    AddAt(errors, ruleAt, ValidateRule(rule.Name, rule));
+                    CheckUnique(errors, ruleAt, ruleNames, rule.Name, "another rule of the subscription");
+                }
+            }
+        }
+
+        return errors.Count <= MaxReportedViolations
+            ? errors
+            : [.. errors.Take(MaxReportedViolations), $"And {errors.Count - MaxReportedViolations} more."];
+    }
+
+    private static T? Present<T>(List<string> errors, string at, T? item) where T : class
+    {
+        if (item is null)
+            errors.Add($"{at} must be an object.");
+        return item;
+    }
+
+    private static void AddAt(List<string> errors, string at, IReadOnlyList<string> violations) =>
+        errors.AddRange(violations.Select(v => $"{at}: {v}"));
+
+    private static void CheckUnique(List<string> errors, string at, HashSet<string> names, string? name, string other)
+    {
+        if (!string.IsNullOrEmpty(name) && !names.Add(name))
+            errors.Add($"{at}: name is used by {other} in the document; names are not case-sensitive.");
     }
 
     /// <summary>The name of a rule to add, replace or delete: 1 to 50 characters, or the reserved <c>$Default</c>.</summary>

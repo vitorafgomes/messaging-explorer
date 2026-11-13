@@ -1094,6 +1094,18 @@ public class RabbitMQProvider : IMessagingProvider
 
     #endregion
 
+    #region Entity Definitions (Not supported)
+
+    /// <inheritdoc />
+    public Task<EntityDefinitionsDocument> ExportDefinitionsAsync(CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("RabbitMQ does not support entity definitions.");
+
+    /// <inheritdoc />
+    public Task<DefinitionsImportResult> ImportDefinitionsAsync(EntityDefinitionsDocument document, bool dryRun, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("RabbitMQ does not support entity definitions.");
+
+    #endregion
+
     #region Session Operations (Not supported)
 
     /// <inheritdoc />

@@ -623,7 +623,7 @@ const STRIP = {
   counts: [NOT_BUILT, 'Counts of every entity in one table: planned. Today the poll is fixed at 30 seconds and nothing sorts, filters, marks a threshold or opens the entity.'],
   sessions: [NOT_BUILT, 'Sessions on a queue, the messages of one session and the state editor: planned. Built today: a subscription lists its sessions (locked or has state) and shows the state read-only.'],
   sessionsConfirm: [NOT_BUILT, 'Writing session state: planned. The confirmation shows the current state beside the new one before anything is written.'],
-  definitions: [NOT_BUILT, 'Export and import of entity definitions: planned, opened from the header of the entities tree. Import only creates, after a dry run.']
+  definitions: [BUILT_TODAY, 'Export and import of entity definitions: built on 2026-11-13, two dialogs opened from the header of the entities tree. Import only creates, after a dry run shown in three lists (would be created, already exist, exist and differ) instead of one table; the confirmation names the connection and environment and needs the namespace typed. Export shows no progress.']
 };
 
 class Component extends DCLogic {
