@@ -68,4 +68,69 @@ function stopProcess(child, { graceMs, setTimeoutFn = setTimeout }) {
   }, graceMs);
 }
 
-module.exports = { isSafeExternalUrl, normalizeUpdateChannel, applyUpdateChannel, waitForHealth, stopProcess };
+/**
+ * The application menu: on macOS the application, Edit and Window menus, because the clipboard
+ * shortcuts are delivered through Edit and Cmd+M and Cmd+W through Window; null elsewhere, which
+ * removes the menu bar.
+ */
+function applicationMenuTemplate(platform) {
+  if (platform !== 'darwin') return null;
+  return [
+    { role: 'appMenu' },
+    { role: 'editMenu' },
+    {
+      role: 'window',
+      submenu: [{ role: 'minimize' }, { role: 'zoom' }, { role: 'close' }, { type: 'separator' }, { role: 'front' }]
+    }
+  ];
+}
+
+/**
+ * The shortcut the shell handles for a before-input-event input, with no menu: 'toggleFullScreen'
+ * for F11 off macOS; 'toggleDevTools' for F12 and Ctrl+Shift+I (Cmd+Alt+I on macOS) in a
+ * development build only; otherwise null, and the key goes to the page.
+ */
+function shellShortcut(input, { platform, isDev }) {
+  if (input.type !== 'keyDown' || input.isAutoRepeat) return null;
+  if (input.code === 'F11' && platform !== 'darwin') return 'toggleFullScreen';
+  if (!isDev) return null;
+  if (input.code === 'F12') return 'toggleDevTools';
+  const inspect = platform === 'darwin'
+    ? input.meta && input.alt
+    : input.control && input.shift;
+  return inspect && input.code === 'KeyI' ? 'toggleDevTools' : null;
+}
+
+/**
+ * Options of the main window: the native frame and title bar on every platform, a background in
+ * the surface colour of the system theme, and a sandboxed renderer with the given preload.
+ */
+function mainWindowOptions({ preload, icon, prefersDark }) {
+  return {
+    width: 1400,
+    height: 900,
+    minWidth: 1000,
+    minHeight: 700,
+    show: false,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      preload
+    },
+    icon,
+    title: 'Messaging Explorer',
+    backgroundColor: prefersDark ? '#111318' : '#f9f9ff'
+  };
+}
+
+module.exports = {
+  isSafeExternalUrl,
+  normalizeUpdateChannel,
+  applyUpdateChannel,
+  waitForHealth,
+  stopProcess,
+  applicationMenuTemplate,
+  mainWindowOptions,
+  shellShortcut
+};

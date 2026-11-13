@@ -49,7 +49,7 @@ The API holds broker credentials in memory and can purge a production queue with
 - `src/ServiceBusExplorer.Api/Program.cs:88` - Kestrel binds to loopback when `ASPNETCORE_URLS` is not set.
 - `src/ServiceBusExplorer.Api/Program.cs:186` - `/health` is mapped before the key middleware and answers without a key.
 - `src/ServiceBusExplorer.Api/Program.cs:208` - the key middleware compares `X-Api-Key` with `CryptographicOperations.FixedTimeEquals` and answers 401 otherwise; it lets `OPTIONS` through for the CORS preflight (`src/ServiceBusExplorer.Api/Program.cs:192`).
-- `web-app/electron/main.js:10` - the secret is 32 random bytes per launch; it reaches the API as an environment variable (`web-app/electron/main.js:784`) and the renderer over the `get-api-secret` IPC channel (`web-app/electron/main.js:976`).
+- `web-app/electron/main.js:10` - the secret is 32 random bytes per launch; it reaches the API as an environment variable (`web-app/electron/main.js:638`) and the renderer over the `get-api-secret` IPC channel (`web-app/electron/main.js:832`).
 - `web-app/src/app/core/services/api.service.ts:67` - the one place the header is attached.
 
 ## How it's verified
