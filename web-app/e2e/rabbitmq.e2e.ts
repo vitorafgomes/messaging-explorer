@@ -131,7 +131,7 @@ test.describe('RabbitMQ', () => {
 
   test('the Monitoring screen shows the queues and subscriptions with their counts', async ({ page }) => {
     await open(page, 'monitoring');
-    await expect(page.getByRole('heading', { name: 'Monitoring Dashboard' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Monitoring', exact: true })).toBeVisible();
     const ordersRow = page.locator('tr', { has: page.getByText(SEED.queue, { exact: true }) });
     await expect(ordersRow).toBeVisible();
     await expect(async () => {
