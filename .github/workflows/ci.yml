@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Agent harness - hook, workflow and script self-tests, vault citations
+  # Agent harness - hook, workflow and script self-tests, context citations
   # Seconds, no .NET or npm install needed; jq and node ship on ubuntu runners.
   # ---------------------------------------------------------------------------
   harness:
@@ -37,7 +37,7 @@ jobs:
             echo "== $t"
             bash "$t"
           done
-          bash scripts/check-vault-refs.sh
+          bash scripts/check-context-refs.sh
 
       - name: Site script tests
         run: node --test docs/app.test.js
