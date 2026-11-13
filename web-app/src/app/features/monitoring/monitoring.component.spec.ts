@@ -109,6 +109,29 @@ describe('MonitoringComponent: loading, empty and error are three different stat
     expect(deltas(1)).toStrictEqual(['events/audit +6', 'other/audit 0']);
   });
 
+  it('the Overview says each total with its change since the last poll and draws the trend of active and dead-letter messages from the first poll to the last', () => {
+    const before: MonitoringSnapshot = { ...SNAPSHOT, timestamp: '2026-11-13T09:00:00Z' };
+    const after: MonitoringSnapshot = {
+      timestamp: '2026-11-13T09:00:30Z',
+      queues: [{ ...SNAPSHOT.queues[0], activeMessageCount: 8, deadLetterMessageCount: 4 }],
+      subscriptions: [{ ...SNAPSHOT.queues[0], topicName: 'events', name: 'audit', activeMessageCount: 0, deadLetterMessageCount: 0 }]
+    };
+    render(() => of(status(after)), [before]);
+
+    expect(Array.from(el.querySelectorAll('.summary-card')).map(card => Array.from(card.children).map(text).join(' '))).toStrictEqual([
+      'Active 8 +3 since the last poll',
+      'Dead-letter 4 +2 since the last poll',
+      'Transfer 0 On their way to another entity',
+      'Monitored entities 2 1 queue, 1 subscription'
+    ]);
+    expect(text(el.querySelector('.trend-section h3'))).toBe('Message trend, last 2 polls');
+    expect(Array.from(el.querySelectorAll('.trend figcaption')).map(caption => Array.from(caption.children).map(text).join(' '))).toStrictEqual(['Active 5 to 8', 'Dead-letter 2 to 4']);
+    expect(Array.from(el.querySelectorAll('.trend svg')).map(svg => svg.getAttribute('aria-label'))).toStrictEqual([
+      'Active messages over the last 2 polls, from 5 to 8',
+      'Dead-letter messages over the last 2 polls, from 2 to 4'
+    ]);
+  });
+
   it('opens the counts of every entity on the All entities tab, and creates them only when that tab is opened', async () => {
     const created = vi.spyOn(Storage.prototype, 'getItem');
     render(() => of(status(SNAPSHOT)));

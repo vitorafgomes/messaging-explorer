@@ -8,7 +8,7 @@ import { expect, messageBodies, messagesDialog, open, shoot, test, treeNode } fr
  */
 async function openTopicOnTopicsScreen(page: Page): Promise<void> {
   await open(page, 'topics');
-  await page.locator('.card-header', { hasText: SEED.topic }).click();
+  await page.locator('.topic-toggle', { hasText: SEED.topic }).click();
 }
 
 const subscriptionRow = (page: Page) => page.locator('.subscription-card', { hasText: SEED.subscription });

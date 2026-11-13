@@ -27,7 +27,7 @@ describe('TopicsComponent loads the subscriptions of a topic when it is opened, 
     fixture.detectChanges();
     const element = fixture.nativeElement as HTMLElement;
     const open = async (name: string) => {
-      const header = Array.from(element.querySelectorAll('.card-header')).find(h => h.textContent?.includes(name)) as HTMLElement;
+      const header = Array.from(element.querySelectorAll('.topic-toggle')).find(h => h.textContent?.includes(name)) as HTMLElement;
       header.click();
       await fixture.whenStable();
       return element.textContent ?? '';
@@ -99,6 +99,25 @@ describe('TopicsComponent loads the subscriptions of a topic when it is opened, 
     expect(topicService.getSubscriptions.mock.calls).toStrictEqual([['billing'], ['billing']]);
     expect(shown).toContain('invoice-sub');
     expect(shown).not.toContain('No subscriptions');
+  });
+
+  it('a topic list the API fails to return is an error with Retry, never "No topics found"; Retry asks again and shows the topics', async () => {
+    topicService.getTopics = vi.fn()
+      .mockReturnValueOnce(throwError(() => new Error('503 Service Unavailable')))
+      .mockReturnValueOnce(of([topic('orders', 2)]));
+    const { element, fixture } = render();
+    const text = (e: Element | null) => (e?.textContent ?? '').replace(/\s+/g, ' ').trim();
+
+    const error = element.querySelector('[role="alert"]');
+    expect(text(error?.querySelector('h3') ?? null)).toBe('Could not load the topics');
+    expect(element.textContent).not.toContain('No topics found');
+
+    (Array.from(error!.querySelectorAll('button')).find(b => text(b) === 'Retry') as HTMLButtonElement).click();
+    await fixture.whenStable();
+
+    expect(topicService.getTopics).toHaveBeenCalledTimes(2);
+    expect(element.querySelector('[role="alert"]')).toBeNull();
+    expect(element.textContent).toContain('orders');
   });
 
   it('a second topic load cancels the first, so only the second list reaches the screen', () => {

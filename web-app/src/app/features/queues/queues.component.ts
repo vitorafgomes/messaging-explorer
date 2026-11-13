@@ -1,12 +1,10 @@
 import { Component, OnInit, inject, signal, DestroyRef } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatMenuModule } from '@angular/material/menu';
 import { MatTableModule } from '@angular/material/table';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { finalize } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -20,124 +18,114 @@ import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
   selector: 'app-queues',
   standalone: true,
   imports: [
-    CommonModule,
+    MatButtonModule,
+    MatIconModule,
+    MatMenuModule,
+    MatProgressSpinnerModule,
+    MatTableModule,
     MatSnackBarModule,
     MatDialogModule
   ],
   template: `
     <div class="queues-container">
-      <div class="header d-flex justify-content-between align-items-center mb-4">
-        <h2 class="mb-0">Queues</h2>
-        <button class="btn btn-primary" (click)="loadQueues()" [disabled]="!isConnected">
-          <i class="fa-solid fa-arrows-rotate me-2"></i>
+      <div class="header">
+        <h2>Queues</h2>
+        <button matButton="outlined" type="button" (click)="loadQueues()" [disabled]="!isConnected || loading()">
+          <mat-icon fontIcon="refresh" aria-hidden="true"></mat-icon>
           Refresh
         </button>
       </div>
 
       @if (!isConnected) {
-        <div class="card text-center py-5">
-          <div class="card-body">
-            <i class="fa fa-exclamation-triangle fa-4x text-warning mb-3"></i>
-            <p class="mb-0">Please connect to a Service Bus namespace first</p>
-          </div>
+        <div class="state">
+          <mat-icon class="state-icon" fontIcon="cloud_off" aria-hidden="true"></mat-icon>
+          <h3>Not connected</h3>
+          <p>Please connect to a Service Bus namespace first</p>
         </div>
       } @else if (loading()) {
-        <div class="text-center py-5">
-          <div class="spinner-border text-primary" role="status">
-            <span class="visually-hidden">Loading...</span>
-          </div>
+        <div class="state" role="status">
+          <mat-progress-spinner mode="indeterminate" diameter="32" aria-label="Loading"></mat-progress-spinner>
+          <span>Loading the queues</span>
         </div>
-      } @else if (queues().length === 0) {
-        <div class="card text-center py-5">
-          <div class="card-body">
-            <i class="fa fa-inbox fa-4x text-secondary mb-3"></i>
-            <p class="mb-0">No queues found</p>
+      } @else if (loadError()) {
+        <section class="load-error" role="alert" aria-label="Error">
+          <mat-icon fontIcon="error" aria-hidden="true"></mat-icon>
+          <div class="load-error-body">
+            <h3>Could not load the queues</h3>
+            <p>The API did not return the queue list. Nothing is shown because nothing was read, and nothing on the broker was changed.</p>
+            <button matButton="outlined" type="button" (click)="loadQueues()">
+              <mat-icon fontIcon="refresh" aria-hidden="true"></mat-icon>
+              Retry
+            </button>
           </div>
+        </section>
+      } @else if (queues().length === 0) {
+        <div class="state">
+          <mat-icon class="state-icon" fontIcon="inbox" aria-hidden="true"></mat-icon>
+          <h3>No queues found</h3>
+          <p>The broker answered and holds no queue.</p>
         </div>
       } @else {
-        <div class="table-responsive">
-          <table class="table table-hover">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Active</th>
-                <th>Dead Letter</th>
-                <th>Scheduled</th>
-                <th>Size</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (queue of queues(); track queue.name) {
-                <tr>
-                  <td>
-                    <div class="d-flex align-items-center">
-                      <i class="fa fa-inbox text-primary me-2"></i>
-                      {{ queue.name }}
-                    </div>
-                  </td>
-                  <td>
-                    <span class="badge bg-primary clickable-stat" (click)="viewMessages(queue, 0)">
-                      {{ queue.activeMessageCount }}
-                    </span>
-                  </td>
-                  <td>
-                    <span class="badge clickable-stat" [class.bg-danger]="queue.deadLetterMessageCount > 0" [class.bg-secondary]="queue.deadLetterMessageCount === 0" (click)="viewMessages(queue, 1)">
-                      {{ queue.deadLetterMessageCount }}
-                    </span>
-                  </td>
-                  <td>
-                    <span class="badge bg-info">{{ queue.scheduledMessageCount }}</span>
-                  </td>
-                  <td>{{ formatSize(queue.sizeInBytes) }}</td>
-                  <td>
-                    <div class="btn-group">
-                      <button class="btn btn-sm btn-outline-primary" (click)="viewMessages(queue)" title="View Messages">
-                        <i class="fa fa-eye"></i>
-                      </button>
-                      <button class="btn btn-sm btn-outline-primary" (click)="sendMessage(queue)" title="Send Message">
-                        <i class="fa fa-paper-plane"></i>
-                      </button>
-                      <button class="btn btn-sm btn-outline-secondary" (click)="purgeMessages(queue)" [disabled]="queue.activeMessageCount === 0" title="Purge Messages">
-                        <i class="fa fa-trash"></i>
-                      </button>
-                      <button class="btn btn-sm btn-outline-danger" (click)="purgeDeadLetter(queue)" [disabled]="queue.deadLetterMessageCount === 0" title="Purge Dead Letter">
-                        <i class="fa fa-times-circle"></i>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              }
-            </tbody>
+        <div class="table-wrapper">
+          <table mat-table [dataSource]="queues()" [trackBy]="queueName" aria-label="Queues">
+            <ng-container matColumnDef="name">
+              <th mat-header-cell *matHeaderCellDef>Name</th>
+              <td mat-cell *matCellDef="let queue" class="name"><span>{{ queue.name }}</span></td>
+            </ng-container>
+            <ng-container matColumnDef="activeMessages">
+              <th mat-header-cell *matHeaderCellDef class="number">Active</th>
+              <td mat-cell *matCellDef="let queue" class="number">
+                <button matButton type="button" class="count" (click)="viewMessages(queue, 0)"
+                        [attr.aria-label]="'View the ' + queue.activeMessageCount + ' active messages of ' + queue.name">{{ queue.activeMessageCount }}</button>
+              </td>
+            </ng-container>
+            <ng-container matColumnDef="deadLetter">
+              <th mat-header-cell *matHeaderCellDef class="number">Dead Letter</th>
+              <td mat-cell *matCellDef="let queue" class="number">
+                <button matButton type="button" class="count" [class.dead-letter]="queue.deadLetterMessageCount > 0" (click)="viewMessages(queue, 1)"
+                        [attr.aria-label]="'View the ' + queue.deadLetterMessageCount + ' dead-letter messages of ' + queue.name">{{ queue.deadLetterMessageCount }}</button>
+              </td>
+            </ng-container>
+            <ng-container matColumnDef="scheduled">
+              <th mat-header-cell *matHeaderCellDef class="number">Scheduled</th>
+              <td mat-cell *matCellDef="let queue" class="number">{{ queue.scheduledMessageCount }}</td>
+            </ng-container>
+            <ng-container matColumnDef="size">
+              <th mat-header-cell *matHeaderCellDef class="number">Size</th>
+              <td mat-cell *matCellDef="let queue" class="number">{{ formatSize(queue.sizeInBytes) }}</td>
+            </ng-container>
+            <ng-container matColumnDef="actions">
+              <th mat-header-cell *matHeaderCellDef class="actions">Actions</th>
+              <td mat-cell *matCellDef="let queue" class="actions">
+                <button matIconButton type="button" (click)="viewMessages(queue)" title="View Messages" [attr.aria-label]="'View the messages of ' + queue.name">
+                  <mat-icon fontIcon="visibility" aria-hidden="true"></mat-icon>
+                </button>
+                <button matIconButton type="button" (click)="sendMessage(queue)" title="Send Message" [attr.aria-label]="'Send a message to ' + queue.name">
+                  <mat-icon fontIcon="send" aria-hidden="true"></mat-icon>
+                </button>
+                <button matIconButton type="button" [matMenuTriggerFor]="purgeMenu" title="More actions" [attr.aria-label]="'More actions for ' + queue.name">
+                  <mat-icon fontIcon="more_vert" aria-hidden="true"></mat-icon>
+                </button>
+                <mat-menu #purgeMenu="matMenu">
+                  <button mat-menu-item class="danger" (click)="purgeMessages(queue)" [disabled]="queue.activeMessageCount === 0">
+                    <mat-icon fontIcon="delete_sweep" aria-hidden="true"></mat-icon>
+                    Purge Messages
+                  </button>
+                  <button mat-menu-item class="danger" (click)="purgeDeadLetter(queue)" [disabled]="queue.deadLetterMessageCount === 0">
+                    <mat-icon fontIcon="delete_forever" aria-hidden="true"></mat-icon>
+                    Purge Dead Letter
+                  </button>
+                </mat-menu>
+              </td>
+            </ng-container>
+            <tr mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></tr>
+            <tr mat-row *matRowDef="let queue; columns: displayedColumns"></tr>
           </table>
         </div>
       }
     </div>
   `,
-  styles: [`
-    .queues-container {
-      max-width: 1200px;
-      margin: 0 auto;
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      padding: 12px;
-    }
-
-    .table-responsive {
-      flex: 1;
-      overflow-y: auto;
-    }
-
-    .clickable-stat {
-      cursor: pointer;
-      transition: opacity 0.2s ease;
-
-      &:hover {
-        opacity: 0.8;
-      }
-    }
-  `]
+  styleUrl: './queues.component.scss'
 })
 export class QueuesComponent implements OnInit {
   private queueService = inject(QueueService);
@@ -148,6 +136,8 @@ export class QueuesComponent implements OnInit {
 
   queues = signal<QueueInfo[]>([]);
   loading = signal(false);
+  loadError = signal(false);
+  readonly queueName = (_: number, queue: QueueInfo) => queue.name;
   displayedColumns = ['name', 'activeMessages', 'deadLetter', 'scheduled', 'size', 'actions'];
 
   get isConnected(): boolean {
@@ -172,6 +162,7 @@ export class QueuesComponent implements OnInit {
 
   loadQueues() {
     this.loading.set(true);
+    this.loadError.set(false);
     this.queueService.getQueues().pipe(
       finalize(() => {
         this.loading.set(false);
@@ -182,7 +173,8 @@ export class QueuesComponent implements OnInit {
         this.queues.set(queues);
       },
       error: () => {
-        this.snackBar.open('Failed to load queues', 'Close', { duration: 3000 });
+        this.queues.set([]);
+        this.loadError.set(true);
       }
     });
   }
