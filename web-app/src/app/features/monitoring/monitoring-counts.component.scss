@@ -1,0 +1,102 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.filter {
+  flex: 1 1 240px;
+  max-width: 320px;
+  min-width: 0;
+}
+
+.threshold {
+  flex: 0 0 200px;
+}
+
+.summary,
+.footnote,
+.refresh-failure {
+  margin: 0;
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.footnote {
+  font: var(--mat-sys-body-small);
+}
+
+.refresh-failure {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--mat-sys-error-container);
+  color: var(--mat-sys-on-error-container);
+}
+
+.counts {
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+
+.number {
+  text-align: right;
+}
+
+.open {
+  min-width: 0;
+  padding: 0 4px;
+}
+
+.parent,
+.not-counted {
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.over {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px 0 6px;
+  border-radius: 999px;
+  background: var(--mat-sys-error-container);
+  color: var(--mat-sys-on-error-container);
+  font: var(--mat-sys-label-medium);
+  font-weight: 700;
+
+  mat-icon {
+    width: 16px;
+    height: 16px;
+    font-size: 16px;
+  }
+}
+
+.over-label {
+  font-weight: 500;
+}
+
+.actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.no-match td {
+  padding: 16px;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

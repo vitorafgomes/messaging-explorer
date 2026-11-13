@@ -396,6 +396,7 @@ public class ConnectionsController : ControllerBase
                 supportsEntityUpdate = capabilities.SupportsEntityUpdate,
                 supportsSubscriptionRules = capabilities.SupportsSubscriptionRules,
                 supportsTransferDeadLetter = capabilities.SupportsTransferDeadLetter, supportsPeekFromSequenceNumber = capabilities.SupportsPeekFromSequenceNumber,
+                supportsDefinitions = capabilities.SupportsDefinitions,
                 maxMessageSizeInBytes = capabilities.MaxMessageSizeInBytes,
                 maxTimeToLive = capabilities.MaxTimeToLive.ToString(),
                 supportedExchangeTypes = capabilities.SupportedExchangeTypes

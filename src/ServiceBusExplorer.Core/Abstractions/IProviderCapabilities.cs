@@ -114,6 +114,14 @@ public interface IProviderCapabilities
     bool SupportsTransferDeadLetter { get; }
 
     /// <summary>
+    /// Indicates whether the provider can export the definitions of every entity to one document and import such a
+    /// document, creating only what does not exist.
+    /// For Azure Service Bus: true.
+    /// For RabbitMQ: false (its own definitions export is not read by this application).
+    /// </summary>
+    bool SupportsDefinitions { get; }
+
+    /// <summary>
     /// Gets the supported exchange types for the provider.
     /// For Azure Service Bus: empty (not applicable).
     /// For RabbitMQ: ["direct", "fanout", "topic", "headers"].

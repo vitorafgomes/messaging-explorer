@@ -794,4 +794,26 @@ public sealed class AzureServiceBusProviderTests(AzureServiceBusFixture fixture)
         Assert.Equal(["m1", "m2", "m3", "m4", "m5"],
             (await _messaging.PeekMessagesAsync(queue, 10, MessageSubQueue.DeadLetter, fromSequenceNumber: 0)).Select(m => m.Body));
     }
+
+    /// <summary>
+    /// Finds the entity and answers null for one that does not exist. It does not prove that the counts equal the
+    /// broker: the emulator reports every runtime count as zero, so equality is proven only against RabbitMQ.
+    /// </summary>
+    [Fact]
+    public async Task A_counts_read_finds_a_created_queue_and_subscription_and_is_null_for_an_entity_that_does_not_exist()
+    {
+        var queue = Name(_queues, "counts");
+        var topic = Name(_topics, "counts");
+        await _management.CreateQueueAsync(queue);
+        await _management.CreateTopicAsync(topic);
+        await _management.CreateSubscriptionAsync(topic, "audit");
+
+        var queueCounts = await _management.GetQueueCountsAsync(queue, CancellationToken.None);
+        var subscriptionCounts = await _management.GetSubscriptionCountsAsync(topic, "audit", CancellationToken.None);
+
+        Assert.Equal(queue, queueCounts?.Name);
+        Assert.Equal(("audit", topic), (subscriptionCounts?.Name, subscriptionCounts?.TopicName));
+        Assert.Null(await _management.GetQueueCountsAsync(AzureServiceBusFixture.UniqueName("missing"), CancellationToken.None));
+        Assert.Null(await _management.GetSubscriptionCountsAsync(topic, "missing", CancellationToken.None));
+    }
 }

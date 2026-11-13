@@ -24,6 +24,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\ServiceBusExplorer.Api\ServiceBusExplorer.Api.csproj" />
     <ProjectReference Include="..\ServiceBusExplorer.Core\ServiceBusExplorer.Core.csproj" />
   </ItemGroup>
 

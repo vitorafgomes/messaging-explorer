@@ -18,7 +18,7 @@ for p in "/repo/web-app/src/app/core/services/api.service.spec.ts" \
          "/repo/src/ServiceBusExplorer.Core.Tests/Providers/Azure/AzureServiceBusProviderTests.cs" \
          "/repo/src/ServiceBusExplorer.Api.Tests/CorsTests.cs" \
          "/repo/web-app/src/app/app.html" "/repo/web-app/scripts/generate-icons.js" \
-         "/repo/vault/log.md" "/repo/.claude/hooks/post-edit-rule-b.sh" "/repo/web-app/angular.json" ""; do check QUIET "$p"; done
+         "/repo/context/log.md" "/repo/.claude/hooks/post-edit-rule-b.sh" "/repo/web-app/angular.json" ""; do check QUIET "$p"; done
 # The backend reminder names the gates it exists for.
 out=$(printf '{"tool_input":{"file_path":"/repo/src/ServiceBusExplorer.Api/Program.cs"}}' | sh "$HOOK")
 for needle in "0 warnings" "gate 4" "Rule A" "Rule G" "Rule H"; do

@@ -1,17 +1,17 @@
 # Feature lane
 
-Stages in order. Repo facts live in the linked vault pages; this file carries only the stage order.
+Stages in order. Repo facts live in the linked context pages; this file carries only the stage order.
 
-0. **Discovery** - when the request is an owner sentence with no spec in the vault yet, run
+0. **Discovery** - when the request is an owner sentence with no spec in the context yet, run
    `superpowers:brainstorming` and `product-management:write-spec` first, write the outcome into a
-   roadmap page under `vault/pages/roadmap/` (problem, users, scope, non-goals, acceptance, open
+   roadmap page under `context/pages/roadmap/` (problem, users, scope, non-goals, acceptance, open
    decisions), and only then continue.
 1. **Pre-flight** - decide before coding: which project owns it (a feature that seems to need the
    API and the web app usually needs one provider member, one endpoint and one Angular service
    method, in that order); whether it touches the API surface, a secret, or a message (and in which
    order it receives, sends and completes); which provider supports it and what the other provider
    answers (a capability flag in `IProviderCapabilities`, never a silent no-op).
-2. **Vault route** - `vault/pages/services/<project>.md` + linked invariants + relevant ADRs, **then
+2. **Context route** - `context/pages/services/<project>.md` + linked invariants + relevant ADRs, **then
    the capability check in SKILL.md gate 1**. Exit: no invariant conflict (else stop, superseding
    ADR first).
 3. **Plan** - state the six-part plan from SKILL.md before implementation; a sequence diagram when
