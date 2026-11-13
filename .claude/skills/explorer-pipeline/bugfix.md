@@ -1,6 +1,6 @@
 # Bug-fix lane
 
-1. **Vault route** - `vault/pages/services/<project>.md`, its "Known gaps" (the bug may already be
+1. **Context route** - `context/pages/services/<project>.md`, its "Known gaps" (the bug may already be
    recorded there with its citation) and the invariants touching the bug surface. If the bug
    violates a documented invariant, that invariant is the fix target, not the symptom.
 2. **Reproduce first** - once the expected behaviour is a defined spec, the failing test is step one

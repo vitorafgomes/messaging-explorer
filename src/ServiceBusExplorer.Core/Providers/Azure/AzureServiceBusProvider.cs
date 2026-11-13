@@ -204,7 +204,7 @@ public class AzureServiceBusProvider : IMessagingProvider
     /// option that is set; failures the caller can act on arrive as the provider-neutral exceptions. The name and
     /// options are checked against the Azure Service Bus rules first; a violation reaches no broker call.
     /// </summary>
-    internal static async Task CreateQueueCoreAsync(ServiceBusAdministrationClient adminClient, string queueName, QueueCreateOptions? options)
+    internal static async Task CreateQueueCoreAsync(ServiceBusAdministrationClient adminClient, string queueName, QueueCreateOptions? options, CancellationToken cancellationToken = default)
     {
         ThrowIfInvalid(EntityConfigurationValidator.ValidateQueueCreate(queueName, options));
 
@@ -212,7 +212,7 @@ public class AzureServiceBusProvider : IMessagingProvider
         {
             if (options == null)
             {
-                await adminClient.CreateQueueAsync(queueName);
+                await adminClient.CreateQueueAsync(queueName, cancellationToken);
                 return;
             }
 
@@ -233,8 +233,9 @@ public class AzureServiceBusProvider : IMessagingProvider
             if (!string.IsNullOrEmpty(options.ForwardTo)) queue.ForwardTo = options.ForwardTo;
             if (!string.IsNullOrEmpty(options.ForwardDeadLetteredMessagesTo)) queue.ForwardDeadLetteredMessagesTo = options.ForwardDeadLetteredMessagesTo;
             if (options.UserMetadata != null) queue.UserMetadata = options.UserMetadata;
+            if (options.Status != null) queue.Status = ToEntityStatus(options.Status);
 
-            await adminClient.CreateQueueAsync(queue);
+            await adminClient.CreateQueueAsync(queue, cancellationToken);
         }
         catch (Exception ex) when (ToProviderNeutral(ex) is { } neutral)
         {
@@ -332,21 +333,21 @@ public class AzureServiceBusProvider : IMessagingProvider
         await _adminClient!.DeleteQueueAsync(queueName);
     }
 
-    private static QueueInfo MapToQueueInfo(QueueRuntimeProperties props)
+    /// <summary>Maps the runtime properties a list or a counts read returns; every configuration value stays at
+    /// its default.</summary>
+    private static QueueInfo MapToQueueInfo(QueueRuntimeProperties props) => new()
     {
-        return new QueueInfo
-        {
-            Name = props.Name,
-            ActiveMessageCount = props.ActiveMessageCount,
-            DeadLetterMessageCount = props.DeadLetterMessageCount,
-            ScheduledMessageCount = props.ScheduledMessageCount,
-            TransferMessageCount = props.TransferMessageCount,
-            SizeInBytes = props.SizeInBytes,
-            CreatedAt = props.CreatedAt,
-            UpdatedAt = props.UpdatedAt,
-            AccessedAt = props.AccessedAt
-        };
-    }
+        Name = props.Name,
+        ActiveMessageCount = props.ActiveMessageCount,
+        DeadLetterMessageCount = props.DeadLetterMessageCount,
+        ScheduledMessageCount = props.ScheduledMessageCount,
+        TransferMessageCount = props.TransferMessageCount,
+        TransferDeadLetterMessageCount = props.TransferDeadLetterMessageCount,
+        SizeInBytes = props.SizeInBytes,
+        CreatedAt = props.CreatedAt,
+        UpdatedAt = props.UpdatedAt,
+        AccessedAt = props.AccessedAt
+    };
 
     private static QueueInfo MapToQueueInfo(QueueProperties props, QueueRuntimeProperties runtimeProps)
     {
@@ -447,7 +448,7 @@ public class AzureServiceBusProvider : IMessagingProvider
     /// Creates a topic with the broker's defaults when <paramref name="options"/> is null, otherwise with every
     /// option that is set; failures the caller can act on arrive as the provider-neutral exceptions.
     /// </summary>
-    internal static async Task CreateTopicCoreAsync(ServiceBusAdministrationClient adminClient, string topicName, TopicCreateOptions? options)
+    internal static async Task CreateTopicCoreAsync(ServiceBusAdministrationClient adminClient, string topicName, TopicCreateOptions? options, CancellationToken cancellationToken = default)
     {
         ThrowIfInvalid(EntityConfigurationValidator.ValidateTopicCreate(topicName, options));
 
@@ -455,7 +456,7 @@ public class AzureServiceBusProvider : IMessagingProvider
         {
             if (options == null)
             {
-                await adminClient.CreateTopicAsync(topicName);
+                await adminClient.CreateTopicAsync(topicName, cancellationToken);
                 return;
             }
 
@@ -471,8 +472,9 @@ public class AzureServiceBusProvider : IMessagingProvider
             if (options.EnableBatchedOperations is { } batched) topic.EnableBatchedOperations = batched;
             if (options.SupportOrdering is { } ordering) topic.SupportOrdering = ordering;
             if (options.UserMetadata != null) topic.UserMetadata = options.UserMetadata;
+            if (options.Status != null) topic.Status = ToEntityStatus(options.Status);
 
-            await adminClient.CreateTopicAsync(topic);
+            await adminClient.CreateTopicAsync(topic, cancellationToken);
         }
         catch (Exception ex) when (ToProviderNeutral(ex) is { } neutral)
         {
@@ -657,19 +659,24 @@ public class AzureServiceBusProvider : IMessagingProvider
     /// every option that is set; failures the caller can act on arrive as the provider-neutral exceptions. A
     /// missing topic arrives as <see cref="EntityNotFoundException"/>. With a filter expression the subscription and
     /// its one SQL rule, named <c>CustomFilter</c>, are created in a single call instead of the default rule, so an
-    /// expression the broker refuses creates nothing.
+    /// expression the broker refuses creates nothing. With <paramref name="firstRule"/> that rule is created with the
+    /// subscription in the same call instead, and the filter expression is not read.
     /// </summary>
-    internal static async Task CreateSubscriptionCoreAsync(ServiceBusAdministrationClient adminClient, string topicName, string subscriptionName, SubscriptionCreateOptions? options)
+    internal static async Task CreateSubscriptionCoreAsync(ServiceBusAdministrationClient adminClient, string topicName, string subscriptionName, SubscriptionCreateOptions? options, SubscriptionRuleInfo? firstRule = null, CancellationToken cancellationToken = default)
     {
         ThrowIfInvalid(EntityConfigurationValidator.ValidateSubscriptionCreate(topicName, subscriptionName, options));
+        if (firstRule != null)
+            ThrowIfInvalid(EntityConfigurationValidator.ValidateRule(firstRule.Name, firstRule));
 
         try
         {
-            if (options == null)
+            if (options == null && firstRule == null)
             {
-                await adminClient.CreateSubscriptionAsync(topicName, subscriptionName);
+                await adminClient.CreateSubscriptionAsync(topicName, subscriptionName, cancellationToken);
                 return;
             }
+
+            options ??= new SubscriptionCreateOptions();
 
             var subscription = new CreateSubscriptionOptions(topicName, subscriptionName)
             {
@@ -685,11 +692,14 @@ public class AzureServiceBusProvider : IMessagingProvider
             if (!string.IsNullOrEmpty(options.ForwardTo)) subscription.ForwardTo = options.ForwardTo;
             if (!string.IsNullOrEmpty(options.ForwardDeadLetteredMessagesTo)) subscription.ForwardDeadLetteredMessagesTo = options.ForwardDeadLetteredMessagesTo;
             if (options.UserMetadata != null) subscription.UserMetadata = options.UserMetadata;
+            if (options.Status != null) subscription.Status = ToEntityStatus(options.Status);
 
-            if (string.IsNullOrWhiteSpace(options.FilterExpression))
-                await adminClient.CreateSubscriptionAsync(subscription);
+            if (firstRule != null)
+                await adminClient.CreateSubscriptionAsync(subscription, new CreateRuleOptions(firstRule.Name, ToRuleFilter(firstRule)) { Action = ToRuleAction(firstRule) }, cancellationToken);
+            else if (string.IsNullOrWhiteSpace(options.FilterExpression))
+                await adminClient.CreateSubscriptionAsync(subscription, cancellationToken);
             else
-                await adminClient.CreateSubscriptionAsync(subscription, new CreateRuleOptions(FilteredSubscriptionRuleName, new SqlRuleFilter(options.FilterExpression)));
+                await adminClient.CreateSubscriptionAsync(subscription, new CreateRuleOptions(FilteredSubscriptionRuleName, new SqlRuleFilter(options.FilterExpression)), cancellationToken);
         }
         catch (Exception ex) when (ToProviderNeutral(ex) is { } neutral)
         {
@@ -990,6 +1000,24 @@ public class AzureServiceBusProvider : IMessagingProvider
 
     private static SqlRuleAction? ToRuleAction(SubscriptionRuleInfo rule) =>
         string.IsNullOrWhiteSpace(rule.SqlAction) ? null : new SqlRuleAction(rule.SqlAction);
+
+    #endregion
+
+    #region Entity Definitions
+
+    /// <inheritdoc />
+    public async Task<EntityDefinitionsDocument> ExportDefinitionsAsync(CancellationToken cancellationToken = default)
+    {
+        EnsureConnected();
+        return await AzureEntityDefinitions.ExportCoreAsync(_adminClient!, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<DefinitionsImportResult> ImportDefinitionsAsync(EntityDefinitionsDocument document, bool dryRun, CancellationToken cancellationToken = default)
+    {
+        EnsureConnected();
+        return await AzureEntityDefinitions.ImportCoreAsync(_adminClient!, document, dryRun, _logger, cancellationToken);
+    }
 
     #endregion
 
@@ -2506,6 +2534,54 @@ public class AzureServiceBusProvider : IMessagingProvider
         _adminClient = null;
         _currentConfig = null;
         CurrentTarget = null;
+    }
+
+    #endregion
+
+    #region Counts
+
+    /// <inheritdoc />
+    public async Task<IQueueEntity?> GetQueueCountsAsync(string queueName, CancellationToken cancellationToken)
+    {
+        EnsureConnected();
+        return await GetQueueCountsCoreAsync(_adminClient!, queueName, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<SubscriptionInfo?> GetSubscriptionCountsAsync(string topicName, string subscriptionName, CancellationToken cancellationToken)
+    {
+        EnsureConnected();
+        return await GetSubscriptionCountsCoreAsync(_adminClient!, topicName, subscriptionName, cancellationToken);
+    }
+
+    /// <summary>
+    /// One runtime-properties call for the queue; null when the broker says it does not exist.
+    /// </summary>
+    internal static async Task<QueueInfo?> GetQueueCountsCoreAsync(ServiceBusAdministrationClient adminClient, string queueName, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return MapToQueueInfo((await adminClient.GetQueueRuntimePropertiesAsync(queueName, cancellationToken)).Value);
+        }
+        catch (ServiceBusException ex) when (ex.Reason == ServiceBusFailureReason.MessagingEntityNotFound)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// One runtime-properties call for the subscription; null when the broker says it or its topic does not exist.
+    /// </summary>
+    internal static async Task<SubscriptionInfo?> GetSubscriptionCountsCoreAsync(ServiceBusAdministrationClient adminClient, string topicName, string subscriptionName, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return MapToSubscriptionInfo((await adminClient.GetSubscriptionRuntimePropertiesAsync(topicName, subscriptionName, cancellationToken)).Value);
+        }
+        catch (ServiceBusException ex) when (ex.Reason == ServiceBusFailureReason.MessagingEntityNotFound)
+        {
+            return null;
+        }
     }
 
     #endregion

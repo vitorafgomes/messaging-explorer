@@ -56,7 +56,7 @@ public class EntityAdministrationTests
 
     internal sealed record Answered(HttpStatusCode Status, string Body, Uri? Location, List<(string Method, object?[] Args)> Calls);
 
-    internal static async Task<Answered> SendAsync(string method, string path, string? json, Func<MethodInfo, object?[], object?>? answer = null, ProviderType providerType = ProviderType.AzureServiceBus)
+    internal static async Task<Answered> SendAsync(string method, string path, string? json, Func<MethodInfo, object?[], object?>? answer = null, ProviderType providerType = ProviderType.AzureServiceBus, Func<HttpContent>? content = null)
     {
         var provider = DispatchProxy.Create<IMessagingProvider, RecordingProvider>();
         var recorder = (RecordingProvider)(object)provider;
@@ -79,6 +79,7 @@ public class EntityAdministrationTests
             recorder.Calls.Clear();
             using var request = new HttpRequestMessage(new HttpMethod(method), path);
             if (json is not null) request.Content = new StringContent(json, Encoding.UTF8, "application/json");
+            if (content is not null) request.Content = content();
             using var response = await client.SendAsync(request);
             return new Answered(response.StatusCode, await response.Content.ReadAsStringAsync(), response.Headers.Location, recorder.Calls.ToList());
         }

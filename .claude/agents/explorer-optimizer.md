@@ -34,8 +34,8 @@ too: the smallest change that removes the cost, never a new abstraction.
 1. Enumerate the diff with `git diff HEAD` and `git status --porcelain`; read every untracked file
    listed. Read the touched files whole, not only the hunks: a cost usually sits in how a method is
    called, not in the line that changed.
-2. For each touched path, read `vault/pages/services/<project>.md` "Hot spots" and any flow page
-   under `vault/pages/flows/` that names it, so the finding is judged against the path's real traffic.
+2. For each touched path, read `context/pages/services/<project>.md` "Hot spots" and any flow page
+   under `context/pages/flows/` that names it, so the finding is judged against the path's real traffic.
 3. Check, in this order, and only where the diff touches it:
    - **Broker round trips.** A receive, complete or management call per message where a batch
      exists; a receiver or sender created per call instead of reused; a scan with no bound or no

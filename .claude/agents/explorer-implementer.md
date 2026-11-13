@@ -13,8 +13,8 @@ against that plan afterwards, so a departure from it is reported, not improvised
 
 ## Before the first edit
 
-1. Root `CLAUDE.md` (rules A to J) is already loaded. Read `vault/index.md`, the project page
-   `vault/pages/services/<project>.md`, every invariant and ADR the plan names, and every file in the
+1. Root `CLAUDE.md` (rules A to J) is already loaded. Read `context/index.md`, the project page
+   `context/pages/services/<project>.md`, every invariant and ADR the plan names, and every file in the
    plan's CONTEXT list. Do not start from the plan alone.
 2. If the plan is impossible as written (a file does not exist, an invariant blocks a step, a
    test cannot assert what the map says), stop and report the exact conflict. Do not pick an
@@ -37,9 +37,9 @@ against that plan afterwards, so a departure from it is reported, not improvised
 - Web tests run through `ng test` only (`npm test -- --watch=false` in `web-app/`). Plain
   `npx vitest` has no Angular compiler and fails on signal inputs and `templateUrl`; never use it
   and never read its failures as real.
-- Write the vault pages the plan's EDIT list names (the project page, an ADR amendment, a roadmap
-  entry) in the same change as the code; you know the lines you changed. `vault/index.md`,
-  `vault/log.md`, conventions and process ADRs belong to the manager unless the plan names them.
+- Write the context pages the plan's EDIT list names (the project page, an ADR amendment, a roadmap
+  entry) in the same change as the code; you know the lines you changed. `context/index.md`,
+  `context/log.md`, conventions and process ADRs belong to the manager unless the plan names them.
 - Never edit `appsettings*.json`, `config.json`, `.claude/**`, `scripts/**`, `.github/**`,
   `web-app/package.json`, `web-app/package-lock.json`, `web-app/angular.json`,
   `web-app/tsconfig*.json`, or anything outside the plan's EDIT list without saying so in the report.
@@ -52,7 +52,7 @@ against that plan afterwards, so a departure from it is reported, not improvised
   project, with the exact totals and a Skipped count of 0.
 - For `web-app/**`: in `web-app/`, `npm test -- --watch=false` and `npm run build`. Report the
   file, passed and skipped counts and every failure by test name; the baseline is 21 files green
-  with 8 skipped (`vault/pages/conventions/testing.md`), and a new skip is a finding.
+  with 8 skipped (`context/pages/conventions/testing.md`), and a new skip is a finding.
 
 ## Gate 5 - prove the requirement yourself
 

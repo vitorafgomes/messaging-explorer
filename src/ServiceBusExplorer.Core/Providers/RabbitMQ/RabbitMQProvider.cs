@@ -135,14 +135,14 @@ public class RabbitMQProvider : IMessagingProvider
     public async Task<IEnumerable<IQueueEntity>> GetQueuesAsync()
     {
         EnsureConnected();
-        return await _managementClient!.GetQueuesAsync();
+        return WithDeadLetterCounts(await _managementClient!.GetQueuesAsync());
     }
 
     /// <inheritdoc />
     public async Task<IQueueEntity?> GetQueueAsync(string queueName)
     {
         EnsureConnected();
-        return await _managementClient!.GetQueueAsync(queueName);
+        return await WithDeadLetterCountAsync(await _managementClient!.GetQueueAsync(queueName), CancellationToken.None);
     }
 
     /// <inheritdoc />
@@ -355,7 +355,7 @@ public class RabbitMQProvider : IMessagingProvider
         var bindings = await _managementClient!.GetExchangeBindingsAsync(topicName);
 
         var subscriptions = new List<SubscriptionInfo>();
-        foreach (var binding in bindings)
+        foreach (var binding in bindings.Where(b => b.DestinationType == "queue"))
         {
             var queue = await _managementClient.GetQueueAsync(binding.Destination);
             // Try to get the DLQ message count (convention: {queueName}.dlq)
@@ -1094,6 +1094,18 @@ public class RabbitMQProvider : IMessagingProvider
 
     #endregion
 
+    #region Entity Definitions (Not supported)
+
+    /// <inheritdoc />
+    public Task<EntityDefinitionsDocument> ExportDefinitionsAsync(CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("RabbitMQ does not support entity definitions.");
+
+    /// <inheritdoc />
+    public Task<DefinitionsImportResult> ImportDefinitionsAsync(EntityDefinitionsDocument document, bool dryRun, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("RabbitMQ does not support entity definitions.");
+
+    #endregion
+
     #region Session Operations (Not supported)
 
     /// <inheritdoc />
@@ -1152,6 +1164,92 @@ public class RabbitMQProvider : IMessagingProvider
     public async ValueTask DisposeAsync()
     {
         await DisconnectAsync();
+    }
+
+    #endregion
+
+    #region Construction
+
+    public RabbitMQProvider()
+    {
+    }
+
+    /// <summary>
+    /// A provider over a connection and a management client that are already open, for tests that answer the
+    /// management API with a handler of their own.
+    /// </summary>
+    internal RabbitMQProvider(IConnection connection, RabbitMQManagementClient managementClient)
+    {
+        _connection = connection;
+        _managementClient = managementClient;
+    }
+
+    #endregion
+
+    #region Counts
+
+    /// <inheritdoc />
+    public async Task<IQueueEntity?> GetQueueCountsAsync(string queueName, CancellationToken cancellationToken)
+    {
+        EnsureConnected();
+        return await WithDeadLetterCountAsync(await _managementClient!.GetQueueAsync(queueName, cancellationToken), cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<SubscriptionInfo?> GetSubscriptionCountsAsync(string topicName, string subscriptionName, CancellationToken cancellationToken)
+    {
+        EnsureConnected();
+        IEnumerable<RabbitMQBindingInfo> bindings;
+        try
+        {
+            bindings = await _managementClient!.GetExchangeBindingsAsync(topicName, cancellationToken);
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+
+        var binding = bindings.FirstOrDefault(b => b.Destination == subscriptionName || b.PropertiesKey == subscriptionName);
+        if (binding == null)
+        {
+            return null;
+        }
+
+        var queue = await _managementClient.GetQueueAsync(binding.Destination, cancellationToken);
+        var dlqQueue = await _managementClient.GetQueueAsync($"{binding.Destination}.dlq", cancellationToken);
+        return MapBindingToSubscriptionInfo(topicName, binding, queue, dlqQueue);
+    }
+
+    /// <summary>
+    /// Fills each queue's dead-letter count with the ready messages of its <c>&lt;queue&gt;.dlq</c> from the same list,
+    /// the convention a subscription's dead-letter count follows; zero when there is none.
+    /// </summary>
+    private static List<RabbitMQQueueInfo> WithDeadLetterCounts(IEnumerable<RabbitMQQueueInfo> queues)
+    {
+        var listed = queues.ToList();
+        var byName = listed.ToDictionary(q => q.Name, StringComparer.Ordinal);
+        foreach (var queue in listed)
+        {
+            queue.DeadLetterMessageCount = byName.TryGetValue($"{queue.Name}.dlq", out var deadLetter) ? deadLetter.ActiveMessageCount : 0;
+        }
+
+        return listed;
+    }
+
+    /// <summary>
+    /// Reads the queue's <c>&lt;queue&gt;.dlq</c> and fills its dead-letter count with that queue's ready messages; zero
+    /// when there is none.
+    /// </summary>
+    private async Task<RabbitMQQueueInfo?> WithDeadLetterCountAsync(RabbitMQQueueInfo? queue, CancellationToken cancellationToken)
+    {
+        if (queue == null)
+        {
+            return null;
+        }
+
+        var deadLetter = await _managementClient!.GetQueueAsync($"{queue.Name}.dlq", cancellationToken);
+        queue.DeadLetterMessageCount = deadLetter?.ActiveMessageCount ?? 0;
+        return queue;
     }
 
     #endregion

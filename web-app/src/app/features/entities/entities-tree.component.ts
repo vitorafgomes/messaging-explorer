@@ -11,6 +11,8 @@ import { TreeNode } from '../../core/models';
 import { TreeDataBuilderService, EntitySelectionService, ConnectionService, LoggerService, DeadLetterNotificationService } from '../../core/services';
 import { ProviderService } from '../../core/services/provider.service';
 import { EntityFormDialogComponent, EntityFormDialogData } from './entity-form-dialog.component';
+import { ExportDefinitionsDialogComponent } from './export-definitions-dialog.component';
+import { ImportDefinitionsDialogComponent } from './import-definitions-dialog.component';
 
 @Component({
   selector: 'app-entities-tree',
@@ -36,6 +38,14 @@ import { EntityFormDialogComponent, EntityFormDialogData } from './entity-form-d
           <i class="fa fa-sitemap header-icon"></i>
           <span class="tree-title">Service Bus Entities</span>
         </div>
+        @if (canUseDefinitions() && isConnected) {
+          <button mat-icon-button type="button" class="definitions-btn" aria-label="Export definitions" matTooltip="Export definitions" (click)="openExportDefinitions()">
+            <mat-icon>download</mat-icon>
+          </button>
+          <button mat-icon-button type="button" class="definitions-btn" aria-label="Import definitions" matTooltip="Import definitions" (click)="openImportDefinitions()">
+            <mat-icon>upload</mat-icon>
+          </button>
+        }
         <button class="btn btn-sm btn-outline-secondary refresh-btn"
                 (click)="loadTree()"
                 [disabled]="loading() || !isConnected"
@@ -310,6 +320,8 @@ import { EntityFormDialogComponent, EntityFormDialogData } from './entity-form-d
 
     .header-content {
       display: flex;
+      flex: 1;
+      min-width: 0;
       align-items: center;
       gap: 8px;
     }
@@ -704,6 +716,9 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
   /** Create is offered only when the connected broker's API explicitly declares entity administration. */
   readonly canCreate = computed(() => this.providerService.capabilities()?.supportsEntityUpdate === true);
 
+  /** Export and import of definitions are offered only when the connected broker's API explicitly declares them. */
+  readonly canUseDefinitions = computed(() => this.providerService.capabilities()?.supportsDefinitions === true);
+
   treeData: TreeNode[] = [];
   expandedNodes = new Set<string>();
   loading: WritableSignal<boolean> = signal<boolean>(false);
@@ -840,6 +855,14 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
       ? { mode: 'create', kind: 'subscription', topicName: node.name }
       : { mode: 'create', kind: node.id === 'category-queues' ? 'queue' : 'topic', topicName: undefined };
     this.dialog.open(EntityFormDialogComponent, { data, width: '720px', maxWidth: '95vw' });
+  }
+
+  openExportDefinitions() {
+    this.dialog.open(ExportDefinitionsDialogComponent, { width: '520px', maxWidth: '95vw' });
+  }
+
+  openImportDefinitions() {
+    this.dialog.open(ImportDefinitionsDialogComponent, { width: '760px', maxWidth: '95vw' });
   }
 
   isSelected(node: TreeNode): boolean {

@@ -10,6 +10,8 @@ import { ProviderCapabilities } from '../../core/models/provider.model';
 import { TreeNode } from '../../core/models';
 import { EntitiesTreeComponent } from './entities-tree.component';
 import { EntityFormDialogComponent } from './entity-form-dialog.component';
+import { ExportDefinitionsDialogComponent } from './export-definitions-dialog.component';
+import { ImportDefinitionsDialogComponent } from './import-definitions-dialog.component';
 
 describe('EntitiesTreeComponent create entry points', () => {
   let open: ReturnType<typeof vi.fn>;
@@ -89,6 +91,31 @@ describe('EntitiesTreeComponent create entry points', () => {
       expect(labels(render(capabilities))).toStrictEqual([]);
       TestBed.resetTestingModule();
     }
+  });
+
+  describe('Export and Import of definitions in the tree header', () => {
+    const definitionButtons = (el: HTMLElement) =>
+      Array.from(el.querySelectorAll('.tree-header button[aria-label$="definitions"]')) as HTMLButtonElement[];
+
+    it('with supportsDefinitions exactly true: Export and Import, each named, and each opens its dialog', () => {
+      const el = render({ ...DEFAULT_AZURE_CAPABILITIES, supportsDefinitions: true });
+
+      const buttons = definitionButtons(el);
+      expect(buttons.map(b => b.getAttribute('aria-label'))).toStrictEqual(['Export definitions', 'Import definitions']);
+      buttons[0].click();
+      buttons[1].click();
+      expect(open.mock.calls.map(c => c[0])).toStrictEqual([ExportDefinitionsDialogComponent, ImportDefinitionsDialogComponent]);
+    });
+
+    it('without the explicit true (absent, false, RabbitMQ, or no connection) there is neither', () => {
+      expect(definitionButtons(render(DEFAULT_AZURE_CAPABILITIES))).toHaveLength(0);
+      TestBed.resetTestingModule();
+      expect(definitionButtons(render({ ...DEFAULT_AZURE_CAPABILITIES, supportsDefinitions: false }))).toHaveLength(0);
+      TestBed.resetTestingModule();
+      expect(definitionButtons(render({ ...DEFAULT_RABBITMQ_CAPABILITIES, supportsDefinitions: false }))).toHaveLength(0);
+      TestBed.resetTestingModule();
+      expect(definitionButtons(render(null))).toHaveLength(0);
+    });
   });
 });
 
@@ -190,4 +217,5 @@ describe('EntitiesTreeComponent runs one tree load at a time', () => {
     expect(text()).toContain('orders');
     expect(text()).not.toContain('stale');
   });
+
 });
