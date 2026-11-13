@@ -2,146 +2,80 @@ import { TestBed } from '@angular/core/testing';
 import { of, firstValueFrom } from 'rxjs';
 import { SessionService } from './session.service';
 import { ApiService } from './api.service';
-import { SessionInfo } from '../models';
+import { SessionDetail, SessionList } from '../models';
 
-describe('SessionService', () => {
+describe('SessionService: the eight session routes, through ApiService only', () => {
   let service: SessionService;
-  let apiServiceMock: { get: ReturnType<typeof vi.fn>; put: ReturnType<typeof vi.fn> };
+  let api: { get: ReturnType<typeof vi.fn>; put: ReturnType<typeof vi.fn> };
 
-  const mockSessions: SessionInfo[] = [
-    { sessionId: 'session-1', state: '{"key": "value"}', lockedUntil: '2026-04-08T22:00:00Z' },
-    { sessionId: 'session-2' },
-  ];
+  const LIST: SessionList = { sessions: [{ sessionId: 'order-1001', messageCount: 12, firstSequenceNumber: 4411 }], scannedMessages: 1000, truncated: true };
+  const DETAIL: SessionDetail = { sessionId: 'order-1001', state: '{"step":3}', stateIsBinary: false, lockedUntil: '2026-11-12T23:10:00+00:00' };
+
+  const QUEUE = { queueName: 'orders' };
+  const SUBSCRIPTION = { topicName: 'order-events', subscriptionName: 'billing' };
 
   beforeEach(() => {
-    apiServiceMock = {
-      get: vi.fn().mockReturnValue(of(mockSessions)),
-      put: vi.fn().mockReturnValue(of({ success: true })),
-    };
-
-    TestBed.configureTestingModule({
-      providers: [
-        SessionService,
-        { provide: ApiService, useValue: apiServiceMock },
-      ],
-    });
+    api = { get: vi.fn(() => of(LIST)), put: vi.fn(() => of(DETAIL)) };
+    TestBed.configureTestingModule({ providers: [SessionService, { provide: ApiService, useValue: api }] });
     service = TestBed.inject(SessionService);
   });
 
-  it('should be created', () => {
-    expect(service).toBeTruthy();
+  it('a queue: list, detail, messages and state write under api/queues/{name}/sessions', () => {
+    service.list(QUEUE).subscribe();
+    service.list(QUEUE, 250).subscribe();
+    service.get(QUEUE, 'order-1001').subscribe();
+    service.messages(QUEUE, 'order-1001').subscribe();
+    service.setState(QUEUE, 'order-1001', { state: '{"step":4}', expectedState: '{"step":3}' }).subscribe();
+
+    expect(api.get.mock.calls.map(c => c[0])).toStrictEqual([
+      'queues/orders/sessions?maxMessages=1000',
+      'queues/orders/sessions?maxMessages=250',
+      'queues/orders/sessions/order-1001',
+      'queues/orders/sessions/order-1001/messages?count=100'
+    ]);
+    expect(api.put.mock.calls).toStrictEqual([
+      ['queues/orders/sessions/order-1001/state', { state: '{"step":4}', expectedState: '{"step":3}' }]
+    ]);
   });
 
-  describe('getSubscriptionSessions', () => {
-    it('should call correct URL', () => {
-      service.getSubscriptionSessions('my-topic', 'my-sub').subscribe();
-      expect(apiServiceMock.get).toHaveBeenCalledWith(
-        'sessions/my-topic/subscriptions/my-sub?maxSessions=50'
-      );
-    });
+  it('a subscription: the same four routes under api/topics/{topic}/subscriptions/{subscription}/sessions', () => {
+    service.list(SUBSCRIPTION).subscribe();
+    service.get(SUBSCRIPTION, 'order-1001').subscribe();
+    service.messages(SUBSCRIPTION, 'order-1001', 20).subscribe();
+    service.setState(SUBSCRIPTION, 'order-1001', { state: null, expectedState: null }).subscribe();
 
-    it('should pass maxSessions param', () => {
-      service.getSubscriptionSessions('my-topic', 'my-sub', 100).subscribe();
-      expect(apiServiceMock.get).toHaveBeenCalledWith(
-        'sessions/my-topic/subscriptions/my-sub?maxSessions=100'
-      );
-    });
-
-    it('should return sessions from API', async () => {
-      const sessions = await firstValueFrom(service.getSubscriptionSessions('my-topic', 'my-sub'));
-      expect(sessions).toEqual(mockSessions);
-      expect(sessions.length).toBe(2);
-    });
+    expect(api.get.mock.calls.map(c => c[0])).toStrictEqual([
+      'topics/order-events/subscriptions/billing/sessions?maxMessages=1000',
+      'topics/order-events/subscriptions/billing/sessions/order-1001',
+      'topics/order-events/subscriptions/billing/sessions/order-1001/messages?count=20'
+    ]);
+    expect(api.put.mock.calls).toStrictEqual([
+      ['topics/order-events/subscriptions/billing/sessions/order-1001/state', { state: null, expectedState: null }]
+    ]);
   });
 
-  describe('getQueueSessions', () => {
-    it('should call correct URL', () => {
-      service.getQueueSessions('my-queue').subscribe();
-      expect(apiServiceMock.get).toHaveBeenCalledWith(
-        'sessions/my-queue?maxSessions=50'
-      );
-    });
+  it('a clear sends expectedState null as a present property, never dropped from the JSON', () => {
+    service.setState(QUEUE, 'order-1001', { state: null, expectedState: null }).subscribe();
 
-    it('should pass maxSessions param', () => {
-      service.getQueueSessions('my-queue', 25).subscribe();
-      expect(apiServiceMock.get).toHaveBeenCalledWith(
-        'sessions/my-queue?maxSessions=25'
-      );
-    });
-
-    it('should return sessions from API', async () => {
-      const sessions = await firstValueFrom(service.getQueueSessions('my-queue'));
-      expect(sessions).toEqual(mockSessions);
-    });
+    expect(JSON.stringify(api.put.mock.calls[0][1])).toBe('{"state":null,"expectedState":null}');
   });
 
-  describe('setSubscriptionSessionState', () => {
-    it('should call PUT with state body', () => {
-      const newState = '{"updated": true}';
-      service.setSubscriptionSessionState('my-topic', 'my-sub', 'session-1', newState).subscribe();
-      expect(apiServiceMock.put).toHaveBeenCalledWith(
-        'sessions/my-topic/subscriptions/my-sub/session-1/state',
-        { state: newState }
-      );
-    });
+  it('names and session ids with / and a space stay one segment each', () => {
+    service.list({ queueName: 'q/1' }).subscribe();
+    service.get({ topicName: 't/1', subscriptionName: 's 2' }, 'id/with space').subscribe();
+    service.messages({ queueName: 'q/1' }, 'id/with space').subscribe();
+    service.setState({ topicName: 't/1', subscriptionName: 's 2' }, 'id/with space', { state: 'x', expectedState: null }).subscribe();
 
-    it('should send null state', () => {
-      service.setSubscriptionSessionState('my-topic', 'my-sub', 'session-1', null).subscribe();
-      expect(apiServiceMock.put).toHaveBeenCalledWith(
-        'sessions/my-topic/subscriptions/my-sub/session-1/state',
-        { state: null }
-      );
-    });
-
-    it('should return success response', async () => {
-      const result = await firstValueFrom(
-        service.setSubscriptionSessionState('my-topic', 'my-sub', 'session-1', 'data')
-      );
-      expect(result).toEqual({ success: true });
-    });
+    expect(api.get.mock.calls.map(c => c[0])).toStrictEqual([
+      'queues/q%2F1/sessions?maxMessages=1000',
+      'topics/t%2F1/subscriptions/s%202/sessions/id%2Fwith%20space',
+      'queues/q%2F1/sessions/id%2Fwith%20space/messages?count=100'
+    ]);
+    expect(api.put.mock.calls[0][0]).toBe('topics/t%2F1/subscriptions/s%202/sessions/id%2Fwith%20space/state');
   });
 
-  describe('setQueueSessionState', () => {
-    it('should call PUT with state body', () => {
-      const newState = '{"updated": true}';
-      service.setQueueSessionState('my-queue', 'session-1', newState).subscribe();
-      expect(apiServiceMock.put).toHaveBeenCalledWith(
-        'sessions/my-queue/state/session-1',
-        { state: newState }
-      );
-    });
-
-    it('should send null state', () => {
-      service.setQueueSessionState('my-queue', 'session-1', null).subscribe();
-      expect(apiServiceMock.put).toHaveBeenCalledWith(
-        'sessions/my-queue/state/session-1',
-        { state: null }
-      );
-    });
-
-    it('should return success response', async () => {
-      const result = await firstValueFrom(
-        service.setQueueSessionState('my-queue', 'session-1', 'data')
-      );
-      expect(result).toEqual({ success: true });
-    });
-  });
-
-  describe('names in the URL', () => {
-    it('sends queue, topic, subscription and session names with / and a space as one segment each', () => {
-      service.getQueueSessions('q/1').subscribe();
-      service.getSubscriptionSessions('t/1', 's/2').subscribe();
-      service.setQueueSessionState('q/1', 'id/with space', 'x').subscribe();
-      service.setSubscriptionSessionState('t/1', 's/2', 'id/with space', 'x').subscribe();
-
-      expect(apiServiceMock.get.mock.calls.map(c => c[0])).toEqual([
-        'sessions/q%2F1?maxSessions=50',
-        'sessions/t%2F1/subscriptions/s%2F2?maxSessions=50'
-      ]);
-      expect(apiServiceMock.put.mock.calls.map(c => c[0])).toEqual([
-        'sessions/q%2F1/state/id%2Fwith%20space',
-        'sessions/t%2F1/subscriptions/s%2F2/id%2Fwith%20space/state'
-      ]);
-    });
+  it('returns what the API answered', async () => {
+    expect(await firstValueFrom(service.list(QUEUE))).toStrictEqual(LIST);
+    expect(await firstValueFrom(service.setState(QUEUE, 'order-1001', { state: 'x', expectedState: null }))).toStrictEqual(DETAIL);
   });
 });
