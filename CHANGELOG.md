@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+Versions after 2.4.4 are described in the notes of each [GitHub Release](https://github.com/vitorafgomes/messaging-explorer/releases), written from the commits by the release workflow. This file covers versions up to 2.4.4.
 
 ## [2.4.4] - 2026-11-13
 

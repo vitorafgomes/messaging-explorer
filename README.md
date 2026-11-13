@@ -64,7 +64,7 @@ The app looks for a new version a few seconds after it starts and every four hou
 - Exchanges, queues and bindings, read through the management plugin.
 - Recognises the common topologies (work queue, publish and subscribe, routing, topics, RPC, headers).
 
-See the [changelog](CHANGELOG.md) for what each version added.
+See the [releases](https://github.com/vitorafgomes/messaging-explorer/releases) for what each version added; the [changelog](CHANGELOG.md) covers versions up to 2.4.4.
 
 ## Connect to a broker
 
@@ -130,7 +130,7 @@ The same commands run in CI on every pull request.
 npm run electron:build:linux    # or :win, :mac
 ```
 
-The packages are written to `web-app/release/`. Published releases are built by the release workflow when a `v<version>` tag is pushed.
+The packages are written to `web-app/release/`. Published releases are built by the release workflow: Run workflow on `main` computes the next version from the commits and creates the tag and the release; pushing a `v<version>` tag releases that tag.
 
 ## Project layout
 

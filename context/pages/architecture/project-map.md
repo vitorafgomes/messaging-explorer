@@ -1,9 +1,9 @@
 ---
 title: "Project map"
-version: "1.0"
+version: "1.1"
 date: 2026-11-12
 updated: 2026-11-13
-changes: "2026-11-13: CI runs the web and Electron helper tests, corrected in the CI section and the change table. Before: the integration project also runs the Azure Service Bus emulator"
+changes: "2026-11-13: release from main; CI runs the web and Electron tests. Before: the integration project also runs the Azure Service Bus emulator"
 page_type: longform
 status: active
 description: "Every project in ServiceBusExplorer.slnx plus the Angular app, the Electron shell and the docs site: kind, references, packages, covering tests and which tests to run when a project changes."
@@ -97,7 +97,7 @@ The vendor SDKs (`Azure.*`, `RabbitMQ.Client`) are referenced by Core only; Api 
 
 ## CI
 
-`.github/workflows/ci.yml` runs on pushes and pull requests to `main`. Job `dotnet` restores and builds the whole solution in Release (`.github/workflows/ci.yml#dotnet-version: '10.0.x'`, `.github/workflows/ci.yml#run: dotnet restore ServiceBusExplorer.slnx`), so all five projects always build together, and tests Core.Tests and Api.Tests by path (`.github/workflows/ci.yml`, `.github/workflows/ci.yml#- name: Test`), so it starts no container. Job `integration` builds and runs the integration project on its own runner (`.github/workflows/ci.yml## ---------------------------------------------------------------------------`, `.github/workflows/ci.yml#run: dotnet build src/ServiceBusExplorer.IntegrationTests --configuration Releas`); the release workflow calls this workflow, so a tag waits for it too. Job `web` runs `npm ci` and `npm run build` in `web-app` (`.github/workflows/ci.yml`) and, since 2026-11-12, `npm test -- --watch=false` between them (`.github/workflows/ci.yml`), so every spec file is part of CI (45 on 2026-11-12), and the Electron helper tests run after them with `npm run test:electron` (`.github/workflows/ci.yml`). `.github/workflows/release.yml` triggers on `v*` tags (`.github/workflows/release.yml#- 'v*'`) and builds Electron installers for Linux, Windows and macOS (`.github/workflows/release.yml#run: npm run electron:build:linux`, `.github/workflows/release.yml#run: npm run electron:build:win`, `.github/workflows/release.yml#run: npm run electron:build:mac`).
+`.github/workflows/ci.yml` runs on pushes and pull requests to `main`. Job `dotnet` restores and builds the whole solution in Release (`.github/workflows/ci.yml#dotnet-version: '10.0.x'`, `.github/workflows/ci.yml#run: dotnet restore ServiceBusExplorer.slnx`), so all five projects always build together, and tests Core.Tests and Api.Tests by path (`.github/workflows/ci.yml`, `.github/workflows/ci.yml#- name: Test`), so it starts no container. Job `integration` builds and runs the integration project on its own runner (`.github/workflows/ci.yml## ---------------------------------------------------------------------------`, `.github/workflows/ci.yml#run: dotnet build src/ServiceBusExplorer.IntegrationTests --configuration Releas`); the release workflow calls this workflow, so a release waits for it. Job `web` runs `npm ci` and `npm run build` in `web-app` (`.github/workflows/ci.yml`) and, since 2026-11-12, `npm test -- --watch=false` between them (`.github/workflows/ci.yml`), so every spec file is part of CI (45 on 2026-11-12), and the Electron helper tests run after them with `npm run test:electron` (`.github/workflows/ci.yml`). `.github/workflows/release.yml` runs by hand from `main` or on a `v*` tag (`.github/workflows/release.yml#workflow_dispatch:`) and builds Electron installers for Linux, Windows and macOS (`.github/workflows/release.yml#run: npm run electron:build:linux`, `.github/workflows/release.yml#run: npm run electron:build:win`, `.github/workflows/release.yml#run: npm run electron:build:mac`).
 
 ## Who references whom: what to run when X changes
 

@@ -1,61 +1,127 @@
-# Release pipeline for Messaging Explorer
-# Triggers on version tags (v*) and produces:
+# Release pipeline for Messaging Explorer. Runs by hand from main (Run workflow: the version is
+# computed from the commits since the last vX.Y.Z tag, and the tag and the release are created
+# once every build passes) or from a pushed version tag. Produces:
 #   - Linux: AppImage + deb
 #   - Windows: NSIS installer + portable exe
 #   - macOS: dmg + zip (unsigned)
-#   - GitHub Release with all artifacts attached
+#   - SHA256SUMS-<os>.txt for each system's packages
+#   - the updater metadata of the version's channel (latest*.yml or beta*.yml) and block maps
 
 name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      kind:
+        description: 'From main: release (vX.Y.Z, marked Latest) or prerelease (vX.Y.Z-beta.N, offered only to the Beta update channel). Ignored when run from a tag.'
+        type: choice
+        options: [release, prerelease]
+        default: release
+      version:
+        description: 'From main: a version to use instead of the computed one, for example 1.0.0 or 1.0.0-beta.1. Leave empty to use the computed version.'
+        type: string
+        required: false
+        default: ''
 
-# Prevent concurrent releases for the same tag
+permissions:
+  contents: read
+
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
-permissions:
-  contents: write
-
 jobs:
-  # ---------------------------------------------------------------------------
-  # Gate - nothing is packaged unless CI passes on this commit and the tag
-  # matches the version in web-app/package.json
-  # ---------------------------------------------------------------------------
-  verify:
-    name: CI on the tagged commit
-    uses: ./.github/workflows/ci.yml
-    permissions:
-      contents: read
-
-  verify-version:
-    name: Tag matches package version
+  check:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      create: ${{ steps.version.outputs.create }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+      notes: ${{ steps.version.outputs.notes }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        if: github.ref_type == 'branch'
+        with:
+          fetch-depth: 0
 
-      - name: Compare tag and package.json
+      - name: The version
+        id: version
         shell: bash
+        env:
+          KIND: ${{ inputs.kind }}
+          VERSION_OVERRIDE: ${{ inputs.version }}
         run: |
-          version=$(node -p "require('./web-app/package.json').version")
-          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME does not match web-app/package.json version $version (expected v$version)."
+          create=false; prerelease=false; notes=''
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            if ! [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?$ ]]; then
+              echo "::error::Tag $GITHUB_REF_NAME is not a version. Use v<major>.<minor>.<patch> or v<major>.<minor>.<patch>-beta.<n>, for example v1.2.3 or v1.2.3-beta.1: the updater has only the latest and beta channels."
+              exit 1
+            fi
+            version="${GITHUB_REF_NAME#v}"
+          elif [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && [ "$GITHUB_REF_NAME" = main ]; then
+            case "$KIND" in
+              release) args=(release); shape='^[0-9]+\.[0-9]+\.[0-9]+$' ;;
+              prerelease) args=(prerelease beta); prerelease=true; shape='^[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$' ;;
+              *) echo "::error::Kind $KIND is neither release nor prerelease."; exit 1 ;;
+            esac
+            if [ -n "$VERSION_OVERRIDE" ]; then
+              if ! [[ "$VERSION_OVERRIDE" =~ $shape ]]; then
+                echo "::error::Version $VERSION_OVERRIDE does not fit a $KIND. A release is <major>.<minor>.<patch>, for example 1.2.3; a prerelease is a beta, for example 1.2.3-beta.1."
+                exit 1
+              fi
+              version="$VERSION_OVERRIDE"
+            else
+              version=$(bash tools/release/next-version.sh "${args[@]}")
+            fi
+            if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+              echo "::error::The tag v$version already exists. Pick another version, or run the workflow from that tag to rebuild it."
+              exit 1
+            fi
+            notes=$(bash tools/release/next-version.sh --notes "${args[@]}")
+            create=true
+          else
+            echo "::error::A release runs from a version tag, or by hand from main, not from the $GITHUB_REF_TYPE $GITHUB_REF_NAME. Push a tag such as v1.2.3, or choose main or the tag under Use workflow from."
             exit 1
           fi
-          echo "Tag $GITHUB_REF_NAME matches package version $version."
+          {
+            echo "version=$version"
+            echo "tag=v$version"
+            echo "create=$create"
+            echo "prerelease=$prerelease"
+            echo "notes<<RELEASE_NOTES"
+            printf '%s\n' "$notes"
+            echo "RELEASE_NOTES"
+          } >> "$GITHUB_OUTPUT"
+          {
+            if [ "$create" = true ]; then
+              echo "## Releasing v$version ($KIND)"
+              echo
+              echo "The tag and the release are created on $GITHUB_SHA once every build leg passes."
+              echo
+              printf '%s\n' "$notes"
+            else
+              echo "## Releasing $GITHUB_REF_NAME from its tag"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Releasing $version"
+
+  # ---------------------------------------------------------------------------
+  # Gate - nothing is packaged unless CI passes on this commit
+  # ---------------------------------------------------------------------------
+  verify:
+    name: CI on the released commit
+    needs: check
+    uses: ./.github/workflows/ci.yml
 
   # ---------------------------------------------------------------------------
   # Linux build — AppImage + deb
   # ---------------------------------------------------------------------------
   build-linux:
     name: Build Linux
-    needs: [verify, verify-version]
+    needs: [check, verify]
     runs-on: ubuntu-latest
 
     steps:
@@ -78,15 +144,32 @@ jobs:
         working-directory: web-app
         run: npm ci
 
+      - name: Set the app version
+        working-directory: web-app
+        shell: bash
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+        run: npm pkg set version="$VERSION"
+
       - name: Build Linux packages
         working-directory: web-app
         run: npm run electron:build:linux
+
+      - name: Write checksums
+        working-directory: web-app/release
+        shell: bash
+        run: |
+          shopt -s extglob
+          if command -v sha256sum >/dev/null; then hash=(sha256sum); else hash=(shasum -a 256); fi
+          "${hash[@]}" Messaging-Explorer-!(*.blockmap) > "SHA256SUMS-linux.txt"
+          cat "SHA256SUMS-linux.txt"
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
         with:
           name: linux-artifacts
           path: |
+            web-app/release/SHA256SUMS-linux.txt
             web-app/release/*.AppImage
             web-app/release/*.deb
             web-app/release/*-linux.yml
@@ -97,7 +180,7 @@ jobs:
   # ---------------------------------------------------------------------------
   build-windows:
     name: Build Windows
-    needs: [verify, verify-version]
+    needs: [check, verify]
     runs-on: windows-latest
 
     steps:
@@ -120,15 +203,32 @@ jobs:
         working-directory: web-app
         run: npm ci
 
+      - name: Set the app version
+        working-directory: web-app
+        shell: bash
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+        run: npm pkg set version="$VERSION"
+
       - name: Build Windows packages
         working-directory: web-app
         run: npm run electron:build:win
+
+      - name: Write checksums
+        working-directory: web-app/release
+        shell: bash
+        run: |
+          shopt -s extglob
+          if command -v sha256sum >/dev/null; then hash=(sha256sum); else hash=(shasum -a 256); fi
+          "${hash[@]}" Messaging-Explorer-!(*.blockmap) > "SHA256SUMS-windows.txt"
+          cat "SHA256SUMS-windows.txt"
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
           name: windows-artifacts
           path: |
+            web-app/release/SHA256SUMS-windows.txt
             web-app/release/*.exe
             web-app/release/*.blockmap
             web-app/release/latest.yml
@@ -140,7 +240,7 @@ jobs:
   # ---------------------------------------------------------------------------
   build-mac:
     name: Build macOS
-    needs: [verify, verify-version]
+    needs: [check, verify]
     runs-on: macos-latest
 
     steps:
@@ -163,15 +263,32 @@ jobs:
         working-directory: web-app
         run: npm ci
 
+      - name: Set the app version
+        working-directory: web-app
+        shell: bash
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+        run: npm pkg set version="$VERSION"
+
       - name: Build macOS packages
         working-directory: web-app
         run: npm run electron:build:mac
+
+      - name: Write checksums
+        working-directory: web-app/release
+        shell: bash
+        run: |
+          shopt -s extglob
+          if command -v sha256sum >/dev/null; then hash=(sha256sum); else hash=(shasum -a 256); fi
+          "${hash[@]}" Messaging-Explorer-!(*.blockmap) > "SHA256SUMS-mac.txt"
+          cat "SHA256SUMS-mac.txt"
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
         with:
           name: mac-artifacts
           path: |
+            web-app/release/SHA256SUMS-mac.txt
             web-app/release/*.dmg
             web-app/release/*.zip
             web-app/release/*.blockmap
@@ -179,43 +296,43 @@ jobs:
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
-  # Create GitHub Release and attach all platform artifacts
+  # Create the tag and the GitHub Release, and attach every platform's files
   # ---------------------------------------------------------------------------
-  release:
-    name: Create Release
+  publish:
+    name: Publish Release
     runs-on: ubuntu-latest
-    needs: [build-linux, build-windows, build-mac]
+    needs: [check, build-linux, build-windows, build-mac]
+    permissions:
+      contents: write
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download Linux artifacts
+      - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: linux-artifacts
-          path: artifacts/linux
+          pattern: '*-artifacts'
+          merge-multiple: true
+          path: release
 
-      - name: Download Windows artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: windows-artifacts
-          path: artifacts/windows
-
-      - name: Download macOS artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: mac-artifacts
-          path: artifacts/mac
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
-          prerelease: ${{ contains(github.ref_name, '-beta') }}
-          files: |
-            artifacts/linux/*
-            artifacts/windows/*
-            artifacts/mac/*
+      - name: Publish the GitHub Release
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.check.outputs.tag }}
+          CREATE: ${{ needs.check.outputs.create }}
+          PRERELEASE: ${{ needs.check.outputs.prerelease }}
+          NOTES: ${{ needs.check.outputs.notes }}
+        run: |
+          ls -l release
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" release/* --clobber
+          elif [ "$CREATE" = true ]; then
+            printf '%s\n' "$NOTES" > "$RUNNER_TEMP/notes.md"
+            flags=()
+            if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "Messaging Explorer $TAG" --notes-file "$RUNNER_TEMP/notes.md" "${flags[@]}" release/*
+          else
+            flags=()
+            if [[ "$TAG" == *-* ]]; then flags+=(--prerelease); fi
+            gh release create "$TAG" --verify-tag --title "Messaging Explorer $TAG" --generate-notes "${flags[@]}" release/*
+          fi
