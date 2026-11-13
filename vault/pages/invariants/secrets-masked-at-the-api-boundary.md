@@ -43,7 +43,7 @@ Connection strings and passwords for production brokers pass through this tool. 
 
 ## Where it's enforced
 
-- `src/ServiceBusExplorer.Core/Services/FileWorkspaceManager.cs:274` - `MaskConnection` clones a connection with the three secret fields replaced by `***` when they are not empty (`:278`, `:283`, `:295` of the same file).
+- `src/ServiceBusExplorer.Core/Services/FileWorkspaceManager.cs:274` - `MaskConnection` clones a connection with the three secret fields replaced by `***` when they are not empty (`:281`, `:286`, `:298` of the same file).
 - `src/ServiceBusExplorer.Core/Services/IConnectionManager.cs:12` - `GetConnectionAsync` returns the masked clone; `src/ServiceBusExplorer.Core/Services/IConnectionManager.cs:18` `GetConnectionWithSecretAsync` is the one read with raw values, for server-side callers.
 - `src/ServiceBusExplorer.Core/Services/FileWorkspaceManager.cs:342` - `CopyEditableFields`, the one merge used by save and by import of a stored id: a secret that arrives as the mask keeps the stored value (`src/ServiceBusExplorer.Core/Services/FileWorkspaceManager.cs:346`, `src/ServiceBusExplorer.Core/Services/FileWorkspaceManager.cs:351`, `src/ServiceBusExplorer.Core/Services/FileWorkspaceManager.cs:360`).
 - `src/ServiceBusExplorer.Core/Services/FileWorkspaceManager.cs:385` - `SaveConnectionAsync` returns the masked clone of what it stored, on update and on create, so the POST response carries no raw secret.
