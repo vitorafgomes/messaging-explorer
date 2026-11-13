@@ -2,6 +2,40 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.4.3] - 2026-11-13
+
+### Added
+- A Settings screen, opened from the toolbar: the version, the update channel
+  (Stable or Beta), a check for updates with each state explained (available,
+  downloading, ready to restart, failed), the bug report and developer mode.
+  A package that cannot update itself (macOS, the portable Windows app, a
+  Linux package other than the AppImage) says so and links the download page.
+- Clear all data moved to a danger zone in Settings, behind a confirmation
+  that names what it removes and asks you to type the words.
+
+### Changed
+- The Connections screen follows the new design: one table grouped by client
+  and environment, Edit and Delete on each connection with Delete set apart,
+  and a clear message with Retry when the connections cannot be loaded.
+- The Messages dialog and the message tools (Send, Move, Import, Export,
+  Compare, Auto resubmit) follow the new design: tabs per sub-queue, the list
+  and the message detail side by side.
+- The version and the update channel are in Settings instead of the toolbar;
+  the toolbar shows a link to Settings when an update is available.
+
+### Fixed
+- The Send, Import, Move, Export and Auto resubmit dialogs were cut off on
+  their right edge.
+
+### Known issues
+- On a very large dead-letter queue, a resubmit run that leaves messages behind
+  at the head of the queue (a filter, refused messages) stops after a few
+  hundred of them; it says so, and nothing is lost or sent twice.
+- A saved connection shows "Unknown Provider" on the Connections screen, and the
+  Connected mark disappears when the list reloads.
+- macOS builds are unsigned, so macOS cannot install an update by itself;
+  download the new version from the releases page.
+
 ## [2.4.2] - 2026-11-13
 
 ### Added
