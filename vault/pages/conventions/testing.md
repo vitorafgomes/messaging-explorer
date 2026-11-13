@@ -30,7 +30,7 @@ reliability: high
 
 | What | Command | State on 2026-11-12 |
 |---|---|---|
-| Core | `dotnet test src/ServiceBusExplorer.Core.Tests` | 389 passed, 0 skipped (2026-11-13) |
+| Core | `dotnet test src/ServiceBusExplorer.Core.Tests` | 391 passed, 0 skipped (2026-11-13) |
 | Api | `dotnet test src/ServiceBusExplorer.Api.Tests` | 364 passed, 0 skipped (2026-11-13) |
 | Integration (Docker) | `dotnet test src/ServiceBusExplorer.IntegrationTests` | 94 passed, 0 skipped (29 RabbitMQ, 65 Azure Service Bus) on 2026-11-13, 392 s wall for the whole project run on that day, of which about 70 s is the scan-reach defect pin and about 110 s the protocol pin, each arranging 800 dead-lettered messages (231 s earlier the same day with 93); earlier, 93 to 102 s wall with the images cached, as measured when the project had 74 tests. The two collections run in parallel and the Azure one dominates: about 20 s to start SQL Server and the emulator, about 68 s of tests, of which 20 s is the deep dead-letter resubmit (350 messages arranged one by one) and 15 s three calls to a closed port that wait out the SDK retries |
 | Web | `npm test -- --watch=false` in `web-app/` | 49 files: 944 passed, 8 skipped (2026-11-13) |

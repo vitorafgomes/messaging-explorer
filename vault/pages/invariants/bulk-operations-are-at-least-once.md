@@ -20,6 +20,7 @@ enforced_by:
   - "src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:2221"
   - "src/ServiceBusExplorer.Api/Controllers/QueuesController.cs:375"
 verified_by:
+  - "src/ServiceBusExplorer.Core.Tests/Providers/Azure/AzureServiceBusProviderSubQueueTests.cs:713"
   - "web-app/src/app/core/services/resubmit-run.service.spec.ts:96"
   - "src/ServiceBusExplorer.Core.Tests/Providers/Azure/AzureServiceBusProviderBatchTests.cs:162"
   - "src/ServiceBusExplorer.Core.Tests/Providers/Azure/AzureServiceBusProviderBatchTests.cs:196"

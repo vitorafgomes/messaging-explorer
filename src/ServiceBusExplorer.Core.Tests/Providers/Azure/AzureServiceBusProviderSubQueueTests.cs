@@ -706,4 +706,18 @@ public class AzureServiceBusProviderSubQueueTests
         Assert.Equal(new[] { (1L, duplicate), (2L, duplicate), (3L, "Not found within scan window") },
             result.Failures.Select(f => (f.SequenceNumber, f.Error)).OrderBy(f => f.SequenceNumber).ToArray());
     }
+
+    [Theory]
+    [InlineData("resubmit", ResubmitSendUnknown)]
+    [InlineData("move", MoveSendUnknown)]
+    public async Task A_resubmit_or_move_whose_second_send_is_refused_as_disabled_reports_only_the_first_send_as_possible_duplicates(string operation, string duplicate)
+    {
+        var receiver = ReceiverFailingAfter([Batch(Msg(1), Msg(2), Msg(3), Msg(4))], Broker(ServiceBusFailureReason.ServiceTimeout));
+        var sender = SenderOfPairs(null, Broker(ServiceBusFailureReason.MessagingEntityDisabled));
+
+        var result = await ResubmitOrMove(operation, receiver, sender, [1, 2, 3, 4]);
+
+        Assert.Equal(new[] { (1L, duplicate), (2L, duplicate), (3L, Disabled), (4L, Disabled) },
+            result.Failures.Select(f => (f.SequenceNumber, f.Error)).OrderBy(f => f.SequenceNumber).ToArray());
+    }
 }
