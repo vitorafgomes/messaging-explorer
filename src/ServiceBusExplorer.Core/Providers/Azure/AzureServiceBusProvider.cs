@@ -332,21 +332,21 @@ public class AzureServiceBusProvider : IMessagingProvider
         await _adminClient!.DeleteQueueAsync(queueName);
     }
 
-    private static QueueInfo MapToQueueInfo(QueueRuntimeProperties props)
+    /// <summary>Maps the runtime properties a list or a counts read returns; every configuration value stays at
+    /// its default.</summary>
+    private static QueueInfo MapToQueueInfo(QueueRuntimeProperties props) => new()
     {
-        return new QueueInfo
-        {
-            Name = props.Name,
-            ActiveMessageCount = props.ActiveMessageCount,
-            DeadLetterMessageCount = props.DeadLetterMessageCount,
-            ScheduledMessageCount = props.ScheduledMessageCount,
-            TransferMessageCount = props.TransferMessageCount,
-            SizeInBytes = props.SizeInBytes,
-            CreatedAt = props.CreatedAt,
-            UpdatedAt = props.UpdatedAt,
-            AccessedAt = props.AccessedAt
-        };
-    }
+        Name = props.Name,
+        ActiveMessageCount = props.ActiveMessageCount,
+        DeadLetterMessageCount = props.DeadLetterMessageCount,
+        ScheduledMessageCount = props.ScheduledMessageCount,
+        TransferMessageCount = props.TransferMessageCount,
+        TransferDeadLetterMessageCount = props.TransferDeadLetterMessageCount,
+        SizeInBytes = props.SizeInBytes,
+        CreatedAt = props.CreatedAt,
+        UpdatedAt = props.UpdatedAt,
+        AccessedAt = props.AccessedAt
+    };
 
     private static QueueInfo MapToQueueInfo(QueueProperties props, QueueRuntimeProperties runtimeProps)
     {
@@ -2506,6 +2506,54 @@ public class AzureServiceBusProvider : IMessagingProvider
         _adminClient = null;
         _currentConfig = null;
         CurrentTarget = null;
+    }
+
+    #endregion
+
+    #region Counts
+
+    /// <inheritdoc />
+    public async Task<IQueueEntity?> GetQueueCountsAsync(string queueName, CancellationToken cancellationToken)
+    {
+        EnsureConnected();
+        return await GetQueueCountsCoreAsync(_adminClient!, queueName, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<SubscriptionInfo?> GetSubscriptionCountsAsync(string topicName, string subscriptionName, CancellationToken cancellationToken)
+    {
+        EnsureConnected();
+        return await GetSubscriptionCountsCoreAsync(_adminClient!, topicName, subscriptionName, cancellationToken);
+    }
+
+    /// <summary>
+    /// One runtime-properties call for the queue; null when the broker says it does not exist.
+    /// </summary>
+    internal static async Task<QueueInfo?> GetQueueCountsCoreAsync(ServiceBusAdministrationClient adminClient, string queueName, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return MapToQueueInfo((await adminClient.GetQueueRuntimePropertiesAsync(queueName, cancellationToken)).Value);
+        }
+        catch (ServiceBusException ex) when (ex.Reason == ServiceBusFailureReason.MessagingEntityNotFound)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// One runtime-properties call for the subscription; null when the broker says it or its topic does not exist.
+    /// </summary>
+    internal static async Task<SubscriptionInfo?> GetSubscriptionCountsCoreAsync(ServiceBusAdministrationClient adminClient, string topicName, string subscriptionName, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return MapToSubscriptionInfo((await adminClient.GetSubscriptionRuntimePropertiesAsync(topicName, subscriptionName, cancellationToken)).Value);
+        }
+        catch (ServiceBusException ex) when (ex.Reason == ServiceBusFailureReason.MessagingEntityNotFound)
+        {
+            return null;
+        }
     }
 
     #endregion

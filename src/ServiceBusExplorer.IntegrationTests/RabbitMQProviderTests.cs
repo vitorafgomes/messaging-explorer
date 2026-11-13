@@ -206,4 +206,21 @@ public sealed class RabbitMQProviderTests(RabbitMqFixture fixture) : IAsyncLifet
 
         Assert.Contains(queue, listed);
     }
+
+    [Fact]
+    public async Task A_counts_read_finds_a_created_queue_and_binding_and_is_null_for_a_queue_or_exchange_that_does_not_exist()
+    {
+        var exchange = Exchange("counts-ex");
+        var queue = Queue("counts-q");
+        await _provider.CreateTopicAsync(exchange);
+        await _provider.CreateSubscriptionAsync(exchange, queue);
+
+        var queueCounts = await _provider.GetQueueCountsAsync(queue, CancellationToken.None);
+        var subscriptionCounts = await _provider.GetSubscriptionCountsAsync(exchange, queue, CancellationToken.None);
+
+        Assert.Equal(queue, queueCounts?.Name);
+        Assert.Equal((queue, exchange), (subscriptionCounts?.Name, subscriptionCounts?.TopicName));
+        Assert.Null(await _provider.GetQueueCountsAsync(RabbitMqFixture.UniqueName("missing"), CancellationToken.None));
+        Assert.Null(await _provider.GetSubscriptionCountsAsync(RabbitMqFixture.UniqueName("missing-ex"), queue, CancellationToken.None));
+    }
 }

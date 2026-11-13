@@ -1155,4 +1155,40 @@ public class RabbitMQProvider : IMessagingProvider
     }
 
     #endregion
+
+    #region Counts
+
+    /// <inheritdoc />
+    public async Task<IQueueEntity?> GetQueueCountsAsync(string queueName, CancellationToken cancellationToken)
+    {
+        EnsureConnected();
+        return await _managementClient!.GetQueueAsync(queueName, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<SubscriptionInfo?> GetSubscriptionCountsAsync(string topicName, string subscriptionName, CancellationToken cancellationToken)
+    {
+        EnsureConnected();
+        IEnumerable<RabbitMQBindingInfo> bindings;
+        try
+        {
+            bindings = await _managementClient!.GetExchangeBindingsAsync(topicName, cancellationToken);
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+
+        var binding = bindings.FirstOrDefault(b => b.Destination == subscriptionName || b.PropertiesKey == subscriptionName);
+        if (binding == null)
+        {
+            return null;
+        }
+
+        var queue = await _managementClient.GetQueueAsync(binding.Destination, cancellationToken);
+        var dlqQueue = await _managementClient.GetQueueAsync($"{binding.Destination}.dlq", cancellationToken);
+        return MapBindingToSubscriptionInfo(topicName, binding, queue, dlqQueue);
+    }
+
+    #endregion
 }

@@ -15,4 +15,8 @@
     <ProjectReference Include="..\ServiceBusExplorer.Core\ServiceBusExplorer.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="ServiceBusExplorer.Api.Tests" />
+  </ItemGroup>
+
 </Project>
