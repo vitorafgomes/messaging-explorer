@@ -8,7 +8,8 @@ Everything above holds here. What follows is how this repo uses Claude Code.
 
 Use the `explorer-pipeline` skill first, for every code task. It classifies the task by risk and
 says what the change needs: a one-line edit needs a build, and a change to the API surface, to
-secrets or to anything that moves messages needs a plan, proof and a review.
+secrets or to anything that moves messages needs a plan, proof and a review. Read the page the
+rules file names for the change before the source, not the whole `context/` folder.
 
 ## What loads without being asked
 

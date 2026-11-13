@@ -102,4 +102,5 @@ OPEN QUESTIONS
 <question>
 ```
 
-The sending session writes the commit message and decides about git.
+The sending session writes the commit message and decides about git. You run no git commit, no
+git push and no other command that writes history.

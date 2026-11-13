@@ -107,6 +107,7 @@
       "Bash(bash .claude/workflows/explorer-review.test.sh)",
       "Bash(tools/checks/in-docker.sh:*)",
       "Bash(sh tools/checks/check-diagnostics.sh:*)",
+      "Bash(bash tools/checks/check-harness-requirements.sh)",
       "Bash(bash tools/checks/check-diagnostics.test.sh)",
       "Bash(bash tools/checks/test-per-project.test.sh)",
       "Bash(bash tools/checks/check-hidden-text.sh)",

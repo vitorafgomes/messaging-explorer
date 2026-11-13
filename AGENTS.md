@@ -71,7 +71,7 @@ provider interface, the capabilities and the factory are documented abstractions
 recommended. `docs/ADDING_PROVIDERS.md` describes a flow the code does not fully run; the service
 pages say which parts.
 
-**Documentation lives in `context/`, in English.** Code carries a `<summary>` on a public type or
+**Documentation lives in `context/`, in English, with no emojis.** Code carries a `<summary>` on a public type or
 member, and no comment that narrates inside a member or refers to a decision, a page or an issue;
 the one exception is a `ponytail:` line that names a deferral. Identifiers and comments are in
 English. An existing file is edited before a new one is created, and no planning or analysis
@@ -79,7 +79,7 @@ Markdown is written outside `context/`.
 `README.md` is the public front page; how it works and why stays in `context/`. A page cites code
 by name, `path#Member`, never by line number.
 
-**Git belongs to the owner.** No commit, push, pull request, release or merge unless the owner
+**Git belongs to the owner.** No commit, push, pull request, release, publish or merge unless the owner
 asks for that action. A batch authorisation in words covers one session's commits and pull
 requests on a `feat/`, `fix/`, `chore/` or `docs/` branch, and never a push to `main`: every
 change reaches `main` through a pull request. A commit, a pull

@@ -79,10 +79,9 @@ leaves out is P1.
 
 ## Refute one finding
 
-When the prompt starts with "Refute one finding", skip the order of work above. Read the cited
-file in the tree the prompt names, around the cited line, and the page or rule the finding cites.
-Answer `located` (the line holds what the finding describes), `refuted` and `reason`. A finding
-you could not locate is `located: false`, never refuted.
+When the prompt starts with "Refute one finding", skip the order of work. Read the cited line
+in the tree the prompt names, and the rule it cites. Answer `located`, `refuted` and `reason`; a
+finding you could not locate is `located: false`, never refuted.
 
 ## Report
 
