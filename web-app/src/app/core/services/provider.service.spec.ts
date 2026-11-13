@@ -191,6 +191,33 @@ describe('ProviderService holds the capabilities of the connected provider', () 
     });
   });
 
+  describe('export and import of definitions are offered only when the API explicitly says supportsDefinitions is true', () => {
+    const azureConnected = { connected: true, namespace: 'ns.example.net', providerType: 'AzureServiceBus' } as unknown as ConnectionStatus;
+
+    it('an Azure API that answers supportsDefinitions: true enables it', () => {
+      capabilitiesResponse = () => of({ supportsDefinitions: true });
+
+      status$.next(azureConnected);
+
+      expect(service.capabilities()?.supportsDefinitions).toBe(true);
+    });
+
+    it('an Azure API that does not send the flag, one still loading and one that fails with a 500 leave it off', () => {
+      capabilitiesResponse = () => of({ supportsSessions: true });
+      status$.next(azureConnected);
+      expect(service.capabilities()?.supportsDefinitions, 'the API did not send the flag').toBe(false);
+
+      const pending = new Subject<ProviderCapabilities>();
+      capabilitiesResponse = () => pending;
+      status$.next({ connected: false } as ConnectionStatus);
+      status$.next(azureConnected);
+      expect(service.capabilities()?.supportsDefinitions, 'while the capabilities load').toBe(false);
+
+      pending.error(new HttpErrorResponse({ status: 500, statusText: 'Internal Server Error' }));
+      expect(service.capabilities()?.supportsDefinitions, 'after a 500').toBe(false);
+    });
+  });
+
   describe('deferral is not declared for Azure', () => {
     it('an Azure connection whose API leaves the flag out, and one whose call fails, does not declare deferral', () => {
       const azureConnected = { connected: true, namespace: 'ns.example.net', providerType: 'AzureServiceBus' } as unknown as ConnectionStatus;

@@ -100,6 +100,9 @@ public class AzureProviderCapabilities : IProviderCapabilities
     public bool SupportsTransferDeadLetter => true;
 
     /// <inheritdoc />
+    public bool SupportsDefinitions => true;
+
+    /// <inheritdoc />
     /// <remarks>
     /// Azure Service Bus does not use exchange types - this is a RabbitMQ concept.
     /// </remarks>

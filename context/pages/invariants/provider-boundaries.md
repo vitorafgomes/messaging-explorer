@@ -8,7 +8,7 @@ status: active
 description: "A broker is reached through IMessagingProvider, what a provider cannot do is declared in IProviderCapabilities, and vendor SDK types stay inside their provider folder."
 updated: 2026-11-12
 enforced_by:
-  - "src/ServiceBusExplorer.Core/Abstractions/IMessagingProvider.cs:18"
+  - "src/ServiceBusExplorer.Core/Abstractions/IMessagingProvider.cs:19"
   - "src/ServiceBusExplorer.Core/Providers/ProviderFactory.cs:33"
   - "src/ServiceBusExplorer.Api/Controllers/QueuesController.cs:22"
 verified_by:
@@ -38,7 +38,7 @@ The product is "one tool, several brokers". Every vendor type that leaks into a 
 
 By convention and review only; no architecture test exists (tracked in [[pages/roadmap/followups]]). `reliability: medium` for that reason.
 
-- `src/ServiceBusExplorer.Core/Abstractions/IMessagingProvider.cs:18` - the provider contract; `Abstractions/` references no vendor SDK.
+- `src/ServiceBusExplorer.Core/Abstractions/IMessagingProvider.cs:19` - the provider contract; `Abstractions/` references no vendor SDK.
 - `src/ServiceBusExplorer.Core/Providers/ProviderFactory.cs:33` - the one place a provider type is chosen from `ProviderType`.
 - `src/ServiceBusExplorer.Api/Controllers/QueuesController.cs:22` - controllers obtain the active `IMessagingProvider` and call the contract.
 

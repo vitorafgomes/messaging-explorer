@@ -215,6 +215,18 @@ public class EntityConfigurationValidatorTests
     }
 
     [Fact]
+    public void A_create_checks_the_status_against_the_states_of_its_kind()
+    {
+        Assert.Equal(Expected("status must be one of Active, Disabled, SendDisabled, ReceiveDisabled."),
+            EntityConfigurationValidator.ValidateQueueCreate("orders", new QueueCreateOptions { Status = "Paused" }));
+        Assert.Equal(Expected("status must be one of Active, Disabled, SendDisabled."),
+            EntityConfigurationValidator.ValidateTopicCreate("events", new TopicCreateOptions { Status = "ReceiveDisabled" }));
+        Assert.Equal(Expected("status must be one of Active, Disabled, ReceiveDisabled."),
+            EntityConfigurationValidator.ValidateSubscriptionCreate("events", "audit", new SubscriptionCreateOptions { Status = "SendDisabled" }));
+        Assert.Equal(Expected(null), EntityConfigurationValidator.ValidateQueueCreate("orders", new QueueCreateOptions { Status = "Disabled" }));
+    }
+
+    [Fact]
     public void Every_create_and_update_kind_applies_the_limits_of_its_own_fields()
     {
         Assert.Equal([LockRange], EntityConfigurationValidator.ValidateQueueCreate("orders", new QueueCreateOptions { LockDuration = TimeSpan.FromMinutes(6) }));
