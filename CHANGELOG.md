@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.4.4] - 2026-11-13
+
+### Changed
+- The main screen follows the new design: the entities tree and the entity
+  panel, where a queue and a subscription share one panel with their counts,
+  properties and actions.
+- The selection bar, the filters, the bulk dialogs, the Monitoring overview and
+  the Queues and Topics pages follow the new design.
+- The purge actions are under "More actions", set apart from the everyday ones.
+
+### Fixed
+- A page or a panel that cannot load its data shows the error with Retry
+  instead of an empty view.
+
+### Known issues
+- On a very large dead-letter queue, a resubmit run that leaves messages behind
+  at the head of the queue (a filter, refused messages) stops after a few
+  hundred of them; it says so, and nothing is lost or sent twice.
+- A saved connection shows "Unknown Provider" on the Connections screen, and the
+  Connected mark disappears when the list reloads.
+- macOS builds are unsigned, so macOS cannot install an update by itself;
+  download the new version from the releases page.
+
 ## [2.4.3] - 2026-11-13
 
 ### Added
