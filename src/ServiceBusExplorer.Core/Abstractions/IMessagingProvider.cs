@@ -408,6 +408,22 @@ public interface IMessagingProvider : IAsyncDisposable
     const int MaxSessionStateBytes = 262144;
 
     #endregion
+
+    #region Counts
+
+    /// <summary>
+    /// Reads the message counts of one queue now, without its configuration, which stays at its defaults.
+    /// Null when the queue does not exist.
+    /// </summary>
+    Task<IQueueEntity?> GetQueueCountsAsync(string queueName, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Reads the message counts of one subscription now, without its configuration or its rules.
+    /// Null when the topic or the subscription does not exist.
+    /// </summary>
+    Task<SubscriptionInfo?> GetSubscriptionCountsAsync(string topicName, string subscriptionName, CancellationToken cancellationToken);
+
+    #endregion
 }
 
 /// <summary>

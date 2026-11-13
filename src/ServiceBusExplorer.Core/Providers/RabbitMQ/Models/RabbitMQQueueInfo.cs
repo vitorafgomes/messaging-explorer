@@ -139,4 +139,9 @@ public class RabbitMQQueueInfo : IQueueEntity
     /// Contains all custom queue arguments set during declaration.
     /// </summary>
     public Dictionary<string, object> Arguments { get; set; } = new();
+
+    /// <summary>
+    /// Always zero: RabbitMQ has no transfer dead-letter queue.
+    /// </summary>
+    public long TransferDeadLetterMessageCount => 0;
 }

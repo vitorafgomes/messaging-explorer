@@ -55,4 +55,10 @@ public interface IQueueEntity : IMessagingEntity
     /// Indicates whether messages are dead-lettered when they expire.
     /// </summary>
     bool DeadLetteringOnMessageExpiration { get; }
+
+    /// <summary>
+    /// The number of messages in the transfer dead-letter queue; zero for a provider whose
+    /// <see cref="IProviderCapabilities.SupportsTransferDeadLetter"/> is false.
+    /// </summary>
+    long TransferDeadLetterMessageCount { get; }
 }

@@ -362,7 +362,7 @@ public class ConnectionFailureLogTests
             {
                 using var connect = await client.PostAsync($"/api/connections/{connection.Id}/connect", null);
                 Assert.Equal(HttpStatusCode.OK, connect.StatusCode);
-                using var monitor = new MonitoringBackgroundService(new MonitoringStore(), services.GetRequiredService<ILogger<MonitoringBackgroundService>>());
+                using var monitor = new MonitoringBackgroundService(new MonitoringStore(), services.GetRequiredService<ILogger<MonitoringBackgroundService>>(), services.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>());
                 await monitor.StartAsync(CancellationToken.None);
                 var waited = System.Diagnostics.Stopwatch.StartNew();
                 while (!captured.Any(e => e.Category == category && e.Level == LogLevel.Error) && waited.Elapsed < TimeSpan.FromSeconds(60))
