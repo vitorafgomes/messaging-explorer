@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
-import { NEVER, of } from 'rxjs';
+import { BehaviorSubject, NEVER, of } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { EntityDetailsComponent } from './entity-details.component';
@@ -530,5 +530,102 @@ describe('EntityDetailsComponent: the subscription panel has a Transfer Dead Let
     const el = render(subscription(0), { ...DEFAULT_AZURE_CAPABILITIES, supportsTransferDeadLetter: true });
 
     expect(card(el)).toBeUndefined();
+  });
+});
+
+describe('EntityDetailsComponent: the Sessions tab on the queue panel and the subscription panel', () => {
+  let state$: BehaviorSubject<{ selection: EntitySelection; loading: boolean; error: null }>;
+  let list: ReturnType<typeof vi.fn>;
+
+  const queue = (name: string, requiresSession: boolean): EntitySelection => ({
+    type: 'queue',
+    node: { id: name, name, type: 'queue', icon: 'inbox', expandable: false, level: 1 },
+    entity: { name, activeMessageCount: 3, deadLetterMessageCount: 0, scheduledMessageCount: 0, sizeInBytes: 0, requiresSession } as never
+  });
+  const subscription = (name: string): EntitySelection => ({
+    type: 'subscription',
+    node: { id: `order-events/${name}`, name, type: 'subscription', icon: 'mail', expandable: false, level: 2, data: { topicName: 'order-events' } as never },
+    entity: { topicName: 'order-events', name, activeMessageCount: 3, deadLetterMessageCount: 0, requiresSession: true, rules: [] } as never
+  });
+
+  function render(selection: EntitySelection, capabilities: ProviderCapabilities = DEFAULT_AZURE_CAPABILITIES) {
+    state$ = new BehaviorSubject<{ selection: EntitySelection; loading: boolean; error: null }>({ selection, loading: false, error: null });
+    list = vi.fn(() => of({ sessions: [{ sessionId: 'order-1001', messageCount: 12, firstSequenceNumber: 4411 }], scannedMessages: 12, truncated: false }));
+    TestBed.configureTestingModule({
+      imports: [EntityDetailsComponent],
+      providers: [
+        { provide: EntitySelectionService, useValue: { state$, get currentSelection() { return state$.value.selection; }, isLoading: false } },
+        { provide: ConnectionService, useValue: { currentTarget: 'prod.example.net' } },
+        { provide: QueueService, useValue: {} },
+        { provide: TopicService, useValue: { getSubscription: () => NEVER } },
+        { provide: SessionService, useValue: { list } },
+        { provide: MatSnackBar, useValue: { open: vi.fn() } },
+        { provide: MatDialog, useValue: { open: vi.fn() } },
+        { provide: ProviderService, useValue: { capabilities: signal(capabilities) } }
+      ]
+    });
+    const fixture = TestBed.createComponent(EntityDetailsComponent);
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  const text = (e: Element | null) => (e?.textContent ?? '').replace(/\s+/g, ' ').trim();
+  const tabs = (el: HTMLElement) => Array.from(el.querySelectorAll('[role="tab"]')).map(text);
+  const select = async (fixture: ReturnType<typeof render>, label: string) => {
+    const tab = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('[role="tab"], button'))
+      .find(t => text(t).endsWith(label))!;
+    tab.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  };
+  const sessions = (fixture: ReturnType<typeof render>) => (fixture.nativeElement as HTMLElement).querySelector('app-entity-sessions');
+
+  it('the queue panel shows the Sessions tab for a session queue and not for a plain one', () => {
+    expect(tabs(render(queue('orders', true)).nativeElement)).toStrictEqual(['Properties', 'Sessions']);
+    TestBed.resetTestingModule();
+    expect(tabs(render(queue('invoices', false)).nativeElement)).toStrictEqual(['Properties']);
+  });
+
+  it('a broker that declares no sessions shows no Sessions tab even on a session queue', () => {
+    expect(tabs(render(queue('orders', true), DEFAULT_RABBITMQ_CAPABILITIES).nativeElement)).toStrictEqual(['Properties']);
+  });
+
+  it('the queue sessions are read only when the tab is opened, for that queue', async () => {
+    const fixture = render(queue('orders', true));
+    expect(sessions(fixture), 'before the tab is opened').toBeNull();
+    expect(list).not.toHaveBeenCalled();
+
+    await select(fixture, 'Sessions');
+
+    expect(sessions(fixture)).not.toBeNull();
+    expect(list.mock.calls).toStrictEqual([[{ queueName: 'orders' }]]);
+  });
+
+  it('switching to another queue goes back to Properties and shows nothing of the previous queue sessions', async () => {
+    const fixture = render(queue('orders', true));
+    await select(fixture, 'Sessions');
+    expect(sessions(fixture)).not.toBeNull();
+
+    state$.next({ selection: queue('payments', true), loading: false, error: null });
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(sessions(fixture)).toBeNull();
+    expect(text((fixture.nativeElement as HTMLElement).querySelector('[role="tab"][aria-selected="true"]'))).toBe('Properties');
+  });
+
+  it('the subscription Sessions tab mounts the same component for that subscription, read when opened, and goes on a switch', async () => {
+    const fixture = render(subscription('billing'));
+    expect(sessions(fixture)).toBeNull();
+
+    await select(fixture, 'Sessions');
+    expect(sessions(fixture)).not.toBeNull();
+    expect(list.mock.calls).toStrictEqual([[{ topicName: 'order-events', subscriptionName: 'billing' }]]);
+
+    state$.next({ selection: subscription('shipping'), loading: false, error: null });
+    fixture.detectChanges();
+    expect(sessions(fixture)).toBeNull();
   });
 });
