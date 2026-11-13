@@ -11,29 +11,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Get the dynamically-allocated API port from the Electron main process
   getApiPort: () => ipcRenderer.invoke('get-api-port'),
 
-  // Listen for navigation commands from menu
+  // Listen for navigation commands from the tray menu
   onNavigate: (callback) => {
     ipcRenderer.on('navigate', (event, route) => callback(route));
-  },
-
-  // Listen for new connection command from menu
-  onNewConnection: (callback) => {
-    ipcRenderer.on('menu-new-connection', () => callback());
   },
 
   // Listen for connection change from tray menu
   onChangeConnection: (callback) => {
     ipcRenderer.on('change-connection', (event, connectionId) => callback(connectionId));
-  },
-
-  // Listen for clear all data command from menu
-  onClearAllData: (callback) => {
-    ipcRenderer.on('clear-all-data', () => callback());
-  },
-
-  // Listen for developer mode toggle from menu
-  onToggleDevMode: (callback) => {
-    ipcRenderer.on('toggle-dev-mode', () => callback());
   },
 
   // Auto-updater
@@ -52,19 +37,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,
 
   // Check if running in Electron
-  isElectron: true
-});
-
-// Also expose a simpler 'electron' API for convenience
-contextBridge.exposeInMainWorld('electron', {
-  on: (channel, callback) => {
-    // Whitelist channels for security
-    const validChannels = ['navigate', 'menu-new-connection', 'change-connection', 'clear-all-data', 'toggle-dev-mode'];
-    if (validChannels.includes(channel)) {
-      ipcRenderer.on(channel, (event) => callback());
-    }
-  },
-  platform: process.platform,
   isElectron: true
 });
 

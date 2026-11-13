@@ -4,10 +4,24 @@
   gap: 8px;
 }
 
-.brand {
-  font-weight: 600;
-  font-size: 1rem;
-  margin-right: 4px;
+.main-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 8px;
+}
+
+.nav-link {
+  color: inherit;
+}
+
+.nav-link.active-link {
+  background-color: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 6px;
+  text-decoration-thickness: 2px;
 }
 
 .version-badge {
@@ -76,6 +90,13 @@
   padding: 4px 10px;
   border-radius: 16px;
   font-weight: 500;
+  min-width: 0;
+
+  .badge-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
   .status-icon {
     font-size: 14px;
@@ -101,15 +122,6 @@
 .app-container {
   flex: 1;
   min-height: 0;
-}
-
-.app-sidenav {
-  width: 220px;
-}
-
-.active-link {
-  --mat-list-active-indicator-shape: 4px;
-  font-weight: 500;
 }
 
 .app-content {
