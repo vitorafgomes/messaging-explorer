@@ -48,7 +48,7 @@ Link every [[pages/invariants/*]] this service must preserve. If an invariant do
 
 ## Hot spots
 
-Code paths that are high-churn, high-complexity, or known-fragile. Cite `file:line`.
+Code paths that are high-churn, high-complexity, or known-fragile. Cite `path#Member`.
 
 - `src/<path>.cs:LINE` — *what's hot about it*
 - `src/<path>.cs:LINE` — *what's hot about it*

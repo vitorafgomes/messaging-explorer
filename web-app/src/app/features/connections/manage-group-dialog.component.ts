@@ -8,9 +8,9 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatSelectModule } from '@angular/material/select';
 import { MatIconModule } from '@angular/material/icon';
 import { MatListModule } from '@angular/material/list';
-import { MatCardModule } from '@angular/material/card';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTabsModule } from '@angular/material/tabs';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { ConnectionGroupService } from '../../core/services';
 import { ConnectionGroup } from '../../core/models';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -33,50 +33,18 @@ interface ManageGroupDialogData {
     MatSelectModule,
     MatIconModule,
     MatListModule,
-    MatCardModule,
     MatSnackBarModule,
-    MatTabsModule
+    MatTabsModule,
+    MatTooltipModule
   ],
   template: `
-    <div class="modal-header">
-      <h5 class="modal-title d-flex align-items-center gap-2">
-        <i class="fa fa-folder"></i>
-        Manage Groups
-      </h5>
-    </div>
+    <h2 mat-dialog-title>Manage Groups</h2>
 
-    <div class="modal-body">
+    <mat-dialog-content>
+      <p class="intro">Clients and their environments group the saved connections. Nothing here reaches a broker.</p>
       <mat-tab-group>
-        <!-- Clients Tab -->
         <mat-tab label="Clients">
           <div class="tab-content">
-            <div class="form-section">
-              <h3>{{ editingClient() ? 'Edit Client' : 'Add New Client' }}</h3>
-              <form [formGroup]="clientForm" (ngSubmit)="saveClient()">
-                <mat-form-field appearance="outline" class="full-width">
-                  <mat-label>Client Name</mat-label>
-                  <input matInput formControlName="name" placeholder="e.g., Acme Corp">
-                  @if (clientForm.get('name')?.hasError('required') && clientForm.get('name')?.touched) {
-                    <mat-error>Client name is required</mat-error>
-                  }
-                </mat-form-field>
-
-                <mat-form-field appearance="outline" class="full-width">
-                  <mat-label>Description (optional)</mat-label>
-                  <textarea matInput formControlName="description" rows="2" placeholder="Brief description"></textarea>
-                </mat-form-field>
-
-                <div class="form-actions">
-                  @if (editingClient()) {
-                    <button mat-button type="button" (click)="cancelEditClient()">Cancel</button>
-                  }
-                  <button mat-raised-button color="primary" type="submit" [disabled]="!clientForm.valid || saving()">
-                    {{ editingClient() ? 'Update' : 'Add' }} Client
-                  </button>
-                </div>
-              </form>
-            </div>
-
             <div class="list-section">
               <h3>Existing Clients</h3>
               @if (clients().length === 0) {
@@ -91,10 +59,16 @@ interface ManageGroupDialogData {
                         <div matListItemLine>{{ client.description }}</div>
                       }
                       <div matListItemMeta class="item-actions">
-                        <button mat-icon-button (click)="editClient(client)">
+                        <button mat-icon-button
+                          [attr.aria-label]="'Edit client ' + client.name"
+                          [matTooltip]="'Edit client ' + client.name"
+                          (click)="editClient(client)">
                           <mat-icon>edit</mat-icon>
                         </button>
-                        <button mat-icon-button color="warn" (click)="deleteClient(client)">
+                        <button mat-icon-button class="delete"
+                          [attr.aria-label]="'Delete client ' + client.name"
+                          [matTooltip]="'Delete client ' + client.name"
+                          (click)="deleteClient(client)">
                           <mat-icon>delete</mat-icon>
                         </button>
                       </div>
@@ -103,34 +77,91 @@ interface ManageGroupDialogData {
                 </mat-list>
               }
             </div>
+
+            <div class="form-section">
+              <h3>{{ editingClient() ? 'Edit Client' : 'Add New Client' }}</h3>
+              <form [formGroup]="clientForm" (ngSubmit)="saveClient()">
+                <div class="grid">
+                  <mat-form-field appearance="outline">
+                    <mat-label>Client Name</mat-label>
+                    <input matInput formControlName="name" placeholder="e.g., Acme Corp">
+                    @if (clientForm.get('name')?.hasError('required') && clientForm.get('name')?.touched) {
+                      <mat-error>Client name is required</mat-error>
+                    }
+                  </mat-form-field>
+
+                  <mat-form-field appearance="outline">
+                    <mat-label>Description (optional)</mat-label>
+                    <textarea matInput formControlName="description" rows="1" placeholder="Brief description"></textarea>
+                  </mat-form-field>
+                </div>
+
+                <div class="form-actions">
+                  @if (editingClient()) {
+                    <button matButton type="button" (click)="cancelEditClient()">Cancel</button>
+                  }
+                  <button matButton="tonal" type="submit" [disabled]="!clientForm.valid || saving()">
+                    <mat-icon>{{ editingClient() ? 'save' : 'add' }}</mat-icon>
+                    {{ editingClient() ? 'Update' : 'Add' }} Client
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </mat-tab>
 
-        <!-- Environments Tab -->
         <mat-tab label="Environments" [disabled]="clients().length === 0">
-          <div class="env-tab-content">
-            <!-- Client selector -->
-            <div class="client-selector">
-              <mat-form-field appearance="outline" class="full-width">
-                <mat-label>Select Client</mat-label>
-                <mat-select [(value)]="selectedClientId" (selectionChange)="onClientSelected()">
-                  @for (client of clients(); track client.id) {
-                    <mat-option [value]="client.id">{{ client.name }}</mat-option>
-                  }
-                </mat-select>
-              </mat-form-field>
-            </div>
+          <div class="tab-content">
+            <mat-form-field appearance="outline" class="client-selector">
+              <mat-label>Select Client</mat-label>
+              <mat-select [(value)]="selectedClientId" (selectionChange)="onClientSelected()">
+                @for (client of clients(); track client.id) {
+                  <mat-option [value]="client.id">{{ client.name }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
 
             @if (!selectedClientId) {
-              <div class="empty-message" style="text-align: center; padding: 48px 24px;">
-                <p>Select a client above to view and manage its environments.</p>
-              </div>
+              <p class="empty-message">Select a client above to view and manage its environments.</p>
             } @else {
-              <div class="tab-content">
-                <div class="form-section">
-                  <h3>{{ editingEnvironment() ? 'Edit Environment' : 'Add New Environment' }}</h3>
-                  <form [formGroup]="environmentForm" (ngSubmit)="saveEnvironment()">
-                    <mat-form-field appearance="outline" class="full-width">
+              <div class="list-section">
+                <h3>Environments</h3>
+                @if (getEnvironmentsByClient(selectedClientId).length === 0) {
+                  <p class="empty-message">No environments for this client</p>
+                } @else {
+                  <mat-list>
+                    @for (env of getEnvironmentsByClient(selectedClientId); track env.id) {
+                      <mat-list-item>
+                        <mat-icon matListItemIcon>dns</mat-icon>
+                        <div matListItemTitle>{{ env.name }}</div>
+                        @if (env.description) {
+                          <div matListItemLine>{{ env.description }}</div>
+                        }
+                        <div matListItemMeta class="item-actions">
+                          <button mat-icon-button
+                            [attr.aria-label]="'Edit environment ' + env.name"
+                            [matTooltip]="'Edit environment ' + env.name"
+                            (click)="editEnvironment(env)">
+                            <mat-icon>edit</mat-icon>
+                          </button>
+                          <button mat-icon-button class="delete"
+                            [attr.aria-label]="'Delete environment ' + env.name"
+                            [matTooltip]="'Delete environment ' + env.name"
+                            (click)="deleteEnvironment(env)">
+                            <mat-icon>delete</mat-icon>
+                          </button>
+                        </div>
+                      </mat-list-item>
+                    }
+                  </mat-list>
+                }
+              </div>
+
+              <div class="form-section">
+                <h3>{{ editingEnvironment() ? 'Edit Environment' : 'Add New Environment' }}</h3>
+                <form [formGroup]="environmentForm" (ngSubmit)="saveEnvironment()">
+                  <div class="grid">
+                    <mat-form-field appearance="outline">
                       <mat-label>Environment Name</mat-label>
                       <input matInput formControlName="name" placeholder="e.g., Production, Development">
                       @if (environmentForm.get('name')?.hasError('required') && environmentForm.get('name')?.touched) {
@@ -138,232 +169,65 @@ interface ManageGroupDialogData {
                       }
                     </mat-form-field>
 
-                    <mat-form-field appearance="outline" class="full-width">
+                    <mat-form-field appearance="outline">
                       <mat-label>Description (optional)</mat-label>
-                      <textarea matInput formControlName="description" rows="2" placeholder="Brief description"></textarea>
+                      <textarea matInput formControlName="description" rows="1" placeholder="Brief description"></textarea>
                     </mat-form-field>
+                  </div>
 
-                    <div class="form-actions">
-                      @if (editingEnvironment()) {
-                        <button mat-button type="button" (click)="cancelEditEnvironment()">Cancel</button>
-                      }
-                      <button mat-raised-button color="primary" type="submit" [disabled]="!environmentForm.valid || saving()">
-                        {{ editingEnvironment() ? 'Update' : 'Add' }} Environment
-                      </button>
-                    </div>
-                  </form>
-                </div>
-
-                <div class="list-section">
-                  <h3>Environments</h3>
-                  @if (getEnvironmentsByClient(selectedClientId).length === 0) {
-                    <p class="empty-message">No environments for this client</p>
-                  } @else {
-                    <mat-list>
-                      @for (env of getEnvironmentsByClient(selectedClientId); track env.id) {
-                        <mat-list-item>
-                          <mat-icon matListItemIcon>dns</mat-icon>
-                          <div matListItemTitle>{{ env.name }}</div>
-                          @if (env.description) {
-                            <div matListItemLine>{{ env.description }}</div>
-                          }
-                          <div matListItemMeta class="item-actions">
-                            <button mat-icon-button (click)="editEnvironment(env)">
-                              <mat-icon>edit</mat-icon>
-                            </button>
-                            <button mat-icon-button color="warn" (click)="deleteEnvironment(env)">
-                              <mat-icon>delete</mat-icon>
-                            </button>
-                          </div>
-                        </mat-list-item>
-                      }
-                    </mat-list>
-                  }
-                </div>
+                  <div class="form-actions">
+                    @if (editingEnvironment()) {
+                      <button matButton type="button" (click)="cancelEditEnvironment()">Cancel</button>
+                    }
+                    <button matButton="tonal" type="submit" [disabled]="!environmentForm.valid || saving()">
+                      <mat-icon>{{ editingEnvironment() ? 'save' : 'add' }}</mat-icon>
+                      {{ editingEnvironment() ? 'Update' : 'Add' }} Environment
+                    </button>
+                  </div>
+                </form>
               </div>
             }
           </div>
         </mat-tab>
       </mat-tab-group>
-    </div>
+    </mat-dialog-content>
 
-    <div class="modal-footer">
-      <button class="btn btn-secondary" (click)="close()">
-        <i class="fa fa-times me-2"></i>
-        Close
-      </button>
-    </div>
+    <mat-dialog-actions align="end">
+      <button matButton="filled" (click)="close()">Close</button>
+    </mat-dialog-actions>
   `,
   styles: [`
-    // Override Material Dialog container styles to use Bootstrap theme variables
-    :host ::ng-deep {
-      .mat-mdc-dialog-container,
-      .mat-mdc-dialog-surface {
-        background-color: var(--bs-body-bg) !important;
-        color: var(--bs-body-color) !important;
-      }
-
-      // Material Form Field Customization
-      .mat-mdc-form-field {
-        // Label colors
-        .mat-mdc-floating-label {
-          color: var(--bs-secondary-color) !important;
-        }
-
-        // Outline (border) colors
-        .mdc-notched-outline {
-          .mdc-notched-outline__leading,
-          .mdc-notched-outline__notch,
-          .mdc-notched-outline__trailing {
-            border-color: var(--bs-border-color) !important;
-          }
-        }
-
-        // Focused state
-        &.mat-focused {
-          .mdc-notched-outline {
-            .mdc-notched-outline__leading,
-            .mdc-notched-outline__notch,
-            .mdc-notched-outline__trailing {
-              border-color: var(--bs-primary) !important;
-            }
-          }
-
-          .mat-mdc-floating-label {
-            color: var(--bs-primary) !important;
-          }
-        }
-
-        // Input field
-        .mat-mdc-input-element {
-          background-color: var(--bs-secondary-bg) !important;
-          color: var(--bs-body-color) !important;
-          border-radius: 4px;
-          padding: 8px 12px;
-        }
-
-        // Textarea
-        .mat-mdc-input-element[textarea] {
-          background-color: var(--bs-secondary-bg) !important;
-          color: var(--bs-body-color) !important;
-        }
-
-        // Error messages
-        .mat-mdc-form-field-error {
-          color: var(--bs-danger) !important;
-        }
-      }
-
-      // Material Select
-      .mat-mdc-select {
-        .mat-mdc-select-value {
-          color: var(--bs-body-color) !important;
-        }
-
-        .mat-mdc-select-arrow {
-          color: var(--bs-secondary-color) !important;
-        }
-      }
-
-      // Select panel (dropdown)
-      .mat-mdc-select-panel {
-        background-color: var(--bs-body-bg) !important;
-
-        .mat-mdc-option {
-          color: var(--bs-body-color) !important;
-
-          &:hover {
-            background-color: var(--bs-secondary-bg) !important;
-          }
-
-          &.mat-mdc-option-active {
-            background-color: var(--bs-tertiary-bg) !important;
-          }
-        }
-      }
-
-      // Material Tabs
-      .mat-mdc-tab-group {
-        .mat-mdc-tab-header {
-          background-color: var(--bs-body-bg) !important;
-          border-bottom: 1px solid var(--bs-border-color);
-        }
-
-        .mat-mdc-tab {
-          color: var(--bs-secondary-color) !important;
-
-          &.mat-mdc-tab-active {
-            color: var(--bs-primary) !important;
-          }
-        }
-
-        .mat-mdc-tab-body-wrapper {
-          background-color: var(--bs-body-bg);
-        }
-      }
-    }
-
-    .modal-header {
-      border-bottom: 1px solid var(--bs-border-color);
-      padding: 16px 24px;
-      background-color: var(--bs-body-bg);
-    }
-
-    .modal-title {
-      margin: 0;
-      font-size: 18px;
-      font-weight: 500;
-      color: var(--bs-body-color);
-
-      i {
-        font-size: 20px;
-      }
-    }
-
-    .modal-body {
-      min-height: 500px;
-      max-height: 70vh;
-      padding: 0;
-      background-color: var(--bs-body-bg);
-      color: var(--bs-body-color);
-    }
-
-    .modal-footer {
-      border-top: 1px solid var(--bs-border-color);
-      padding: 16px 24px;
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
-      background-color: var(--bs-body-bg);
+    .intro {
+      margin: 0 0 8px;
+      color: var(--mat-sys-on-surface-variant);
     }
 
     .tab-content {
-      padding: 24px;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding-top: 16px;
     }
 
-    .form-section,
-    .list-section {
+    .list-section,
+    .form-section {
       h3 {
-        margin: 0 0 16px 0;
-        font-size: 16px;
-        font-weight: 500;
-        color: var(--bs-secondary-color);
+        margin: 0 0 8px;
+        font: var(--mat-sys-title-small);
+        color: var(--mat-sys-on-surface-variant);
       }
     }
 
-    .full-width {
-      width: 100%;
-      margin-bottom: 16px;
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0 12px;
     }
 
     .form-actions {
       display: flex;
-      justify-content: flex-end;
+      justify-content: flex-start;
       gap: 8px;
-      margin-top: 16px;
     }
 
     .item-actions {
@@ -371,60 +235,29 @@ interface ManageGroupDialogData {
       gap: 4px;
     }
 
-    .empty-message {
-      color: var(--bs-secondary-color);
-      font-style: italic;
-      text-align: center;
-      padding: 24px;
-    }
-
-    mat-list {
-      max-height: 400px;
-      overflow-y: auto;
-    }
-
-    mat-list-item {
-      border-bottom: 1px solid var(--bs-border-color);
-
-      &:hover {
-        background-color: var(--bs-secondary-bg);
-      }
-    }
-
-    .env-tab-content {
-      padding: 24px;
+    .delete {
+      color: var(--mat-sys-error);
     }
 
     .client-selector {
-      margin-bottom: 16px;
+      max-width: 320px;
     }
 
-    .client-env-group {
-      margin-bottom: 16px;
-
-      &:last-child {
-        margin-bottom: 0;
-      }
+    .empty-message {
+      margin: 0;
+      padding: 16px 0;
+      color: var(--mat-sys-on-surface-variant);
+      font-style: italic;
     }
 
-    .client-env-header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin: 0 0 8px 0;
-      font-size: 14px;
-      font-weight: 500;
-      color: var(--bs-primary);
-      padding: 8px 12px;
-      background-color: var(--bs-tertiary-bg);
-      border-radius: 4px;
-      border-left: 3px solid var(--bs-primary);
+    mat-list {
+      max-height: 320px;
+      overflow-y: auto;
+      padding: 0;
     }
 
-    .client-env-icon {
-      font-size: 18px;
-      width: 18px;
-      height: 18px;
+    mat-list-item {
+      border-bottom: 1px solid var(--mat-sys-outline-variant);
     }
   `]
 })

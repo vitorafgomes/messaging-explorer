@@ -55,7 +55,8 @@ No dates are set; the owner sets them.
 - **Success criteria:** a queue created with a 2-minute lock, 7 deliveries and sessions shows exactly those values; the end-to-end screenshots of a queue and a subscription differ only by the rules tab.
 
 ### Phase 2 - Actions that can hurt
-- **Status:** not started
+- **Status:** in progress (2026-11-13).
+  - **Connections, migrated 2026-11-13, with a recorded residual:** the screen and its add, edit, groups and export dialogs are Material and theme tokens, with the three states and named icon controls; the end-to-end flows pass unchanged. The counts reach zero once the debug panel goes; the light and dark screenshots wait for the owner's review. In `features/connections/` the Bootstrap classes went from 233 to 27, Font Awesome from 46 to 5, literal colours from 8 to 2 and `--bs-*` from 74 to 0. What is left is the developer-mode debug panel, kept as it was apart from its Clear All Data button, removed on 2026-11-13, and the class `badge` on the connected chip, which a pinned expected failure looks for. Details on [[pages/services/web-app]].
 - **Scope:** rule 6 everywhere: destructive actions out of the routine row, one confirmation builder that names entity, parent and connection with the live count; an environment badge in the toolbar; fields with no save path become text (rule 8).
 - **Success criteria:** no purge or delete can be confirmed without the entity and the connection on screen.
 

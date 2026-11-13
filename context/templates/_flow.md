@@ -32,7 +32,7 @@ One Mermaid `sequenceDiagram`: the UI, the API host, every module touched, the p
 
 ## Steps
 
-Numbered, code-anchored. Each step cites `file:line` for the entry point. **Never invent a path** - if the path can't be verified, mark it `?`.
+Numbered, code-anchored. Each step cites `path#Member` for the entry point. **Never invent a path** - if the path can't be verified, mark it `?`.
 
 1. **<Step name>** - `src/<path>.cs:LINE`. What happens here in one sentence. What it produces.
 2. **<Step name>** - `src/<path>.cs:LINE`. What happens here. What it produces.
@@ -45,7 +45,7 @@ Every [[pages/invariants/*]] that constrains a step in this flow. If a step woul
 
 ## Failure modes
 
-- **<Failure>** - what happens, where it surfaces, how the flow recovers. Cite `file:line` of the handler.
+- **<Failure>** - what happens, where it surfaces, how the flow recovers. Cite `path#Member` of the handler.
 - **<Failure>** - same.
 
 ## Idempotency / replay

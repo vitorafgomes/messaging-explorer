@@ -88,7 +88,7 @@ describe('SendMessageDialogComponent', () => {
     const { fixture } = createComponent({ activeTab: 1 });
 
     const el = fixture.nativeElement as HTMLElement;
-    const heading = el.querySelector('h6');
+    const heading = el.querySelector('h3.group-title');
 
     expect(heading).toBeTruthy();
     expect(heading!.textContent).toContain('Delivery Options');
@@ -134,7 +134,7 @@ describe('SendMessageDialogComponent', () => {
     const { fixture } = createComponent({ scheduledTime: '2026-06-15T14:30' });
 
     const el = fixture.nativeElement as HTMLElement;
-    const sendButton = el.querySelector('.btn-primary') as HTMLButtonElement;
+    const sendButton = el.querySelector('.send-button') as HTMLButtonElement;
 
     expect(sendButton.textContent).toContain('Schedule');
   });
@@ -143,7 +143,7 @@ describe('SendMessageDialogComponent', () => {
     const { fixture } = createComponent();
 
     const el = fixture.nativeElement as HTMLElement;
-    const sendButton = el.querySelector('.btn-primary') as HTMLButtonElement;
+    const sendButton = el.querySelector('.send-button') as HTMLButtonElement;
 
     expect(sendButton.textContent).toContain('Send');
     expect(sendButton.textContent).not.toContain('Schedule');

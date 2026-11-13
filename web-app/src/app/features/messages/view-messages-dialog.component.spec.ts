@@ -351,7 +351,7 @@ describe('ViewMessagesDialogComponent', () => {
     });
 
     it('a broker without a dead-letter queue has no Dead Letter tab; Azure has it', () => {
-      const tabs = (el: HTMLElement) => Array.from(el.querySelectorAll('.nav-link')).map(t => text(t).replace(/ \d+$/, ''));
+      const tabs = (el: HTMLElement) => Array.from(el.querySelectorAll('.sub-queue-tab')).map(t => text(t).replace(/ \d+$/, ''));
 
       expect(tabs(render(null, { ...DEFAULT_AZURE_CAPABILITIES, supportsDeadLetterQueue: false }))).toEqual(['Active Messages']);
       TestBed.resetTestingModule();
@@ -417,7 +417,7 @@ describe('ViewMessagesDialogComponent: transfer dead-letter queue, message state
   }
 
   const text = (e: Element | null) => (e?.textContent ?? '').replace(/\s+/g, ' ').trim();
-  const tabs = (el: HTMLElement) => Array.from(el.querySelectorAll('.nav-link')).map(t => text(t).replace(/ \d+$/, ''));
+  const tabs = (el: HTMLElement) => Array.from(el.querySelectorAll('.sub-queue-tab')).map(t => text(t).replace(/ \d+$/, ''));
   const toolbarButtons = (el: HTMLElement) => Array.from(el.querySelectorAll('app-bulk-actions-toolbar button')).map(b => text(b));
   const keyDown = (key: string, ctrlKey = false) =>
     ({ key, target: document.body, ctrlKey, metaKey: false, preventDefault: vi.fn() }) as unknown as KeyboardEvent;

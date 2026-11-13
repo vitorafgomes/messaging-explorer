@@ -113,7 +113,7 @@ export function formatDuration(ms: number): string {
         @if (run.isActive()) {
           <p class="hint">Pause starts nothing new once the request in flight has answered. Stop cancels the request in flight; its messages are then reported as possible duplicates.</p>
         } @else if (byReason().length > 0) {
-          <table mat-table [dataSource]="byReason()" class="table">
+          <table mat-table [dataSource]="byReason()" class="results">
             <caption>By dead-letter reason</caption>
             <ng-container matColumnDef="reason">
               <th mat-header-cell *matHeaderCellDef>Reason</th>
@@ -140,7 +140,7 @@ export function formatDuration(ms: number): string {
           </table>
         }
         @if (leftBehind().length > 0) {
-          <table mat-table [dataSource]="leftBehind()" [trackBy]="trackLeftBehind" class="table">
+          <table mat-table [dataSource]="leftBehind()" [trackBy]="trackLeftBehind" class="results">
             <caption>
               Left in the dead-letter queue: {{ p.failed + p.possibleDuplicates | number }}, by sequence number.
               {{ leftBehind().length }} shown, all of them in the saved report.
@@ -183,12 +183,12 @@ export function formatDuration(ms: number): string {
         @if (positional) {
           <fieldset class="group">
             <legend>Which messages</legend>
-            <mat-form-field appearance="outline">
+            <mat-form-field appearance="outline" subscriptSizing="dynamic">
               <mat-label>Dead-letter reason equals</mat-label>
               <input matInput name="reason" [(ngModel)]="reasonFilter" autocomplete="off">
               <mat-hint>Empty: any reason</mat-hint>
             </mat-form-field>
-            <mat-form-field appearance="outline">
+            <mat-form-field appearance="outline" subscriptSizing="dynamic">
               <mat-label>Text in the subject or body</mat-label>
               <input matInput name="text" [(ngModel)]="textFilter" autocomplete="off">
               <mat-hint>Applied to each batch as it is read; the run counts what matched so far</mat-hint>
@@ -209,7 +209,7 @@ export function formatDuration(ms: number): string {
             <p class="hint">Continuing applies to a message the broker refused and to a possible duplicate. A message the server cannot find is tried again once its lock is released, and then stops the run.</p>
           </fieldset>
         }
-        <mat-form-field appearance="outline" class="batch">
+        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="batch">
           <mat-label>Batch size</mat-label>
           <input matInput type="number" name="batchSize" [(ngModel)]="batchSize" min="1" max="500">
           <mat-hint>1 to 500 messages per cycle.@if (positional) { The server reads 250 per scan. A smaller batch costs the broker more scans.}</mat-hint>
@@ -276,7 +276,7 @@ export function formatDuration(ms: number): string {
     </mat-dialog-actions>
   `,
   styles: [`
-    .content { display: flex; flex-direction: column; gap: 12px; min-width: min(640px, 80vw); }
+    .content { display: flex; flex-direction: column; gap: 12px; min-width: 0; overflow-wrap: anywhere; }
     p { margin: 0; }
     .target { overflow-wrap: anywhere; }
     .note { display: flex; align-items: flex-start; gap: 8px; padding: 8px 12px; border-radius: 8px; background: var(--mat-sys-surface-container); color: var(--mat-sys-on-surface-variant); }
@@ -289,11 +289,11 @@ export function formatDuration(ms: number): string {
     .timing { display: flex; flex-wrap: wrap; gap: 16px; font: var(--mat-sys-body-small); color: var(--mat-sys-on-surface-variant); font-variant-numeric: tabular-nums; }
     .status { display: flex; align-items: flex-start; gap: 8px; }
     .hint { font: var(--mat-sys-body-small); color: var(--mat-sys-on-surface-variant); }
-    .group { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; border: 0; min-width: 0; }
+    .group { display: flex; flex-direction: column; gap: 12px; margin: 0; padding: 0; border: 0; min-width: 0; }
     legend { padding: 0 0 4px; font: var(--mat-sys-label-medium); color: var(--mat-sys-on-surface-variant); }
     .radios { display: flex; flex-direction: column; }
     .batch { max-width: 240px; }
-    .table { width: 100%; }
+    .results { width: 100%; }
     caption { text-align: start; padding: 0 0 4px; font: var(--mat-sys-label-medium); color: var(--mat-sys-on-surface-variant); }
     .mono { font-family: ui-monospace, monospace; }
     .log { max-height: 200px; overflow-y: auto; margin: 0; padding: 8px 12px; list-style: none; border: 1px solid var(--mat-sys-outline-variant); border-radius: 8px; font: var(--mat-sys-body-small); }

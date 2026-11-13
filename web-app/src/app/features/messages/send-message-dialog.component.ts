@@ -3,9 +3,15 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatButtonModule } from '@angular/material/button';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatIconModule } from '@angular/material/icon';
+import { MatInputModule } from '@angular/material/input';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { finalize } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { QueueService, TopicService, ThemeService, MessageTemplateService } from '../../core/services';
+import { QueueService, TopicService, MessageTemplateService } from '../../core/services';
 import { ProviderService } from '../../core/services/provider.service';
 import { SendMessageRequest, MessageTemplate } from '../../core/models';
 import { messageCallFailure } from './message-call-failure';
@@ -34,246 +40,215 @@ export interface SendMessageDialogData {
   imports: [
     CommonModule,
     FormsModule,
+    MatButtonModule,
     MatDialogModule,
-    MatSnackBarModule
+    MatFormFieldModule,
+    MatIconModule,
+    MatInputModule,
+    MatProgressSpinnerModule,
+    MatSnackBarModule,
+    MatTooltipModule
   ],
-  host: {
-    '[class.dark-mode-dialog]': 'themeService.isDark()'
-  },
   template: `
-    <div class="modal-header" [class.bg-dark]="themeService.isDark()" [class.text-light]="themeService.isDark()">
-      <h5 class="modal-title d-flex align-items-center gap-2" [class.text-light]="themeService.isDark()">
-        <i class="fa" [class.fa-paper-plane]="!isResubmitMode" [class.fa-pencil]="isResubmitMode" [class.text-primary]="!isResubmitMode" [class.text-warning]="isResubmitMode"></i>
-        {{ dialogTitle }}
-      </h5>
-    </div>
+    <h2 mat-dialog-title class="title">
+      <mat-icon [fontIcon]="isResubmitMode ? 'edit' : 'send'" aria-hidden="true"></mat-icon>
+      <span>{{ dialogTitle }}</span>
+    </h2>
 
-    <div class="modal-body" [class.bg-dark]="themeService.isDark()" [class.text-light]="themeService.isDark()">
+    <mat-dialog-content class="content">
+      @if (isResubmitMode) {
+        <p class="note" role="note">
+          <mat-icon fontIcon="info" aria-hidden="true"></mat-icon>
+          <span>This sends a new message to {{ data.entityName }} with the fields below. The original is not removed: it stays in the dead-letter queue until it is deleted.</span>
+        </p>
+      }
+
       @if (templates().length > 0) {
-        <div class="template-picker mb-3">
-          <label class="form-label d-flex align-items-center gap-2">
-            <i class="fa fa-bookmark text-muted"></i>
-            Load Template
-          </label>
-          <div class="d-flex gap-2">
-            <select class="form-select" [(ngModel)]="selectedTemplateId" (ngModelChange)="onTemplateSelected($event)">
+        <div class="template-picker">
+          <mat-form-field appearance="outline" subscriptSizing="dynamic" class="grow">
+            <mat-label>Load Template</mat-label>
+            <select matNativeControl [(ngModel)]="selectedTemplateId" (ngModelChange)="onTemplateSelected($event)">
               <option value="">-- Select a template --</option>
               @for (tpl of templates(); track tpl.id) {
                 <option [value]="tpl.id">{{ tpl.name }}</option>
               }
             </select>
-            @if (selectedTemplateId) {
-              <button class="btn btn-outline-danger btn-sm" (click)="deleteSelectedTemplate()" title="Delete template">
-                <i class="fa fa-trash"></i>
-              </button>
-            }
+          </mat-form-field>
+          @if (selectedTemplateId) {
+            <button mat-icon-button type="button" class="danger" (click)="deleteSelectedTemplate()" aria-label="Delete template" matTooltip="Delete template">
+              <mat-icon fontIcon="delete" aria-hidden="true"></mat-icon>
+            </button>
+          }
+        </div>
+      }
+
+      <nav class="sections" aria-label="Message sections">
+        <button mat-button type="button" class="section-tab" [class.current]="activeTab === 0" [attr.aria-current]="activeTab === 0 ? 'true' : null" (click)="activeTab = 0">Message Body</button>
+        <button mat-button type="button" class="section-tab" [class.current]="activeTab === 1" [attr.aria-current]="activeTab === 1 ? 'true' : null" (click)="activeTab = 1">Properties</button>
+        <button mat-button type="button" class="section-tab" [class.current]="activeTab === 2" [attr.aria-current]="activeTab === 2 ? 'true' : null" (click)="activeTab = 2">Custom Properties</button>
+      </nav>
+
+      @if (activeTab === 0) {
+        <div class="section">
+          <mat-form-field appearance="outline" subscriptSizing="dynamic" class="content-type">
+            <mat-label>Content Type</mat-label>
+            <select matNativeControl [(ngModel)]="message.contentType">
+              <option value="application/json">application/json</option>
+              <option value="text/plain">text/plain</option>
+              <option value="application/xml">application/xml</option>
+            </select>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>Message Body</mat-label>
+            <textarea matInput class="mono" [(ngModel)]="message.body" rows="12" spellcheck="false"
+              placeholder='{"key": "value"}'></textarea>
+          </mat-form-field>
+
+          <div>
+            <button mat-stroked-button type="button" (click)="formatJson()" [disabled]="!message.body">
+              <mat-icon fontIcon="data_object" aria-hidden="true"></mat-icon>
+              Format JSON
+            </button>
           </div>
         </div>
       }
 
-      <ul class="nav nav-tabs mb-3" role="tablist">
-        <li class="nav-item" role="presentation">
-          <button class="nav-link" [class.active]="activeTab === 0" (click)="activeTab = 0" type="button">
-            Message Body
-          </button>
-        </li>
-        <li class="nav-item" role="presentation">
-          <button class="nav-link" [class.active]="activeTab === 1" (click)="activeTab = 1" type="button">
-            Properties
-          </button>
-        </li>
-        <li class="nav-item" role="presentation">
-          <button class="nav-link" [class.active]="activeTab === 2" (click)="activeTab = 2" type="button">
-            Custom Properties
-          </button>
-        </li>
-      </ul>
-
-      <div class="tab-content">
-        @if (activeTab === 0) {
-          <div class="tab-pane-content">
-            <div class="mb-3">
-              <label class="form-label">Content Type</label>
-              <select class="form-select" [(ngModel)]="message.contentType">
-                <option value="application/json">application/json</option>
-                <option value="text/plain">text/plain</option>
-                <option value="application/xml">application/xml</option>
-              </select>
-            </div>
-
-            <div class="mb-3">
-              <label class="form-label">Message Body</label>
-              <textarea class="form-control font-monospace" [(ngModel)]="message.body" rows="12"
-                placeholder='{"key": "value"}'></textarea>
-            </div>
-
-            <button class="btn btn-outline-secondary" type="button" (click)="formatJson()" [disabled]="!message.body">
-              <i class="fa fa-code me-2"></i>
-              Format JSON
-            </button>
-          </div>
-        }
-
-        @if (activeTab === 1) {
-          <div class="tab-pane-content">
-            <div class="row mb-3">
-              <div class="col-md-6">
-                <label class="form-label">Message ID</label>
-                <input class="form-control" [(ngModel)]="message.messageId" placeholder="Auto-generated if empty">
-              </div>
-              <div class="col-md-6">
-                <label class="form-label">Correlation ID</label>
-                <input class="form-control" [(ngModel)]="message.correlationId">
-              </div>
-            </div>
-
-            <div class="row mb-3">
-              @if (capabilities()?.supportsSessions !== false) {
-                <div class="col-md-6">
-                  <label class="form-label" for="send-session-id">Session ID</label>
-                  <input id="send-session-id" class="form-control" [(ngModel)]="message.sessionId">
-                </div>
-              }
-              <div class="col-md-6">
-                <label class="form-label">Partition Key</label>
-                <input class="form-control" [(ngModel)]="message.partitionKey">
-              </div>
-            </div>
-
-            <div class="row mb-3">
-              <div class="col-md-6">
-                <label class="form-label">Subject / Label</label>
-                <input class="form-control" [(ngModel)]="message.subject">
-              </div>
-              <div class="col-md-6">
-                <label class="form-label">To</label>
-                <input class="form-control" [(ngModel)]="message.to">
-              </div>
-            </div>
-
-            <div class="mb-3">
-              <label class="form-label">Reply To</label>
-              <input class="form-control" [(ngModel)]="message.replyTo">
-            </div>
-
-            <hr class="my-3">
-            <h6 class="text-muted mb-3">
-              <i class="fa fa-clock me-2"></i>Delivery Options
-            </h6>
-
-            <div class="row mb-3">
-              @if (capabilities()?.supportsScheduledMessages !== false) {
-                <div class="col-md-6">
-                  <label class="form-label" for="send-scheduled-delivery">Scheduled Delivery</label>
-                  <input id="send-scheduled-delivery" type="datetime-local" class="form-control"
-                    data-testid="scheduled-enqueue-time"
-                    [(ngModel)]="scheduledEnqueueTimeLocal"
-                    [min]="minDateTimeLocal">
-                </div>
-              }
-              <div class="col-md-6">
-                <label class="form-label">Time to Live</label>
-                <input type="text" class="form-control"
-                  data-testid="time-to-live"
-                  [(ngModel)]="message.timeToLive"
-                  placeholder="HH:mm:ss">
-              </div>
-            </div>
-          </div>
-        }
-
-        @if (activeTab === 2) {
-          <div class="tab-pane-content">
-            <p class="text-muted mb-3">Add custom application properties to the message</p>
-
-            @for (prop of customProperties; track $index) {
-              <div class="property-row mb-2">
-                <div class="flex-fill">
-                  <input class="form-control" [(ngModel)]="prop.key" placeholder="Key">
-                </div>
-                <div class="flex-fill">
-                  <input class="form-control" [(ngModel)]="prop.value" placeholder="Value">
-                </div>
-                <button class="btn btn-outline-danger btn-sm" (click)="removeProperty($index)">
-                  <i class="fa fa-trash"></i>
-                </button>
-              </div>
+      @if (activeTab === 1) {
+        <div class="section">
+          <div class="fields">
+            <mat-form-field appearance="outline" subscriptSizing="dynamic">
+              <mat-label>Message ID</mat-label>
+              <input matInput [(ngModel)]="message.messageId" placeholder="Auto-generated if empty">
+            </mat-form-field>
+            <mat-form-field appearance="outline" subscriptSizing="dynamic">
+              <mat-label>Correlation ID</mat-label>
+              <input matInput [(ngModel)]="message.correlationId">
+            </mat-form-field>
+            @if (capabilities()?.supportsSessions !== false) {
+              <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                <mat-label>Session ID</mat-label>
+                <input matInput id="send-session-id" [(ngModel)]="message.sessionId">
+              </mat-form-field>
             }
+            <mat-form-field appearance="outline" subscriptSizing="dynamic">
+              <mat-label>Partition Key</mat-label>
+              <input matInput [(ngModel)]="message.partitionKey">
+            </mat-form-field>
+            <mat-form-field appearance="outline" subscriptSizing="dynamic">
+              <mat-label>Subject / Label</mat-label>
+              <input matInput [(ngModel)]="message.subject">
+            </mat-form-field>
+            <mat-form-field appearance="outline" subscriptSizing="dynamic">
+              <mat-label>To</mat-label>
+              <input matInput [(ngModel)]="message.to">
+            </mat-form-field>
+            <mat-form-field appearance="outline" subscriptSizing="dynamic">
+              <mat-label>Reply To</mat-label>
+              <input matInput [(ngModel)]="message.replyTo">
+            </mat-form-field>
+          </div>
 
-            <button class="btn btn-outline-secondary" (click)="addProperty()">
-              <i class="fa fa-plus me-2"></i>
+          <h3 class="group-title">
+            <mat-icon fontIcon="schedule" aria-hidden="true"></mat-icon>Delivery Options
+          </h3>
+
+          <div class="fields">
+            @if (capabilities()?.supportsScheduledMessages !== false) {
+              <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                <mat-label>Scheduled Delivery</mat-label>
+                <input matInput id="send-scheduled-delivery" type="datetime-local"
+                  data-testid="scheduled-enqueue-time"
+                  [(ngModel)]="scheduledEnqueueTimeLocal"
+                  [min]="minDateTimeLocal">
+              </mat-form-field>
+            }
+            <mat-form-field appearance="outline" subscriptSizing="dynamic">
+              <mat-label>Time to Live</mat-label>
+              <input matInput type="text"
+                data-testid="time-to-live"
+                [(ngModel)]="message.timeToLive"
+                placeholder="HH:mm:ss">
+            </mat-form-field>
+          </div>
+        </div>
+      }
+
+      @if (activeTab === 2) {
+        <div class="section">
+          <p class="hint">Add custom application properties to the message</p>
+
+          @for (prop of customProperties; track $index) {
+            <div class="property-row">
+              <mat-form-field appearance="outline" subscriptSizing="dynamic" class="grow">
+                <mat-label>Key</mat-label>
+                <input matInput class="mono" [(ngModel)]="prop.key" placeholder="Key">
+              </mat-form-field>
+              <mat-form-field appearance="outline" subscriptSizing="dynamic" class="grow">
+                <mat-label>Value</mat-label>
+                <input matInput class="mono" [(ngModel)]="prop.value" placeholder="Value">
+              </mat-form-field>
+              <button mat-icon-button type="button" (click)="removeProperty($index)" [attr.aria-label]="'Remove property ' + ($index + 1)" matTooltip="Remove property">
+                <mat-icon fontIcon="close" aria-hidden="true"></mat-icon>
+              </button>
+            </div>
+          }
+
+          <div>
+            <button mat-stroked-button type="button" (click)="addProperty()">
+              <mat-icon fontIcon="add" aria-hidden="true"></mat-icon>
               Add Property
             </button>
           </div>
-        }
-      </div>
-    </div>
+        </div>
+      }
+    </mat-dialog-content>
 
-    <div class="modal-footer" [class.bg-dark]="themeService.isDark()">
-      <button class="btn btn-outline-info me-auto" (click)="saveAsTemplate()" [disabled]="!message.body">
-        <i class="fa fa-bookmark me-2"></i>
+    <mat-dialog-actions class="actions">
+      <button mat-stroked-button type="button" (click)="saveAsTemplate()" [disabled]="!message.body">
+        <mat-icon fontIcon="bookmark" aria-hidden="true"></mat-icon>
         Save as Template
       </button>
-      <button class="btn btn-secondary" mat-dialog-close>Cancel</button>
-      <button class="btn btn-primary" (click)="send()" [disabled]="sending() || !message.body">
+      <span class="spacer"></span>
+      <button mat-button type="button" mat-dialog-close>Cancel</button>
+      <button mat-flat-button type="button" class="send-button" (click)="send()" [disabled]="sending() || !message.body">
         @if (sending()) {
-          <span class="spinner-border spinner-border-sm me-2"></span>
+          <mat-progress-spinner mode="indeterminate" diameter="18" aria-hidden="true"></mat-progress-spinner>
         } @else {
-          <i class="fa fa-paper-plane me-2"></i>
+          <mat-icon fontIcon="send" aria-hidden="true"></mat-icon>
         }
         {{ isResubmitMode ? 'Resubmit' : (isScheduled ? 'Schedule' : 'Send') }}
       </button>
-    </div>
+    </mat-dialog-actions>
   `,
   styles: [`
-    .modal-header {
-      border-bottom: 1px solid var(--bs-border-color);
-      padding: 16px 24px;
+    .title { display: flex; align-items: center; gap: 8px; overflow-wrap: anywhere; }
+    .title mat-icon { flex: none; color: var(--mat-sys-primary); }
+    .content { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+    p { margin: 0; }
+    .note { display: flex; align-items: flex-start; gap: 8px; padding: 8px 12px; border-radius: 8px; background: var(--mat-sys-secondary-container); color: var(--mat-sys-on-secondary-container); }
+    .note mat-icon { flex: none; }
+    .template-picker { display: flex; align-items: center; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--mat-sys-outline-variant); }
+    .grow { flex: 1; min-width: 0; }
+    .danger { color: var(--mat-sys-error); }
+    .sections { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--mat-sys-outline-variant); }
+    .section-tab {
+      --mat-button-text-container-shape: 0;
+      --mat-button-text-container-height: 44px;
+      --mat-button-text-label-text-color: var(--mat-sys-on-surface-variant);
+      margin-bottom: -1px;
+      border-bottom: 3px solid transparent;
     }
-
-    .modal-title {
-      margin: 0;
-      font-size: 18px;
-      font-weight: 500;
-      color: var(--bs-body-color);
-
-      i {
-        font-size: 20px;
-      }
-    }
-
-    .modal-body {
-      padding: 24px;
-      min-width: 600px;
-      min-height: 400px;
-    }
-
-    .modal-footer {
-      border-top: 1px solid var(--bs-border-color);
-      padding: 16px 24px;
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
-    }
-
-    .tab-content {
-      padding: 16px 0;
-    }
-
-    .property-row {
-      display: flex;
-      gap: 16px;
-      align-items: center;
-
-      .flex-fill {
-        flex: 1;
-      }
-    }
-
-    .template-picker {
-      padding-bottom: 12px;
-      border-bottom: 1px solid var(--bs-border-color);
-    }
+    .section-tab.current { --mat-button-text-label-text-color: var(--mat-sys-primary); border-bottom-color: var(--mat-sys-primary); }
+    .section { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+    .content-type { max-width: 280px; }
+    .mono { font-family: ui-monospace, monospace; }
+    .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+    .group-title { display: flex; align-items: center; gap: 8px; margin: 4px 0 0; font: var(--mat-sys-title-small); color: var(--mat-sys-on-surface-variant); }
+    .hint { font: var(--mat-sys-body-small); color: var(--mat-sys-on-surface-variant); }
+    .property-row { display: flex; align-items: center; gap: 8px; }
+    .actions { gap: 8px; flex-wrap: wrap; }
+    .spacer { flex: 1; }
   `]
 })
 export class SendMessageDialogComponent {
@@ -283,7 +258,6 @@ export class SendMessageDialogComponent {
   private topicService = inject(TopicService);
   private snackBar = inject(MatSnackBar);
   private readonly destroyRef = inject(DestroyRef);
-  protected themeService = inject(ThemeService);
   private templateService = inject(MessageTemplateService);
   protected readonly capabilities = inject(ProviderService).capabilities;
 
