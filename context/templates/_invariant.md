@@ -32,14 +32,14 @@ Where the invariant applies. What it does NOT cover.
 
 ## Where it's enforced
 
-Cite `file:line` for every enforcement point. The `enforced_by:` frontmatter field holds the machine-readable list; prose below explains each.
+Cite `path#Member` for every enforcement point. The `enforced_by:` frontmatter field holds the machine-readable list; prose below explains each.
 
 - `src/<path>.cs:LINE` — *what this code does to enforce the rule*
 - `src/<path>.cs:LINE` — *what this code does*
 
 ## How it's verified
 
-Tests that would fail if the invariant were broken. Cite `file:line`.
+Tests that would fail if the invariant were broken. Cite `path#Member`.
 
 - `src/<path>.Tests/<test>.cs:LINE` — *what scenario this test covers*
 

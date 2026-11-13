@@ -16,7 +16,7 @@ requirement-to-test map this lane hands over.
    `dotnet-diag` (`dotnet-trace-collect`, `dump-collect`, `analyzing-dotnet-performance`), not
    reasoned about. Never point a reproduction at a production broker: a peek is safe, a receive, a
    purge and every bulk operation are not.
-4. **Answer with citations** - `[[context/pages/...]]` where a page exists, else `file:line`; verified
+4. **Answer with citations** - `[[context/pages/...]]` where a page exists, else `path#Member`; verified
    facts apart from hypotheses; per Rule D, anything recommended is read in current code first.
    When the diagnosis hands off a fix, carry the user's wording and a requirement-to-test map
    (`new behaviour` | `behaviour lock` | `mutation proof`) into the bug-fix lane.

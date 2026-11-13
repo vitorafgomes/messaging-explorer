@@ -22,8 +22,8 @@ conditional_fields:
   reliability: enum                # only meaningful when source present
   supersedes: string               # ADR / decision ID this page replaces
   superseded_by: string            # ADR / decision ID that replaces this page
-  enforced_by: list                # file:line references (invariant pages)
-  verified_by: list                # test file:line references (invariant pages)
+  enforced_by: list                # path#Member references (invariant pages)
+  verified_by: list                # test path#Member references (invariant pages)
 
 # Valid enum values
 enums:
@@ -80,8 +80,8 @@ This schema extends the personal-wiki default (upstream: vanillaflava/llm-wiki-s
 **New conditional fields:**
 - `supersedes: string` — ID of a page this page replaces (ADRs, decisions).
 - `superseded_by: string` — inverse of above.
-- `enforced_by: list` — file:line references where an invariant is enforced (for `invariant` pages).
-- `verified_by: list` — file:line references to tests that verify an invariant.
+- `enforced_by: list` — `path#Member` references where an invariant is enforced (for `invariant` pages).
+- `verified_by: list` — `path#TestName` references to tests that verify an invariant.
 
 All personal-wiki default values are retained for compatibility. If a page needs a type the engineering variant doesn't cover, fall back to `knowledge`.
 
