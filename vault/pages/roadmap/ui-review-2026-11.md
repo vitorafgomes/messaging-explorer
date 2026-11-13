@@ -87,7 +87,11 @@ The owner remembers a user reporting layout problems on macOS, with no details. 
 - **Fonts for code.** `'Consolas', 'Courier New'` (`web-app/src/app/features/entities/entity-details.component.ts:873`), `'Fira Code', 'Consolas', 'Monaco'` (`web-app/src/app/shared/components/message-body-editor/message-body-editor.component.ts:237`), `'Courier New'` (`web-app/src/app/shared/components/bulk-operation-results-dialog/bulk-operation-results-dialog.component.ts:302`). A Mac has neither Consolas nor Fira Code, so each place falls to a different font. Fix: one stack defined once, starting with `ui-monospace, "SF Mono", Menlo`, as in the prototype's `--mono`.
 - **Custom scrollbar in the tree** (`web-app/src/app/features/entities/entities-tree.component.ts:656`): it replaces the overlay scrollbar of macOS with a permanent 8 px one in Bootstrap colours. Fix: remove it; `color-scheme` already themes the native one.
 - **Tray icon.** One bitmap resized to 16 px on darwin (`web-app/electron/main.js:209`), from `tray-icon.png` (`web-app/electron/main.js:177`); no `@2x` file and no template image, so it is soft on Retina and does not adapt to a light or dark menu bar.
+<<<<<<< HEAD
 - **Application icon.** The build names `src/assets/icon.icns` (`web-app/package.json:147`); no such file is tracked in git. Whether the build generates it or ships the default icon was not checked.
+=======
+- **Application icon.** The build names `src/assets/icon.icns` (`web-app/package.json:146`); no such file is tracked in git. Whether the build generates it or ships the default icon was not checked.
+>>>>>>> origin/main
 - **Window size.** The window opens at 1400 by 900 (`web-app/electron/shell-helpers.js:110`), larger than the usable area of a 13 inch display at its default scaling, and allows 1000 by 700 (`web-app/electron/shell-helpers.js:112`). Board `#min` draws the shell at that minimum.
 - **Update bar position.** The download bar is pinned at `top: 48px` (`web-app/src/app/app.scss:78`), a height the toolbar may not have.
 
