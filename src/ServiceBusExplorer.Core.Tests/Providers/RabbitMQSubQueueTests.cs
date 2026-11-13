@@ -44,4 +44,17 @@ public class RabbitMQSubQueueTests
 
         Assert.Equal("RabbitMQ does not support scheduled messages.", error.Message);
     }
+
+    [Theory]
+    [InlineData(MessageSubQueue.Active)]
+    [InlineData(MessageSubQueue.DeadLetter)]
+    public async Task RabbitMQ_refuses_a_peek_from_a_sequence_number_and_declares_that_it_cannot_read_from_a_position(MessageSubQueue subQueue)
+    {
+        var provider = new RabbitMQProvider();
+
+        var error = await Assert.ThrowsAsync<NotSupportedException>(() => provider.PeekMessagesAsync("orders", 10, subQueue, fromSequenceNumber: 0));
+
+        Assert.Equal("RabbitMQ cannot peek from a sequence number.", error.Message);
+        Assert.False(provider.Capabilities.SupportsPeekFromSequenceNumber);
+    }
 }

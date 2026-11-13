@@ -1153,28 +1153,28 @@ public class AzureServiceBusProvider : IMessagingProvider
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<IMessage>> PeekMessagesAsync(string entityName, int count = 10, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<IMessage>> PeekMessagesAsync(string entityName, int count = 10, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, long? fromSequenceNumber = null, CancellationToken cancellationToken = default)
     {
         EnsureConnected();
 
         await using var receiver = CreateReceiver(_client!, entityName, subscriptionName, subQueue);
-        var messages = await RefuseDisabledAsync(() => PeekCoreAsync(receiver, count, cancellationToken));
+        var messages = await RefuseDisabledAsync(() => PeekCoreAsync(receiver, count, fromSequenceNumber, cancellationToken));
 
         return messages.Select(m => MapToMessageInfo(m, subQueue != MessageSubQueue.Active));
     }
 
     /// <summary>
-    /// Peeks up to <paramref name="count"/> messages in batches of at most 250, the SDK's limit per call. A batch
+    /// Peeks up to <paramref name="count"/> messages in batches of at most 250, the SDK's limit per call, from
+    /// <paramref name="fromSequenceNumber"/> when it is given and from the head otherwise. A batch
     /// shorter than asked is not the end: the broker returns one where a scheduled message or a dropped duplicate
     /// sits between messages. The peek goes on from the last sequence number until a batch is empty or
     /// <paramref name="count"/> is reached; every batch that is not empty brings it closer to <paramref name="count"/>,
     /// so it makes at most <paramref name="count"/> plus one calls. The caller's token is checked before each call
     /// and handed to the SDK, so an aborted request stops the peek.
     /// </summary>
-    internal static async Task<List<ServiceBusReceivedMessage>> PeekCoreAsync(ServiceBusReceiver receiver, int count, CancellationToken cancellationToken)
+    internal static async Task<List<ServiceBusReceivedMessage>> PeekCoreAsync(ServiceBusReceiver receiver, int count, long? fromSequenceNumber, CancellationToken cancellationToken)
     {
         var allMessages = new List<ServiceBusReceivedMessage>();
-        long? fromSequenceNumber = null;
 
         while (allMessages.Count < count)
         {
@@ -2373,7 +2373,7 @@ public class AzureServiceBusProvider : IMessagingProvider
     {
         await using var session = await RefuseDisabledAsync(() => AcceptSessionCoreAsync(client, entityName, subscriptionName, sessionId, wait, cancellationToken));
         var (state, isBinary) = DecodeSessionState(await session.GetSessionStateAsync(cancellationToken));
-        var messages = messageCount > 0 ? await PeekCoreAsync(session, messageCount, cancellationToken) : null;
+        var messages = messageCount > 0 ? await PeekCoreAsync(session, messageCount, null, cancellationToken) : null;
         return (new SessionDetail { SessionId = session.SessionId, State = state, StateIsBinary = isBinary, LockedUntil = session.SessionLockedUntil }, messages);
     }
 
@@ -2383,7 +2383,7 @@ public class AzureServiceBusProvider : IMessagingProvider
         ValidateSessionId(sessionId);
         EnsureConnected();
         await using var session = await RefuseDisabledAsync(() => AcceptSessionCoreAsync(_client!, entityName, subscriptionName, sessionId, SessionAcceptWait, cancellationToken));
-        var messages = await PeekCoreAsync(session, count, cancellationToken);
+        var messages = await PeekCoreAsync(session, count, null, cancellationToken);
         return messages.Select(m => MapToMessageInfo(m, false));
     }
 
