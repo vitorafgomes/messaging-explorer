@@ -348,7 +348,7 @@ public sealed class AzureServiceBusProviderTests(AzureServiceBusFixture fixture)
             await _messaging.SendMessageAsync(queue, new SendMessageRequest { Body = sessionId, SessionId = sessionId });
         }
 
-        var listed = (await _messaging.GetSessionsAsync(queue)).Select(s => s.SessionId).Order().ToList();
+        var listed = (await _messaging.GetSessionsAsync(queue, null, 1000)).Sessions.Select(s => s.SessionId).ToList();
 
         Assert.Equal(sessionIds, listed);
     }

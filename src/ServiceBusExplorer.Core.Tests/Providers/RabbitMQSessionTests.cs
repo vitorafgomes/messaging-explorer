@@ -1,49 +1,33 @@
 using ServiceBusExplorer.Core.Providers.RabbitMQ;
-using Xunit;
 
 namespace ServiceBusExplorer.Core.Tests.Providers;
 
 /// <summary>
-/// Unit tests for RabbitMQ session operations.
-/// RabbitMQ does not support message sessions, so these tests verify
-/// that the provider returns empty results or throws <see cref="NotSupportedException"/>.
+/// RabbitMQ has no message sessions: it says so in its capabilities and refuses every session operation, never by
+/// answering an empty list as if it had looked.
 /// </summary>
 public class RabbitMQSessionTests
 {
     [Fact]
-    public async Task GetSessionsAsync_ReturnsEmpty()
+    public void RabbitMQ_declares_no_sessions()
     {
-        // Arrange
-        var provider = new RabbitMQProvider();
-
-        // Act
-        var sessions = await provider.GetSessionsAsync("test-queue");
-
-        // Assert
-        Assert.Empty(sessions);
+        Assert.False(new RabbitMQProvider().Capabilities.SupportsSessions);
     }
 
     [Fact]
-    public async Task GetSessionsAsync_WithSubscription_ReturnsEmpty()
+    public async Task RabbitMQ_refuses_the_session_list_detail_messages_and_state_write()
     {
-        // Arrange
         var provider = new RabbitMQProvider();
 
-        // Act
-        var sessions = await provider.GetSessionsAsync("test-topic", "test-sub");
+        var errors = new[]
+        {
+            await Assert.ThrowsAsync<NotSupportedException>(() => provider.GetSessionsAsync("orders", null, 1000)),
+            await Assert.ThrowsAsync<NotSupportedException>(() => provider.GetSessionsAsync("events", "audit", 1000)),
+            await Assert.ThrowsAsync<NotSupportedException>(() => provider.GetSessionAsync("orders", null, "order-1")),
+            await Assert.ThrowsAsync<NotSupportedException>(() => provider.PeekSessionMessagesAsync("orders", null, "order-1", 10)),
+            await Assert.ThrowsAsync<NotSupportedException>(() => provider.SetSessionStateAsync("orders", null, "order-1", "s", null))
+        };
 
-        // Assert
-        Assert.Empty(sessions);
-    }
-
-    [Fact]
-    public async Task SetSessionStateAsync_ThrowsNotSupportedException()
-    {
-        // Arrange
-        var provider = new RabbitMQProvider();
-
-        // Act & Assert
-        await Assert.ThrowsAsync<NotSupportedException>(
-            () => provider.SetSessionStateAsync("entity", "session-1", "state"));
+        Assert.All(errors, e => Assert.Equal("RabbitMQ does not support message sessions.", e.Message));
     }
 }

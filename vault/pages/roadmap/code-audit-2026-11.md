@@ -6,7 +6,7 @@ changes: "Initial tracker: the line-by-line bug hunt of 2026-11-12, by area"
 page_type: roadmap
 status: active
 description: "The findings of the line-by-line read of the back end and the front end on 2026-11-12: bugs by area and severity, then improvements. A tracker; an entry leaves when its fix lands."
-updated: 2026-11-12
+updated: 2026-11-13
 source:
   - "src/"
   - "web-app/"
@@ -50,7 +50,7 @@ Path for every entry: `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceB
 - **Prefetch with a short lock duration** (PLAUSIBLE, `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:1415`): the next batch can arrive with expired locks, so each message is sent and then cannot be completed.
 - **Metrics are probably queried on the wrong resource** (PLAUSIBLE, `src/ServiceBusExplorer.Core/Services/AzureMonitorMetricsService.cs:351`): a child resource id per queue, where Service Bus publishes on the namespace with an `EntityName` dimension. One real call confirms it.
 
-- **The session list may be cut short on a real namespace** (PLAUSIBLE, `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:2299`): each session receiver is disposed before the next accept, and the loop stops on the first repeated session. Not reproduced on the emulator, which returned 20 of 20 sessions (`src/ServiceBusExplorer.IntegrationTests/AzureServiceBusProviderTests.cs:342`); that rests on how the emulator hands out sessions, so the entry stays until a namespace confirms or refutes it.
+- **Fixed 2026-11-13: the session list could be cut short on a real namespace,** and while it loaded it took each session away from its consumers: it accepted the sessions one by one and stopped at the first repeated one. It is now a passive peek that accepts nothing, and it lists a session a consumer holds (`src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:2308`, `src/ServiceBusExplorer.IntegrationTests/AzureServiceBusSessionTests.cs:112`).
 
 ### P3
 
@@ -74,7 +74,7 @@ Path for every entry: `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceB
 
 ### Read and found sound
 
-Entity path building on every operation; send before complete in resubmit and move, with no resend after a failed complete; batch splitting on resubmit; termination of the delete scan; the drain and the server-side purge; no secret in any log template; the credential factory; the provider factory; paging in search; the metrics cache keys and time ranges. The session list, suspected of being cut short at the first repeated session, returned all 20 sessions of a queue on the emulator, `The_session_list_holds_every_session_of_a_queue` (`src/ServiceBusExplorer.IntegrationTests/AzureServiceBusProviderTests.cs:342`); refuted there, not proven against a namespace. The legacy `ServiceBusService` was only skimmed.
+Entity path building on every operation; send before complete in resubmit and move, with no resend after a failed complete; batch splitting on resubmit; termination of the delete scan; the drain and the server-side purge; no secret in any log template; the credential factory; the provider factory; paging in search; the metrics cache keys and time ranges. The session list, suspected of being cut short at the first repeated session, returned all 20 sessions of a queue on the emulator, `The_session_list_holds_every_session_of_a_queue` (`src/ServiceBusExplorer.IntegrationTests/AzureServiceBusProviderTests.cs:342`); refuted there, not proven against a namespace; replaced on 2026-11-13 by a passive peek, the fixed entry above. The legacy `ServiceBusService` was only skimmed.
 
 ## RabbitMQ provider
 
@@ -91,7 +91,7 @@ Paths under `src/ServiceBusExplorer.Core/Providers/RabbitMQ/`. No broker was con
 - **Positions are counted from the head at execution time, with no identity check** (`src/ServiceBusExplorer.Core/Providers/RabbitMQ/RabbitMQProvider.cs:706`): if the queue moved since the peek, a different message is deleted or moved. A position beyond the end is skipped with no failure entry. The first half reproduced in a container: after another client consumed the head, a delete of position 1 removed the second message, `Defect_delete_by_position_removes_whichever_message_is_at_that_position_now` (`src/ServiceBusExplorer.IntegrationTests/RabbitMQProviderDefectTests.cs:170`).
 - **The single resubmit ignores which message was chosen** (`src/ServiceBusExplorer.Core/Providers/RabbitMQ/RabbitMQProvider.cs:641`): it takes the head of the dead-letter queue. Reproduced in a container: `Defect_single_resubmit_ignores_the_sequence_number_and_takes_the_dead_letter_head` (`src/ServiceBusExplorer.IntegrationTests/RabbitMQProviderDefectTests.cs:200`).
 - **Send guesses exchange or queue from the message subject** (`src/ServiceBusExplorer.Core/Providers/RabbitMQ/RabbitMQProvider.cs:576`), with no `mandatory` flag or confirm: a send to a fanout exchange with no subject goes to the default exchange and is dropped, and the API answers success. Reproduced in a container: `Defect_send_to_a_fanout_exchange_without_subject_is_dropped_and_reports_success` (`src/ServiceBusExplorer.IntegrationTests/RabbitMQProviderDefectTests.cs:216`).
-- **A republish keeps `user_id`** (CONFIRMED, `src/ServiceBusExplorer.Core/Providers/RabbitMQ/RabbitMQProvider.cs:1132`): the broker validates it against the publishing user, so a message first published by another user is rejected after it was already consumed. Reproduced in a container: the management publish answers 400 `406 PRECONDITION_FAILED - user_id property set to ... but authenticated user was ...`, the single resubmit throws, and the message is in neither queue, `Defect_resubmit_of_a_message_with_another_users_user_id_fails_after_consuming_it` (`src/ServiceBusExplorer.IntegrationTests/RabbitMQProviderDefectTests.cs:317`).
+- **A republish keeps `user_id`** (CONFIRMED, `src/ServiceBusExplorer.Core/Providers/RabbitMQ/RabbitMQProvider.cs:1140`): the broker validates it against the publishing user, so a message first published by another user is rejected after it was already consumed. Reproduced in a container: the management publish answers 400 `406 PRECONDITION_FAILED - user_id property set to ... but authenticated user was ...`, the single resubmit throws, and the message is in neither queue, `Defect_resubmit_of_a_message_with_another_users_user_id_fails_after_consuming_it` (`src/ServiceBusExplorer.IntegrationTests/RabbitMQProviderDefectTests.cs:317`).
 
 ### P2
 
