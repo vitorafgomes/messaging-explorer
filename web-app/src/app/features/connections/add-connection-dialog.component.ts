@@ -44,79 +44,81 @@ interface AddConnectionDialogData {
     MatIconModule
   ],
   template: `
-    <div class="modal-header">
-      <h5 class="modal-title d-flex align-items-center gap-2">
-        <i class="fa fa-link"></i>
-        {{ isEditing ? 'Edit' : 'Add' }} Connection
-      </h5>
-    </div>
+    <h2 mat-dialog-title>{{ isEditing ? 'Edit' : 'Add' }} Connection</h2>
 
-    <div class="modal-body">
-      <mat-form-field appearance="outline" class="full-width">
-        <mat-label>Connection Name</mat-label>
-        <input matInput [(ngModel)]="name" placeholder="My Connection">
-      </mat-form-field>
+    <mat-dialog-content>
+      @if (!isEditing) {
+        <p class="intro">New connection, saved on this computer. Nothing is created on the broker.</p>
+      }
 
-      <mat-form-field appearance="outline" class="full-width">
-        <mat-label>Provider Type</mat-label>
-        <mat-select [(ngModel)]="providerType" (selectionChange)="onProviderTypeChange()">
-          @for (provider of providerOptions; track provider.value) {
-            <mat-option [value]="provider.value">
-              <mat-icon class="provider-icon">{{ provider.icon }}</mat-icon>
-              {{ provider.label }}
-            </mat-option>
-          }
-        </mat-select>
-      </mat-form-field>
+      <div class="grid two">
+        <mat-form-field appearance="outline">
+          <mat-label>Connection Name</mat-label>
+          <input matInput [(ngModel)]="name" placeholder="My Connection">
+        </mat-form-field>
 
-      <!-- Azure Service Bus Configuration -->
+        <mat-form-field appearance="outline">
+          <mat-label>Provider Type</mat-label>
+          <mat-select [(ngModel)]="providerType" (selectionChange)="onProviderTypeChange()">
+            @for (provider of providerOptions; track provider.value) {
+              <mat-option [value]="provider.value">
+                <mat-icon class="provider-icon">{{ provider.icon }}</mat-icon>
+                {{ provider.label }}
+              </mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+      </div>
+
       @if (providerType === ProviderType.AzureServiceBus) {
-        <div class="provider-section azure-section">
-          <mat-form-field appearance="outline" class="full-width">
+        <div class="provider-section">
+          <mat-form-field appearance="outline">
             <mat-label>Authentication</mat-label>
             <mat-select [(ngModel)]="azureAuthType" (selectionChange)="onAzureAuthTypeChange()">
               @for (opt of azureAuthOptions; track opt.value) {
                 <mat-option [value]="opt.value">
                   {{ opt.label }}
-                  @if (opt.badge) { <span class="auth-badge">({{ opt.badge }})</span> }
-                  @if (opt.advanced) { <span class="auth-badge advanced">(advanced)</span> }
+                  @if (opt.badge) { <span class="auth-note">({{ opt.badge }})</span> }
+                  @if (opt.advanced) { <span class="auth-note">(advanced)</span> }
                 </mat-option>
               }
             </mat-select>
             <mat-hint>Choose how to authenticate against Azure Service Bus</mat-hint>
           </mat-form-field>
 
-          <!-- Interactive Browser (Sign in with Microsoft) -->
           @if (azureAuthType === 'InteractiveBrowser') {
-            <mat-form-field appearance="outline" class="full-width">
+            <mat-form-field appearance="outline">
               <mat-label>Fully Qualified Namespace</mat-label>
               <input matInput [(ngModel)]="fullyQualifiedNamespace"
                 placeholder="mynamespace.servicebus.windows.net">
               <mat-hint>Your Service Bus namespace host (without https://)</mat-hint>
             </mat-form-field>
-            <mat-form-field appearance="outline" class="full-width">
+            <mat-form-field appearance="outline">
               <mat-label>Tenant ID (optional)</mat-label>
               <input matInput [(ngModel)]="tenantId" placeholder="00000000-0000-0000-0000-000000000000">
               <mat-hint>Leave empty to use the user's home tenant</mat-hint>
             </mat-form-field>
-            <button class="btn btn-primary sign-in-btn"
-              (click)="signInWithMicrosoft()"
-              [disabled]="signingIn() || !fullyQualifiedNamespace">
-              @if (signingIn()) {
-                <mat-progress-spinner diameter="18" mode="indeterminate"></mat-progress-spinner>
-              } @else {
-                <i class="fa fa-windows me-2"></i>
-              }
-              Sign in with Microsoft
-            </button>
-            @if (signingIn()) {
-              <p class="sign-in-hint">Opening browser &mdash; complete sign-in in your browser window.</p>
-            }
+            <div class="sign-in">
+              <button matButton="tonal"
+                (click)="signInWithMicrosoft()"
+                [disabled]="signingIn() || !fullyQualifiedNamespace">
+                @if (signingIn()) {
+                  <mat-progress-spinner diameter="18" mode="indeterminate"></mat-progress-spinner>
+                }
+                Sign in with Microsoft
+              </button>
+              <span class="hint">
+                @if (signingIn()) {
+                  Opening browser &mdash; complete sign-in in your browser window.
+                } @else {
+                  Opens your browser. Enter the namespace first.
+                }
+              </span>
+            </div>
           }
 
-          <!-- Connection String (legacy) -->
           @if (azureAuthType === 'ConnectionString') {
-            <mat-form-field appearance="outline" class="full-width">
+            <mat-form-field appearance="outline">
               <mat-label>Connection String</mat-label>
               <textarea matInput [(ngModel)]="connectionString" rows="4"
                 placeholder="Endpoint=sb://...;SharedAccessKeyName=...;SharedAccessKey=..."></textarea>
@@ -124,32 +126,32 @@ interface AddConnectionDialogData {
             </mat-form-field>
           }
 
-          <!-- Service Principal -->
           @if (azureAuthType === 'ServicePrincipal') {
-            <mat-form-field appearance="outline" class="full-width">
+            <mat-form-field appearance="outline">
               <mat-label>Fully Qualified Namespace</mat-label>
               <input matInput [(ngModel)]="fullyQualifiedNamespace"
                 placeholder="mynamespace.servicebus.windows.net">
             </mat-form-field>
-            <mat-form-field appearance="outline" class="full-width">
-              <mat-label>Tenant ID</mat-label>
-              <input matInput [(ngModel)]="tenantId" placeholder="00000000-0000-0000-0000-000000000000">
-            </mat-form-field>
-            <mat-form-field appearance="outline" class="full-width">
-              <mat-label>Client ID</mat-label>
-              <input matInput [(ngModel)]="servicePrincipalClientId"
-                placeholder="App registration client ID">
-            </mat-form-field>
-            <mat-form-field appearance="outline" class="full-width">
+            <div class="grid two">
+              <mat-form-field appearance="outline">
+                <mat-label>Tenant ID</mat-label>
+                <input matInput [(ngModel)]="tenantId" placeholder="00000000-0000-0000-0000-000000000000">
+              </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Client ID</mat-label>
+                <input matInput [(ngModel)]="servicePrincipalClientId"
+                  placeholder="App registration client ID">
+              </mat-form-field>
+            </div>
+            <mat-form-field appearance="outline">
               <mat-label>Client Secret</mat-label>
               <input matInput type="password" [(ngModel)]="clientSecret">
               <mat-hint>Stored in the secure secret store on save</mat-hint>
             </mat-form-field>
           }
 
-          <!-- Azure CLI session -->
           @if (azureAuthType === 'AzureCli') {
-            <mat-form-field appearance="outline" class="full-width">
+            <mat-form-field appearance="outline">
               <mat-label>Fully Qualified Namespace</mat-label>
               <input matInput [(ngModel)]="fullyQualifiedNamespace"
                 placeholder="mynamespace.servicebus.windows.net">
@@ -159,42 +161,33 @@ interface AddConnectionDialogData {
         </div>
       }
 
-      <!-- RabbitMQ Configuration -->
       @if (providerType === ProviderType.RabbitMQ) {
-        <div class="provider-section rabbitmq-section">
-          <div class="form-row">
-            <mat-form-field appearance="outline" class="flex-grow">
-              <mat-label>Host Name</mat-label>
-              <input matInput [(ngModel)]="hostName" placeholder="localhost">
-            </mat-form-field>
-            <mat-form-field appearance="outline" class="port-field">
-              <mat-label>Port</mat-label>
-              <input matInput type="number" [(ngModel)]="port" placeholder="5672">
-            </mat-form-field>
-          </div>
-
-          <div class="form-row">
-            <mat-form-field appearance="outline" class="flex-grow">
-              <mat-label>Username</mat-label>
-              <input matInput [(ngModel)]="userName" placeholder="guest">
-            </mat-form-field>
-            <mat-form-field appearance="outline" class="flex-grow">
-              <mat-label>Password</mat-label>
-              <input matInput type="password" [(ngModel)]="password" placeholder="guest">
-            </mat-form-field>
-          </div>
-
-          <div class="form-row">
-            <mat-form-field appearance="outline" class="flex-grow">
-              <mat-label>Virtual Host</mat-label>
-              <input matInput [(ngModel)]="virtualHost" placeholder="/">
-            </mat-form-field>
-            <mat-form-field appearance="outline" class="port-field">
-              <mat-label>Management Port</mat-label>
-              <input matInput type="number" [(ngModel)]="managementPort" placeholder="15672">
-              <mat-hint>HTTP API port</mat-hint>
-            </mat-form-field>
-          </div>
+        <div class="grid four">
+          <mat-form-field appearance="outline" class="span-3">
+            <mat-label>Host Name</mat-label>
+            <input matInput [(ngModel)]="hostName" placeholder="localhost">
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Port</mat-label>
+            <input matInput type="number" [(ngModel)]="port" placeholder="5672">
+          </mat-form-field>
+          <mat-form-field appearance="outline" class="span-2">
+            <mat-label>Username</mat-label>
+            <input matInput [(ngModel)]="userName" placeholder="guest">
+          </mat-form-field>
+          <mat-form-field appearance="outline" class="span-2">
+            <mat-label>Password</mat-label>
+            <input matInput type="password" [(ngModel)]="password" placeholder="guest">
+          </mat-form-field>
+          <mat-form-field appearance="outline" class="span-2">
+            <mat-label>Virtual Host</mat-label>
+            <input matInput [(ngModel)]="virtualHost" placeholder="/">
+          </mat-form-field>
+          <mat-form-field appearance="outline" class="span-2">
+            <mat-label>Management Port</mat-label>
+            <input matInput type="number" [(ngModel)]="managementPort" placeholder="15672">
+            <mat-hint>HTTP API port</mat-hint>
+          </mat-form-field>
         </div>
       }
 
@@ -202,177 +195,96 @@ interface AddConnectionDialogData {
         <h3>Organization (Optional)</h3>
         <p class="hint">Organize this connection by client and environment</p>
 
-        <mat-form-field appearance="outline" class="full-width">
-          <mat-label>Client</mat-label>
-          <mat-select [(ngModel)]="clientId" (selectionChange)="onClientChange()">
-            <mat-option [value]="null">No client</mat-option>
-            @for (client of clients(); track client.id) {
-              <mat-option [value]="client.id">{{ client.name }}</mat-option>
-            }
-          </mat-select>
-        </mat-form-field>
-
-        @if (clientId) {
-          <mat-form-field appearance="outline" class="full-width">
-            <mat-label>Environment</mat-label>
-            <mat-select [(ngModel)]="environmentId">
-              <mat-option [value]="null">No environment</mat-option>
-              @for (env of availableEnvironments(); track env.id) {
-                <mat-option [value]="env.id">{{ env.name }}</mat-option>
+        <div class="grid two">
+          <mat-form-field appearance="outline">
+            <mat-label>Client</mat-label>
+            <mat-select [(ngModel)]="clientId" (selectionChange)="onClientChange()">
+              <mat-option [value]="null">No client</mat-option>
+              @for (client of clients(); track client.id) {
+                <mat-option [value]="client.id">{{ client.name }}</mat-option>
               }
             </mat-select>
           </mat-form-field>
-        }
-      </div>
-    </div>
 
-    <div class="modal-footer">
-      <button class="btn btn-secondary" mat-dialog-close>
-        <i class="fa fa-times me-2"></i>
-        Cancel
-      </button>
-      <button class="btn btn-outline-primary" (click)="testConnection()" [disabled]="testing() || !isFormValid()">
+          @if (clientId) {
+            <mat-form-field appearance="outline">
+              <mat-label>Environment</mat-label>
+              <mat-select [(ngModel)]="environmentId">
+                <mat-option [value]="null">No environment</mat-option>
+                @for (env of availableEnvironments(); track env.id) {
+                  <mat-option [value]="env.id">{{ env.name }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+          }
+        </div>
+      </div>
+    </mat-dialog-content>
+
+    <mat-dialog-actions align="end">
+      <button matButton mat-dialog-close>Cancel</button>
+      <button matButton="outlined" (click)="testConnection()" [disabled]="testing() || !isFormValid()">
         @if (testing()) {
-          <span class="spinner-border spinner-border-sm me-2"></span>
+          <mat-progress-spinner diameter="18" mode="indeterminate"></mat-progress-spinner>
         } @else {
-          <i class="fa fa-plug me-2"></i>
+          <mat-icon>power</mat-icon>
         }
         Test
       </button>
-      <button class="btn btn-primary" (click)="save()" [disabled]="saving() || !name || !isFormValid()">
+      <button matButton="filled" (click)="save()" [disabled]="saving() || !name || !isFormValid()">
         @if (saving()) {
-          <span class="spinner-border spinner-border-sm me-2"></span>
-        } @else {
-          <i class="fa fa-save me-2"></i>
+          <mat-progress-spinner diameter="18" mode="indeterminate"></mat-progress-spinner>
         }
         {{ isEditing ? 'Update' : 'Save' }}
       </button>
-    </div>
+    </mat-dialog-actions>
   `,
   styles: [`
-    // Override Material Dialog container styles to use Bootstrap theme variables
-    :host ::ng-deep {
-      .mat-mdc-dialog-container,
-      .mat-mdc-dialog-surface {
-        background-color: var(--bs-body-bg) !important;
-        color: var(--bs-body-color) !important;
-      }
-
-      // Material Form Field Customization
-      .mat-mdc-form-field {
-        // Label colors
-        .mat-mdc-floating-label {
-          color: var(--bs-secondary-color) !important;
-        }
-
-        // Outline (border) colors
-        .mdc-notched-outline {
-          .mdc-notched-outline__leading,
-          .mdc-notched-outline__notch,
-          .mdc-notched-outline__trailing {
-            border-color: var(--bs-border-color) !important;
-          }
-        }
-
-        // Focused state
-        &.mat-focused {
-          .mdc-notched-outline {
-            .mdc-notched-outline__leading,
-            .mdc-notched-outline__notch,
-            .mdc-notched-outline__trailing {
-              border-color: var(--bs-primary) !important;
-            }
-          }
-
-          .mat-mdc-floating-label {
-            color: var(--bs-primary) !important;
-          }
-        }
-
-        // Input field
-        .mat-mdc-input-element {
-          background-color: var(--bs-secondary-bg) !important;
-          color: var(--bs-body-color) !important;
-          border-radius: 4px;
-          padding: 8px 12px;
-        }
-
-        // Textarea
-        .mat-mdc-input-element[textarea] {
-          background-color: var(--bs-secondary-bg) !important;
-          color: var(--bs-body-color) !important;
-        }
-
-        // Hint text
-        .mat-mdc-form-field-hint {
-          color: var(--bs-secondary-color) !important;
-        }
-      }
-
-      // Material Select
-      .mat-mdc-select {
-        .mat-mdc-select-value {
-          color: var(--bs-body-color) !important;
-        }
-
-        .mat-mdc-select-arrow {
-          color: var(--bs-secondary-color) !important;
-        }
-      }
-
-      // Select panel (dropdown)
-      .mat-mdc-select-panel {
-        background-color: var(--bs-body-bg) !important;
-
-        .mat-mdc-option {
-          color: var(--bs-body-color) !important;
-
-          &:hover {
-            background-color: var(--bs-secondary-bg) !important;
-          }
-
-          &.mat-mdc-option-active {
-            background-color: var(--bs-tertiary-bg) !important;
-          }
-        }
-      }
-    }
-
-    .modal-header {
-      border-bottom: 1px solid var(--bs-border-color);
-      padding: 16px 24px;
-      background-color: var(--bs-body-bg);
-    }
-
-    .modal-title {
-      margin: 0;
-      font-size: 18px;
-      font-weight: 500;
-      color: var(--bs-body-color);
-
-      i {
-        font-size: 20px;
-      }
-    }
-
-    .modal-body {
-      padding: 24px;
-      min-width: 500px;
-      background-color: var(--bs-body-bg);
-      color: var(--bs-body-color);
-    }
-
-    .modal-footer {
-      border-top: 1px solid var(--bs-border-color);
-      padding: 16px 24px;
+    mat-dialog-content {
       display: flex;
-      justify-content: flex-end;
-      gap: 8px;
-      background-color: var(--bs-body-bg);
+      flex-direction: column;
+      gap: 4px;
     }
 
-    .full-width {
-      width: 100%;
+    .intro,
+    .hint {
+      margin: 0;
+      color: var(--mat-sys-on-surface-variant);
+    }
+
+    .intro {
+      margin-bottom: 12px;
+    }
+
+    .hint {
+      font: var(--mat-sys-body-small);
+    }
+
+    .grid {
+      display: grid;
+      gap: 0 12px;
+
+      &.two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      &.four {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .span-2 {
+        grid-column: span 2;
+      }
+
+      .span-3 {
+        grid-column: span 3;
+      }
+    }
+
+    .provider-section {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
     }
 
     .provider-icon {
@@ -380,70 +292,30 @@ interface AddConnectionDialogData {
       vertical-align: middle;
     }
 
-    .provider-section {
-      margin-top: 8px;
-      padding: 16px;
-      border: 1px solid var(--bs-border-color);
-      border-radius: 8px;
-      background-color: var(--bs-tertiary-bg);
-    }
-
-    .form-row {
-      display: flex;
-      gap: 16px;
-      margin-bottom: 8px;
-
-      .flex-grow {
-        flex: 1;
-      }
-
-      .port-field {
-        width: 120px;
-        flex-shrink: 0;
-      }
-    }
-
-    .auth-badge {
+    .auth-note {
       margin-left: 6px;
-      font-size: 12px;
-      color: var(--bs-success);
-      font-weight: 500;
-
-      &.advanced {
-        color: var(--bs-warning);
-      }
+      font: var(--mat-sys-body-small);
+      color: var(--mat-sys-on-surface-variant);
     }
 
-    .sign-in-btn {
-      display: inline-flex;
+    .sign-in {
+      display: flex;
       align-items: center;
-      gap: 8px;
-      margin-top: 4px;
-    }
-
-    .sign-in-hint {
-      margin: 8px 0 0 0;
-      font-size: 13px;
-      color: var(--bs-secondary-color);
-      font-style: italic;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 16px;
     }
 
     .grouping-section {
-      margin-top: 24px;
-      padding-top: 16px;
-      border-top: 1px solid var(--bs-border-color);
+      margin-top: 8px;
 
       h3 {
-        margin: 0 0 8px 0;
-        font-size: 16px;
-        font-weight: 500;
-        color: var(--bs-secondary-color);
+        margin: 0;
+        font: var(--mat-sys-title-small);
       }
 
       .hint {
-        margin: 0 0 16px 0;
-        font-size: 14px;
-        color: var(--bs-secondary-color);
+        margin-bottom: 12px;
       }
     }
   `]

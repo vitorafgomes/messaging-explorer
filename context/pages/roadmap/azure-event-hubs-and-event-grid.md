@@ -70,7 +70,7 @@ A fact below carries its URL inline, or one of these tags when the same listing 
 
 ## How the family appears to the user
 
-**What exists.** A connection is one saved endpoint with a provider type (`src/ServiceBusExplorer.Core/Models/ServiceBusConnection.cs:26`); the dialog offers two providers (`web-app/src/app/features/connections/add-connection-dialog.component.ts:461`) and four of the five Azure credential types (`web-app/src/app/features/connections/add-connection-dialog.component.ts:482`); an identity connection still asks the user to type the namespace (`src/ServiceBusExplorer.Core/Models/ServiceBusConnection.cs:117`). Resource discovery, the half of [[pages/decisions/0003-azure-authentication-strategy]] that delivers its stated requirement, was never built.
+**What exists.** A connection is one saved endpoint with a provider type (`src/ServiceBusExplorer.Core/Models/ServiceBusConnection.cs:26`); the dialog offers two providers (`web-app/src/app/features/connections/add-connection-dialog.component.ts:333`) and four of the five Azure credential types (`web-app/src/app/features/connections/add-connection-dialog.component.ts:354`); an identity connection still asks the user to type the namespace (`src/ServiceBusExplorer.Core/Models/ServiceBusConnection.cs:117`). Resource discovery, the half of [[pages/decisions/0003-azure-authentication-strategy]] that delivers its stated requirement, was never built.
 
 **What a connection string can and cannot identify.**
 

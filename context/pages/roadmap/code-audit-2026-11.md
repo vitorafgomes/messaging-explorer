@@ -184,8 +184,8 @@ The key middleware (only `OPTIONS` and `/health` bypass it; `/healthz`, `//healt
 
 ### P2
 
-- **Test connection on a saved connection always fails** (`web-app/src/app/features/connections/add-connection-dialog.component.ts:689`): the dialog sends the masked values with no id and the API does not restore them. Confirms the API entry.
-- **Deleting a group hides its connections** (`web-app/src/app/features/connections/manage-group-dialog.component.ts:535`). Confirms the API entry from the UI side.
+- **Test connection on a saved connection always fails** (`web-app/src/app/features/connections/add-connection-dialog.component.ts:561`): the dialog sends the masked values with no id and the API does not restore them. Confirms the API entry.
+- **Deleting a group hides its connections** (`web-app/src/app/features/connections/manage-group-dialog.component.ts:368`). Confirms the API entry from the UI side.
 - **A filter on "Enqueued Time" breaks the message dialog** (`web-app/src/app/core/services/advanced-message-filter.service.ts:170`): it calls a `Date` method on what is a string at runtime. The specs use real dates and miss it.
 - **Fixed 2026-11-12: durations of days showed as "1 minute".** One parser now reads every duration, including the `d.hh:mm:ss` form (`web-app/src/app/features/entities/duration.ts:28`); the second one is deleted. The maximum value reads "Never" and a value the API did not send reads "Not set", on the queue, topic and subscription panels alike (`web-app/src/app/features/entities/entity-details.component.ts:1937`).
 - **Fixed 2026-11-13: sessions of the previous subscription were shown under the next one.** The inline list was not reset on selection change and was fetched only when empty. The sessions are now a component of their own, mounted only while its tab is open and reset, with whatever is in flight cancelled, when the entity changes (`web-app/src/app/features/entities/entity-sessions.component.ts:224`).
@@ -194,13 +194,13 @@ The key middleware (only `OPTIONS` and `/health` bypass it; `/healthz`, `//healt
 
 ### P3
 
-- Listeners for the menu action and for F9 are added on every visit to the connections page and never removed (`web-app/src/app/features/connections/connections.component.ts:425`); after N visits the action runs N times.
-- After clear-all or after deleting the connected connection, the header still says connected (`web-app/src/app/features/connections/connections.component.ts:616`).
+- Listeners for the menu action and for F9 are added on every visit to the connections page and never removed (`web-app/src/app/features/connections/connections.component.ts:303`); after N visits the action runs N times.
+- After clear-all or after deleting the connected connection, the header still says connected (`web-app/src/app/features/connections/connections.component.ts:481`).
 - The tree loads twice on every visit and can show the previous connection's tree after a switch (`web-app/src/app/features/entities/entities-tree.component.ts:734`). Since 2026-11-13 a new load cancels the one in flight (`web-app/src/app/features/entities/entities-tree.component.ts:770`), so the last load decides what is shown (`web-app/src/app/features/entities/entities-tree.component.spec.ts:197`, `web-app/src/app/features/entities/entities-tree.component.spec.ts:209`); the mount still sends the first request before cancelling it. The topics page does the same (`web-app/src/app/features/topics/topics.component.ts:208`). A failed load no longer reads as "No Entities Found" (fixed 2026-11-13, below).
 - The transfer monitor shows a growing backlog as a processing rate (`web-app/src/app/features/entities/transfer-monitor.component.ts:231`).
 - A regex that matches the empty string can freeze the detail view (`web-app/src/app/shared/pipes/highlight.pipe.ts:58`). The pipe itself is safe against injection.
 - A new filter row with no value blanks the list under AND (`web-app/src/app/core/services/advanced-message-filter.service.ts:92`); numbers and dates compare as text.
-- Editing a RabbitMQ connection with no stored password saves `guest`; no port validation; the signed-in state survives a change of namespace (`web-app/src/app/features/connections/add-connection-dialog.component.ts:544`).
+- Editing a RabbitMQ connection with no stored password saves `guest`; no port validation; the signed-in state survives a change of namespace (`web-app/src/app/features/connections/add-connection-dialog.component.ts:416`).
 - A RabbitMQ exchange is shown with the Azure topic form and invented defaults; the inputs are editable and there is no save. Capabilities are ignored.
 - **Removed 2026-11-12:** `metrics-dashboard`, which rendered random series under real metric names, and the two unreachable Metrics tabs. The metrics service still falls back to mock data on any error and has no consumer in the app.
 - The monitoring page requests history twice on entry (PLAUSIBLE).

@@ -21,15 +21,13 @@ export interface ExportConnectionsDialogResult {
   standalone: true,
   imports: [MatDialogModule, MatButtonModule, MatIconModule, MatCheckboxModule],
   template: `
-    <h2 mat-dialog-title class="dialog-title">
-      <mat-icon color="primary">download</mat-icon>
-      Export connections
-    </h2>
+    <h2 mat-dialog-title>Export connections</h2>
 
     <mat-dialog-content>
-      <p class="mb-3">
+      <p>
         By default, exports are <strong>masked</strong>: connection strings,
         passwords and client secrets are replaced with <code>***</code>.
+        A masked file can be shared; whoever imports it types the secrets again.
       </p>
 
       <mat-checkbox
@@ -39,36 +37,30 @@ export interface ExportConnectionsDialogResult {
       </mat-checkbox>
 
       @if (includeSecrets()) {
-        <div class="warning-box mt-3" role="alert">
-          <mat-icon color="warn">warning</mat-icon>
+        <div class="warning-box" role="alert">
+          <mat-icon aria-hidden="true">warning</mat-icon>
           <span>
+            <strong>The file will hold real secrets.</strong>
             The exported file will contain real connection strings, passwords,
-            and client secrets. Store it securely.
+            and client secrets, unencrypted. Store it securely.
           </span>
         </div>
       }
     </mat-dialog-content>
 
     <mat-dialog-actions align="end">
-      <button mat-stroked-button (click)="cancel()">Cancel</button>
+      <button matButton (click)="cancel()">Cancel</button>
       <button
-        mat-flat-button
-        [color]="includeSecrets() ? 'warn' : 'primary'"
+        matButton="filled"
+        [class.danger]="includeSecrets()"
         (click)="confirm()">
-        Export
+        <mat-icon>download</mat-icon>
+        {{ includeSecrets() ? 'Export with secrets' : 'Export' }}
       </button>
     </mat-dialog-actions>
   `,
   styles: [`
-    .dialog-title {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin: 0;
-    }
-
     mat-dialog-content {
-      min-width: 420px;
       max-width: 520px;
 
       p {
@@ -77,27 +69,29 @@ export interface ExportConnectionsDialogResult {
 
       code {
         padding: 1px 4px;
-        border-radius: 3px;
-        background-color: var(--bs-secondary-bg, #f1f3f5);
+        border-radius: 4px;
+        background-color: var(--mat-sys-surface-container-high);
       }
     }
-
-    .mb-3 { margin-bottom: 12px; }
-    .mt-3 { margin-top: 12px; }
 
     .warning-box {
       display: flex;
       align-items: flex-start;
       gap: 8px;
-      padding: 12px;
-      border-radius: 6px;
-      border: 1px solid var(--bs-warning-border-subtle, #f5c2c7);
-      background-color: var(--bs-warning-bg-subtle, #fff3cd);
-      color: var(--bs-body-color);
+      margin-top: 12px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      background-color: var(--mat-sys-error-container);
+      color: var(--mat-sys-on-error-container);
 
       mat-icon {
         flex-shrink: 0;
       }
+    }
+
+    .danger {
+      background-color: var(--mat-sys-error);
+      color: var(--mat-sys-on-error);
     }
   `]
 })

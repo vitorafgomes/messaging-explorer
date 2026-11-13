@@ -1,18 +1,12 @@
-import {Component, OnInit, inject, WritableSignal, signal, DestroyRef, ChangeDetectorRef, ApplicationRef} from '@angular/core';
+import {Component, OnInit, inject, WritableSignal, signal, computed, DestroyRef, ChangeDetectorRef, ApplicationRef} from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
-import { MatCardModule } from '@angular/material/card';
+import { Router, RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
 import {MatDialogModule, MatDialog} from '@angular/material/dialog';
-import { MatListModule } from '@angular/material/list';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { MatTreeModule } from '@angular/material/tree';
-import { MatMenuModule } from '@angular/material/menu';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { ConnectionService, ConnectionGroupService, DevSettingsService } from '../../core/services';
 import { ServiceBusConnection, ConnectionGroup, ConnectionGroupTree, getConnectionDisplayTarget, getProviderDisplayName, getProviderIcon } from '../../core/models';
 import { AddConnectionDialogComponent } from './add-connection-dialog.component';
@@ -21,54 +15,62 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ManageGroupDialogComponent } from './manage-group-dialog.component';
 import { ExportConnectionsDialogComponent, ExportConnectionsDialogResult } from './export-connections-dialog.component';
 
+interface ConnectionSection {
+  key: string;
+  label: string;
+  connections: ServiceBusConnection[];
+  emptyText: string;
+}
+
+const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+
 @Component({
   selector: 'app-connections',
   standalone: true,
   imports: [
     CommonModule,
-    FormsModule,
-    MatCardModule,
+    RouterLink,
     MatButtonModule,
     MatIconModule,
-    MatFormFieldModule,
-    MatInputModule,
     MatDialogModule,
-    MatListModule,
     MatProgressSpinnerModule,
     MatSnackBarModule,
-    MatTreeModule,
-    MatMenuModule
+    MatTooltipModule
   ],
   template: `
     <div class="connections-container">
-      <div class="header d-flex justify-content-between align-items-center mb-4">
-        <h2 class="mb-0">Connections</h2>
-        <div class="d-flex gap-2">
+      <div class="header">
+        <div class="title">
+          <h2>Connections</h2>
+          @if (hasData()) {
+            <p class="summary">{{ summary() }}</p>
+          }
+        </div>
+        <div class="actions">
           @if (devSettingsService.devMode()) {
-            <button
-              class="btn btn-outline-warning"
-              (click)="toggleDebugMode()"
-              title="Toggle Debug Mode (F9)">
-              <i class="fa fa-bug me-2"></i>
+            <button matButton (click)="toggleDebugMode()" matTooltip="Toggle Debug Mode (F9)">
+              <mat-icon>bug_report</mat-icon>
               {{ debugMode() ? 'Hide Debug' : 'Debug' }}
             </button>
           }
-          <button class="btn btn-outline-secondary" (click)="importConfiguration()">
-            <i class="fa fa-upload me-2"></i>
-            Import
-          </button>
-          <button class="btn btn-outline-secondary" (click)="exportConfiguration()">
-            <i class="fa fa-download me-2"></i>
-            Export
-          </button>
-          <button class="btn btn-secondary" (click)="openManageGroupDialog()">
-            <i class="fa fa-folder me-2"></i>
-            Manage Groups
-          </button>
-          <button class="btn btn-primary" (click)="openAddDialog()">
-            <i class="fa fa-plus me-2"></i>
-            Add Connection
-          </button>
+          @if (!isEmpty()) {
+            <button matButton="outlined" (click)="importConfiguration()">
+              <mat-icon>upload</mat-icon>
+              Import
+            </button>
+            <button matButton="outlined" (click)="exportConfiguration()">
+              <mat-icon>download</mat-icon>
+              Export
+            </button>
+            <button matButton="tonal" (click)="openManageGroupDialog()">
+              <mat-icon>folder</mat-icon>
+              Manage Groups
+            </button>
+            <button matButton="filled" (click)="openAddDialog()">
+              <mat-icon>add</mat-icon>
+              Add Connection
+            </button>
+          }
         </div>
       </div>
 
@@ -115,283 +117,121 @@ import { ExportConnectionsDialogComponent, ExportConnectionsDialogResult } from 
       }
 
       @if (loading()) {
-        <div class="text-center py-5">
-          <div class="spinner-border text-primary" role="status">
-            <span class="visually-hidden">Loading...</span>
+        <div class="state">
+          <mat-progress-spinner mode="indeterminate" diameter="40" aria-label="Loading connections"></mat-progress-spinner>
+        </div>
+      } @else if (loadError()) {
+        <section class="load-error" aria-label="Error">
+          <mat-icon aria-hidden="true">error</mat-icon>
+          <div class="load-error-body">
+            <h3>Could not load the connections</h3>
+            <p>The saved connections and groups could not be read from the app's API. Nothing was changed.</p>
+            <button matButton="outlined" (click)="loadData()">
+              <mat-icon>refresh</mat-icon>
+              Retry
+            </button>
           </div>
+        </section>
+      } @else if (isEmpty()) {
+        <div class="empty-state">
+          <mat-icon class="empty-icon" aria-hidden="true">power</mat-icon>
+          <h3>No connections configured</h3>
+          <p>Nothing is saved on this computer yet, so there is no broker to explore. Start with one connection:</p>
+          <ol>
+            <li>Add a connection to an Azure Service Bus namespace or to a RabbitMQ broker.</li>
+            <li>Test it in the dialog before you save it.</li>
+            <li>Connect. The entities of the broker open, and the toolbar shows which broker you are on.</li>
+          </ol>
+          <div class="empty-actions">
+            <button matButton="filled" (click)="openAddDialog()">
+              <mat-icon>add</mat-icon>
+              Add Connection
+            </button>
+            <button matButton (click)="importConfiguration()">
+              <mat-icon>upload</mat-icon>
+              Import
+            </button>
+          </div>
+          <p class="footnote">Import reads a file exported from this app on another computer: its connections, clients and environments.</p>
         </div>
       } @else {
         <div class="connections-content">
-          <!-- Grouped Connections -->
-          @if (groupedTree().length > 0) {
-            <div class="grouped-section">
-              <h3 class="text-muted mb-3">Organized Connections</h3>
-              @for (clientNode of groupedTree(); track clientNode.group.id) {
-                <div class="card group-card client-card mb-3">
-                  <div class="card-header cursor-pointer user-select-none" (click)="toggleNode(clientNode)">
-                    <div class="d-flex align-items-center">
-                      <i class="fa fa-building text-primary fa-2x me-3"></i>
-                      <div class="flex-grow-1">
-                        <h5 class="mb-0 d-flex align-items-center">
-                          <i class="fa me-2" [class.fa-chevron-down]="clientNode.expanded" [class.fa-chevron-right]="!clientNode.expanded"></i>
-                          {{ clientNode.group.name }}
-                        </h5>
-                        @if (clientNode.group.description) {
-                          <p class="text-muted mb-0 small">{{ clientNode.group.description }}</p>
-                        }
-                      </div>
-                    </div>
-                  </div>
-
-                  @if (clientNode.expanded) {
-                    <div class="card-body">
-                      <!-- Environments -->
-                      @for (envNode of clientNode.children; track envNode.group.id) {
-                        <div class="card group-card environment-card ms-4 mb-2">
-                          <div class="card-header cursor-pointer user-select-none" (click)="toggleNode(envNode)">
-                            <div class="d-flex align-items-center">
-                              <i class="fa fa-server text-success fa-lg me-3"></i>
-                              <div class="flex-grow-1">
-                                <h6 class="mb-0 d-flex align-items-center">
-                                  <i class="fa me-2" [class.fa-chevron-down]="envNode.expanded" [class.fa-chevron-right]="!envNode.expanded"></i>
-                                  {{ envNode.group.name }}
-                                </h6>
-                                @if (envNode.group.description) {
-                                  <p class="text-muted mb-0 small">{{ envNode.group.description }}</p>
-                                }
-                              </div>
-                            </div>
-                          </div>
-
-                          @if (envNode.expanded) {
-                            <div class="card-body">
-                              @if (envNode.connections.length > 0) {
-                                @for (connection of envNode.connections; track connection.id) {
-                                  <div class="card connection-card ms-5 mb-2">
-                                    <div class="card-body">
-                                      <div class="d-flex align-items-center justify-content-between">
-                                        <div class="d-flex align-items-center">
-                                          <i class="fa fa-{{ getProviderIcon(connection.providerType) }} text-warning fa-lg me-3"></i>
-                                          <div>
-                                            <h6 class="mb-0">{{ connection.name }}</h6>
-                                            <small class="text-muted d-block">{{ getProviderName(connection.providerType) }}</small>
-                                            <small class="text-muted">{{ getConnectionTarget(connection) }}</small>
-                                          </div>
-                                        </div>
-                                        <div class="d-flex align-items-center gap-2">
-                                          @if (connection.isConnected) {
-                                            <span class="badge bg-success pulse-badge">
-                                              <i class="fa fa-circle-dot me-1"></i>
-                                              Connected
-                                            </span>
-                                          }
-                                          <div class="btn-group">
-                                            <button
-                                              [class]="connection.isConnected ? 'btn btn-sm btn-success' : 'btn btn-sm btn-primary'"
-                                              (click)="connect(connection)"
-                                              [disabled]="connecting() || connection.isConnected">
-                                              <i [class]="connection.isConnected ? 'fa fa-check me-1' : 'fa fa-plug me-1'"></i>
-                                              {{ connection.isConnected ? 'Connected' : 'Connect' }}
-                                            </button>
-                                            <button class="btn btn-sm btn-outline-secondary" (click)="editConnection(connection)">
-                                              <i class="fa fa-edit"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-outline-danger" (click)="delete(connection)">
-                                              <i class="fa fa-trash"></i>
-                                            </button>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                }
-                              } @else {
-                                <p class="text-muted text-center fst-italic py-3">No connections in this environment</p>
-                              }
-                            </div>
-                          }
-                        </div>
-                      }
-
-                      <!-- Connections directly under client (no environment) -->
-                      @if (clientNode.connections.length > 0) {
-                        @for (connection of clientNode.connections; track connection.id) {
-                          <div class="card connection-card ms-5 mb-2">
-                            <div class="card-body">
-                              <div class="d-flex align-items-center justify-content-between">
-                                <div class="d-flex align-items-center">
-                                  <i class="fa fa-{{ getProviderIcon(connection.providerType) }} text-warning fa-lg me-3"></i>
-                                  <div>
-                                    <h6 class="mb-0">{{ connection.name }}</h6>
-                                    <small class="text-muted d-block">{{ getProviderName(connection.providerType) }}</small>
-                                    <small class="text-muted">{{ getConnectionTarget(connection) }}</small>
-                                  </div>
-                                </div>
-                                <div class="d-flex align-items-center gap-2">
-                                  @if (connection.isConnected) {
-                                    <span class="badge bg-success pulse-badge">
-                                      <i class="fa fa-circle-dot me-1"></i>
-                                      Connected
-                                    </span>
-                                  }
-                                  <div class="btn-group">
-                                    <button
-                                      [class]="connection.isConnected ? 'btn btn-sm btn-success' : 'btn btn-sm btn-primary'"
-                                      (click)="connect(connection)"
-                                      [disabled]="connecting() || connection.isConnected">
-                                      <i [class]="connection.isConnected ? 'fa fa-check me-1' : 'fa fa-plug me-1'"></i>
-                                      {{ connection.isConnected ? 'Connected' : 'Connect' }}
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-secondary" (click)="editConnection(connection)">
-                                      <i class="fa fa-edit"></i>
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-danger" (click)="delete(connection)">
-                                      <i class="fa fa-trash"></i>
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        }
-                      }
-                    </div>
-                  }
-                </div>
-              }
-            </div>
-          }
-
-          <!-- Ungrouped Connections -->
-          @if (ungroupedConnections().length > 0) {
-            <div class="ungrouped-section">
-              <h3 class="text-muted mb-3">Ungrouped Connections</h3>
-              @for (connection of ungroupedConnections(); track connection.id) {
-                <div class="card connection-card mb-2">
-                  <div class="card-body">
-                    <div class="d-flex align-items-center justify-content-between">
-                      <div class="d-flex align-items-center">
-                        <i class="fa fa-{{ getProviderIcon(connection.providerType) }} text-warning fa-lg me-3"></i>
-                        <div>
-                          <h6 class="mb-0">{{ connection.name }}</h6>
-                          <small class="text-muted d-block">{{ getProviderName(connection.providerType) }}</small>
-                          <small class="text-muted">{{ getConnectionTarget(connection) }}</small>
-                        </div>
-                      </div>
-                      <div class="d-flex align-items-center gap-2">
+          <table class="connections-table">
+            <caption>Saved connections, grouped by client and environment</caption>
+            <thead>
+              <tr>
+                <th scope="col">Connection</th>
+                <th scope="col">Broker</th>
+                <th scope="col">Target</th>
+                <th scope="col" class="actions-col">Actions</th>
+              </tr>
+            </thead>
+            @for (section of sections(); track section.key) {
+              <tbody>
+                <tr>
+                  <th colspan="4" scope="rowgroup" class="group-header">{{ section.label }}</th>
+                </tr>
+                @for (connection of section.connections; track connection.id) {
+                  <tr class="connection-card" [class.active]="connection.isConnected">
+                    <td>
+                      <div class="name-line">
+                        <h3 class="connection-name">{{ connection.name }}</h3>
                         @if (connection.isConnected) {
-                          <span class="badge bg-success pulse-badge">
-                            <i class="fa fa-circle-dot me-1"></i>
+                          <span class="badge connected-chip">
+                            <mat-icon aria-hidden="true">check_circle</mat-icon>
                             Connected
                           </span>
                         }
-                        <div class="btn-group">
-                          <button
-                            [class]="connection.isConnected ? 'btn btn-sm btn-success' : 'btn btn-sm btn-primary'"
-                            (click)="connect(connection)"
-                            [disabled]="connecting() || connection.isConnected">
-                            <i [class]="connection.isConnected ? 'fa fa-check me-1' : 'fa fa-plug me-1'"></i>
-                            {{ connection.isConnected ? 'Connected' : 'Connect' }}
-                          </button>
-                          <button class="btn btn-sm btn-outline-secondary" (click)="editConnection(connection)">
-                            <i class="fa fa-edit"></i>
-                          </button>
-                          <button class="btn btn-sm btn-outline-danger" (click)="delete(connection)">
-                            <i class="fa fa-trash"></i>
-                          </button>
-                        </div>
                       </div>
-                    </div>
-                  </div>
-                </div>
-              }
-            </div>
-          }
-
-          @if (groupedTree().length === 0 && ungroupedConnections().length === 0) {
-            <div class="card empty-state text-center py-5">
-              <div class="card-body">
-                <i class="fa fa-link-slash fa-4x text-secondary mb-3"></i>
-                <p class="mb-1">No connections configured</p>
-                <p class="text-muted small">Click "Add Connection" to get started</p>
-              </div>
-            </div>
-          }
+                    </td>
+                    <td>{{ getProviderName(connection.providerType) }}</td>
+                    <td class="target">{{ getConnectionTarget(connection) }}</td>
+                    <td class="actions-col">
+                      <div class="row-actions">
+                        @if (connection.isConnected) {
+                          <a matButton="outlined" routerLink="/entities">Open entities</a>
+                        } @else {
+                          <button
+                            matButton="filled"
+                            [attr.aria-label]="'Connect to ' + connection.name"
+                            (click)="connect(connection)"
+                            [disabled]="connecting()">
+                            <mat-icon>power</mat-icon>
+                            Connect
+                          </button>
+                        }
+                        <button
+                          matIconButton
+                          [attr.aria-label]="'Edit ' + connection.name"
+                          [matTooltip]="'Edit ' + connection.name"
+                          (click)="editConnection(connection)">
+                          <mat-icon>edit</mat-icon>
+                        </button>
+                        <span class="divider" aria-hidden="true"></span>
+                        <button
+                          matButton
+                          class="delete"
+                          [attr.aria-label]="'Delete ' + connection.name"
+                          (click)="delete(connection)">
+                          <mat-icon>delete</mat-icon>
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td colspan="4" class="muted none">{{ section.emptyText }}</td>
+                  </tr>
+                }
+              </tbody>
+            }
+          </table>
         </div>
       }
     </div>
   `,
-  styles: [`
-    .connections-container {
-      max-width: 1000px;
-      margin: 0 auto;
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      padding: 12px;
-    }
-
-    .connections-content {
-      flex: 1;
-      overflow-y: auto;
-      overflow-x: hidden;
-    }
-
-    .cursor-pointer {
-      cursor: pointer;
-    }
-
-    .user-select-none {
-      user-select: none;
-    }
-
-    .border-dashed {
-      border-style: dashed !important;
-    }
-
-    .client-card {
-      border-left: 4px solid var(--bs-primary);
-    }
-
-    .environment-card {
-      border-left: 4px solid var(--bs-success);
-    }
-
-    .card-header:hover {
-      background-color: rgba(0, 0, 0, 0.02);
-    }
-
-    .pulse-badge {
-      animation: pulse 2s ease-in-out infinite;
-      position: relative;
-      display: inline-flex;
-      align-items: center;
-      padding: 0.35em 0.65em;
-      font-weight: 600;
-    }
-
-    .pulse-badge i {
-      animation: pulse-dot 2s ease-in-out infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% {
-        box-shadow: 0 0 0 0 rgba(25, 135, 84, 0.4);
-      }
-      50% {
-        box-shadow: 0 0 0 5px rgba(25, 135, 84, 0);
-      }
-    }
-
-    @keyframes pulse-dot {
-      0%, 100% {
-        opacity: 1;
-      }
-      50% {
-        opacity: 0.5;
-      }
-    }
-  `]
+  styleUrl: './connections.component.scss'
 })
 export class ConnectionsComponent implements OnInit {
   private connectionService = inject(ConnectionService);
@@ -410,6 +250,7 @@ export class ConnectionsComponent implements OnInit {
   groupedTree: WritableSignal<ConnectionGroupTree[]> = signal<ConnectionGroupTree[]>([]);
   ungroupedConnections: WritableSignal<ServiceBusConnection[]> = signal<ServiceBusConnection[]>([]);
   loading: WritableSignal<boolean> = signal<boolean>(false);
+  loadError = signal(false);
   connecting = signal(false);
   debugMode = signal(false);
   debugInfo = signal('');
@@ -418,6 +259,43 @@ export class ConnectionsComponent implements OnInit {
   getConnectionTarget = getConnectionDisplayTarget;
   getProviderName = getProviderDisplayName;
   getProviderIcon = getProviderIcon;
+
+  readonly hasData = computed(() => this.groupedTree().length > 0 || this.ungroupedConnections().length > 0);
+  readonly isEmpty = computed(() => !this.loading() && !this.loadError() && !this.hasData());
+
+  readonly summary = computed(() => {
+    const clients = this.groups().filter(g => g.type === 'client').length;
+    const environments = this.groups().filter(g => g.type === 'environment').length;
+    return `${plural(this.connections().length, 'connection', 'connections')}, ${plural(clients, 'client', 'clients')}, `
+      + `${plural(environments, 'environment', 'environments')}. One connection is active at a time.`;
+  });
+
+  /** The client and environment tree flattened into the row groups of the table, ungrouped connections last. */
+  readonly sections = computed<ConnectionSection[]>(() => {
+    const sections: ConnectionSection[] = [];
+    for (const client of this.groupedTree()) {
+      for (const env of client.children) {
+        sections.push({
+          key: env.group.id,
+          label: `${client.group.name}, ${env.group.name}`,
+          connections: env.connections,
+          emptyText: 'No connections in this environment'
+        });
+      }
+      if (client.connections.length > 0 || client.children.length === 0) {
+        sections.push({
+          key: client.group.id,
+          label: client.group.name,
+          connections: client.connections,
+          emptyText: 'No connections in this client'
+        });
+      }
+    }
+    if (this.ungroupedConnections().length > 0) {
+      sections.push({ key: 'ungrouped', label: 'Ungrouped Connections', connections: this.ungroupedConnections(), emptyText: '' });
+    }
+    return sections;
+  });
 
   ngOnInit() {
     console.log('╔' + '═'.repeat(78) + '╗');
@@ -446,6 +324,7 @@ export class ConnectionsComponent implements OnInit {
     this.groups.set([]);
     this.groupedTree.set([]);
     this.ungroupedConnections.set([]);
+    this.loadError.set(false);
     this.loading.set(true);
 
     this.addDebugLog('Signals reset, loading set to true');
@@ -502,6 +381,7 @@ export class ConnectionsComponent implements OnInit {
       error: (err) => {
         console.error('[ConnectionsComponent] loadData() error:', err);
         this.addDebugLog('❌ ERROR loading data: ' + (err as any).message);
+        this.loadError.set(true);
         this.snackBar.open('Failed to load data', 'Close', { duration: 3000 });
       }
     });
@@ -518,30 +398,15 @@ export class ConnectionsComponent implements OnInit {
     console.log('[buildTree] Output - tree nodes:', tree.length, tree);
     console.log('[buildTree] Output - ungrouped:', ungrouped.length, ungrouped);
 
-    // Expand all nodes to show connections
-    tree.forEach(clientNode => {
-      clientNode.expanded = true; // Expand client
-      clientNode.children.forEach(envNode => {
-        envNode.expanded = true; // Expand all environments
-      });
-    });
-
-    console.log('[buildTree] All nodes expanded automatically');
-
     this.groupedTree.set(tree);
     this.ungroupedConnections.set(ungrouped);
 
     console.log('[buildTree] Tree updated in signals');
   }
 
-  toggleNode(node: ConnectionGroupTree) {
-    node.expanded = !node.expanded;
-    this.groupedTree.set([...this.groupedTree()]);
-  }
-
   openAddDialog() {
     const dialogRef = this.dialog.open(AddConnectionDialogComponent, {
-      width: '600px',
+      width: '780px',
       data: { groups: this.groups() }
     });
 
@@ -556,7 +421,7 @@ export class ConnectionsComponent implements OnInit {
 
   openManageGroupDialog() {
     const dialogRef = this.dialog.open(ManageGroupDialogComponent, {
-      width: '700px',
+      width: '680px',
       data: { groups: this.groups() }
     });
 
@@ -571,7 +436,7 @@ export class ConnectionsComponent implements OnInit {
 
   editConnection(connection: ServiceBusConnection) {
     const dialogRef = this.dialog.open(AddConnectionDialogComponent, {
-      width: '600px',
+      width: '620px',
       data: {
         connection,
         groups: this.groups()
@@ -637,7 +502,7 @@ export class ConnectionsComponent implements OnInit {
       unknown,
       ExportConnectionsDialogResult | undefined
     >(ExportConnectionsDialogComponent, {
-      width: '520px',
+      width: '560px',
       autoFocus: false
     });
 

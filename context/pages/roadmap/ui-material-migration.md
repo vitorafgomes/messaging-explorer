@@ -59,7 +59,8 @@ No dates are set; the owner sets them.
 - **Success criteria:** no purge or delete can be confirmed without the entity and the connection on screen.
 
 ### Phase 3 - Material, screen by screen
-- **Status:** not started
+- **Status:** in progress (2026-11-13).
+  - **Connections, migrated 2026-11-13, with a recorded residual:** the screen and its add, edit, groups and export dialogs are Material and theme tokens, with the three states and named icon controls; the end-to-end flows pass unchanged. The counts reach zero once the debug panel goes; the light and dark screenshots wait for the owner's review. In `features/connections/` the Bootstrap classes went from 233 to 33, Font Awesome from 46 to 6, literal colours from 8 to 2 and `--bs-*` from 74 to 0. What is left is the developer-mode debug panel, kept as it was while its Clear All Data button is removed elsewhere, and the class `badge` on the connected chip, which a pinned expected failure looks for. Details on [[pages/services/web-app]].
 - **Scope:** in this order: entity details, entities tree, connections, messages dialog, monitoring, queues and topics pages. Per screen: buttons and form controls to Material, Font Awesome to `mat-icon`, `--bs-*` and hex colours to theme tokens, styles into their own file, the three states of rule 9, names on icon controls.
 - **Success criteria:** per screen, the counts on [[pages/conventions/ui]] reach zero for that screen and its end-to-end flow still passes; the light and dark screenshots are reviewed.
 
