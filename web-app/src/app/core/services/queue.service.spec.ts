@@ -91,6 +91,27 @@ describe('QueueService', () => {
     });
   });
 
+  describe('a dead-letter peek reads from a position when one is given', () => {
+    it('peeks the dead-letter and transfer dead-letter queues from the given sequence number, 0 included', () => {
+      service.peekDeadLetterMessages('orders', 500, 48211951).subscribe();
+      service.peekDeadLetterMessages('orders', 500, 0).subscribe();
+      service.peekTransferDeadLetterMessages('orders', 20, 7).subscribe();
+
+      expect(apiGet.mock.calls.map(c => c[0])).toEqual([
+        'queues/orders/deadletter?count=500&fromSequenceNumber=48211951',
+        'queues/orders/deadletter?count=500&fromSequenceNumber=0',
+        'queues/orders/transferdeadletter?count=20&fromSequenceNumber=7'
+      ]);
+    });
+
+    it('without a position the peek reads from the head with the URL it always had', () => {
+      service.peekDeadLetterMessages('orders', 5).subscribe();
+      service.peekTransferDeadLetterMessages('orders', 5).subscribe();
+
+      expect(apiGet.mock.calls.map(c => c[0])).toEqual(['queues/orders/deadletter?count=5', 'queues/orders/transferdeadletter?count=5']);
+    });
+  });
+
   describe('names in the URL', () => {
     it('purging a queue named orders#1 purges that queue and never deletes the queue orders', () => {
       service.purgeMessages('orders#1').subscribe();

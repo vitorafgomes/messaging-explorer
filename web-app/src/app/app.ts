@@ -15,6 +15,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { ConnectionService, ThemeService, EntitySelectionService, DevSettingsService } from './core/services';
 import { DeadLetterNotificationService, DeadLetterAlert } from './core/services/dead-letter-notification.service';
 import { BugReportDialogComponent } from './shared/bug-report-dialog.component';
+import { ResubmitRunIndicatorComponent } from './features/messages/resubmit-run-indicator.component';
 
 interface NavItem {
   label: string;
@@ -41,6 +42,7 @@ type UpdateStatus = 'idle' | 'checking' | 'available' | 'downloading' | 'downloa
     MatDividerModule,
     MatDialogModule,
     MatSnackBarModule,
+    ResubmitRunIndicatorComponent,
   ],
   templateUrl: './app.html',
   styleUrl: './app.scss'

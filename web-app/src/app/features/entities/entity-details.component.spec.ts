@@ -4,12 +4,15 @@ import { BehaviorSubject, NEVER, of } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { EntityDetailsComponent } from './entity-details.component';
-import { ConnectionService, EntitySelectionService, QueueService, SessionService, TopicService } from '../../core/services';
+import { ConnectionService, EntitySelectionService, QueueService, ResubmitRun, ResubmitRunService, SessionService, TopicService } from '../../core/services';
 import { EntitySelection } from '../../core/models';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
 import { DEFAULT_AZURE_CAPABILITIES, DEFAULT_RABBITMQ_CAPABILITIES, ProviderService } from '../../core/services/provider.service';
 import { ProviderCapabilities } from '../../core/models/provider.model';
 import { ViewMessagesDialogComponent } from '../messages/view-messages-dialog.component';
+
+let resubmitRun: ResubmitRun | undefined;
+const resubmitRuns = { provide: ResubmitRunService, useValue: { find: () => resubmitRun } };
 
 describe('EntityDetailsComponent purge confirmation', () => {
   let dialog: { open: ReturnType<typeof vi.fn> };
@@ -28,7 +31,8 @@ describe('EntityDetailsComponent purge confirmation', () => {
         { provide: SessionService, useValue: {} },
         { provide: MatSnackBar, useValue: { open: vi.fn() } },
         { provide: MatDialog, useValue: dialog },
-        { provide: ProviderService, useValue: { capabilities: signal(DEFAULT_AZURE_CAPABILITIES) } }
+        { provide: ProviderService, useValue: { capabilities: signal(DEFAULT_AZURE_CAPABILITIES) } },
+        resubmitRuns
       ]
     });
     return TestBed.runInInjectionContext(() => new EntityDetailsComponent());
@@ -97,7 +101,8 @@ describe('EntityDetailsComponent panels', () => {
         { provide: SessionService, useValue: {} },
         { provide: MatSnackBar, useValue: { open: vi.fn() } },
         { provide: MatDialog, useValue: { open: vi.fn() } },
-        { provide: ProviderService, useValue: { capabilities: signal(capabilities) } }
+        { provide: ProviderService, useValue: { capabilities: signal(capabilities) } },
+        resubmitRuns
       ]
     });
     const fixture = TestBed.createComponent(EntityDetailsComponent);
@@ -215,6 +220,25 @@ describe('EntityDetailsComponent panels', () => {
       const shownSubscription = render(subscription({}), DEFAULT_AZURE_CAPABILITIES);
       expect(all(shownSubscription, '.card-header')).toContain('Dead Letter');
       expect(all(shownSubscription, 'button')).toContain('Auto Resubmit (3)');
+    });
+  });
+
+  describe('the dead-letter entry shows the run of its entity', () => {
+    afterEach(() => (resubmitRun = undefined));
+
+    it('while a run is active on the queue, the Auto Resubmit entry shows how far it got, even once the count reads 0', () => {
+      resubmitRun = { isActive: () => true, progress: signal({ status: 'running', read: 480, total: 700 }) } as unknown as ResubmitRun;
+
+      const el = render(queue({ deadLetterMessageCount: 0 }));
+
+      expect(all(el, 'button')).toContain('Resubmit running: 480 of 700');
+      expect(all(el, 'button').some(b => b.startsWith('Auto Resubmit'))).toBe(false);
+    });
+
+    it('a finished run leaves the entry as it was', () => {
+      resubmitRun = { isActive: () => false, progress: signal({ status: 'completed', read: 700, total: 700 }) } as unknown as ResubmitRun;
+
+      expect(all(render(queue({})), 'button')).toContain('Auto Resubmit (7)');
     });
   });
 
@@ -411,7 +435,8 @@ describe('EntityDetailsComponent opens the messages dialog on the transfer dead-
         { provide: TopicService, useValue: {} },
         { provide: SessionService, useValue: {} },
         { provide: MatSnackBar, useValue: { open: vi.fn() } },
-        { provide: ProviderService, useValue: { capabilities: signal(capabilities) } }
+        { provide: ProviderService, useValue: { capabilities: signal(capabilities) } },
+        resubmitRuns
       ]
     });
     const fixture = TestBed.createComponent(EntityDetailsComponent);
@@ -484,7 +509,8 @@ describe('EntityDetailsComponent: the subscription panel has a Transfer Dead Let
         { provide: TopicService, useValue: { getSubscription: () => NEVER } },
         { provide: SessionService, useValue: {} },
         { provide: MatSnackBar, useValue: { open: vi.fn() } },
-        { provide: ProviderService, useValue: { capabilities: signal(capabilities) } }
+        { provide: ProviderService, useValue: { capabilities: signal(capabilities) } },
+        resubmitRuns
       ]
     });
     const fixture = TestBed.createComponent(EntityDetailsComponent);
@@ -561,7 +587,8 @@ describe('EntityDetailsComponent: the Sessions tab on the queue panel and the su
         { provide: SessionService, useValue: { list } },
         { provide: MatSnackBar, useValue: { open: vi.fn() } },
         { provide: MatDialog, useValue: { open: vi.fn() } },
-        { provide: ProviderService, useValue: { capabilities: signal(capabilities) } }
+        { provide: ProviderService, useValue: { capabilities: signal(capabilities) } },
+        resubmitRuns
       ]
     });
     const fixture = TestBed.createComponent(EntityDetailsComponent);

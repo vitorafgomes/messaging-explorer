@@ -1,13 +1,15 @@
 ---
 title: "Bulk operations are at-least-once"
-version: "1.4"
+version: "1.5"
 date: 2026-11-12
-changes: "v1.4 (2026-11-13): the partial-send exception cites the code path it was read from and says it is not executed. v1.3 (2026-11-12): the cancel of scheduled messages is covered, a disabled entity found midway is reported per message and never retried, and the limit of the disabled-entity exception is stated; every enforcement point re-read after the sub-queue change. v1.2 (2026-11-12): two Azure loss modes reproduced on the emulator are known exceptions; the invariant no longer claims to hold for Azure. v1.1 (2026-11-12): the RabbitMQ exception names the three loss modes reproduced in a container and cites the tests that pin them. v1.0 founded from the code"
+changes: "v1.5 (2026-11-13): the automatic dead-letter resubmit of the web app, a run that continues past a failure, is held to the rule: bounded by the count at its start, never resends a possible duplicate, reports a message of unknown outcome as one, stops by cancelling the request in flight. v1.4 (2026-11-13): the partial-send exception cites the code path it was read from and says it is not executed. v1.3 (2026-11-12): the cancel of scheduled messages is covered, a disabled entity found midway is reported per message and never retried, and the limit of the disabled-entity exception is stated; every enforcement point re-read after the sub-queue change. v1.2 (2026-11-12): two Azure loss modes reproduced on the emulator are known exceptions; the invariant no longer claims to hold for Azure. v1.1 (2026-11-12): the RabbitMQ exception names the three loss modes reproduced in a container and cites the tests that pin them. v1.0 founded from the code"
 page_type: invariant
 status: active
 description: "A bulk delete, resubmit, move, purge or cancel of scheduled messages never loses a message silently: send first, complete after; a message sent but not removed from its source is reported as a possible duplicate; failures are reported per sequence number; scans are bounded; the caller's token stops the batch."
 updated: 2026-11-13
 enforced_by:
+  - "web-app/src/app/core/services/resubmit-run.service.ts:220"
+  - "web-app/src/app/core/services/resubmit-run.service.ts:306"
   - "src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:1773"
   - "src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:1886"
   - "src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:2093"
@@ -17,6 +19,7 @@ enforced_by:
   - "src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:2160"
   - "src/ServiceBusExplorer.Api/Controllers/QueuesController.cs:375"
 verified_by:
+  - "web-app/src/app/core/services/resubmit-run.service.spec.ts:93"
   - "src/ServiceBusExplorer.Core.Tests/Providers/Azure/AzureServiceBusProviderBatchTests.cs:162"
   - "src/ServiceBusExplorer.Core.Tests/Providers/Azure/AzureServiceBusProviderBatchTests.cs:196"
   - "src/ServiceBusExplorer.Core.Tests/Providers/Azure/AzureServiceBusProviderBatchTests.cs:347"
@@ -33,6 +36,7 @@ source:
   - "src/ServiceBusExplorer.Core.Tests/Providers/Azure/AzureServiceBusProviderSubQueueTests.cs"
   - "src/ServiceBusExplorer.Core/Abstractions/EntityAdministrationExceptions.cs"
   - "CHANGELOG.md"
+  - "web-app/src/app/core/services/resubmit-run.service.ts"
 reliability: high
 ---
 
@@ -75,6 +79,16 @@ The broker refuses a send to, or a receive from, an entity disabled for that dir
 - **Before anything was done, the operation throws.** Delete `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:1609`, resubmit `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:1800`, move `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:2028`, cancel `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:2145` and `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:2168`.
 - **Found midway, it is reported per message and nothing is retried.** What was already deleted, sent or cancelled keeps its outcome; every remaining sequence number is a failure with the text "The entity is disabled for this operation." (`src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:1611`, `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:1802`, `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:2030`, written at `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:1626`, `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:1817`, `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:2045`; cancel `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:2172`). The loop ends there.
 - **What the exception guarantees, and what it does not.** It guarantees only that no message was removed from its source. A resubmit or a move whose first cycle was sent in several batches may have sent part of that cycle before the broker refused the next batch; those messages stay in the source, so a retry can duplicate them, and the 409 does not say so. This is the same hole as the partial send under Known exceptions, not a new one.
+
+### The automatic dead-letter resubmit of the web app (2026-11-13)
+
+The client decides which sequence numbers each resubmit-batch call carries; the server still sends first and completes after. A run goes on past a failure only where the API reads the dead-letter queue from a position, so it can move past what it leaves behind instead of reading it again ([[pages/services/web-app]]).
+
+- **Bounded.** The run reads the dead-letter count N once, at its start, and peeks at most N messages in total, each counted whatever became of it (`web-app/src/app/core/services/resubmit-run.service.ts:220`, `web-app/src/app/core/services/resubmit-run.service.ts:241`). The cursor moves past every batch, a sequence number is handled once, and a message enqueued at or after the start is left alone, so a message the run resubmitted that comes back to the dead-letter queue is not sent again by it (`web-app/src/app/core/services/resubmit-run.service.ts:262`, `web-app/src/app/core/services/resubmit-run.service.ts:266`).
+- **Every failure per sequence number.** A failed message is recorded with its dead-letter reason and the API's error and left in the queue; a possible duplicate is recorded apart, never sent again by the run and never part of "Retry the N failed" (`web-app/src/app/core/services/resubmit-run.service.ts:306`, `web-app/src/app/core/services/resubmit-run.service.ts:495`). The report and its JSON file carry every one of them.
+- **Unknown outcome is a possible duplicate.** A resubmit stopped while in flight, failed as a call, or answered with something unreadable may have sent part of its batch; every message of that batch is reported as a possible duplicate and kept out of the retry (`web-app/src/app/core/services/resubmit-run.service.ts:367`). This over-reports on purpose: a message that was never sent is listed as possibly duplicated rather than silently retried.
+- **Stop cancels.** Stop unsubscribes the request in flight, which aborts the HTTP call, and the API passes `HttpContext.RequestAborted` on (`web-app/src/app/core/services/resubmit-run.service.ts:397`); a change of connection stops every active run (`web-app/src/app/core/services/resubmit-run.service.ts:470`), and the failed messages of a run from before it are never retried under the new one (`web-app/src/app/core/services/resubmit-run.service.ts:487`). A stopped or failed run is never resumed.
+- **Verified by** `web-app/src/app/core/services/resubmit-run.service.spec.ts:93` (continue past a failure), `:123` (a possible duplicate is never resent), `:141` (a message that comes back), `:158` (never more than N, and an API that ignores the position), `:198` (pause, stop aborts the request, a change of connection), `:400` (report and retry without duplicates), `:444` (each failing call) and `:492` (no retry under another connection).
 
 ## How it's verified
 

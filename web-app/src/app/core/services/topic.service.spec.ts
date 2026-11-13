@@ -51,6 +51,30 @@ describe('TopicService', () => {
     });
   });
 
+  describe('a dead-letter peek of a subscription reads from a position when one is given', () => {
+    it('peeks the dead-letter and transfer dead-letter queues from the given sequence number, 0 included', () => {
+      service.peekDeadLetterMessages('sales', 'eu', 500, 48211951).subscribe();
+      service.peekDeadLetterMessages('sales', 'eu', 500, 0).subscribe();
+      service.peekTransferDeadLetterMessages('sales', 'eu', 20, 7).subscribe();
+
+      expect(apiGet.mock.calls.map(c => c[0])).toEqual([
+        'topics/sales/subscriptions/eu/deadletter?count=500&fromSequenceNumber=48211951',
+        'topics/sales/subscriptions/eu/deadletter?count=500&fromSequenceNumber=0',
+        'topics/sales/subscriptions/eu/transferdeadletter?count=20&fromSequenceNumber=7'
+      ]);
+    });
+
+    it('without a position the peek reads from the head with the URL it always had', () => {
+      service.peekDeadLetterMessages('sales', 'eu', 5).subscribe();
+      service.peekTransferDeadLetterMessages('sales', 'eu', 5).subscribe();
+
+      expect(apiGet.mock.calls.map(c => c[0])).toEqual([
+        'topics/sales/subscriptions/eu/deadletter?count=5',
+        'topics/sales/subscriptions/eu/transferdeadletter?count=5'
+      ]);
+    });
+  });
+
   describe('deleteMessages', () => {
     it('forwards the selected sequence numbers with all=false by default', () => {
       service.deleteMessages('sales', 'sub1', [1, 2, 3], true).subscribe();

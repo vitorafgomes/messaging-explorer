@@ -191,6 +191,38 @@ describe('ProviderService holds the capabilities of the connected provider', () 
     });
   });
 
+  describe('a dead-letter peek from a position is offered only when the API explicitly says supportsPeekFromSequenceNumber is true', () => {
+    const azureConnected = { connected: true, namespace: 'ns.example.net', providerType: 'AzureServiceBus' } as unknown as ConnectionStatus;
+
+    it('an Azure API that answers true enables it', () => {
+      capabilitiesResponse = () => of({ supportsPeekFromSequenceNumber: true });
+
+      status$.next(azureConnected);
+
+      expect(service.capabilities()?.supportsPeekFromSequenceNumber).toBe(true);
+    });
+
+    it('an API that leaves the flag out, or sends anything but true, leaves it off', () => {
+      capabilitiesResponse = () => of({ supportsSessions: true });
+      status$.next(azureConnected);
+      expect(service.capabilities()?.supportsPeekFromSequenceNumber, 'the API did not send the flag').toBe(false);
+
+      capabilitiesResponse = () => of({ supportsPeekFromSequenceNumber: 'true' } as unknown as ProviderCapabilities);
+      status$.next(rabbitConnected);
+      expect(service.capabilities()?.supportsPeekFromSequenceNumber, 'the text "true"').toBe(false);
+    });
+
+    it('while the capabilities load, and when the call fails with a 500, it is off', () => {
+      const pending = new Subject<ProviderCapabilities>();
+      capabilitiesResponse = () => pending;
+      status$.next(azureConnected);
+      expect(service.capabilities()?.supportsPeekFromSequenceNumber, 'while the capabilities load').toBe(false);
+
+      pending.error(new HttpErrorResponse({ status: 500, statusText: 'Internal Server Error' }));
+      expect(service.capabilities()?.supportsPeekFromSequenceNumber, 'after a 500').toBe(false);
+    });
+  });
+
   describe('deferral is not declared for Azure', () => {
     it('an Azure connection whose API leaves the flag out, and one whose call fails, does not declare deferral', () => {
       const azureConnected = { connected: true, namespace: 'ns.example.net', providerType: 'AzureServiceBus' } as unknown as ConnectionStatus;

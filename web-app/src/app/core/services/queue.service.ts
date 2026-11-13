@@ -82,10 +82,12 @@ export class QueueService {
    * For RabbitMQ, this accesses the configured dead letter exchange (DLX) queue.
    * @param queueName - The queue name
    * @param count - Maximum number of messages to peek (default: 10)
+   * @param fromSequenceNumber - First sequence number to read; absent reads from the head
    * @returns Observable array of dead letter messages
    */
-  peekDeadLetterMessages(queueName: string, count: number = 10): Observable<MessageInfo[]> {
-    return this.api.get<MessageInfo[]>(apiPath`queues/${queueName}/deadletter?count=${count}`);
+  peekDeadLetterMessages(queueName: string, count: number = 10, fromSequenceNumber?: number): Observable<MessageInfo[]> {
+    const from = fromSequenceNumber === undefined ? '' : apiPath`&fromSequenceNumber=${fromSequenceNumber}`;
+    return this.api.get<MessageInfo[]>(apiPath`queues/${queueName}/deadletter?count=${count}` + from);
   }
 
   /**
@@ -173,8 +175,9 @@ export class QueueService {
   }
 
   /** Peeks the transfer dead-letter queue: messages this queue could not forward to another entity. */
-  peekTransferDeadLetterMessages(queueName: string, count: number = 10): Observable<MessageInfo[]> {
-    return this.api.get<MessageInfo[]>(apiPath`queues/${queueName}/transferdeadletter?count=${count}`);
+  peekTransferDeadLetterMessages(queueName: string, count: number = 10, fromSequenceNumber?: number): Observable<MessageInfo[]> {
+    const from = fromSequenceNumber === undefined ? '' : apiPath`&fromSequenceNumber=${fromSequenceNumber}`;
+    return this.api.get<MessageInfo[]>(apiPath`queues/${queueName}/transferdeadletter?count=${count}` + from);
   }
 
   /** Deletes the given transfer dead-letter messages; never the whole queue, which has no purge. */
