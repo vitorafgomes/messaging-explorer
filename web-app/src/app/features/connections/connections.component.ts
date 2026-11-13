@@ -79,10 +79,6 @@ const plural = (count: number, one: string, many: string) => `${count} ${count =
           <h5 class="alert-heading">
             <i class="fa fa-bug me-2"></i>
             DEBUG MODE
-            <button class="btn btn-sm btn-danger float-end ms-2" (click)="clearAllData()">
-              <i class="fa fa-trash me-1"></i>
-              Clean All
-            </button>
             <button class="btn btn-sm btn-warning float-end" (click)="refreshDebugInfo()">
               <i class="fa-solid fa-arrows-rotate me-1"></i>
               Refresh
@@ -676,62 +672,5 @@ export class ConnectionsComponent implements OnInit {
       alert(afterMsg);
       this.addDebugLog('✅ Force reload completed');
     }, 2000);
-  }
-
-  clearAllData() {
-    console.log('[ConnectionsComponent] clearAllData() called');
-    this.addDebugLog('🗑️ Clear All Data requested');
-
-    const currentConnections = this.connections().length;
-    const currentGroups = this.groups().length;
-
-    if (currentConnections === 0 && currentGroups === 0) {
-      this.snackBar.open('No data to clear', 'Close', { duration: 3000 });
-      this.addDebugLog('⚠️ No data to clear');
-      return;
-    }
-
-    const confirmMsg = `⚠️ WARNING: This will delete ALL data!\n\nCurrent data:\n- ${currentConnections} connections\n- ${currentGroups} groups\n\nThis action CANNOT be undone!\n\nContinue?`;
-
-    if (!confirm(confirmMsg)) {
-      console.log('[ConnectionsComponent] User cancelled clear all');
-      this.addDebugLog('Clear all cancelled by user');
-      return;
-    }
-
-    console.log('[ConnectionsComponent] User confirmed clear all - proceeding...');
-    this.addDebugLog('User confirmed - clearing all data...');
-
-    this.loading.set(true);
-
-    this.connectionService.clearAllData().pipe(
-      finalize(() => this.loading.set(false)),
-      takeUntilDestroyed(this.destroyRef)
-    ).subscribe({
-      next: (result) => {
-        console.log('[ConnectionsComponent] Clear all successful:', result);
-        this.addDebugLog(`✅ Cleared: ${result.connectionsDeleted} connections, ${result.groupsDeleted} groups`);
-
-        this.snackBar.open(result.message, 'Close', { duration: 5000 });
-
-        // Reload data to show empty state
-        setTimeout(() => {
-          console.log('[ConnectionsComponent] Reloading after clear...');
-          this.loadData();
-        }, 500);
-
-        // Show success alert if debug mode
-        if (this.debugMode()) {
-          setTimeout(() => {
-            alert(`✅ ALL DATA CLEARED!\n\nDeleted:\n- ${result.connectionsDeleted} connections\n- ${result.groupsDeleted} groups`);
-          }, 1000);
-        }
-      },
-      error: (err) => {
-        console.error('[ConnectionsComponent] Clear all failed:', err);
-        this.addDebugLog('❌ Clear all failed: ' + (err as any).message);
-        this.snackBar.open('Failed to clear data', 'Close', { duration: 5000 });
-      }
-    });
   }
 }
