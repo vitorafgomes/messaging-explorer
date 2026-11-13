@@ -2,6 +2,46 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.4.2] - 2026-11-13
+
+### Added
+- Automatic dead-letter resubmit as a run of the app, made for very large
+  dead-letter queues: it continues past a refused message, never resends a
+  message that may already have been delivered, reads only the messages that
+  were there when it started, can be paused and stopped, keeps running with
+  its dialog closed (an indicator in the toolbar shows it), and ends with a
+  report that can be saved; "Retry the failed" leaves possible duplicates out.
+- Monitoring: an "All entities" table with the counts of every queue and
+  subscription, sortable and filterable, with a dead-letter threshold you set
+  and a click through to the entity. The poll interval is a setting, never
+  below 30 seconds.
+- Azure Service Bus: export the definitions of a namespace (queues, topics,
+  subscriptions and rules) to a file and import them into another; the import
+  shows what it would do first and only creates, never changes or deletes.
+- The navigation (Connections, Entities, Queues, Topics, Monitoring) is in the
+  toolbar, so every screen can be reached in the desktop app.
+
+### Changed
+- The window has no File, Edit, View, Window or Help bar. On macOS it keeps the
+  native title bar, so the window buttons no longer cover the toolbar and the
+  window can be dragged; copy and paste keep working.
+- F11 toggles full screen on Windows and Linux.
+
+### Fixed
+- A message sent during a resubmit or move whose send then failed was reported
+  as "not found", so a retry could deliver it twice; it is now reported as a
+  possible duplicate.
+- A RabbitMQ queue showed 0 dead-letter messages while its dead-letter queue
+  held some.
+- The window no longer flashes blue before the first screen appears.
+
+### Known issues
+- On a very large dead-letter queue, a resubmit run that leaves messages behind
+  at the head of the queue (a filter, refused messages) stops after a few
+  hundred of them; it says so, and nothing is lost or sent twice.
+- macOS builds are unsigned, so macOS cannot install an update by itself;
+  download the new version from the releases page.
+
 ## [2.4.1] - 2026-11-13
 
 ### Added
