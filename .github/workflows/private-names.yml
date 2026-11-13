@@ -1,0 +1,45 @@
+# Private names - fails when a name the owner keeps out of this public repository appears in the
+# tracked files, the pull request's title or body, or a commit message. The names live only in the
+# PRIVATE_NAMES secret; the report names the place, never the text.
+
+name: Private names
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Private names
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check
+        shell: bash
+        env:
+          PRIVATE_NAMES: ${{ secrets.PRIVATE_NAMES }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          SAME_REPO: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+        run: |
+          set -euo pipefail
+          require=""
+          if [ "$SAME_REPO" = "true" ]; then require="--require"; fi
+          bash scripts/check-private-names.sh --tree $require
+          printf '%s\n%s\n' "$PR_TITLE" "$PR_BODY" | bash scripts/check-private-names.sh --stdin $require
+          if git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            git log --format=%B "$BASE_SHA..$HEAD_SHA" | bash scripts/check-private-names.sh --stdin $require
+          fi

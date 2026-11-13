@@ -22,7 +22,7 @@ input::placeholder{color:currentColor;opacity:.72}
 
   <div style="display: flex; align-items: center; gap: 8px; height: 28px; box-sizing: border-box; padding: 0 16px; background: {{t.surfaceHigh}}; color: {{t.onSurfaceVariant}}; border-bottom: 1px solid {{t.outlineVariant}}; font-size: 12px; line-height: 16px">
     <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M4 10h16M10 10v10"></path></svg>
-    <strong style="font-weight: 600; color: {{t.onSurface}}">Design, not built</strong>
+    <strong style="font-weight: 600; color: {{t.onSurface}}">Built, not seen on a Mac</strong>
     <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{stripText}}</span>
   </div>
 
@@ -344,8 +344,8 @@ class Component extends DCLogic {
       t, bar, env, conn, snack,
       isDefault: !today, isLoading: false, isEmpty: false, isError: false,
       stripText: today
-        ? 'The window: the first frame shows macOS as the code builds it today (inferred, not reproduced); the others show the decided target.'
-        : 'The window: the native frame and no menu bar are decided and not built. Today macOS hides the title bar and every platform has a File, View, Help menu.',
+        ? 'The window: the first frame shows macOS as the code built it before 2026-11-13 (inferred, not reproduced); the others show the target, built since.'
+        : 'The window: the native frame and no menu bar are built (2026-11-13), tested as options and not seen on a Mac. Settings, so About, and the Cmd N shortcut are not built; F11 and, in development builds, the developer tools keys are handled by the shell.',
       frames: [today ? macToday : macTarget, win, linux, min]
     };
   }
