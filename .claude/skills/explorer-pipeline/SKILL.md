@@ -125,6 +125,7 @@ understood: stop and hand the rest to the owner.
   | The session found something no page says | `wiki-crystallize` |
   | A page was created | `wiki-integrate`, for the index and the links back |
   | Pages changed | `wiki-lint`, then `tools/checks/check-context-refs.sh`; read every citation you rewrote |
+  | The owner asks whether the tests of a project would catch a bug | `stryker-project` |
 - The size check and the pull request body: `reference/records.md`.
 - Propose one conventional commit message in a code block, and stop. The owner decides about git;
   a commit the owner asks for goes on a `feat/`, `fix/`, `chore/` or `docs/` branch.
