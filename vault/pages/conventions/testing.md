@@ -33,7 +33,7 @@ reliability: high
 | Core | `dotnet test src/ServiceBusExplorer.Core.Tests` | 369 passed, 0 skipped (2026-11-13) |
 | Api | `dotnet test src/ServiceBusExplorer.Api.Tests` | 303 passed, 0 skipped (2026-11-13) |
 | Integration (Docker) | `dotnet test src/ServiceBusExplorer.IntegrationTests` | 90 passed, 0 skipped (29 RabbitMQ, 61 Azure Service Bus) on 2026-11-13, 165 s wall for the whole project run on that day; earlier, 93 to 102 s wall with the images cached, as measured when the project had 74 tests. The two collections run in parallel and the Azure one dominates: about 20 s to start SQL Server and the emulator, about 68 s of tests, of which 20 s is the deep dead-letter resubmit (350 messages arranged one by one) and 15 s three calls to a closed port that wait out the SDK retries |
-| Web | `npm test -- --watch=false` in `web-app/` | 47 files: 865 passed, 8 skipped (2026-11-13) |
+| Web | `npm test -- --watch=false` in `web-app/` | 47 files: 869 passed, 8 skipped (2026-11-13) |
 | Electron shell helpers | `npm run test:electron` in `web-app/` (`node --test`) | 17 passed, 0 skipped |
 | Build | `dotnet build ServiceBusExplorer.slnx` | 0 warnings, 0 errors |
 

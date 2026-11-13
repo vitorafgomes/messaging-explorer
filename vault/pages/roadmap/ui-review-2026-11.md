@@ -111,7 +111,7 @@ P1 can hurt a broker, mislead about a secret, or blocks a whole screen. P2 break
 14. **Send hides delivery options behind tabs** (`web-app/src/app/features/messages/send-message-dialog.component.ts:76`), where the schedule and time to live are (`web-app/src/app/features/messages/send-message-dialog.component.ts:167`), and the header does not name the environment. Target: `#send`.
 15. **Fixed widths.** The tree column is 320 px (`web-app/src/app/features/entities/entities-container.component.ts:31`), the import preview fixes its columns (`web-app/src/app/features/messages/import-messages-dialog.component.ts:92`), the connection dialog has a 500 px minimum (`web-app/src/app/features/connections/add-connection-dialog.component.ts:360`). Rule 5. Target: `#min`, `#msg-import`.
 16. **The tree has no filter and is not virtualised** (`web-app/src/app/features/entities/entities-tree.component.ts:74`). Rule 11 once a namespace has hundreds of entities. Target: `#topic`.
-17. **No screen created an entity. Fixed 2026-11-12:** a create action on the tree opens the form dialog drawn on `#create` (`web-app/src/app/features/entities/entities-tree.component.ts:835`).
+17. **No screen created an entity. Fixed 2026-11-12:** a create action on the tree opens the form dialog drawn on `#create` (`web-app/src/app/features/entities/entities-tree.component.ts:837`).
 
 ### P3
 

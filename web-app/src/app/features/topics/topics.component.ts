@@ -10,7 +10,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatBadgeModule } from '@angular/material/badge';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { finalize } from 'rxjs';
+import { Subscription, finalize } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TopicService, ConnectionService, LoggerService } from '../../core/services';
 import { TopicInfo, SubscriptionInfo } from '../../core/models';
@@ -82,7 +82,7 @@ import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
               @if (topic.expanded) {
                 <div class="card-body">
                   <h6 class="text-muted mb-3">Subscriptions</h6>
-                  @if (!subscriptionsLoaded.has(topic.name)) {
+                  @if (!subscriptionsLoaded.has(topic)) {
                     <p class="text-muted text-center fst-italic py-3">Loading subscriptions...</p>
                   } @else if (topic.subscriptions && topic.subscriptions.length > 0) {
                     @for (sub of topic.subscriptions; track sub.name) {
@@ -181,7 +181,8 @@ export class TopicsComponent implements OnInit {
 
   topics = signal<TopicInfo[]>([]);
   loading = signal(false);
-  protected readonly subscriptionsLoaded = new Set<string>();
+  protected readonly subscriptionsLoaded = new WeakSet<TopicInfo>();
+  private topicsLoad?: Subscription;
 
   get isConnected(): boolean {
     return this.connectionService.isConnected;
@@ -204,15 +205,15 @@ export class TopicsComponent implements OnInit {
   }
 
   loadTopics() {
+    this.topicsLoad?.unsubscribe();
     this.loading.set(true);
-    this.topicService.getTopics().pipe(
+    this.topicsLoad = this.topicService.getTopics().pipe(
       finalize(() => {
         this.loading.set(false);
       }),
       takeUntilDestroyed(this.destroyRef)
     ).subscribe({
       next: (topics) => {
-        this.subscriptionsLoaded.clear();
         this.topics.set(topics);
       },
       error: () => {
@@ -223,7 +224,7 @@ export class TopicsComponent implements OnInit {
 
   toggleTopic(topic: TopicInfo) {
     topic.expanded = !topic.expanded;
-    if (topic.expanded && !this.subscriptionsLoaded.has(topic.name)) {
+    if (topic.expanded && !this.subscriptionsLoaded.has(topic)) {
       this.loadSubscriptions(topic);
     }
     this.topics.set([...this.topics()]);
@@ -237,7 +238,7 @@ export class TopicsComponent implements OnInit {
       next: (subscriptions) => {
         this.logger.log(`[TopicsComponent] Loaded ${subscriptions.length} subscriptions for topic ${topic.name}`);
         topic.subscriptions = subscriptions;
-        this.subscriptionsLoaded.add(topic.name);
+        this.subscriptionsLoaded.add(topic);
         this.topics.set([...this.topics()]);
 
         if (subscriptions.length > 0) {
@@ -247,7 +248,7 @@ export class TopicsComponent implements OnInit {
       error: (err) => {
         this.logger.log(`[TopicsComponent] Failed to load subscriptions for topic ${topic.name}:`, err);
         this.snackBar.open(`Failed to load the subscriptions of ${topic.name}`, 'Close', { duration: 3000 });
-        if (!this.subscriptionsLoaded.has(topic.name)) {
+        if (!this.subscriptionsLoaded.has(topic)) {
           topic.expanded = false;
           this.topics.set([...this.topics()]);
         }

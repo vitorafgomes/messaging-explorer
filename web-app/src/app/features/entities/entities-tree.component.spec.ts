@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
-import { BehaviorSubject, NEVER, of, throwError } from 'rxjs';
+import { BehaviorSubject, NEVER, Subject, of, throwError } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
 import {
   ConnectionService, DeadLetterNotificationService, EntitySelectionService, LoggerService, TreeDataBuilderService
@@ -139,5 +139,55 @@ describe('EntitiesTreeComponent on a switch to another connection', () => {
     status.next({ connected: true, namespace: 'second' });
 
     expect(alerts.alertCount()).toBe(0);
+  });
+});
+
+describe('EntitiesTreeComponent runs one tree load at a time', () => {
+  const category = (name: string): TreeNode[] =>
+    [{ id: 'category-queues', name: 'Queues', type: 'category', icon: 'folder', expandable: true, level: 0,
+       children: [{ id: `queue-${name}`, name, type: 'queue', icon: 'inbox', expandable: false, level: 1 }] }];
+
+  function mountWithTwoLoads() {
+    const loads: Subject<TreeNode[]>[] = [];
+    TestBed.configureTestingModule({
+      imports: [EntitiesTreeComponent],
+      providers: [
+        { provide: TreeDataBuilderService, useValue: { buildTree: () => { const load = new Subject<TreeNode[]>(); loads.push(load); return load; } } },
+        { provide: EntitySelectionService, useValue: { selection$: of(null), treeRefresh$: NEVER, select: vi.fn() } },
+        { provide: ConnectionService, useValue: { isConnected: true, connectionStatus$: new BehaviorSubject({ connected: true }) } },
+        { provide: LoggerService, useValue: { log: () => undefined, error: () => undefined } },
+        { provide: DeadLetterNotificationService, useValue: { clear: () => undefined } },
+        { provide: ProviderService, useValue: { capabilities: signal(DEFAULT_AZURE_CAPABILITIES) } },
+        { provide: MatDialog, useValue: { open: vi.fn() } }
+      ]
+    });
+    const fixture = TestBed.createComponent(EntitiesTreeComponent);
+    fixture.detectChanges();
+    const text = () => { fixture.detectChanges(); return (fixture.nativeElement as HTMLElement).textContent ?? ''; };
+    return { loads, text };
+  }
+
+  it('an earlier load that fails after a later one succeeded does not show the error panel over the tree', () => {
+    const { loads, text } = mountWithTwoLoads();
+    expect(loads).toHaveLength(2);
+
+    loads[1].next(category('orders'));
+    loads[1].complete();
+    loads[0].error(new Error('503 Service Unavailable'));
+
+    expect(text()).toContain('orders');
+    expect(text()).not.toContain('Could not load entities');
+  });
+
+  it('a second load cancels the first, so only the second tree reaches the screen', () => {
+    const { loads, text } = mountWithTwoLoads();
+
+    expect(loads[0].observed).toBe(false);
+    loads[1].next(category('orders'));
+    loads[1].complete();
+    loads[0].next(category('stale'));
+
+    expect(text()).toContain('orders');
+    expect(text()).not.toContain('stale');
   });
 });

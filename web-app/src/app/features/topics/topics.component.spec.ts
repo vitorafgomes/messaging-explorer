@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { NEVER, Subject, of, throwError } from 'rxjs';
+import { BehaviorSubject, NEVER, Subject, of, throwError } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ConnectionService, LoggerService, TopicService } from '../../core/services';
@@ -12,12 +12,12 @@ const topic = (name: string, subscriptionCount: number) =>
 describe('TopicsComponent loads the subscriptions of a topic when it is opened, not one request per topic', () => {
   let topicService: { getTopics: ReturnType<typeof vi.fn>; getSubscriptions: ReturnType<typeof vi.fn> };
 
-  function render() {
+  function render(connectionStatus$: unknown = NEVER) {
     TestBed.configureTestingModule({
       imports: [TopicsComponent],
       providers: [
         { provide: TopicService, useValue: topicService },
-        { provide: ConnectionService, useValue: { isConnected: true, connectionStatus$: NEVER } },
+        { provide: ConnectionService, useValue: { isConnected: true, connectionStatus$ } },
         { provide: LoggerService, useValue: { log: () => undefined, error: () => undefined } },
         { provide: MatDialog, useValue: { open: vi.fn() } }
       ]
@@ -80,5 +80,40 @@ describe('TopicsComponent loads the subscriptions of a topic when it is opened, 
     expect(afterFailure).not.toContain('No subscriptions');
     expect(topicService.getSubscriptions).toHaveBeenCalledTimes(2);
     expect(afterRetry).toContain('invoice-sub');
+  });
+  it('a reload while a subscription request is in flight, then opening the same topic, asks again and shows the new answer', async () => {
+    topicService.getTopics = vi.fn().mockImplementation(() => of([topic('orders', 2), topic('billing', 1)]));
+    const inFlight = new Subject<unknown[]>();
+    topicService.getSubscriptions
+      .mockReturnValueOnce(inFlight)
+      .mockReturnValueOnce(of([{ name: 'invoice-sub', activeMessageCount: 0, deadLetterMessageCount: 0 }]));
+    const { open, fixture } = render();
+
+    await open('billing');
+    fixture.componentInstance.loadTopics();
+    await fixture.whenStable();
+    inFlight.next([]);
+    inFlight.complete();
+    const shown = await open('billing');
+
+    expect(topicService.getSubscriptions.mock.calls).toStrictEqual([['billing'], ['billing']]);
+    expect(shown).toContain('invoice-sub');
+    expect(shown).not.toContain('No subscriptions');
+  });
+
+  it('a second topic load cancels the first, so only the second list reaches the screen', () => {
+    const loads: Subject<TopicInfo[]>[] = [];
+    topicService.getTopics = vi.fn().mockImplementation(() => { const load = new Subject<TopicInfo[]>(); loads.push(load); return load; });
+    const { element, fixture } = render(new BehaviorSubject({ connected: true }));
+    expect(loads).toHaveLength(2);
+
+    expect(loads[0].observed).toBe(false);
+    loads[1].next([topic('orders', 0)]);
+    loads[1].complete();
+    loads[0].next([topic('stale', 0)]);
+    fixture.detectChanges();
+
+    expect(element.textContent).toContain('orders');
+    expect(element.textContent).not.toContain('stale');
   });
 });

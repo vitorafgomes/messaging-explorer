@@ -5,7 +5,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import {finalize, Subject} from 'rxjs';
+import {finalize, Subject, Subscription} from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { TreeNode } from '../../core/models';
 import { TreeDataBuilderService, EntitySelectionService, ConnectionService, LoggerService, DeadLetterNotificationService } from '../../core/services';
@@ -708,6 +708,7 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
   expandedNodes = new Set<string>();
   loading: WritableSignal<boolean> = signal<boolean>(false);
   loadError = signal(false);
+  private treeLoad?: Subscription;
   selectedNode: TreeNode | null = null;
 
   get isConnected(): boolean {
@@ -751,9 +752,10 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
 
   loadTree() {
     this.logger.log('[EntitiesTree] loadTree() called');
+    this.treeLoad?.unsubscribe();
     this.loading.set(true);
     this.loadError.set(false);
-    this.treeDataBuilder.buildTree()
+    this.treeLoad = this.treeDataBuilder.buildTree()
       .pipe(
         finalize(() => {
           this.loading.set(false);
