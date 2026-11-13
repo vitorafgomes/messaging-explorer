@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
-# Resolve every `path:line` citation in context/pages against the working tree.
+# Resolve every `path#anchor` citation in context/pages against the working tree.
 #
-# A citation is src|web-app|scripts|docs|.claude|.github/<path>.<ext>:<line>[-<line>], written in full; an
-# abbreviated path (`…`) or a bare continuation (`:15`) is not a citation to this script. It fails
-# when the file is missing, the first line is 0 or past the end of the file, or context/pages cannot
-# be listed. It proves the line exists, never that it still describes the claim; that part is read. Pages whose frontmatter status marks them
-# as a record (superseded, archived, artefact, resolved, deprecated) are skipped, and so is a path
-# that names another repo (`other-repo/src/...`).
+# A citation is src|web-app|scripts|docs|.claude|.github/<path>.<ext>#<anchor>, written in full, in
+# backticks or in a quoted frontmatter entry. The anchor is a name or a piece of text that occurs in
+# the file: a member, a type, a test title, a key. Citations by line number (`path:12`) are refused,
+# because every edit above the line moves them. The script fails when the file is missing, the anchor
+# does not occur in it, a line-number citation is found, or context/pages cannot be listed. It proves
+# the anchor exists, never that the page still describes it truly; that part is read. Pages whose
+# frontmatter status marks them as a record are skipped, and so is a path that names another repo
+# or a package (`other-repo/src/...`, `node_modules/...`).
 #
-# Usage: scripts/check-context-refs.sh [root]   exits 1 on any broken ref.
+# Usage: scripts/check-context-refs.sh [root]   exits 1 on any broken citation.
 set -uo pipefail
 root="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
 total=0; skipped=0; broken=0
@@ -17,29 +19,30 @@ if ! find "$root/context/pages" -name '*.md' -print0 > "$pages"; then
   echo "Cannot list $root/context/pages: the context pages tree is missing or unreadable." >&2
   exit 1
 fi
+prefix='(^|[^A-Za-z0-9_./@-])'
+roots='(src|web-app|scripts|docs|\.claude|\.github)/[A-Za-z0-9_./-]+\.[A-Za-z0-9]+'
 while IFS= read -r -d '' page; do
   if awk 'NR==1 && $0!="---"{exit} NR>1 && $0=="---"{exit} NR>1' "$page" | grep -qiE '^status:[[:space:]]*["'"'"']?(superseded|archived|artefact|deprecated|resolved|snapshot|decommissioned|wont-fix)\b'; then
     skipped=$((skipped+1)); continue
   fi
   rel="${page#"$root"/}"
-  while IFS=: read -r file line; do
-    [ -n "$file" ] || continue
+  while IFS= read -r cite; do
+    [ -n "$cite" ] || continue
+    echo "$rel: $cite - cite by name, not by line (path#Member)"; broken=$((broken+1))
+  done < <(grep -oE "$prefix$roots:[0-9]+" "$page" | sed -E 's/^[^A-Za-z0-9_.]//' | sort -u)
+  while IFS= read -r cite; do
+    [ -n "$cite" ] || continue
     total=$((total+1))
-    target="$root/$file"
-    if [ "$line" -lt 1 ]; then
-      echo "$rel: $file:$line - line numbers start at 1"; broken=$((broken+1))
-    elif [ ! -f "$target" ]; then
-      echo "$rel: $file:$line - file missing"; broken=$((broken+1))
-    else
-      count=$(awk 'END{print NR}' "$target")
-      if [ "$line" -gt "$count" ]; then
-        echo "$rel: $file:$line - file has $count lines"; broken=$((broken+1))
-      fi
+    file="${cite%%#*}"; anchor="${cite#*#}"
+    if [ ! -f "$root/$file" ]; then
+      echo "$rel: $cite - file missing"; broken=$((broken+1))
+    elif ! grep -qF -- "$anchor" "$root/$file"; then
+      echo "$rel: $cite - not found in the file"; broken=$((broken+1))
     fi
-  done < <(grep -oE '(^|[^A-Za-z0-9_./-])(src|web-app|scripts|docs|\.claude|\.github)/[A-Za-z0-9_./-]+\.[A-Za-z0-9]+:[0-9]+' "$page" | sed -E 's/^[^A-Za-z0-9_.]//' | sort -u)
+  done < <(grep -oE "$prefix$roots#[^\`\"]+" "$page" | sed -E 's/^[^A-Za-z0-9_.]//' | sort -u)
 done < "$pages"
 if [ "$broken" -gt 0 ]; then
-  echo "$broken of $total context file:line citations do not resolve." >&2
+  echo "$broken context citations do not resolve ($total by name checked)." >&2
   exit 1
 fi
-echo "$total context file:line citations resolve ($skipped record pages skipped)."
+echo "$total context citations resolve ($skipped record pages skipped)."

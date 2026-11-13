@@ -41,7 +41,7 @@ On every session, before any code grep or file read:
 | **Investigation** | `pages/overview/*` → `index.md` → targeted pages | Answer with citations `[[pages/...]]` |
 | **Lint** | all of `pages/`, `index.md`, `log.md` | Run `/wiki-lint` skill |
 | **New ADR** | relevant `pages/services/*` and `pages/invariants/*` | Copy `templates/_adr.md`, increment ADR number, link to superseded ADR if any; then `/wiki-integrate` the new page |
-| **New invariant** | affected `pages/services/*` | Copy `templates/_invariant.md`, cite file:line enforcement points + tests; then `/wiki-integrate` the new page |
+| **New invariant** | affected `pages/services/*` | Copy `templates/_invariant.md`, cite the enforcement points and tests by name (`path#Member`); then `/wiki-integrate` the new page |
 
 ## Page conventions
 
@@ -113,7 +113,7 @@ Claude checks:
 - **Stale claims** — pages last `updated:` >90 days ago that reference files/lines; verify paths still exist.
 - **Missing cross-references** — a service page mentions a concept that has its own domain page but doesn't link it.
 - **Frontmatter violations** — missing mandatory fields, invalid enum values.
-- **Drift** — `file:line` references in service pages that no longer resolve.
+- **Drift** — `path#Member` code citations whose file or name no longer exists (`scripts/check-context-refs.sh`).
 
 Report findings; don't auto-fix without confirmation.
 
@@ -137,7 +137,7 @@ Claude:
    repo is public.
 1. **Never write to `raw/`.** Claude reads raw, writes pages, moves raw → ingested during ingest.
 2. **Every page has `source:` frontmatter** pointing to where its content came from (raw file, chat, or another page).
-3. **Never invent file:line references.** If Claude can't verify a path, it says so; it does not guess.
+3. **Cite code by name, never by line number, and never invent a citation.** A citation is `path#anchor`, where the anchor is a member, a type, a test title or a key that occurs in the file. If Claude can't verify it, it says so; it does not guess.
 4. **Invariants are load-bearing.** Before proposing any code change, cross-check against `pages/invariants/*` linked from the affected service page. A change that violates an invariant needs either the change to be revised OR a superseding ADR that removes the invariant.
 5. **One page per topic.** If a page exceeds ~300 lines, split it. **Exemption:** list-shaped trackers and manifests under `pages/roadmap/` may exceed the limit — splitting a single prioritized list destroys its value; prune closed entries instead.
 6. **Wikilinks over "see also" lists.** Inline links build the graph; bottom-of-page link dumps decay.

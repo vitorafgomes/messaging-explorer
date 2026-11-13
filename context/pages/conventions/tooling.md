@@ -63,7 +63,7 @@ Every hook carries a case-matrix self-test (`<hook>.test.sh`, prints `ALL CASES 
 
 ## `scripts/check-context-refs.sh`
 
-Resolves every `path:line` citation in `context/pages` (paths under `src`, `web-app`, `scripts`, `docs`, `.claude`, `.github`, written in full) against the working tree; fails on a missing file, a line 0 or a line past the end, and when `context/pages` is missing. It proves the line exists, never that it still describes the claim; that part is read. A citation to a root file (`CHANGELOG.md`, `config.json`) and an abbreviated continuation (`:15`) are not checked. Pages whose `status` marks them as a record are skipped. Runs in gate 7b and in CI.
+Resolves every code citation in `context/pages` against the working tree. A citation is `path#anchor` (paths under `src`, `web-app`, `scripts`, `docs`, `.claude`, `.github`, written in full): the anchor is a member, a type, a test title or a key that occurs in the file, so an edit elsewhere in the file never breaks it. It fails on a missing file, an anchor the file does not contain, a citation by line number (`path:12`, refused since 2026-11-13, [[pages/decisions/0005-cite-code-by-name-and-prove-in-proportion-to-risk]]) and a missing `context/pages`. It proves the anchor exists, never that the page still describes it truly; that part is read. Pages whose `status` marks them as a record are skipped. Runs in gate 7b and in CI.
 
 ## `scripts/check-private-names.sh`
 
