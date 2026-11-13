@@ -2354,13 +2354,27 @@ public class AzureServiceBusProvider : IMessagingProvider
     }
 
     /// <inheritdoc />
-    public async Task<SessionDetail> GetSessionAsync(string entityName, string? subscriptionName, string sessionId, CancellationToken cancellationToken = default)
+    public async Task<SessionDetail> GetSessionAsync(string entityName, string? subscriptionName, string sessionId, int messageCount = 0, CancellationToken cancellationToken = default)
     {
         ValidateSessionId(sessionId);
         EnsureConnected();
-        await using var session = await RefuseDisabledAsync(() => AcceptSessionCoreAsync(_client!, entityName, subscriptionName, sessionId, SessionAcceptWait, cancellationToken));
+        var (detail, peeked) = await ReadSessionCoreAsync(_client!, entityName, subscriptionName, sessionId, messageCount, SessionAcceptWait, cancellationToken);
+        detail.Messages = peeked?.Select(m => MapToMessageInfo(m, false)).ToList();
+        return detail;
+    }
+
+    /// <summary>
+    /// Accepts one session once, reads its state and, when <paramref name="messageCount"/> is positive, peeks up to that
+    /// many of its messages under the same accept; the session is released on every path before this returns. The
+    /// messages come back as the broker gave them, so the caller maps them after the release.
+    /// </summary>
+    internal static async Task<(SessionDetail Detail, List<ServiceBusReceivedMessage>? Messages)> ReadSessionCoreAsync(
+        ServiceBusClient client, string entityName, string? subscriptionName, string sessionId, int messageCount, TimeSpan wait, CancellationToken cancellationToken)
+    {
+        await using var session = await RefuseDisabledAsync(() => AcceptSessionCoreAsync(client, entityName, subscriptionName, sessionId, wait, cancellationToken));
         var (state, isBinary) = DecodeSessionState(await session.GetSessionStateAsync(cancellationToken));
-        return new SessionDetail { SessionId = session.SessionId, State = state, StateIsBinary = isBinary, LockedUntil = session.SessionLockedUntil };
+        var messages = messageCount > 0 ? await PeekCoreAsync(session, messageCount, cancellationToken) : null;
+        return (new SessionDetail { SessionId = session.SessionId, State = state, StateIsBinary = isBinary, LockedUntil = session.SessionLockedUntil }, messages);
     }
 
     /// <inheritdoc />

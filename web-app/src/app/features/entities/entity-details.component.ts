@@ -139,7 +139,7 @@ const NOT_SET = 'Not set';
 
         <hr class="my-3">
 
-        <mat-tab-group [selectedIndex]="queueTab()" (selectedIndexChange)="queueTab.set($event)" animationDuration="0ms">
+        <mat-tab-group [selectedIndex]="queueTab()" (selectedIndexChange)="setQueueTab($event)" animationDuration="0ms" [preserveContent]="true">
         <mat-tab label="Properties">
         <div class="entity-properties">
           <div class="property-grid">
@@ -213,7 +213,9 @@ const NOT_SET = 'Not set';
         @if (queueEntity.requiresSession && supports('supportsSessions')) {
           <mat-tab label="Sessions">
             <ng-template matTabContent>
-              <app-entity-sessions [entity]="{ queueName: queueEntity.name }" />
+              @if (sessionsOpened()) {
+                <app-entity-sessions [entity]="{ queueName: queueEntity.name }" />
+              }
             </ng-template>
           </mat-tab>
         }
@@ -547,8 +549,10 @@ const NOT_SET = 'Not set';
               <app-subscription-rules [subscription]="subscriptionEntity" />
             </div>
 
-            @if (subscriptionEntity.requiresSession && supports('supportsSessions') && activeSubscriptionTab() === 'sessions') {
-              <app-entity-sessions [entity]="{ topicName: subscriptionEntity.topicName, subscriptionName: subscriptionEntity.name }" />
+            @if (subscriptionEntity.requiresSession && supports('supportsSessions') && sessionsOpened()) {
+              <div [hidden]="activeSubscriptionTab() !== 'sessions'">
+                <app-entity-sessions [entity]="{ topicName: subscriptionEntity.topicName, subscriptionName: subscriptionEntity.name }" />
+              </div>
             }
 
         } @else {
@@ -1849,6 +1853,9 @@ export class EntityDetailsComponent {
   // Tab navigation state
   activeSubscriptionTab = signal<'description' | 'rules' | 'sessions'>('description');
   queueTab = signal(0);
+  /** The Sessions tab was opened for the entity shown; its list is kept until another entity or a reload. */
+  sessionsOpened = signal(false);
+  private shownEntityKey: string | null = null;
 
   // Description tab style selector
   descriptionStyle: 'cards' | 'infobox' | 'list' | 'hybrid' = 'cards';
@@ -1859,7 +1866,10 @@ export class EntityDetailsComponent {
   constructor() {
     this.state$.pipe(
       takeUntilDestroyed(this.destroyRef)
-    ).subscribe(() => {
+    ).subscribe(state => {
+      const key = state.selection ? `${state.selection.type}/${state.selection.node?.id}` : null;
+      if (state.loading || key !== this.shownEntityKey) this.sessionsOpened.set(false);
+      this.shownEntityKey = key;
       // Reset tabs and live counts when entity changes
       this.activeSubscriptionTab.set('description');
       this.queueTab.set(0);
@@ -2158,5 +2168,11 @@ export class EntityDetailsComponent {
   // Tab navigation methods
   setSubscriptionTab(tab: 'description' | 'rules' | 'sessions') {
     this.activeSubscriptionTab.set(tab);
+    if (tab === 'sessions') this.sessionsOpened.set(true);
+  }
+
+  setQueueTab(index: number) {
+    this.queueTab.set(index);
+    if (index === 1) this.sessionsOpened.set(true);
   }
 }

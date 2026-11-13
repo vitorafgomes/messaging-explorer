@@ -380,10 +380,11 @@ public interface IMessagingProvider : IAsyncDisposable
     Task<SessionList> GetSessionsAsync(string entityName, string? subscriptionName, int maxMessages, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Accepts one session, reads its state and releases it before returning. Throws
+    /// Accepts one session once, reads its state and, when <paramref name="messageCount"/> is positive, peeks up to that
+    /// many of its messages under the same accept, then releases it before returning. Throws
     /// <see cref="SessionInUseException"/> when another receiver holds the session or the accept waits too long.
     /// </summary>
-    Task<SessionDetail> GetSessionAsync(string entityName, string? subscriptionName, string sessionId, CancellationToken cancellationToken = default);
+    Task<SessionDetail> GetSessionAsync(string entityName, string? subscriptionName, string sessionId, int messageCount = 0, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Accepts one session, peeks up to <paramref name="count"/> of its messages and releases it. Nothing is received,

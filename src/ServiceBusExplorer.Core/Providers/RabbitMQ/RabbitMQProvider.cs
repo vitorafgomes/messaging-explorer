@@ -1105,7 +1105,7 @@ public class RabbitMQProvider : IMessagingProvider
         => throw new NotSupportedException("RabbitMQ does not support message sessions.");
 
     /// <inheritdoc />
-    public Task<SessionDetail> GetSessionAsync(string entityName, string? subscriptionName, string sessionId, CancellationToken cancellationToken = default)
+    public Task<SessionDetail> GetSessionAsync(string entityName, string? subscriptionName, string sessionId, int messageCount = 0, CancellationToken cancellationToken = default)
         => throw new NotSupportedException("RabbitMQ does not support message sessions.");
 
     /// <inheritdoc />
