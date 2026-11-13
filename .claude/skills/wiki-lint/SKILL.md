@@ -63,6 +63,8 @@ List all `.md` files in the vault recursively. Exclude paths in `blacklist` enti
 
 Read `index.md`. Parse all wikilink references and file paths. Build a set of pages listed in index.md and their referenced paths.
 
+In this repo `index.md` lists the areas and each `pages/<area>/index.md` lists the pages of its area: read every area index too. A page counts as listed when its area index lists it, or, for a service topic page (`pages/services/<project>/<topic>.md`), when the Topics table of its map does (`context/CLAUDE.md`, Indexes).
+
 ### Step 3 - Check for broken wikilinks
 
 For each in-scope wiki page, extract all `[[wikilinks]]`. Attempt to resolve each to an actual file. If no matching file is found: flag as a **broken wikilink** with the page where found, the broken link text, and a suggested correction if obvious.

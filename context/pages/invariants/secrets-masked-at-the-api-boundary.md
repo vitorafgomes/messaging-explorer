@@ -79,4 +79,4 @@ None is intended; each is tracked in [[pages/roadmap/followups]].
 
 ## Change protocol
 
-A new secret field lands in one change with: its line in `MaskConnection`, its mask merge on save and on import, and a masking test. The `secrets` lens of gate 6 reviews every diff near these points.
+A new secret field lands in one change with: its line in `MaskConnection`, its mask merge on save and on import, and a masking test. The `secrets` review lens reviews every diff near these points.

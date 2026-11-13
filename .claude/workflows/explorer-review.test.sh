@@ -96,7 +96,7 @@ let ranged, lowercase, unshaped, longLine
 try {
   ranged = await refuteFor({ module: 'ServiceBusExplorer.X', lenses: [], range: 'abc123..def456', dispatch: 'Project: ServiceBusExplorer.X   Diff: the range below\nLenses: invariants' })
   lowercase = await refuteFor({ module: 'ServiceBusExplorer.X', lenses: [], dispatch: `${location}\n  lenses: invariants\nMap: the reviewer's framing` })
-  unshaped = await refuteFor({ module: 'ServiceBusExplorer.X', lenses: [], dispatch: `${location}\nline two\nline three\nMap: the reviewer's framing\nGate 5 evidence: the proofs` })
+  unshaped = await refuteFor({ module: 'ServiceBusExplorer.X', lenses: [], dispatch: `${location}\nline two\nline three\nMap: the reviewer's framing\nProof: the proofs` })
   longLine = await refuteFor({ module: 'ServiceBusExplorer.X', lenses: [], dispatch: 'x'.repeat(1000) })
 } catch (error) {
   console.log(`FAIL the workflow threw when the refute prompts were built: ${error.message}`)

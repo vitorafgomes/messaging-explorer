@@ -37,12 +37,12 @@ enums:
     - overview         # multi-topic overview
     - home             # top-level hub
     - log              # append-only operational log
-    - index            # catalogue/index page
+    - index            # catalogue/index page: index.md lists the areas, pages/<area>/index.md the pages of one area
     - config           # configuration document
     - longform         # linear authored document; spec, architecture, design brief
     - established-patterns  # memory record; decisions, what worked, anti-patterns
     # Engineering-variant extensions
-    - service          # pages/services/*.md — one per service or bounded context
+    - service          # pages/services/<project>.md, the map of one project, and pages/services/<project>/<topic>.md, its topic pages
     - adr              # pages/decisions/NNNN-*.md — accepted architecture decision
     - invariant        # pages/invariants/*.md — rule the code MUST preserve
     - incident         # pages/incidents/*.md — per-incident note

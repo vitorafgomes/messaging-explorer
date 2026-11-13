@@ -1,8 +1,3 @@
-17804 context/pages/architecture/project-map.md
+17802 context/pages/architecture/project-map.md
 33127 context/pages/conventions/testing.md
-15113 context/pages/conventions/tooling.md
-27912 context/pages/invariants/bulk-operations-are-at-least-once.md
-63685 context/pages/services/api.md
-108273 context/pages/services/core.md
-36402 context/pages/services/electron-shell.md
-82104 context/pages/services/web-app.md
+27909 context/pages/invariants/bulk-operations-are-at-least-once.md

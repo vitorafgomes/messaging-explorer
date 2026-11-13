@@ -40,9 +40,7 @@ jobs:
           bash tools/checks/check-context-refs.sh
           bash tools/checks/check-hidden-text.sh
           bash tools/checks/check-harness-requirements.sh
-          # A warning, not a failure, while service pages are still over their ceiling and other
-          # pull requests add to them: tools/checks/doc-size-baseline.txt lists the debts.
-          bash tools/checks/check-doc-sizes.sh || echo "::warning::a document a model reads grew past its ceiling (tools/checks/check-doc-sizes.sh)"
+          bash tools/checks/check-doc-sizes.sh
 
       - name: Site script tests
         run: node --test docs/app.test.js

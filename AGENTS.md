@@ -30,7 +30,7 @@ a lane that changes the screen. At most two such heavy lanes run at once on the 
 
 Three things are never left for later: nobody but the local user reaches the API, a secret never
 leaves the backend unmasked or reaches a log, and a bulk operation never loses a message
-silently. Each known breach is written under "Known gaps" on the service pages and in
+silently. Each known breach is written on the `known-gaps` topic pages and in
 `context/pages/roadmap/followups.md`. A change may leave a recorded gap as it found it. It never
 adds one and never widens one.
 

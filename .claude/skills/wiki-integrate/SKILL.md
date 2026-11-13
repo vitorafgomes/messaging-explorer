@@ -88,6 +88,8 @@ Confirm the target page is not in a blacklisted path. If it is, stop; wiki skill
 
 ### Step 3 - Check and update index.md
 
+In this repo `index.md` lists the areas and each `pages/<area>/index.md` lists the pages of its area: add the entry to the index of the page's area, and a service topic page (`pages/services/<project>/<topic>.md`) to the Topics table of its map instead (`context/CLAUDE.md`, Indexes).
+
 Read `index.md`. If the target page is not listed, add an entry in the correct section:
 `- [[Page Title]]: One sentence description, 150 chars max. \`relative/path/to/page.md\``
 

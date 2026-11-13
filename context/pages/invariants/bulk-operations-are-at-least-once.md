@@ -134,4 +134,4 @@ None is intended; each is recorded on [[pages/services/core]] with its citations
 
 ## Change protocol
 
-A change that reorders receive, send and complete, or removes a failure report, needs a superseding ADR first. The `message-safety` lens of gate 6 reviews every diff that touches these paths, on opus.
+A change that reorders receive, send and complete, or removes a failure report, needs a superseding ADR first. The `message-safety` review lens reviews every diff that touches these paths, on opus.

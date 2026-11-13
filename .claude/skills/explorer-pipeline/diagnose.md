@@ -5,7 +5,7 @@ bug-fix lane, started from the requirement table this lane hands over.
 
 1. **Follow `superpowers:systematic-debugging`**: reproduce before theorising, one hypothesis at a
    time, evidence before explanation, and the cause shown before any fix is proposed.
-2. **Read the project first.** Its service page, the sections for the code in question, and `context/pages/history/<project>.md` for a similar failure.
+2. **Read the project first.** Its map, the topic pages for the code in question, and `context/pages/history/<project>.md` for a similar failure.
 3. **Then the evidence.** The worker's logs and OpenTelemetry output before source; the runbooks
    under `context/pages/runbooks/` say where they are. A survey past three searches goes to one
    `Explore` agent. A question about a symbol goes to the code graph or the language server. A

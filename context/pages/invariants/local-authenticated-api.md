@@ -71,4 +71,4 @@ Recorded on the service pages with their citations and tracked in [[pages/roadma
 
 ## Change protocol
 
-A change that adds a route outside the key, a binding beyond loopback or a wider origin needs a superseding ADR under `pages/decisions/` first. The `api-surface` lens of gate 6 reviews every diff that touches this page's enforcement points.
+A change that adds a route outside the key, a binding beyond loopback or a wider origin needs a superseding ADR under `pages/decisions/` first. The `api-surface` review lens reviews every diff that touches this page's enforcement points.

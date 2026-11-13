@@ -44,8 +44,8 @@ against it line by line.
 3. **Rules at risk**: the invariant pages the change could break, and the test that pins
    each. A step that would break one is not a step: a superseding decision comes first.
 4. **Acceptance**: the literal commands, from `reference/test-surface.md`.
-5. **Out of scope**: nearby work this change leaves alone. The "Known gaps" of the project
-   page are out of scope unless the request names one.
+5. **Out of scope**: nearby work this change leaves alone. The known gaps of the project (its
+   `known-gaps*` topic pages) are out of scope unless the request names one.
 6. **Requirement table**: each requirement in the user's words, the test path and name that prove
    it, and its kind. Add a row for each behaviour the change implements beyond the request: a
    limit, a reset, a failure path. A request to build what an artboard draws follows

@@ -2,7 +2,7 @@
 title: "<Service name>"
 version: "1.0"
 date: YYYY-MM-DD
-changes: "Initial service page"
+changes: "Initial service map"
 page_type: service
 status: stub
 description: "<One-sentence responsibility>"
@@ -15,49 +15,38 @@ reliability: high
 
 > One-sentence responsibility. If you can't compress it to one sentence, the service is doing too much.
 
-## To change here, read
-
-The 4 to 10 pages that constrain a change in this module: its invariants, the ADRs that set its shape, the flows that run through it, the conventions it must follow. A reader about to change the module reads these and nothing else first.
-
-- [[pages/invariants/<name>]]
-- [[pages/decisions/<NNNN-slug>]]
-- [[pages/flows/<name>]]
-- [[pages/conventions/<name>]]
+The map of one project. It says what the project is for and lists its topic pages, saved under
+`pages/services/<project>/` from `templates/_service-topic.md`. How a topic works goes on the
+topic page; the rules go in `.claude/rules/<project>.md` (`templates/_project-rules.md`) and, in
+full, on `pages/services/<project>/how-the-rules-are-kept.md`; dated changes go on
+[[pages/history/<project>]]. `changes` holds the newest note only. Keep the map short: a reader
+opens it to choose one topic page.
 
 ## Responsibility
 
-What this service owns. What it explicitly does NOT own (link the service that does).
+REQUIRED. What this service owns. What it explicitly does NOT own (link the service that does).
 
-## Public contract
+## Rules
 
-- **HTTP routes** — top-level route prefix, or "internal only"
-- **Events published** — Service Bus topics/subscriptions this service writes to
-- **Events consumed** — inbound events this service subscribes to
-- **Direct callers** — other services that call this one via HTTP
+The rules this project must keep, and what to read before changing it, are in
+`.claude/rules/<project>.md`; Claude Code loads that file when a task touches the project. Each
+rule in full, with the code and tests that keep it: [[pages/services/<project>/how-the-rules-are-kept]].
 
-## How it works
+## Topics
 
-At least one drawing (Mermaid: `flowchart`, `sequenceDiagram` or `stateDiagram-v2`) of how the service works: where data lands, the write path with its save order, the read path with its authorisation gate, and the lifecycle of the main record. Every box names a type listed under Hot spots. Required for every new feature.
+REQUIRED. One row per topic page, the rules page and the known-gaps page included. The second
+column completes the sentence "read this page when a change touches ...", naming something a
+reader can see in the change: a type, a folder, a route, a screen.
 
-## Invariants
-
-Link every [[pages/invariants/*]] this service must preserve. If an invariant doesn't have a page yet, create one (copy `templates/_invariant.md`).
-
-- [[pages/invariants/<name>]] — *one-line summary*
-- [[pages/invariants/<name>]] — *one-line summary*
-
-## Hot spots
-
-Code paths that are high-churn, high-complexity, or known-fragile. Cite `path#Member`.
-
-- `src/<path>.cs:LINE` — *what's hot about it*
-- `src/<path>.cs:LINE` — *what's hot about it*
+| Page | Read when a change touches |
+|---|---|
+| [[pages/services/<project>/<topic>\|<Topic>]] | <what in the code this page is about> |
 
 ## Cache footprint
 
-If the service uses tier-2 cache, list the keys:
+If the service uses a cache, list the keys:
 
-- `<service>:<entity>(id)` — read by [[pages/...]], invalidated by [[pages/...]]
+- `<service>:<entity>(id)` - read by [[pages/...]], invalidated by [[pages/...]]
 
 If none: "None. Not applicable for [reason]."
 
@@ -66,23 +55,10 @@ If none: "None. Not applicable for [reason]."
 - **Reads from:** [[pages/services/X]] via HTTP; [[pages/services/Y]] via event
 - **Written to by:** [[pages/services/Z]]
 
-## Testing footprint
-
-- **Unit tests:** `src/<service>.Tests/...`
-- **Integration tests:** `src/<service>.Tests/Integration/...`
-- **Invariants verified by tests:** list the invariant pages that have `verified_by:` entries pointing into this service
-
 ## History
 
 This page states how the module works now. What changed when lives in [[pages/history/<module>]], newest first; never add dated activity bullets here.
 
-## Known violations / P1 debt
+## Related
 
-If the service has tracked structural debt (violations of conventions, pending refactors), list and link:
-
-- *Description* — tracked in [[pages/roadmap/<initiative>]]
-
-## Ownership
-
-- **Primary:** <person / team>
-- **Escalation:** see [[pages/overview/stakeholders]]
+REQUIRED. Projects this one references, projects that reference it, and its history page.

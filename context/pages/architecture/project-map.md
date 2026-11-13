@@ -76,7 +76,7 @@ Dotted and plain arrows from `web-app` and `electron`, and the dotted arrows to 
 | Api.Tests | `Microsoft.AspNetCore.Mvc.Testing` | 10.0.15 (`src/ServiceBusExplorer.Api.Tests/ServiceBusExplorer.Api.Tests.csproj#<PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.15" /`) |
 | Api.Tests | `xunit` / `xunit.runner.visualstudio` / `Microsoft.NET.Test.Sdk` / `coverlet.collector` | 2.9.3 / 2.8.2 / 17.14.2 / 6.0.4 (`src/ServiceBusExplorer.Api.Tests/ServiceBusExplorer.Api.Tests.csproj#<PackageReference Include="xunit" Version="2.9.3" />`, `src/ServiceBusExplorer.Api.Tests/ServiceBusExplorer.Api.Tests.csproj#<PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">`, `src/ServiceBusExplorer.Api.Tests/ServiceBusExplorer.Api.Tests.csproj#<PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.2" />`, `src/ServiceBusExplorer.Api.Tests/ServiceBusExplorer.Api.Tests.csproj#<PackageReference Include="coverlet.collector" Version="6.0.4">`) |
 
-The vendor SDKs (`Azure.*`, `RabbitMQ.Client`) are referenced by Core only; Api reaches them transitively. `ProviderVersion` in the two capability classes repeats the Azure and RabbitMQ package versions as strings (see Known gaps in [[pages/services/core]]).
+The vendor SDKs (`Azure.*`, `RabbitMQ.Client`) are referenced by Core only; Api reaches them transitively. `ProviderVersion` in the two capability classes repeats the Azure and RabbitMQ package versions as strings ([[pages/services/core/known-gaps-more]]).
 
 ## What each test project covers
 

@@ -7,11 +7,11 @@ while the lines are still in front of them.
 | What happened | Where it is recorded |
 |---|---|
 | Behaviour changed | A dated entry in `context/pages/history/<project>.md`: what it was, what it is, which tests changed on purpose |
-| The code a page describes changed | The project's service page, with its `updated` date and its `changes` note |
-| A test was added | The testing section of the project's service page, beside the tests of the same behaviour |
+| The code a page describes changed | The topic page that describes it, with its `updated` date and its `changes` note |
+| A test was added | The project's tests topic page, beside the tests of the same behaviour |
 | A decision was amended | A dated amendment in the decision page that names the earlier text it replaces; the earlier text stays |
 | A follow-up was closed | Its entry removed from `context/pages/roadmap/followups.md` |
-| A "Known gaps" entry was closed | Removed from the project page and from `context/pages/roadmap/followups.md`, in the same commit |
+| A "Known gaps" entry was closed | Removed from the project's `known-gaps` page and from `context/pages/roadmap/followups.md`, in the same commit |
 | Any of the above | One line at the top of `context/log.md` |
 
 A decision keeps its original text. The amendment is added below it, says which sentence of the
