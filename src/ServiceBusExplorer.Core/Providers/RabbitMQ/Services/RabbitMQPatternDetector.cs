@@ -80,7 +80,7 @@ public class RabbitMQPatternDetector
     /// Detects messaging pattern for a queue based on its configuration.
     /// </summary>
     /// <param name="queue">The queue to analyze</param>
-    /// <param>bindings">Bindings that connect to this queue</param>
+    /// <param name="bindings">Bindings that connect to this queue</param>
     /// <returns>Pattern information for the queue</returns>
     public QueuePatternInfo DetectQueuePattern(
         RabbitMQQueueInfo queue,

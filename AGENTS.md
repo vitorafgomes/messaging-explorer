@@ -15,9 +15,8 @@ Unit and web tests run in the project's container, never directly on the machine
 
 | To | Run |
 |---|---|
-| Build | `dotnet build ServiceBusExplorer.slnx` and read the summary line: nothing fails the build on a warning, and the count must be 0 |
-| Test the core | `tools/checks/in-docker.sh dotnet test src/ServiceBusExplorer.Core.Tests` |
-| Test the API | `tools/checks/in-docker.sh dotnet test src/ServiceBusExplorer.Api.Tests` |
+| Build | `dotnet build ServiceBusExplorer.slnx`, 0 warnings on the summary line; then `tools/checks/check-diagnostics.sh <touched .csproj>` clean |
+| Test every unit project | `tools/checks/in-docker.sh bash tools/checks/test-per-project.sh`, each with a count and 0 skipped |
 | Test one test | add `--filter "FullyQualifiedName~<Name>"` |
 | Integration tests | `dotnet test src/ServiceBusExplorer.IntegrationTests`, on the machine: they start brokers in Docker |
 | Web tests, in `web-app/` | `../tools/checks/in-docker.sh npm test -- --watch=false`. Never plain `npx vitest`: it has no Angular compiler |

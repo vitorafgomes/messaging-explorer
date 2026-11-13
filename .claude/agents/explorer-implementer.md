@@ -52,6 +52,7 @@ command run directly is denied, except the integration project, which needs Dock
 
 - `dotnet build ServiceBusExplorer.slnx` with `0 Warning(s)`. Read the summary line: nothing
   fails the build on a warning.
+- `tools/checks/check-diagnostics.sh <touched .csproj>`, clean, once per touched project.
 - `tools/checks/in-docker.sh` with each acceptance command from the plan. Record the exact
   totals; skipped is 0 in the .NET projects.
 - For a change under `web-app/**`, in `web-app/`: `../tools/checks/in-docker.sh npm test -- --watch=false`

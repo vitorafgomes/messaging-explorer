@@ -68,10 +68,11 @@ jobs:
       - name: Build
         run: dotnet build ServiceBusExplorer.slnx --configuration Release --no-restore
 
-      - name: Test
-        run: |
-          dotnet test src/ServiceBusExplorer.Core.Tests --configuration Release --no-build --verbosity normal
-          dotnet test src/ServiceBusExplorer.Api.Tests --configuration Release --no-build --verbosity normal
+      - name: Diagnostics at every severity
+        run: sh tools/checks/check-diagnostics.sh ServiceBusExplorer.slnx info Release
+
+      - name: Test, each project on its own
+        run: bash tools/checks/test-per-project.sh --configuration Release --no-build
 
   # ---------------------------------------------------------------------------
   # Integration - the providers against brokers in containers the run starts

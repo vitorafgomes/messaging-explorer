@@ -78,12 +78,14 @@ once on the owner's machine: a lane that starts brokers in Docker, or the end-to
 ## 5. Check
 
 - `dotnet build ServiceBusExplorer.slnx` with 0 warnings on the summary line (the build does not
-  fail on a warning), and `npm run build` in `web-app/` for a web change. This repo has no
-  format or analyzer check yet: do not claim one ran.
+  fail on a warning), and `npm run build` in `web-app/` for a web change.
+- `tools/checks/check-diagnostics.sh <touched .csproj>`, clean, one project per run: it rebuilds
+  with every analyzer and the documentation file on, which the plain build does not.
 - The test surface from `reference/test-surface.md`, with a count per project and 0 skipped. It
   runs once, at the end of the lane, and again only after a fix that touched code. A change to
   `ServiceBusExplorer.Core` runs both unit projects; a provider or broker call adds the
-  integration suite; a visible web change adds the end-to-end suite, once, at the end.
+  integration suite; a visible web change adds the end-to-end suite, once, at the end. Every
+  unit project at once: `tools/checks/in-docker.sh bash tools/checks/test-per-project.sh`.
 
 ## 6. Prove (Standard and Sensitive)
 

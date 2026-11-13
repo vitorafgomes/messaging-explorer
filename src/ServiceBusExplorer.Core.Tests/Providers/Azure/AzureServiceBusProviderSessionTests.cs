@@ -36,7 +36,7 @@ public class AzureServiceBusProviderSessionTests
         return receiver;
     }
 
-    /// <summary>A client whose accept hands out one mocked session receiver holding <paramref name="state"/>.</summary>
+    /// <summary>A client whose accept hands out one mocked session receiver holding the given state.</summary>
     private sealed class FakeSessionBroker
     {
         public Mock<ServiceBusClient> Client { get; } = new();
