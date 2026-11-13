@@ -5,8 +5,95 @@ const {
   normalizeUpdateChannel,
   applyUpdateChannel,
   waitForHealth,
-  stopProcess
+  stopProcess,
+  applicationMenuTemplate,
+  mainWindowOptions,
+  shellShortcut
 } = require('./shell-helpers');
+
+test('no File/Edit/View/Window/Help bar: no application menu on win32 and linux', () => {
+  assert.equal(applicationMenuTemplate('win32'), null);
+  assert.equal(applicationMenuTemplate('linux'), null);
+});
+
+test('copy and paste and Cmd+W keep working on macOS: darwin menu is appMenu, editMenu and a Window menu with minimize, zoom, close and front', () => {
+  assert.deepEqual(applicationMenuTemplate('darwin'), [
+    { role: 'appMenu' },
+    { role: 'editMenu' },
+    {
+      role: 'window',
+      submenu: [{ role: 'minimize' }, { role: 'zoom' }, { role: 'close' }, { type: 'separator' }, { role: 'front' }]
+    }
+  ]);
+});
+
+function key(code, modifiers = {}) {
+  return { type: 'keyDown', code, key: code, shift: false, control: false, alt: false, meta: false, isAutoRepeat: false, ...modifiers };
+}
+
+const devToolsKeys = {
+  win32: [key('F12'), key('KeyI', { control: true, shift: true })],
+  linux: [key('F12'), key('KeyI', { control: true, shift: true })],
+  darwin: [key('F12'), key('KeyI', { meta: true, alt: true })]
+};
+
+test('F11 toggles full screen on win32 and linux, in packaged and development builds', () => {
+  for (const platform of ['win32', 'linux']) {
+    for (const isDev of [false, true]) {
+      assert.equal(shellShortcut(key('F11'), { platform, isDev }), 'toggleFullScreen', `${platform}, isDev ${isDev}`);
+    }
+  }
+});
+
+test('F11 does nothing on darwin, where the zoom button and the system shortcut give full screen', () => {
+  for (const isDev of [false, true]) {
+    assert.equal(shellShortcut(key('F11'), { platform: 'darwin', isDev }), null, `isDev ${isDev}`);
+  }
+});
+
+test('a development build opens developer tools with F12 and Ctrl+Shift+I, or Cmd+Alt+I on darwin', () => {
+  for (const [platform, inputs] of Object.entries(devToolsKeys)) {
+    for (const input of inputs) {
+      assert.equal(shellShortcut(input, { platform, isDev: true }), 'toggleDevTools', `${platform} ${input.code}`);
+    }
+  }
+});
+
+test('a packaged build never opens developer tools', () => {
+  for (const [platform, inputs] of Object.entries(devToolsKeys)) {
+    for (const input of inputs) {
+      assert.equal(shellShortcut(input, { platform, isDev: false }), null, `${platform} ${input.code}`);
+    }
+  }
+});
+
+test('the shell leaves every other key to the page: key up, auto-repeat, Ctrl+Shift+I on darwin, Ctrl+Shift+D', () => {
+  assert.equal(shellShortcut({ ...key('F11'), type: 'keyUp' }, { platform: 'linux', isDev: true }), null);
+  assert.equal(shellShortcut(key('F11', { isAutoRepeat: true }), { platform: 'linux', isDev: true }), null);
+  assert.equal(shellShortcut(key('KeyI', { control: true, shift: true }), { platform: 'darwin', isDev: true }), null);
+  assert.equal(shellShortcut(key('KeyD', { control: true, shift: true }), { platform: 'win32', isDev: true }), null);
+});
+
+const windowPaths = { preload: '/app/electron/preload.js', icon: '/app/assets/icon.png' };
+
+test('window buttons not over the toolbar and the window drags: darwin window options carry no hiddenInset, trafficLightPosition or vibrancy', () => {
+  const options = mainWindowOptions({ ...windowPaths, prefersDark: false });
+  assert.equal('titleBarStyle' in options, false, 'titleBarStyle must not be set: hiddenInset removes the native title bar');
+  assert.equal('trafficLightPosition' in options, false, 'trafficLightPosition must not be set: it moves the window buttons into the page');
+  assert.equal('vibrancy' in options, false, 'vibrancy must not be set');
+  assert.notEqual(options.frame, false, 'the window keeps its native frame');
+  assert.deepEqual(options.webPreferences, {
+    nodeIntegration: false,
+    contextIsolation: true,
+    sandbox: true,
+    preload: '/app/electron/preload.js'
+  });
+});
+
+test('no blue flash: background follows the system theme', () => {
+  assert.equal(mainWindowOptions({ ...windowPaths, prefersDark: false }).backgroundColor, '#f9f9ff');
+  assert.equal(mainWindowOptions({ ...windowPaths, prefersDark: true }).backgroundColor, '#111318');
+});
 
 test('openExternal must not accept any URL scheme: http and https URLs are safe', () => {
   assert.equal(isSafeExternalUrl('https://github.com/vitorafgomes/messaging-explorer'), true);
