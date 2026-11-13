@@ -232,4 +232,18 @@ describe('TopicService', () => {
       expect(apiDelete.mock.calls).toStrictEqual([['topics/t%2F1/subscriptions/s%2F2/rules/physical-goods']]);
     });
   });
+
+  describe('a dead-letter peek of a subscription can leave the bodies out', () => {
+    it('includeBody=false is sent only when the caller asks for no bodies, on both dead-letter queues', () => {
+      service.peekDeadLetterMessages('sales', 'eu', 250, 10, false).subscribe();
+      service.peekDeadLetterMessages('sales', 'eu', 250, 10, true).subscribe();
+      service.peekTransferDeadLetterMessages('sales', 'eu', 250, 0, false).subscribe();
+
+      expect(apiGet.mock.calls.map(c => c[0])).toEqual([
+        'topics/sales/subscriptions/eu/deadletter?count=250&fromSequenceNumber=10&includeBody=false',
+        'topics/sales/subscriptions/eu/deadletter?count=250&fromSequenceNumber=10',
+        'topics/sales/subscriptions/eu/transferdeadletter?count=250&fromSequenceNumber=0&includeBody=false'
+      ]);
+    });
+  });
 });

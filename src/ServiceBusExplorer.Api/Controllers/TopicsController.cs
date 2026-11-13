@@ -347,29 +347,29 @@ public class TopicsController : ControllerBase
 
     [HttpGet("{topicName}/subscriptions/{subscriptionName}/messages")]
     public Task<ActionResult<IEnumerable<IMessage>>> PeekMessages(string topicName, string subscriptionName, [FromQuery] int count = 10) =>
-        Peek(topicName, subscriptionName, count, MessageSubQueue.Active, null);
+        Peek(topicName, subscriptionName, count, MessageSubQueue.Active, null, null);
 
     [HttpGet("{topicName}/subscriptions/{subscriptionName}/deadletter")]
-    public Task<ActionResult<IEnumerable<IMessage>>> PeekDeadLetterMessages(string topicName, string subscriptionName, [FromQuery] int count = 10, [FromQuery] string? fromSequenceNumber = null) =>
-        Peek(topicName, subscriptionName, count, MessageSubQueue.DeadLetter, fromSequenceNumber);
+    public Task<ActionResult<IEnumerable<IMessage>>> PeekDeadLetterMessages(string topicName, string subscriptionName, [FromQuery] int count = 10, [FromQuery] string? fromSequenceNumber = null, [FromQuery] string? includeBody = null) =>
+        Peek(topicName, subscriptionName, count, MessageSubQueue.DeadLetter, fromSequenceNumber, includeBody);
 
     [HttpGet("{topicName}/subscriptions/{subscriptionName}/transferdeadletter")]
-    public Task<ActionResult<IEnumerable<IMessage>>> PeekTransferDeadLetterMessages(string topicName, string subscriptionName, [FromQuery] int count = 10, [FromQuery] string? fromSequenceNumber = null) =>
-        Peek(topicName, subscriptionName, count, MessageSubQueue.TransferDeadLetter, fromSequenceNumber);
+    public Task<ActionResult<IEnumerable<IMessage>>> PeekTransferDeadLetterMessages(string topicName, string subscriptionName, [FromQuery] int count = 10, [FromQuery] string? fromSequenceNumber = null, [FromQuery] string? includeBody = null) =>
+        Peek(topicName, subscriptionName, count, MessageSubQueue.TransferDeadLetter, fromSequenceNumber, includeBody);
 
-    private async Task<ActionResult<IEnumerable<IMessage>>> Peek(string topicName, string subscriptionName, int count, MessageSubQueue subQueue, string? fromSequenceNumber)
+    private async Task<ActionResult<IEnumerable<IMessage>>> Peek(string topicName, string subscriptionName, int count, MessageSubQueue subQueue, string? fromSequenceNumber, string? includeBody)
     {
-        if (count < 1) count = 1;
-        if (count > 1000) count = 1000;
+        count = Math.Clamp(count, 1, 1000);
 
         var provider = GetProvider();
         if (provider == null) return NoProviderConnected();
         if (EntityAdministrationResults.PeekPosition(provider, fromSequenceNumber, out var from) is { } refused) return refused;
+        if (EntityAdministrationResults.IncludeBody(includeBody, out var withBody) is { } badBody) return badBody;
         if (EntityAdministrationResults.SubQueueNotSupported(provider, subQueue) is { } notSupported) return notSupported;
 
         try
         {
-            var messages = await provider.PeekMessagesAsync(topicName, count, subQueue, subscriptionName, from, HttpContext.RequestAborted);
+            var messages = await provider.PeekMessagesAsync(topicName, count, subQueue, subscriptionName, from, withBody, HttpContext.RequestAborted);
             return Ok(messages);
         }
         catch (EntityDisabledException)

@@ -720,7 +720,7 @@ public sealed class AzureServiceBusProviderTests(AzureServiceBusFixture fixture)
         await fixture.Admin.UpdateQueueAsync(properties);
     }
 
-    private async Task<List<(string Body, string State)>> PeekBodiesAndStatesAsync(string queue) =>
+    private async Task<List<(string? Body, string State)>> PeekBodiesAndStatesAsync(string queue) =>
         (await _messaging.PeekMessagesAsync(queue, 10)).Select(m => (m.Body, m.State)).ToList();
 
     [Fact]

@@ -193,4 +193,18 @@ describe('QueueService', () => {
       expect(apiPatch.mock.calls[0][1]).toStrictEqual({ maxDeliveryCount: 10, forwardTo: '' });
     });
   });
+
+  describe('a dead-letter peek can leave the bodies out', () => {
+    it('includeBody=false is sent only when the caller asks for no bodies, on both dead-letter queues', () => {
+      service.peekDeadLetterMessages('orders', 250, 10, false).subscribe();
+      service.peekDeadLetterMessages('orders', 250, 10, true).subscribe();
+      service.peekTransferDeadLetterMessages('orders', 250, 0, false).subscribe();
+
+      expect(apiGet.mock.calls.map(c => c[0])).toEqual([
+        'queues/orders/deadletter?count=250&fromSequenceNumber=10&includeBody=false',
+        'queues/orders/deadletter?count=250&fromSequenceNumber=10',
+        'queues/orders/transferdeadletter?count=250&fromSequenceNumber=0&includeBody=false'
+      ]);
+    });
+  });
 });

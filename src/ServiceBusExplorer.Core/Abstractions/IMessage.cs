@@ -26,7 +26,7 @@ public interface IMessage
     /// <summary>
     /// The message body as a string representation.
     /// </summary>
-    string Body { get; }
+    string? Body { get; }
 
     /// <summary>
     /// The type of the message body (e.g., "Text", "Binary", "Json").

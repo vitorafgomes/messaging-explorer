@@ -387,4 +387,59 @@ public class MessageRouteTests
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
+
+    [Theory]
+    [MemberData(nameof(DeadLetterPeekRoutes))]
+    public async Task A_dead_letter_peek_with_includeBody_false_asks_the_provider_for_no_bodies_and_answers_body_null(string path, MessageSubQueue subQueue)
+    {
+        var answered = await SendAsync("GET", path + "?count=5&includeBody=false", null, (m, args) => m.Name == nameof(IMessagingProvider.PeekMessagesAsync)
+            ? Task.FromResult<IEnumerable<IMessage>>(new List<MessageInfo>
+            {
+                new() { SequenceNumber = 7, Body = args.OfType<bool>().Single() ? "order" : null, Subject = "created", DeadLetterReason = "rejected" }
+            })
+            : null);
+
+        Assert.Equal(HttpStatusCode.OK, answered.Status);
+        var call = Assert.Single(answered.Calls);
+        Assert.Equal((5, subQueue), (call.Args.OfType<int>().Single(), call.Args.OfType<MessageSubQueue>().Single()));
+        Assert.False(Assert.Single(call.Args.OfType<bool>()));
+        using var json = JsonDocument.Parse(answered.Body);
+        var message = Assert.Single(json.RootElement.EnumerateArray().ToList());
+        Assert.Equal((JsonValueKind.Null, 7L, "created", "rejected"),
+            (message.GetProperty("body").ValueKind, message.GetProperty("sequenceNumber").GetInt64(), message.GetProperty("subject").GetString(), message.GetProperty("deadLetterReason").GetString()));
+    }
+
+    [Theory]
+    [InlineData("/api/queues/orders/deadletter?includeBody=true")]
+    [InlineData("/api/queues/orders/deadletter")]
+    [InlineData("/api/queues/orders/deadletter?includeBody=")]
+    [InlineData("/api/queues/orders/transferdeadletter")]
+    [InlineData(Subscription + "/deadletter")]
+    [InlineData(Subscription + "/transferdeadletter?includeBody=true")]
+    [InlineData("/api/queues/orders/messages")]
+    [InlineData(Subscription + "/messages")]
+    public async Task A_peek_with_includeBody_true_or_absent_asks_the_provider_for_the_bodies_as_before(string path)
+    {
+        var answered = await SendAsync("GET", path, null, ProviderAnswers);
+
+        Assert.Equal(HttpStatusCode.OK, answered.Status);
+        Assert.True(Assert.Single(Assert.Single(answered.Calls).Args.OfType<bool>()));
+        Assert.Contains("\"body\":\"order\"", answered.Body);
+    }
+
+    [Theory]
+    [InlineData("/api/queues/orders/deadletter", "False")]
+    [InlineData("/api/queues/orders/transferdeadletter", "0")]
+    [InlineData(Subscription + "/deadletter", "yes")]
+    [InlineData(Subscription + "/transferdeadletter", "1")]
+    [InlineData("/api/queues/orders/deadletter", "%20false")]
+    [InlineData("/api/queues/orders/deadletter", "TRUE")]
+    public async Task A_dead_letter_peek_whose_includeBody_is_not_true_or_false_answers_400_naming_the_field_and_is_never_called(string path, string value)
+    {
+        var answered = await SendAsync("GET", $"{path}?includeBody={value}", null, ProviderAnswers);
+
+        Assert.Equal(HttpStatusCode.BadRequest, answered.Status);
+        Assert.Equal("""{"message":"includeBody must be true or false."}""", answered.Body);
+        Assert.Empty(answered.Calls);
+    }
 }

@@ -13,6 +13,15 @@ export function isPossibleDuplicate(failure: BatchOperationFailure): boolean {
 }
 
 /**
+ * True when the provider did not find the message within the window it scans from the head of the
+ * queue; nothing was sent for it.
+ */
+export function isNotFoundInScanWindow(failure: BatchOperationFailure): boolean {
+  // ponytail: matches the text the Azure provider writes for a target beyond its scan window; replace with a field once BatchOperationFailure carries one.
+  return /not found within scan window/i.test(failure.error);
+}
+
+/**
  * Tab type for bulk operations: the sub-queue a tab lists. Each has its own selection.
  */
 export type TabType = SubQueue;

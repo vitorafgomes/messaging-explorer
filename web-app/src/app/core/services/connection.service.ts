@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
-import { Observable, BehaviorSubject } from 'rxjs';
-import { tap } from 'rxjs/operators';
+import { Observable, BehaviorSubject, from, throwError } from 'rxjs';
+import { catchError, switchMap, tap } from 'rxjs/operators';
 import { ApiService } from './api.service';
 import { apiPath } from './api-path';
 import { ServiceBusConnection, ConnectionStatus, AzureAuthType } from '../models';
@@ -64,6 +64,8 @@ export class ConnectionService {
 
   /** The stored connection this app connected; null when none, or when the status came from the API alone. */
   currentConnectionId: string | null = null;
+
+  private beforeSwitch: () => Promise<void> = () => Promise.resolve();
 
   constructor() {
     this.refreshStatus();
@@ -140,8 +142,27 @@ export class ConnectionService {
     return this.testConnection(request);
   }
 
+  /**
+   * Registers what must end before the API switches or drops its broker connection. It runs when
+   * connect, disconnect or clearAllData is called, and the request waits for it. When that request
+   * fails the status is read again, because the API may have switched before it failed.
+   */
+  onBeforeSwitch(hook: () => Promise<void>): void {
+    this.beforeSwitch = hook;
+  }
+
+  private afterSwitchHook<T>(request: () => Observable<T>): Observable<T> {
+    return from(this.beforeSwitch()).pipe(
+      switchMap(request),
+      catchError(error => {
+        this.refreshStatus();
+        return throwError(() => error);
+      })
+    );
+  }
+
   connect(id: string): Observable<ConnectionStatus> {
-    return this.api.post<ConnectionStatus>(apiPath`connections/${id}/connect`, {}).pipe(
+    return this.afterSwitchHook(() => this.api.post<ConnectionStatus>(apiPath`connections/${id}/connect`, {})).pipe(
       tap(status => {
         this.currentConnectionId = status.connected ? id : null;
         this.connectionStatusSubject.next(status);
@@ -150,7 +171,7 @@ export class ConnectionService {
   }
 
   disconnect(): Observable<ConnectionStatus> {
-    return this.api.post<ConnectionStatus>('connections/disconnect', {}).pipe(
+    return this.afterSwitchHook(() => this.api.post<ConnectionStatus>('connections/disconnect', {})).pipe(
       tap(status => {
         this.currentConnectionId = null;
         this.connectionStatusSubject.next(status);
@@ -243,6 +264,6 @@ export class ConnectionService {
   }
 
   clearAllData(): Observable<{ message: string; connectionsDeleted: number; groupsDeleted: number }> {
-    return this.api.delete<{ message: string; connectionsDeleted: number; groupsDeleted: number }>('connections/clear-all');
+    return this.afterSwitchHook(() => this.api.delete<{ message: string; connectionsDeleted: number; groupsDeleted: number }>('connections/clear-all'));
   }
 }

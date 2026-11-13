@@ -5,7 +5,7 @@ import { BatchOperationResult, MessageInfo } from '../models';
 import { QueueService } from './queue.service';
 import { TopicService } from './topic.service';
 import { ConnectionService } from './connection.service';
-import { isPossibleDuplicate } from './bulk-operations.service';
+import { isNotFoundInScanWindow, isPossibleDuplicate } from './bulk-operations.service';
 import { messageCallFailure } from '../../features/messages/message-call-failure';
 
 /** The entity and dead-letter sub-queue a run resubmits from. */
@@ -90,7 +90,7 @@ export interface ResubmitRunReport {
 
 interface RunBroker {
   count(): Observable<number>;
-  peek(fromSequenceNumber: number, count: number): Observable<MessageInfo[]>;
+  peek(fromSequenceNumber: number, count: number, includeBody: boolean): Observable<MessageInfo[]>;
   resubmit(sequenceNumbers: number[]): Observable<BatchOperationResult>;
 }
 
@@ -106,9 +106,9 @@ function keyOf(target: ResubmitRunTarget): string {
 
 /**
  * One automatic resubmit of a dead-letter queue. It reads the dead-letter count N and the start
- * time once, then peeks onward from a cursor, never more than N messages in total, leaves alone
- * every message enqueued at or after the start and every sequence number it already handled, and
- * resubmits the matching ones per batch. Failed messages and possible duplicates are recorded by
+ * time once, then peeks onward from a cursor that only moves forward, never more than N messages
+ * in total, leaves alone every message enqueued at or after the start, and resubmits the matching
+ * ones per batch. Failed messages and possible duplicates are recorded by
  * sequence number and left behind; a possible duplicate is never sent again.
  */
 export class ResubmitRun {
@@ -129,7 +129,6 @@ export class ResubmitRun {
   private resubmitted = 0;
   private cursor = 0;
   private endedAt: number | null = null;
-  private readonly handled = new Set<number>();
   private readonly reasons = new Map<string, ReasonTotals>();
   private readonly samples: Array<{ t: number; read: number }> = [];
   private readonly stop$ = new ReplaySubject<void>(1);
@@ -137,6 +136,7 @@ export class ResubmitRun {
   private stopReason = 'Stopped by the user.';
   private pauseRequested = false;
   private wake: (() => void) | null = null;
+  private readonly textPattern: RegExp | null;
 
   constructor(
     readonly target: ResubmitRunTarget,
@@ -149,8 +149,10 @@ export class ResubmitRun {
     retryOf?: LeftBehind[]
   ) {
     this.startedAt = now();
+    this.textPattern = options.text ? new RegExp(options.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') : null;
     this.samples.push({ t: this.startedAt, read: 0 });
-    this.done = retryOf ? this.retryList(retryOf) : this.scan();
+    this.done = (retryOf ? this.retryList(retryOf) : this.scan())
+      .catch(() => this.end('failed', 'The run stopped on an unexpected error.'));
   }
 
   isActive(): boolean {
@@ -241,7 +243,7 @@ export class ResubmitRun {
       const count = Math.min(this.options.batchSize, this.total - this.read);
       let answer: MessageInfo[] | null | typeof STOPPED;
       try {
-        answer = await this.call(this.broker.peek(this.cursor, count));
+        answer = await this.call(this.broker.peek(this.cursor, count, this.textPattern !== null));
       } catch (error) {
         return this.end('failed', messageCallFailure(error, 'The dead-letter peek failed'));
       }
@@ -255,15 +257,14 @@ export class ResubmitRun {
 
       const from = this.cursor;
       this.read += batch.length;
-      this.cursor = Math.max(from, batch[batch.length - 1].sequenceNumber + 1);
+      this.cursor = batch.reduce((next, message) => Math.max(next, message.sequenceNumber + 1), from);
       const targets = new Map<number, string>();
       let olderThanStart = 0;
       for (const message of batch) {
-        if (message.sequenceNumber < from || this.handled.has(message.sequenceNumber)) {
+        if (message.sequenceNumber < from) {
           continue;
         }
-        this.handled.add(message.sequenceNumber);
-        if (new Date(message.enqueuedTime).getTime() >= this.startedAt) {
+        if (!(new Date(message.enqueuedTime).getTime() < this.startedAt)) {
           continue;
         }
         olderThanStart++;
@@ -321,7 +322,7 @@ export class ResubmitRun {
       this.end('stopped', `${this.stopReason} The ${targets.size} messages in flight may have been sent and are reported as possible duplicates.`);
       return false;
     }
-    if (!answer || !Array.isArray(answer.failures)) {
+    if (!answer || !Array.isArray(answer.failures) || !answer.failures.every(f => typeof f?.sequenceNumber === 'number' && typeof f?.error === 'string')) {
       this.unknownOutcome(targets, 'The resubmit answer could not be read; this message may have been sent.');
       this.end('failed', `The resubmit answer could not be read. Its ${targets.size} messages are reported as possible duplicates.`);
       return false;
@@ -353,6 +354,11 @@ export class ResubmitRun {
     }
     this.publish();
 
+    const notFound = answer.failures.filter(failure => targets.has(failure.sequenceNumber) && isNotFoundInScanWindow(failure)).length;
+    if (failedNow.length === targets.size && notFound === targets.size) {
+      this.end('failed', 'The head of the dead-letter queue holds the messages this run left behind, so the resubmit cannot reach further. Nothing was sent from the last batch.');
+      return false;
+    }
     if (this.options.stopAtFirstFailure && (failedNow.length > 0 || duplicatesNow.length > 0)) {
       const parts = [
         failedNow.length > 0 ? `failed: ${failedNow.join(', ')}` : '',
@@ -372,15 +378,10 @@ export class ResubmitRun {
   }
 
   private matches(message: MessageInfo): boolean {
-    const { reason, text } = this.options;
-    if (reason && message.deadLetterReason !== reason) {
+    if (this.options.reason && message.deadLetterReason !== this.options.reason) {
       return false;
     }
-    if (!text) {
-      return true;
-    }
-    const needle = text.toLowerCase();
-    return (message.subject ?? '').toLowerCase().includes(needle) || (message.body ?? '').toLowerCase().includes(needle);
+    return !this.textPattern || this.textPattern.test(message.subject ?? '') || this.textPattern.test(message.body ?? '');
   }
 
   private totalsOf(reason: string): ReasonTotals {
@@ -418,7 +419,6 @@ export class ResubmitRun {
     this.status = status;
     this.message = message;
     this.endedAt = this.now();
-    this.handled.clear();
     this.publish();
   }
 
@@ -459,6 +459,8 @@ export class ResubmitRunService {
   private readonly connections = inject(ConnectionService);
   private readonly runs = signal<ReadonlyMap<string, ResubmitRun>>(new Map());
   private generation = 0;
+  /** Set from a connect, disconnect or clear of all data until the API's status arrives; no run starts meanwhile. */
+  private switching = false;
 
   now = () => Date.now();
 
@@ -466,16 +468,34 @@ export class ResubmitRunService {
   readonly activeRuns = computed(() => [...this.runs().values()].filter(run => run.isActive()));
 
   constructor() {
+    this.connections.onBeforeSwitch(() => {
+      this.switching = true;
+      return this.stopAll('The connection is changing, so the run was stopped.');
+    });
     this.connections.connectionStatus$
       .pipe(skip(1))
       .subscribe(() => {
-        this.generation++;
-        this.runs().forEach(run => run.stop('The connection changed, so the run was stopped.'));
+        this.switching = false;
+        void this.stopAll('The connection changed, so the run was stopped.');
       });
   }
 
-  /** Starts a run, or returns the one already active on that entity and sub-queue. */
-  start(target: ResubmitRunTarget, options: ResubmitRunOptions): ResubmitRun {
+  /** Stops every active run and resolves once each has ended; a run from before never acts again. */
+  private stopAll(reason: string): Promise<void> {
+    this.generation++;
+    const active = this.activeRuns();
+    active.forEach(run => run.stop(reason));
+    return Promise.allSettled(active.map(run => run.done)).then(() => undefined);
+  }
+
+  /**
+   * Starts a run, or returns the one already active on that entity and sub-queue. While the
+   * connection is changing it starts nothing and answers undefined.
+   */
+  start(target: ResubmitRunTarget, options: ResubmitRunOptions): ResubmitRun | undefined {
+    if (this.switching) {
+      return undefined;
+    }
     const active = this.find(target);
     if (active?.isActive()) {
       return active;
@@ -485,7 +505,7 @@ export class ResubmitRunService {
 
   /** A finished run can be retried only under the connection it ran on. */
   canRetry(run: ResubmitRun): boolean {
-    return !run.isActive() && run.generation === this.generation && run.failed.length > 0;
+    return !this.switching && !run.isActive() && run.generation === this.generation && run.failed.length > 0;
   }
 
   /**
@@ -531,9 +551,9 @@ export class ResubmitRunService {
         count: () => this.queues.getQueue(name).pipe(
           map(queue => (transfer ? queue.transferDeadLetterMessageCount : queue.deadLetterMessageCount) ?? 0)
         ),
-        peek: (from, count) => transfer
-          ? this.queues.peekTransferDeadLetterMessages(name, count, from)
-          : this.queues.peekDeadLetterMessages(name, count, from),
+        peek: (from, count, includeBody) => transfer
+          ? this.queues.peekTransferDeadLetterMessages(name, count, from, includeBody)
+          : this.queues.peekDeadLetterMessages(name, count, from, includeBody),
         resubmit: numbers => transfer
           ? this.queues.resubmitTransferDeadLetterMessages(name, numbers)
           : this.queues.resubmitDeadLetterMessages(name, numbers)
@@ -544,9 +564,9 @@ export class ResubmitRunService {
       count: () => this.topics.getSubscription(topic, name).pipe(
         map(subscription => (transfer ? subscription.transferDeadLetterMessageCount : subscription.deadLetterMessageCount) ?? 0)
       ),
-      peek: (from, count) => transfer
-        ? this.topics.peekTransferDeadLetterMessages(topic, name, count, from)
-        : this.topics.peekDeadLetterMessages(topic, name, count, from),
+      peek: (from, count, includeBody) => transfer
+        ? this.topics.peekTransferDeadLetterMessages(topic, name, count, from, includeBody)
+        : this.topics.peekDeadLetterMessages(topic, name, count, from, includeBody),
       resubmit: numbers => transfer
         ? this.topics.resubmitTransferDeadLetterMessages(topic, name, numbers)
         : this.topics.resubmitDeadLetterMessages(topic, name, numbers)

@@ -609,4 +609,28 @@ public class AzureServiceBusProviderSubQueueTests
     {
         Assert.True(new AzureServiceBusProvider().Capabilities.SupportsPeekFromSequenceNumber);
     }
+
+    [Theory]
+    [InlineData(MessageSubQueue.DeadLetter)]
+    [InlineData(MessageSubQueue.TransferDeadLetter)]
+    public async Task A_peek_without_bodies_answers_each_message_with_a_null_body_and_everything_else_as_with_bodies(MessageSubQueue subQueue)
+    {
+        var broker = new FakeBroker();
+        var enqueued = new DateTimeOffset(2026, 11, 13, 9, 30, 0, TimeSpan.Zero);
+        broker.Receiver.Setup(r => r.PeekMessagesAsync(It.IsAny<int>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((int _, long? from, CancellationToken _) => from is null or 1
+                ? Batch(ServiceBusModelFactory.ServiceBusReceivedMessage(body: BinaryData.FromString("payload"), subject: "order", sequenceNumber: 1,
+                    properties: new Dictionary<string, object> { ["DeadLetterReason"] = "rejected" }, enqueuedTime: enqueued))
+                : Batch());
+
+        var withBody = Assert.Single(await broker.Provider().PeekMessagesAsync("orders", 10, subQueue));
+        var withoutBody = Assert.Single(await broker.Provider().PeekMessagesAsync("orders", 10, subQueue, includeBody: false));
+
+        Assert.Equal("payload", withBody.Body);
+        Assert.Null(withoutBody.Body);
+        Assert.Equal((1L, enqueued, "rejected", "order", 7L, true),
+            (withoutBody.SequenceNumber, withoutBody.EnqueuedTime, withoutBody.DeadLetterReason, withoutBody.Subject, withoutBody.SizeInBytes, withoutBody.IsDeadLettered));
+        Assert.Equal((withBody.SequenceNumber, withBody.EnqueuedTime, withBody.DeadLetterReason, withBody.Subject, withBody.SizeInBytes),
+            (withoutBody.SequenceNumber, withoutBody.EnqueuedTime, withoutBody.DeadLetterReason, withoutBody.Subject, withoutBody.SizeInBytes));
+    }
 }

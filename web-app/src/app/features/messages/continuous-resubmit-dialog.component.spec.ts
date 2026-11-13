@@ -41,7 +41,7 @@ describe('ContinuousResubmitDialogComponent', () => {
         { provide: QueueService, useValue: queueService },
         { provide: TopicService, useValue: {} },
         { provide: ProviderService, useValue: { capabilities: signal(capabilities) } },
-        { provide: ConnectionService, useValue: { connectionStatus$: of({ connected: true }), currentTarget: 'sample.example.net' } },
+        { provide: ConnectionService, useValue: { connectionStatus$: of({ connected: true }), currentTarget: 'sample.example.net', onBeforeSwitch: vi.fn() } },
         { provide: MessageExportService, useValue: exporter }
       ]
     });
@@ -153,7 +153,7 @@ describe('ContinuousResubmitDialogComponent', () => {
       await component.start();
       await component.run()!.done;
 
-      expect(queueService.peekDeadLetterMessages.mock.calls[0]).toEqual(['orders', 3, 0]);
+      expect(queueService.peekDeadLetterMessages.mock.calls[0]).toEqual(['orders', 3, 0, false]);
       expect(TestBed.inject(ResubmitRunService).find(component.target)).toBe(component.run());
       expect(component.run()!.progress()).toMatchObject({ status: 'completed', resubmitted: 3 });
     });
@@ -259,6 +259,68 @@ describe('ContinuousResubmitDialogComponent', () => {
       expect(text).toContain(AT_LEAST_ONCE);
       expect(text).toContain('Failed, not sent. Not found within scan window');
       expect(text).toContain('Retry the 1 failed');
+    });
+  });
+
+  describe('the batch size of a run', () => {
+    it('a run starts at 250 per batch, what the server reads per scan, and says that a smaller batch costs the broker more; the head-of-queue loop keeps 10', () => {
+      capabilities = { supportsPeekFromSequenceNumber: true };
+      configure();
+      const fixture = TestBed.createComponent(ContinuousResubmitDialogComponent);
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.batchSize).toBe(250);
+      expect(fixture.nativeElement.textContent).toContain('A smaller batch costs the broker more scans');
+
+      TestBed.resetTestingModule();
+      capabilities = null;
+      configure();
+      expect(TestBed.createComponent(ContinuousResubmitDialogComponent).componentInstance.batchSize).toBe(10);
+    });
+  });
+
+  describe('the left-behind table keeps its rows while the run goes on', () => {
+    it('a row of a message left behind is the same element after the next batch, not drawn again', async () => {
+      capabilities = { supportsPeekFromSequenceNumber: true };
+      const second = new Subject<MessageInfo[]>();
+      queueService.peekDeadLetterMessages = vi.fn().mockReturnValueOnce(of(old(1, 2))).mockReturnValueOnce(second).mockReturnValue(of([]));
+      queueService.resubmitDeadLetterMessages
+        .mockReturnValueOnce(of({ success: false, successCount: 1, failureCount: 1, failures: [{ sequenceNumber: 2, error: 'Not found within scan window' }] }))
+        .mockReturnValue(of(ok(2)));
+      configure();
+      const fixture = TestBed.createComponent(ContinuousResubmitDialogComponent);
+      fixture.componentInstance.batchSize = 2;
+      await fixture.componentInstance.start();
+      await flush();
+      fixture.detectChanges();
+      const row = () => Array.from<HTMLElement>(fixture.nativeElement.querySelectorAll('tr.mat-mdc-row')).find(tr => tr.textContent?.includes('Not found'));
+      const before = row();
+
+      second.next(old(3, 2));
+      second.complete();
+      await fixture.componentInstance.run()!.done;
+      fixture.detectChanges();
+
+      expect(before).toBeDefined();
+      expect(fixture.componentInstance.run()!.progress().read).toBe(3);
+      expect(row()).toBe(before);
+    });
+  });
+
+  describe('no run starts while the connection is changing', () => {
+    it('Start during a connect says so and reads nothing from the broker', async () => {
+      capabilities = { supportsPeekFromSequenceNumber: true };
+      configure();
+      const fixture = TestBed.createComponent(ContinuousResubmitDialogComponent);
+      const connection = TestBed.inject(ConnectionService) as unknown as { onBeforeSwitch: ReturnType<typeof vi.fn> };
+      await connection.onBeforeSwitch.mock.calls[0][0]();
+
+      await fixture.componentInstance.start();
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.run()).toBeUndefined();
+      expect(queueService.getQueue).not.toHaveBeenCalled();
+      expect(fixture.nativeElement.textContent).toContain('The connection is changing, so no run was started.');
     });
   });
 });

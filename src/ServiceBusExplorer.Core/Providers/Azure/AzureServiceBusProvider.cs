@@ -1153,14 +1153,14 @@ public class AzureServiceBusProvider : IMessagingProvider
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<IMessage>> PeekMessagesAsync(string entityName, int count = 10, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, long? fromSequenceNumber = null, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<IMessage>> PeekMessagesAsync(string entityName, int count = 10, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, long? fromSequenceNumber = null, bool includeBody = true, CancellationToken cancellationToken = default)
     {
         EnsureConnected();
 
         await using var receiver = CreateReceiver(_client!, entityName, subscriptionName, subQueue);
         var messages = await RefuseDisabledAsync(() => PeekCoreAsync(receiver, count, fromSequenceNumber, cancellationToken));
 
-        return messages.Select(m => MapToMessageInfo(m, subQueue != MessageSubQueue.Active));
+        return messages.Select(m => MapToMessageInfo(m, subQueue != MessageSubQueue.Active, includeBody));
     }
 
     /// <summary>
@@ -2230,12 +2230,12 @@ public class AzureServiceBusProvider : IMessagingProvider
         return message;
     }
 
-    internal static MessageInfo MapToMessageInfo(ServiceBusReceivedMessage message, bool isDeadLettered)
+    internal static MessageInfo MapToMessageInfo(ServiceBusReceivedMessage message, bool isDeadLettered, bool includeBody = true)
     {
-        string body;
+        string? body;
         try
         {
-            body = message.Body.ToString();
+            body = includeBody ? message.Body.ToString() : null;
         }
         catch
         {

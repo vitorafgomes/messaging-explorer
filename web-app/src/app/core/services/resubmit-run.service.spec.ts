@@ -1,9 +1,10 @@
 import { TestBed } from '@angular/core/testing';
 import { BehaviorSubject, Observable, Subject, of, throwError } from 'rxjs';
-import { ResubmitRunService, ResubmitRunTarget } from './resubmit-run.service';
+import { ResubmitRun, ResubmitRunService, ResubmitRunTarget } from './resubmit-run.service';
 import { QueueService } from './queue.service';
 import { TopicService } from './topic.service';
 import { ConnectionService } from './connection.service';
+import { ApiService } from './api.service';
 import { BatchOperationResult, MessageInfo } from '../models';
 
 const START = Date.parse('2026-11-12T09:00:00Z');
@@ -79,7 +80,7 @@ describe('ResubmitRunService', () => {
       providers: [
         { provide: QueueService, useValue: queue },
         { provide: TopicService, useValue: topic },
-        { provide: ConnectionService, useValue: { connectionStatus$: status.asObservable(), get currentTarget() { return status.value.namespace; } } }
+        { provide: ConnectionService, useValue: { connectionStatus$: status.asObservable(), get currentTarget() { return status.value.namespace; }, onBeforeSwitch: vi.fn() } }
       ]
     });
     service = TestBed.inject(ResubmitRunService);
@@ -98,7 +99,7 @@ describe('ResubmitRunService', () => {
         .mockReturnValue(of([]));
       queue.resubmitDeadLetterMessages.mockReturnValueOnce(of(result(2, [[2, NOT_FOUND]])));
 
-      const run = service.start(ORDERS, { batchSize: 3, stopAtFirstFailure: false });
+      const run = service.start(ORDERS, { batchSize: 3, stopAtFirstFailure: false })!;
       await run.done;
 
       expect(peekedFrom()).toEqual([0, 4, 6]);
@@ -111,7 +112,7 @@ describe('ResubmitRunService', () => {
       queue.peekDeadLetterMessages.mockReturnValueOnce(of(range(1, 3))).mockReturnValue(of(range(4, 3)));
       queue.resubmitDeadLetterMessages.mockReturnValueOnce(of(result(2, [[3, NOT_FOUND]])));
 
-      const run = service.start(ORDERS, { batchSize: 3, stopAtFirstFailure: true });
+      const run = service.start(ORDERS, { batchSize: 3, stopAtFirstFailure: true })!;
       await run.done;
 
       expect(queue.peekDeadLetterMessages).toHaveBeenCalledTimes(1);
@@ -128,7 +129,7 @@ describe('ResubmitRunService', () => {
         .mockReturnValue(of([]));
       queue.resubmitDeadLetterMessages.mockReturnValueOnce(of(result(2, [[2, DUPLICATE]])));
 
-      const run = service.start(ORDERS, { batchSize: 3, stopAtFirstFailure: false });
+      const run = service.start(ORDERS, { batchSize: 3, stopAtFirstFailure: false })!;
       await run.done;
 
       expect(resubmitted()).toEqual([[1, 2, 3], [4, 5]]);
@@ -146,7 +147,7 @@ describe('ResubmitRunService', () => {
         .mockReturnValueOnce(of([msg(5, { enqueuedTime: AFTER.toISOString() as unknown as Date })]))
         .mockReturnValue(of(range(6, 2)));
 
-      const run = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false });
+      const run = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false })!;
       await run.done;
 
       expect(resubmitted()).toEqual([[1, 2], [4]]);
@@ -165,7 +166,7 @@ describe('ResubmitRunService', () => {
         return of(batch);
       });
 
-      const run = service.start(ORDERS, { batchSize: 3, stopAtFirstFailure: false });
+      const run = service.start(ORDERS, { batchSize: 3, stopAtFirstFailure: false })!;
       await run.done;
 
       expect(queue.peekDeadLetterMessages.mock.calls.map(call => call[1])).toEqual([3, 2]);
@@ -176,7 +177,7 @@ describe('ResubmitRunService', () => {
     it('an API that ignores the position and answers the head again ends the run instead of resending it', async () => {
       queue.peekDeadLetterMessages.mockReturnValue(of(range(1, 3)));
 
-      const run = service.start(ORDERS, { batchSize: 3, stopAtFirstFailure: false });
+      const run = service.start(ORDERS, { batchSize: 3, stopAtFirstFailure: false })!;
       await run.done;
 
       expect(resubmitted()).toEqual([[1, 2, 3]]);
@@ -187,7 +188,7 @@ describe('ResubmitRunService', () => {
     it('an empty dead-letter queue at the start ends the run without a peek', async () => {
       deadLetterCount(0);
 
-      const run = service.start(ORDERS, { batchSize: 3, stopAtFirstFailure: false });
+      const run = service.start(ORDERS, { batchSize: 3, stopAtFirstFailure: false })!;
       await run.done;
 
       expect(queue.peekDeadLetterMessages).not.toHaveBeenCalled();
@@ -201,7 +202,7 @@ describe('ResubmitRunService', () => {
       queue.peekDeadLetterMessages.mockReturnValueOnce(of(range(1, 2))).mockReturnValueOnce(of(range(3, 1))).mockReturnValue(of([]));
       queue.resubmitDeadLetterMessages.mockReturnValueOnce(answer);
 
-      const run = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false });
+      const run = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false })!;
       await flush();
       run.pause();
       answer.next(ok(2));
@@ -223,7 +224,7 @@ describe('ResubmitRunService', () => {
       queue.peekDeadLetterMessages.mockReturnValue(of(range(1, 2)));
       queue.resubmitDeadLetterMessages.mockReturnValue(new Observable<BatchOperationResult>(() => () => { aborted = true; }));
 
-      const run = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false });
+      const run = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false })!;
       await flush();
       run.stop();
       await flush();
@@ -241,7 +242,7 @@ describe('ResubmitRunService', () => {
       let aborted = false;
       queue.peekDeadLetterMessages.mockReturnValue(new Observable<MessageInfo[]>(() => () => { aborted = true; }));
 
-      const run = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false });
+      const run = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false })!;
       await flush();
       run.stop();
       await flush();
@@ -256,7 +257,7 @@ describe('ResubmitRunService', () => {
       queue.peekDeadLetterMessages.mockReturnValue(of(range(1, 2)));
       queue.resubmitDeadLetterMessages.mockReturnValueOnce(answer);
 
-      const run = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false });
+      const run = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false })!;
       await flush();
       run.pause();
       answer.next(ok(2));
@@ -273,7 +274,7 @@ describe('ResubmitRunService', () => {
     it('a change of connection stops every active run, so a run never goes on against another broker', async () => {
       let aborted = false;
       queue.peekDeadLetterMessages.mockReturnValue(new Observable<MessageInfo[]>(() => () => { aborted = true; }));
-      const run = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false });
+      const run = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false })!;
       await flush();
 
       status.next({ connected: true, namespace: 'other.example.net' });
@@ -290,9 +291,9 @@ describe('ResubmitRunService', () => {
     it('starting again while a run is active returns that run and reads the count once', async () => {
       queue.peekDeadLetterMessages.mockReturnValue(new Observable<MessageInfo[]>());
       queue.peekTransferDeadLetterMessages.mockReturnValue(new Observable<MessageInfo[]>());
-      const first = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false });
-      const second = service.start(ORDERS, { batchSize: 50, stopAtFirstFailure: true });
-      const transfer = service.start({ ...ORDERS, subQueue: 'transferdeadletter' }, { batchSize: 2, stopAtFirstFailure: false });
+      const first = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false })!;
+      const second = service.start(ORDERS, { batchSize: 50, stopAtFirstFailure: true })!;
+      const transfer = service.start({ ...ORDERS, subQueue: 'transferdeadletter' }, { batchSize: 2, stopAtFirstFailure: false })!;
       await flush();
 
       expect(second).toBe(first);
@@ -309,10 +310,10 @@ describe('ResubmitRunService', () => {
       topic.getSubscription.mockReturnValue(of({ name: 'eu', topicName: 'sales', deadLetterMessageCount: 2 }));
       topic.peekDeadLetterMessages.mockReturnValueOnce(of(range(1, 2))).mockReturnValue(of([]));
 
-      const run = service.start({ entityType: 'subscription', topicName: 'sales', entityName: 'eu', subQueue: 'deadletter' }, { batchSize: 5, stopAtFirstFailure: false });
+      const run = service.start({ entityType: 'subscription', topicName: 'sales', entityName: 'eu', subQueue: 'deadletter' }, { batchSize: 5, stopAtFirstFailure: false })!;
       await run.done;
 
-      expect(topic.peekDeadLetterMessages.mock.calls[0]).toEqual(['sales', 'eu', 2, 0]);
+      expect(topic.peekDeadLetterMessages.mock.calls[0]).toEqual(['sales', 'eu', 2, 0, false]);
       expect(topic.resubmitDeadLetterMessages.mock.calls[0]).toEqual(['sales', 'eu', [1, 2]]);
       expect(run.progress()).toMatchObject({ status: 'completed', resubmitted: 2 });
     });
@@ -327,7 +328,7 @@ describe('ResubmitRunService', () => {
       queue.peekDeadLetterMessages.mockReturnValueOnce(of(range(1, 100))).mockReturnValueOnce(of(range(101, 100))).mockReturnValue(new Observable());
       queue.resubmitDeadLetterMessages.mockReturnValueOnce(answers[0]).mockReturnValueOnce(answers[1]);
 
-      const run = service.start(ORDERS, { batchSize: 100, stopAtFirstFailure: false });
+      const run = service.start(ORDERS, { batchSize: 100, stopAtFirstFailure: false })!;
       await flush();
       clock = START + 10_000;
       answers[0].next(ok(100));
@@ -355,7 +356,7 @@ describe('ResubmitRunService', () => {
       queue.peekDeadLetterMessages.mockReturnValueOnce(of(range(1, 100))).mockReturnValue(new Observable());
       queue.resubmitDeadLetterMessages.mockReturnValueOnce(answer);
 
-      const run = service.start(ORDERS, { batchSize: 100, stopAtFirstFailure: false });
+      const run = service.start(ORDERS, { batchSize: 100, stopAtFirstFailure: false })!;
       await flush();
       clock = START + 20_000;
       answer.next(ok(100));
@@ -382,7 +383,7 @@ describe('ResubmitRunService', () => {
         .mockReturnValueOnce(second)
         .mockReturnValue(of([]));
 
-      const run = service.start(ORDERS, { batchSize: 4, stopAtFirstFailure: false, reason: 'MaxDeliveryCountExceeded', text: 'order-created' });
+      const run = service.start(ORDERS, { batchSize: 4, stopAtFirstFailure: false, reason: 'MaxDeliveryCountExceeded', text: 'order-created' })!;
       await flush();
 
       expect(resubmitted()).toEqual([[1, 4]]);
@@ -403,7 +404,7 @@ describe('ResubmitRunService', () => {
         .mockReturnValueOnce(of([msg(1), msg(2, { deadLetterReason: 'TTLExpiredException' }), msg(3)]))
         .mockReturnValue(of([]));
       queue.resubmitDeadLetterMessages.mockReturnValueOnce(of(result(1, [[2, NOT_FOUND], [3, DUPLICATE]])));
-      const run = service.start(ORDERS, { batchSize: 3, stopAtFirstFailure: false });
+      const run = service.start(ORDERS, { batchSize: 3, stopAtFirstFailure: false })!;
       await run.done;
       return run;
     }
@@ -445,7 +446,7 @@ describe('ResubmitRunService', () => {
     it('a dead-letter count that cannot be read fails the run before any peek', async () => {
       queue.getQueue.mockReturnValue(throwError(() => ({ status: 500 })));
 
-      const run = service.start(ORDERS, { batchSize: 3, stopAtFirstFailure: false });
+      const run = service.start(ORDERS, { batchSize: 3, stopAtFirstFailure: false })!;
       await run.done;
 
       expect(queue.peekDeadLetterMessages).not.toHaveBeenCalled();
@@ -455,7 +456,7 @@ describe('ResubmitRunService', () => {
     it('a peek that fails ends the run as failed with the API words and resubmits nothing', async () => {
       queue.peekDeadLetterMessages.mockReturnValue(throwError(() => ({ status: 400, error: { message: 'This provider cannot read the dead-letter queue from a position.' } })));
 
-      const run = service.start(ORDERS, { batchSize: 3, stopAtFirstFailure: false });
+      const run = service.start(ORDERS, { batchSize: 3, stopAtFirstFailure: false })!;
       await run.done;
 
       expect(queue.resubmitDeadLetterMessages).not.toHaveBeenCalled();
@@ -469,7 +470,7 @@ describe('ResubmitRunService', () => {
       queue.peekDeadLetterMessages.mockReturnValue(of(range(1, 2)));
       queue.resubmitDeadLetterMessages.mockReturnValue(throwError(() => ({ status: 503 })));
 
-      const run = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false });
+      const run = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false })!;
       await run.done;
 
       expect(run.progress().status).toBe('failed');
@@ -481,7 +482,7 @@ describe('ResubmitRunService', () => {
       queue.peekDeadLetterMessages.mockReturnValue(of(range(1, 2)));
       queue.resubmitDeadLetterMessages.mockReturnValue(of(null));
 
-      const run = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false });
+      const run = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false })!;
       await run.done;
 
       expect(run.progress().status).toBe('failed');
@@ -493,7 +494,7 @@ describe('ResubmitRunService', () => {
     it('"Retry the N failed" of a run from before a change of connection resubmits nothing', async () => {
       queue.peekDeadLetterMessages.mockReturnValueOnce(of(range(1, 2))).mockReturnValue(of([]));
       queue.resubmitDeadLetterMessages.mockReturnValueOnce(of(result(1, [[2, NOT_FOUND]])));
-      const first = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false });
+      const first = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false })!;
       await first.done;
       status.next({ connected: true, namespace: 'other.example.net' });
       queue.resubmitDeadLetterMessages.mockClear();
@@ -514,13 +515,201 @@ describe('ResubmitRunService', () => {
         .mockReturnValueOnce(of(Array.from({ length: 60 }, (_, i) => msg(i + 1, { deadLetterReason: `Reason ${i + 1}` }))))
         .mockReturnValue(of([]));
 
-      const run = service.start(ORDERS, { batchSize: 60, stopAtFirstFailure: false });
+      const run = service.start(ORDERS, { batchSize: 60, stopAtFirstFailure: false })!;
       await run.done;
 
       const byReason = run.byReason();
       expect(byReason).toHaveLength(51);
       expect(byReason[49]).toEqual({ reason: 'Reason 50', read: 1, resubmitted: 1, failed: 0, possibleDuplicates: 0 });
       expect(byReason[50]).toEqual({ reason: '(other reasons)', read: 10, resubmitted: 10, failed: 0, possibleDuplicates: 0 });
+    });
+  });
+
+  describe('a connect or disconnect stops every run before the API switches its broker', () => {
+    let api: { get: ReturnType<typeof vi.fn>; post: ReturnType<typeof vi.fn> };
+    let order: string[];
+    let connections: ConnectionService;
+
+    beforeEach(() => {
+      order = [];
+      api = { get: vi.fn().mockReturnValue(of({ connected: true, namespace: 'sample.example.net' })), post: vi.fn() };
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          { provide: ApiService, useValue: api },
+          { provide: QueueService, useValue: queue },
+          { provide: TopicService, useValue: topic }
+        ]
+      });
+      connections = TestBed.inject(ConnectionService);
+      service = TestBed.inject(ResubmitRunService);
+      service.now = () => START;
+      queue.peekDeadLetterMessages.mockImplementation(() => { order.push('peek'); return of(range(1, 2)); });
+    });
+
+    it('a connect that fails after the server switched leaves no run able to send another request', async () => {
+      let aborted = false;
+      queue.resubmitDeadLetterMessages.mockImplementation(() => {
+        order.push('resubmit');
+        return new Observable<BatchOperationResult>(() => () => { aborted = true; });
+      });
+      const connectAnswer = new Subject<never>();
+      api.post.mockImplementation((url: string) => { order.push(url); return connectAnswer; });
+      const run = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false })!;
+      await flush();
+
+      let failed = false;
+      connections.connect('other').subscribe({ error: () => (failed = true) });
+      expect(aborted).toBe(true);
+      await flush();
+      connectAnswer.error({ status: 500 });
+      run.resume();
+      await flush();
+
+      expect(failed).toBe(true);
+      expect(order).toEqual(['peek', 'resubmit', 'connections/other/connect']);
+      expect(run.progress().status).toBe('stopped');
+      expect(run.possibleDuplicates.map(entry => entry.sequenceNumber)).toEqual([1, 2]);
+      expect(service.canRetry(run)).toBe(false);
+      expect(service.activeRuns()).toEqual([]);
+    });
+
+    it('the connect request is posted only once the request in flight of every run has ended', async () => {
+      const answer = new Subject<BatchOperationResult>();
+      queue.resubmitDeadLetterMessages.mockImplementation(() => { order.push('resubmit'); return answer; });
+      let run: ResubmitRun | undefined;
+      api.post.mockImplementation((url: string) => { order.push(`${url} while the run is ${run!.progress().status}`); return of({ connected: false }); });
+      run = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false })!;
+      await flush();
+
+      connections.disconnect().subscribe();
+      await flush();
+
+      expect(order).toEqual(['peek', 'resubmit', 'connections/disconnect while the run is stopped']);
+      expect(run.progress()).toMatchObject({ status: 'stopped', message: expect.stringContaining('The connection is changing') });
+    });
+    it('the failed messages of a finished run are not retried after a connect that failed once the server had switched', async () => {
+      queue.peekDeadLetterMessages.mockImplementationOnce(() => of(range(1, 2))).mockImplementation(() => of([]));
+      queue.resubmitDeadLetterMessages.mockReturnValueOnce(of(result(1, [[2, NOT_FOUND]])));
+      api.post.mockReturnValue(throwError(() => ({ status: 500 })));
+      const run = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false })!;
+      await run.done;
+
+      connections.connect('other').subscribe({ error: () => undefined });
+      await flush();
+      queue.resubmitDeadLetterMessages.mockClear();
+      service.retry(run);
+      await flush();
+
+      expect(run.failed.map(entry => entry.sequenceNumber)).toEqual([2]);
+      expect(service.canRetry(run)).toBe(false);
+      expect(queue.resubmitDeadLetterMessages).not.toHaveBeenCalled();
+    });
+    it('after a connect that failed no run starts until the status read again from the API has arrived', async () => {
+      api.post.mockReturnValue(throwError(() => ({ status: 500 })));
+      const refreshed = new Subject<{ connected: boolean; namespace: string }>();
+      api.get.mockReturnValue(refreshed);
+      connections.connect('other').subscribe({ error: () => undefined });
+      await flush();
+
+      const refused = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false });
+      await flush();
+      expect(refused).toBeUndefined();
+      expect(queue.getQueue).not.toHaveBeenCalled();
+
+      refreshed.next({ connected: true, namespace: 'other.example.net' });
+      deadLetterCount(2);
+      const started = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false });
+      await started!.done;
+
+      expect(queue.getQueue).toHaveBeenCalledTimes(1);
+      expect(order).toEqual(['peek']);
+      expect(started!.progress()).toMatchObject({ status: 'completed', resubmitted: 2 });
+    });
+
+    it('a run that fails on something unexpected ends failed, and the next connect is still posted', async () => {
+      queue.peekDeadLetterMessages.mockImplementation(() => { order.push('peek'); return of({} as unknown as MessageInfo[]); });
+      api.post.mockImplementation((url: string) => { order.push(url); return of({ connected: true, namespace: 'other.example.net' }); });
+      const run = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false })!;
+      await flush();
+
+      connections.connect('other').subscribe();
+      await flush();
+
+      expect(run.progress()).toMatchObject({ status: 'failed', message: 'The run stopped on an unexpected error.' });
+      expect(order).toEqual(['peek', 'connections/other/connect']);
+    });
+  });
+
+  describe('a batch whose messages all came back not found ends the run', () => {
+    it('ends failed, saying the head holds the messages the run left behind, and reads nothing more', async () => {
+      queue.peekDeadLetterMessages
+        .mockReturnValueOnce(of(range(1, 2)))
+        .mockReturnValueOnce(of(range(3, 2)))
+        .mockReturnValue(of(range(5, 2)));
+      queue.resubmitDeadLetterMessages
+        .mockReturnValueOnce(of(result(1, [[2, NOT_FOUND]])))
+        .mockReturnValueOnce(of(result(0, [[3, NOT_FOUND], [4, NOT_FOUND]])));
+
+      const run = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false })!;
+      await run.done;
+
+      expect(queue.peekDeadLetterMessages).toHaveBeenCalledTimes(2);
+      expect(run.progress()).toMatchObject({
+        status: 'failed',
+        failed: 3,
+        message: 'The head of the dead-letter queue holds the messages this run left behind, so the resubmit cannot reach further. Nothing was sent from the last batch.'
+      });
+    });
+  });
+
+  describe('the cursor and the bodies', () => {
+    it('the cursor moves past the highest sequence number of a batch, whatever its order', async () => {
+      queue.peekDeadLetterMessages.mockReturnValueOnce(of([msg(3), msg(7), msg(5)])).mockReturnValue(of([]));
+
+      const run = service.start(ORDERS, { batchSize: 3, stopAtFirstFailure: false })!;
+      await run.done;
+
+      expect(peekedFrom()).toEqual([0, 8]);
+    });
+
+    it('without a text filter the peek asks for no bodies; with one it asks for them and matches the text as written, ignoring case', async () => {
+      queue.peekDeadLetterMessages.mockReturnValueOnce(of([msg(1), msg(2, { body: 'price (USD) is 1.5' }), msg(3, { body: 'price (usd) is 105' })])).mockReturnValue(of([]));
+      const withText = service.start(ORDERS, { batchSize: 3, stopAtFirstFailure: false, text: '(usd) IS 1.5' })!;
+      await withText.done;
+      service.clear(ORDERS);
+      queue.peekDeadLetterMessages.mockReturnValue(of([]));
+      const withoutText = service.start(ORDERS, { batchSize: 3, stopAtFirstFailure: false, reason: 'MaxDeliveryCountExceeded' })!;
+      await withoutText.done;
+
+      expect(queue.peekDeadLetterMessages.mock.calls.map(call => call[3])).toEqual([true, true, false]);
+      expect(resubmitted()).toEqual([[2]]);
+    });
+  });
+
+  describe('what the run cannot read it leaves alone', () => {
+    it('a message without a readable enqueued time counts as newer than the start and is not resubmitted', async () => {
+      queue.peekDeadLetterMessages
+        .mockReturnValueOnce(of([msg(1, { enqueuedTime: undefined as unknown as Date }), msg(2, { enqueuedTime: 'not a date' as unknown as Date }), msg(3)]))
+        .mockReturnValue(of([]));
+
+      const run = service.start(ORDERS, { batchSize: 3, stopAtFirstFailure: false })!;
+      await run.done;
+
+      expect(resubmitted()).toEqual([[3]]);
+      expect(run.progress()).toMatchObject({ read: 3, matched: 1 });
+    });
+
+    it('a resubmit answer with a failure entry it cannot read ends the run failed and reports the batch as possible duplicates', async () => {
+      queue.peekDeadLetterMessages.mockReturnValue(of(range(1, 2)));
+      queue.resubmitDeadLetterMessages.mockReturnValue(of({ success: false, successCount: 1, failureCount: 1, failures: [null] } as unknown as BatchOperationResult));
+
+      const run = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false })!;
+      await run.done;
+
+      expect(run.progress().status).toBe('failed');
+      expect(run.possibleDuplicates.map(entry => entry.sequenceNumber)).toEqual([1, 2]);
+      expect(run.failed).toEqual([]);
     });
   });
 });

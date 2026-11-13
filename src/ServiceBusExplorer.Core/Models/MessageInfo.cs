@@ -11,7 +11,7 @@ public class MessageInfo : IMessage
     public string MessageId { get; set; } = string.Empty;
     public string? CorrelationId { get; set; }
     public string? ContentType { get; set; }
-    public string Body { get; set; } = string.Empty;
+    public string? Body { get; set; } = string.Empty;
     public string BodyType { get; set; } = "Text";
     public string? ReplyTo { get; set; }
     public string? To { get; set; }

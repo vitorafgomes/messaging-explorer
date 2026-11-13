@@ -74,4 +74,14 @@ internal static class EntityAdministrationResults
         fromSequenceNumber = position;
         return null;
     }
+
+    /// <summary>
+    /// 400 when <paramref name="value"/> is given and is neither <c>true</c> nor <c>false</c>; null otherwise, with
+    /// <paramref name="includeBody"/> true unless the value was <c>false</c>.
+    /// </summary>
+    public static BadRequestObjectResult? IncludeBody(string? value, out bool includeBody)
+    {
+        includeBody = value != "false";
+        return value is null or "true" or "false" ? null : new(new { message = "includeBody must be true or false." });
+    }
 }

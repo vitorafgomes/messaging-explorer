@@ -522,7 +522,7 @@ public class RabbitMQProvider : IMessagingProvider
     #region Message Operations
 
     /// <inheritdoc />
-    public Task<IEnumerable<IMessage>> PeekMessagesAsync(string entityName, int count = 10, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, long? fromSequenceNumber = null, CancellationToken cancellationToken = default)
+    public Task<IEnumerable<IMessage>> PeekMessagesAsync(string entityName, int count = 10, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, long? fromSequenceNumber = null, bool includeBody = true, CancellationToken cancellationToken = default)
     {
         if (subQueue == MessageSubQueue.TransferDeadLetter)
             return Task.FromException<IEnumerable<IMessage>>(TransferDeadLetterNotSupported());
@@ -545,7 +545,7 @@ public class RabbitMQProvider : IMessagingProvider
             if (result == null)
                 break;
 
-            messages.Add(MapBasicGetToMessageInfo(result, isDeadLetter));
+            messages.Add(MapBasicGetToMessageInfo(result, isDeadLetter, includeBody));
 
             // Nack with requeue to put the message back (peek behavior)
             _channel.BasicNack(result.DeliveryTag, multiple: false, requeue: true);
@@ -926,12 +926,12 @@ public class RabbitMQProvider : IMessagingProvider
     /// Maps a BasicGetResult from the AMQP channel to a MessageInfo.
     /// Uses direct byte access for reliable message body reading.
     /// </summary>
-    private static MessageInfo MapBasicGetToMessageInfo(BasicGetResult result, bool isDeadLettered)
+    internal static MessageInfo MapBasicGetToMessageInfo(BasicGetResult result, bool isDeadLettered, bool includeBody = true)
     {
         var props = result.BasicProperties;
 
         // Read body directly from AMQP bytes - no encoding issues
-        var body = Encoding.UTF8.GetString(result.Body.Span);
+        var body = includeBody ? Encoding.UTF8.GetString(result.Body.Span) : null;
 
         var applicationProperties = new Dictionary<string, object>();
         if (props?.Headers != null)

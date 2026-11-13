@@ -140,7 +140,7 @@ export function formatDuration(ms: number): string {
           </table>
         }
         @if (leftBehind().length > 0) {
-          <table mat-table [dataSource]="leftBehind()" class="table">
+          <table mat-table [dataSource]="leftBehind()" [trackBy]="trackLeftBehind" class="table">
             <caption>
               Left in the dead-letter queue: {{ p.failed + p.possibleDuplicates | number }}, by sequence number.
               {{ leftBehind().length }} shown, all of them in the saved report.
@@ -162,6 +162,12 @@ export function formatDuration(ms: number): string {
           </table>
         }
       } @else if (state() === 'config') {
+        @if (startRefused()) {
+          <p class="note warn" role="alert">
+            <mat-icon aria-hidden="true">error</mat-icon>
+            <span>The connection is changing, so no run was started. Start it again once the connection shows its new state.</span>
+          </p>
+        }
         @if (data.entityType === 'subscription') {
           <p class="note warn" role="note">
             <mat-icon aria-hidden="true">warning</mat-icon>
@@ -199,7 +205,7 @@ export function formatDuration(ms: number): string {
         <mat-form-field appearance="outline" class="batch">
           <mat-label>Batch size</mat-label>
           <input matInput type="number" name="batchSize" [(ngModel)]="batchSize" min="1" max="500">
-          <mat-hint>1 to 500 messages per cycle</mat-hint>
+          <mat-hint>1 to 500 messages per cycle.@if (positional) { The server reads 250 per scan. A smaller batch costs the broker more scans.}</mat-hint>
         </mat-form-field>
       } @else {
         <div class="stats">
@@ -307,6 +313,7 @@ export class ContinuousResubmitDialogComponent implements OnDestroy {
   readonly duration = formatDuration;
   readonly reasonColumns = ['reason', 'read', 'resubmitted', 'failed', 'possibleDuplicates'];
   readonly leftColumns = ['sequenceNumber', 'reason', 'result'];
+  readonly trackLeftBehind = (_: number, row: { sequenceNumber: number; duplicate: boolean }) => `${row.duplicate}:${row.sequenceNumber}`;
   readonly statusLabel = { running: 'Running', paused: 'Paused', completed: 'Finished', stopped: 'Stopped', failed: 'Ended on a failure' } as const;
   readonly statusIcon = { running: 'sync', paused: 'pause_circle', completed: 'check_circle', stopped: 'stop_circle', failed: 'error' } as const;
 
@@ -327,12 +334,15 @@ export class ContinuousResubmitDialogComponent implements OnDestroy {
     ].slice(0, SHOWN_LEFT_BEHIND);
   });
 
-  batchSize = 10;
+  /** The server receives 250 messages per scan, so a run asks for as many; the head-of-queue loop keeps 10. */
+  batchSize = this.positional ? 250 : 10;
   stopAtFirstFailure = false;
   reasonFilter = '';
   textFilter = '';
 
   state = signal<DialogState>('config');
+  /** The run was not started because the connection is changing. */
+  startRefused = signal(false);
   currentBatch = signal(0);
   totalProcessed = signal(0);
   totalSuccess = signal(0);
@@ -366,12 +376,14 @@ export class ContinuousResubmitDialogComponent implements OnDestroy {
 
   async start(): Promise<void> {
     if (this.positional) {
-      this.run.set(this.runs.start(this.target, {
+      const run = this.runs.start(this.target, {
         batchSize: this.batchSize,
         stopAtFirstFailure: this.stopAtFirstFailure,
         reason: this.reasonFilter.trim() || undefined,
         text: this.textFilter.trim() || undefined
-      }));
+      });
+      this.run.set(run);
+      this.startRefused.set(!run);
       return;
     }
 

@@ -287,4 +287,60 @@ public sealed class AzureServiceBusProviderDefectTests(AzureServiceBusFixture fi
         Assert.Equal("127.0.0.1", AzureServiceBusFixture.EndpointOf(fixture.MessagingConnectionString).Host);
         Assert.Equal("127", provider.CurrentTarget);
     }
+
+    /// <summary>
+    /// Correct: a resubmit finds a selected message wherever it sits in the dead-letter queue. The scan receives from
+    /// the head and abandons what it does not send, and an abandoned message is delivered again first, so it gets past
+    /// the head only as far as its 250-message prefetch reaches; a message 300 deep is reported "Not found within scan
+    /// window". Nothing is sent or removed: the message stays dead-lettered and the queue receives nothing.
+    /// </summary>
+    [Fact]
+    public async Task Defect_a_resubmit_of_one_message_300_deep_in_a_dead_letter_queue_of_800_reports_it_not_found()
+    {
+        await _messaging.ResubmitDeadLetterMessagesAsync(await CreateQueueAsync("dlq-warm-up"), [1]);
+        var queue = await CreateQueueAsync("dlq-reach", o => o.LockDuration = TimeSpan.FromSeconds(30));
+        await DeadLetterManyAsync(queue, 800);
+        var sequenceNumbers = (await _messaging.PeekMessagesAsync(queue, 800, MessageSubQueue.DeadLetter))
+            .Select(m => m.SequenceNumber!.Value).ToArray();
+        Assert.Equal(800, sequenceNumbers.Length);
+
+        var result = await _messaging.ResubmitDeadLetterMessagesAsync(queue, [sequenceNumbers[300]]);
+
+        var failure = Assert.Single(result.Failures);
+        Assert.Equal((0, sequenceNumbers[300], "Not found within scan window"), (result.SuccessCount, failure.SequenceNumber, failure.Error));
+        Assert.Contains(sequenceNumbers[300], (await _messaging.PeekMessagesAsync(queue, 800, MessageSubQueue.DeadLetter)).Select(m => m.SequenceNumber!.Value));
+        Assert.Empty(await _messaging.PeekMessagesAsync(queue, 10));
+    }
+
+    /// <summary>
+    /// Sends <paramref name="count"/> messages in batches and dead-letters them a received batch at a time, each batch
+    /// through a fresh receiver, so a deep dead-letter queue is arranged in seconds rather than one message at a time.
+    /// </summary>
+    private async Task DeadLetterManyAsync(string queue, int count)
+    {
+        await using (var sender = fixture.Client.CreateSender(queue))
+        {
+            for (var start = 0; start < count; start += 250)
+            {
+                await sender.SendMessagesAsync(Enumerable.Range(start, Math.Min(250, count - start)).Select(i => new ServiceBusMessage($"m{i}")));
+            }
+        }
+
+        var remaining = count;
+        var emptyReceives = 0;
+        while (remaining > 0)
+        {
+            await using var receiver = fixture.Client.CreateReceiver(queue);
+            var batch = await receiver.ReceiveMessagesAsync(Math.Min(250, remaining), TimeSpan.FromSeconds(5));
+            if (batch.Count == 0)
+            {
+                Assert.True(++emptyReceives < 5, $"{remaining} of {count} messages were not received to dead-letter");
+                continue;
+            }
+
+            emptyReceives = 0;
+            await Task.WhenAll(batch.Select(m => receiver.DeadLetterMessageAsync(m, "arranged", "dead-lettered by the test")));
+            remaining -= batch.Count;
+        }
+    }
 }
