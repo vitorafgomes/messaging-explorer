@@ -56,20 +56,17 @@ const VERDICT = {
 }
 
 function reviewPrompt(lens) {
-  const scope = lens === 'invariants'
-    ? 'Lens: invariants. It also checks the proof of each requirement (in proportion to the risk, per ADR 0005: a mutation for a row under the API, provider, secret, message-safety or external-call rules or a new guard, a failing spec first for other new behaviour, the behaviour lock for a visual refactor), the test and comment rules, and general correctness.'
-    : `Lens: ${lens}. Check only this lens; another agent covers the invariants and the proof.`
   return `Review the working-tree diff (\`git diff ${range}\` + \`git status --porcelain\`, read untracked files) for module: ${module}.
-${scope}
+Lens: ${lens}. Apply only this lens, as your lens table defines it; another agent covers each other lens.
 
 The session's dispatch (the requirement table, the proof recorded for each row, the test-quality results):
 ${dispatch}
 
-Give each finding's file as its path relative to the reviewed tree's root, the way \`git diff\` prints it. Follow your procedure. Read the project's rules file under \`.claude/rules/\` for each changed file. Return findings ONLY where you verified the cited line in the actual code and a context page, a decision or a rule in AGENTS.md backs it. At most five findings, most severe first. An empty findings list on a sound diff is correct.`
+Follow your order of work. Give each finding's file as its path relative to the reviewed tree's root, the way \`git diff\` prints it.`
 }
 
 function refutePrompt(f, lens) {
-  return `An independent review (lens: ${lens}) of the working-tree diff for module ${module} reported this finding.
+  return `Refute one finding. An independent review (lens: ${lens}) of the diff for module ${module} reported it.
 
 The reviewed tree, from the session's dispatch:
 ${reviewedTree || `working tree, \`git diff ${range}\``}${range !== 'HEAD' ? `\nRange: \`${range}\`` : ''}
@@ -80,7 +77,7 @@ Read the cited file in THAT tree: an absolute path as given, a relative path rel
   why: ${f.why}
   fix: ${f.fix}
 
-Try to REFUTE it. Open the file at the cited line, read the context page, decision or rule it cites, and decide whether the code as written actually violates it in a way that changes correctness, lets a request reach the API without the key, leaks a secret, loses or silently resends a message, lets a vendor type out of its provider, or leaves a requirement without the proof its risk calls for. Default to refuted=true if the violation is stylistic, speculative, already handled elsewhere in the diff, or not backed by the cited page. Read-only.`
+Read only the cited file around that line and the page or rule it cites; do not review the rest of the diff. Decide whether the code as written actually violates it in a way that changes correctness, lets a request reach the API without the key, leaks a secret, loses or silently resends a message, lets a vendor type out of its provider, or leaves a requirement without the proof its risk calls for. Answer refuted=true when the violation is stylistic, speculative, already handled elsewhere in the diff, not backed by the cited page, or listed as intended in \`context/pages/conventions/decisions-that-look-like-defects.md\` for code the diff does not touch.`
 }
 
 const results = await pipeline(
