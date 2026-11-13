@@ -73,7 +73,7 @@ Skills read this file on boot alongside `wiki-config.md`. It defines the frontma
 
 This schema extends the personal-wiki default (upstream: vanillaflava/llm-wiki-skills v0.5.0) with fields and enum values tuned for software projects:
 
-**New `page_type` values:** `service`, `adr`, `invariant`, `incident`, `runbook`, `roadmap`, `convention`. Two upstream defaults this vault also uses on purpose: `longform` (specs and architecture briefs) and `established-patterns` (the decisions-and-rejections memory record).
+**New `page_type` values:** `service`, `adr`, `invariant`, `incident`, `runbook`, `roadmap`, `convention`. Two upstream defaults this context also uses on purpose: `longform` (specs and architecture briefs) and `established-patterns` (the decisions-and-rejections memory record).
 
 **New `status` values:** `proposed`, `accepted`, `deprecated` — used by ADR pages.
 

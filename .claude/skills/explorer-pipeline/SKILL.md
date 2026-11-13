@@ -5,13 +5,13 @@ description: Messaging Explorer task orchestration. Always use this skill BEFORE
 
 # Messaging Explorer task pipeline
 
-This file is the single source of the pipeline. Root `CLAUDE.md` and the vault point here; a
+This file is the single source of the pipeline. Root `CLAUDE.md` and the context point here; a
 disagreement between them and this file is fixed here, in the same change that found it. Repo facts
-live in the vault (`vault/index.md`); the team rules A to J live in root `CLAUDE.md`; who runs on
-which model is on `vault/pages/conventions/tooling.md`.
+live in the context (`context/index.md`); the team rules A to J live in root `CLAUDE.md`; who runs on
+which model is on `context/pages/conventions/tooling.md`.
 
 Scope: an open-source desktop tool that reads and changes messages on production brokers through a
-local API. The manager (the session thread) classifies, reads the vault, states the plan, dispatches
+local API. The manager (the session thread) classifies, reads the context, states the plan, dispatches
 `explorer-implementer` with it and checks the result against the plan line by line, reporting any
 departure to the owner instead of patching it silently.
 
@@ -30,7 +30,7 @@ Classify **Feature / Bug / Refactor / Investigate**, then pick the shape:
 | | Shape | Handling |
 |---|---|---|
 | **Fast path** | Any one of: (a) doc/comment-only; (b) an inert file only: Markdown (`.md`), plain text (`.txt`) or a raster image (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.ico`); any other extension is full pipeline; (c) a single-line `.cs`, `.ts`, `.html` or `.scss` with no logic, signature, route, binding or DI impact - and no touched file is on the never-list. | Manager edits inline -> `explorer-mechanic` build gate (`dotnet build ServiceBusExplorer.slnx` at 0 warnings for `.cs`; `npm run build` in `web-app/` for web files) -> commit message proposed. No other dispatch. |
-| **Full pipeline** | Everything else, however small the diff looks. | Vault, six-part plan, `explorer-implementer`, conformance check, every hard gate below. |
+| **Full pipeline** | Everything else, however small the diff looks. | Context, six-part plan, `explorer-implementer`, conformance check, every hard gate below. |
 
 - **Never fast path, whatever the extension:** `ServiceBusExplorer.slnx`, `*.csproj`,
   `.github/workflows/**`, `appsettings*.json`, `config.json`, `.claude/**`, `scripts/**`,
@@ -52,8 +52,8 @@ request with no spec), `wiki-crystallize` / `wiki-lint` (gate 7), the `dotnet-te
 
 ## 1b. Climb the ladder before writing anything
 
-Invoke **`ponytail`** after the vault reading and before the first edit, on every non-trivial lane
-(Rule C with a procedure). The order is fixed: **vault first, ladder second, edit third.** Two
+Invoke **`ponytail`** after the context reading and before the first edit, on every non-trivial lane
+(Rule C with a procedure). The order is fixed: **context first, ladder second, edit third.** Two
 reconciliations: Rule B beats ponytail's "one runnable check, no frameworks" (the check here is an
 xUnit test in the project's test project, or a `*.spec.ts` beside the file, run by `ng test`),
 and a documented convention (the provider abstraction, masking, send before complete) is never
@@ -68,11 +68,11 @@ Read exactly one from this directory: `feature.md` | `bugfix.md` | `refactor.md`
 No narrative, no options survey, no restating the request. Exactly six parts; the plan travels
 verbatim into the `explorer-implementer` dispatch and the conformance check is against it:
 
-1. **Files** - exact `EDIT` and `CONTEXT` paths, including the vault pages the implementer writes
+1. **Files** - exact `EDIT` and `CONTEXT` paths, including the context pages the implementer writes
    (project page, ADR amendment, roadmap entry).
 2. **Steps** - ordered in Rule B shape, naming the test class or spec each step touches. On the bug
    and refactor lanes step one is the failing or pinning test.
-3. **Invariants at risk** - vault pages and the tests that pin them. A step that would violate an
+3. **Invariants at risk** - context pages and the tests that pin them. A step that would violate an
    invariant is not a step: stop, a superseding ADR first.
 4. **Acceptance** - literal build and test commands.
 5. **Out of scope** - adjacent work this change must not touch. The "Known gaps" of the project
@@ -93,7 +93,7 @@ stated too fast: fix the plan.
 
 ## 3. Hard gates (every non-trivial code lane)
 
-1. **Vault first** - `vault/pages/services/<project>.md` + every invariant it links, BEFORE editing.
+1. **Context first** - `context/pages/services/<project>.md` + every invariant it links, BEFORE editing.
 
    **Capability check.** The project page carries no rules for a capability you are about to *add*:
 
@@ -113,7 +113,7 @@ stated too fast: fix the plan.
 3. **Build.** `dotnet build ServiceBusExplorer.slnx` with `0 Warning(s)` and `0 Error(s)` on the
    summary line (the build does not fail on a warning; the gate is the line), and for `web-app/**`
    `npm run build` in `web-app/`. This repo has no format or analyzer gate yet
-   (`vault/pages/roadmap/followups.md`); do not claim one ran.
+   (`context/pages/roadmap/followups.md`); do not claim one ran.
 4. **Full test surface green.** A filter is allowed for a named subset when a proof or a batch
    needs it; the full surface below then runs once **without** a filter before the commit message.
    Require `N passed` per project and a Skipped count of 0:
@@ -127,9 +127,9 @@ stated too fast: fix the plan.
    | `.claude/hooks/**` | every `.claude/hooks/*.test.sh` (seven; each must print `ALL CASES PASS`) |
    | `.claude/workflows/explorer-review.js` | `.claude/workflows/explorer-review.test.sh` (`ALL CASES PASS`) |
    | `scripts/*.sh` | the script's `.test.sh` (`ALL CASES PASS`) and a run of the script itself on the real tree |
-   | contract/config/doc text only (`vault/**`, `*.md`, and `.claude/**` paths no row above matches) | no executable surface - record gates 3-4 as N/A and say why |
+   | contract/config/doc text only (`context/**`, `*.md`, and `.claude/**` paths no row above matches) | no executable surface - record gates 3-4 as N/A and say why |
 
-   **Web baseline** (`vault/pages/conventions/testing.md`): 21 spec files, 8 tests skipped in
+   **Web baseline** (`context/pages/conventions/testing.md`): 21 spec files, 8 tests skipped in
    `metrics.service.spec.ts`. Those 8 are the only skips allowed; a new one fails the gate.
 5. **Prove the requirement.** The implementer proves the map inside its own run and reports the
    evidence; the manager checks it.
@@ -182,13 +182,13 @@ stated too fast: fix the plan.
      `superpowers:receiving-code-review` prescribes. Apply the `confirmed` findings, verify every
      `unresolved` one yourself and apply it unless the code refutes it, record the `refuted` ones
      with the reason in the dispatch report, then re-gate.
-7. **Crystallize.** The implementer has written the vault pages the plan named; the manager reviews
-   that vault diff, owns `index.md`, `log.md`, the conventions and process ADRs, and uses
+7. **Crystallize.** The implementer has written the context pages the plan named; the manager reviews
+   that context diff, owns `index.md`, `log.md`, the conventions and process ADRs, and uses
    `wiki-crystallize` for anything the session found beyond the plan. A change that closes a
    "Known gaps" entry removes it from the project page and from `pages/roadmap/followups.md` in the
-   same commit. **7b.** Run `wiki-lint` when the vault changed; it does not check `file:line`
-   drift, so also run `bash scripts/check-vault-refs.sh` on every lane that touched `src/`,
-   `web-app/` or `vault/` and fix every ref it reports. Then read every ref you rewrote. A page
+   same commit. **7b.** Run `wiki-lint` when the context changed; it does not check `file:line`
+   drift, so also run `bash scripts/check-context-refs.sh` on every lane that touched `src/`,
+   `web-app/` or `context/` and fix every ref it reports. Then read every ref you rewrote. A page
    over 300 lines that is not a tracker fails the gate.
 8. **The PR body** uses `.github/PULL_REQUEST_TEMPLATE.md`, ticks the three safety boxes (API
    surface, secrets, message safety) only after the matching lens (or the plan's statement that the
@@ -204,9 +204,9 @@ Implementer dispatch (copy, fill, send verbatim):
 
 ```text
 Project: <ServiceBusExplorer.Core | ServiceBusExplorer.Api | web-app | electron-shell>   Worktree: <path>   Lane: feature | bugfix | refactor
-1. Files      EDIT: <paths, incl. vault pages>   CONTEXT: <paths>
+1. Files      EDIT: <paths, incl. context pages>   CONTEXT: <paths>
 2. Steps      <ordered, Rule B shape, test class or spec per step>
-3. Invariants <vault page -> pinning test>
+3. Invariants <context page -> pinning test>
    API surface: <none | endpoint/middleware/IPC>   Secret: <none | field, masked where>   Messages: <none | operation, order>
 4. Acceptance <literal commands>
 5. Out of scope <...>
@@ -232,5 +232,5 @@ Check this evidence; do not rebuild it. Findings: CONFIRMED with file:line and t
 - Don't re-run a gate on an unchanged diff; reuse session findings.
 - Surveys past a handful of targeted reads go to `Explore`. Long runs go to `explorer-mechanic`
   with literal commands; it never fixes.
-- The manager edits only vault, docs, `.claude/**` and fast-path one-liners; simple well-specified
+- The manager edits only context, docs, `.claude/**` and fast-path one-liners; simple well-specified
   changes go to a `sonnet` agent instead of `explorer-implementer`.

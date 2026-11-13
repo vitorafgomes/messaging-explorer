@@ -16,7 +16,7 @@ source:
   - "web-app/src/styles.scss"
   - "web-app/src/app/features/"
   - "web-app/src/app/shared/"
-  - "vault/prototypes/web-app/index.html"
+  - "context/prototypes/web-app/index.html"
 reliability: medium
 ---
 
@@ -26,7 +26,7 @@ reliability: medium
 
 ## How to read this page
 
-- The target of every finding is an artboard of `vault/prototypes/web-app/index.html`, named by its address (`#queue`, `#mac`). The prototype now has 38 artboards; its README describes each.
+- The target of every finding is an artboard of `context/prototypes/web-app/index.html`, named by its address (`#queue`, `#mac`). The prototype now has 38 artboards; its README describes each.
 - Evidence is a `path:line` read on 2026-11-12. A line proves the code says so, not how it renders.
 - **Reliability is medium on purpose.** The review was done on Linux by reading templates and styles. Section C lists what that cannot settle.
 - The work itself belongs to [[pages/roadmap/ui-material-migration]]; this page feeds its phases and does not reorder them, except where section D says so.

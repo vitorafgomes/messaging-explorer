@@ -1,5 +1,5 @@
 ---
-title: "Messaging Explorer Vault Index"
+title: "Messaging Explorer Context Index"
 version: "1.0"
 date: 2026-11-12
 changes: "Founded on 2026-11-12"
@@ -14,18 +14,18 @@ source:
 reliability: high
 ---
 
-# Messaging Explorer Vault Index
+# Messaging Explorer Context Index
 
-The content catalogue for this vault. Start here, follow wikilinks. If the vault can't answer, grep source, then `/wiki-crystallize` the findings back.
+The content catalogue for this context. Start here, follow wikilinks. If the context can't answer, grep source, then `/wiki-crystallize` the findings back.
 
-- Operation contract: [[CLAUDE]] (how Claude operates on this vault)
+- Operation contract: [[CLAUDE]] (how Claude operates on this context)
 - Page schema: [[wiki-schema]] | Config: [[wiki-config]]
 - Templates: `templates/`
 - UI prototype: `prototypes/web-app/` (the target layout: a design canvas of one artboard per screen, and the earlier single-file drawing with screenshots; the spec for [[pages/conventions/ui]])
 
 > **Coverage note (2026-11-12):** founded in one day, from the code only, in the working tree of
 > branch `fix/dlq-bulk-operations` with the owner's uncommitted changes. Every `path:line` citation
-> resolves (`scripts/check-vault-refs.sh`); the service pages and the project map were written by
+> resolves (`scripts/check-context-refs.sh`); the service pages and the project map were written by
 > three survey agents and their citations were spot-checked, not all re-read, so a line that exists
 > may still describe its claim loosely. On 2026-11-12 the owner allowed his private notes to be
 > migrated: the product history, the Azure authentication decision and the feature backlog came
@@ -68,8 +68,9 @@ The content catalogue for this vault. Start here, follow wikilinks. If the vault
 ## Decisions
 
 - [[pages/decisions/0003-azure-authentication-strategy|ADR 0003 - Azure authentication strategy]] *(accepted 2026-04-19)* - Identity before keys: five supported credentials, two rejected, and resource discovery, which is the part not built.
+- [[pages/decisions/0004-the-in-repo-documentation-folder-is-named-context|ADR 0004 - The in-repo documentation folder is named context]] *(accepted 2026-11-13)* - `vault/` became `context/`; ADR 0001 otherwise stands.
 - [[pages/decisions/0002-integration-tests-against-brokers-in-docker|ADR 0002 - Integration tests against brokers in Docker]] *(accepted)* - A third test project that starts RabbitMQ and the Azure Service Bus emulator in containers; a test never talks to a broker it did not start.
-- [[pages/decisions/0001-in-repo-vault-and-agent-harness|ADR 0001 - In-repo vault and agent harness]] *(accepted)* - Why the documentation and the harness live in the repo, and where the ten rules came from.
+- [[pages/decisions/0001-in-repo-vault-and-agent-harness|ADR 0001 - In-repo context and agent harness]] *(accepted)* - Why the documentation and the harness live in the repo, and where the ten rules came from.
 
 ## History
 

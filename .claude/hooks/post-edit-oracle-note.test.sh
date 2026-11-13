@@ -12,7 +12,7 @@ for p in "/repo/Directory.Build.props" "Directory.Packages.props" "/repo/.editor
          "/repo/.github/workflows/ci.yml" "/repo/web-app/angular.json" "/repo/web-app/tsconfig.json" \
          "/repo/web-app/tsconfig.spec.json"; do check NOTE "$p"; done
 for p in "/repo/src/ServiceBusExplorer.Api/Program.cs" "/repo/src/ServiceBusExplorer.Api.Tests/CorsTests.cs" \
-         "/repo/vault/pages/services/api.md" "/repo/web-app/package.json" "/repo/.github/PULL_REQUEST_TEMPLATE.md" \
+         "/repo/context/pages/services/api.md" "/repo/web-app/package.json" "/repo/.github/PULL_REQUEST_TEMPLATE.md" \
          "/repo/web-app/src/angular.json.bak" "/repo/config.json" ""; do check QUIET "$p"; done
 [ $fail = 0 ] && echo "ALL CASES PASS"
 exit $fail

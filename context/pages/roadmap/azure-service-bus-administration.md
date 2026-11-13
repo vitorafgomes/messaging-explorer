@@ -34,7 +34,7 @@ It does not include Event Hubs, Relay, Notification Hubs or Event Grid: a differ
 
 ## What the surveys corrected
 
-Four things the vault or the conversation had wrong, found while surveying:
+Four things the context or the conversation had wrong, found while surveying:
 
 - **No screen created or deleted an entity.** Create arrived on 2026-11-12 with edit and status (items 1 and 3 below): a create action on the tree (`web-app/src/app/features/entities/entities-tree.component.ts:837`). No screen deletes one yet; the API can and nothing calls it.
 - **The topic panel looked editable and saved nothing. Fixed 2026-11-12.** Its form had live inputs and toggles and no submit path, so an edit was discarded in silence; the panel is read-only text now.

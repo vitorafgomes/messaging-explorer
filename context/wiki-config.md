@@ -35,7 +35,7 @@ This is the **project-based** variant of `wiki-config.md`, tuned for software pr
 
 **Path style.** Forward slash (`/`).
 
-**Wiki root.** The directory containing this file. When this template is instantiated as `project/vault/`, `project/vault/` is the wiki root. Skills derive the root from this file's location — don't add a `wiki_root` field.
+**Wiki root.** The directory containing this file. When this template is instantiated as `project/context/`, `project/context/` is the wiki root. Skills derive the root from this file's location — don't add a `wiki_root` field.
 
 **blacklist.** Folders where the wiki must NEVER write. The defaults (`src/`, `node_modules/`, build artifact folders) protect source code and dependencies. Extend with any project-specific no-go zones: secrets folders, legacy code, generated directories.
 
@@ -61,4 +61,4 @@ Adapt `ingested_subdirs` to your workflow. If you want separate buckets for "cod
 
 **log_format.** Format string for `log.md` entries. Do not change without updating all wiki skills.
 
-**Property type conflict warning.** Some note-taking apps infer a type for each frontmatter property. If a property name conflicts with something elsewhere in your vault or plugin, rename here and inform Claude.
+**Property type conflict warning.** Some note-taking apps infer a type for each frontmatter property. If a property name conflicts with something elsewhere in your context or plugin, rename here and inform Claude.

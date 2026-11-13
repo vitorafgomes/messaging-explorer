@@ -8,4 +8,4 @@ docker compose -f dev/brokers/docker-compose.yml down -v    # stop and discard a
 ```
 
 Connection values, the sample entities and the limits of the emulator:
-[`vault/pages/runbooks/local-brokers.md`](../../vault/pages/runbooks/local-brokers.md).
+[`context/pages/runbooks/local-brokers.md`](../../context/pages/runbooks/local-brokers.md).

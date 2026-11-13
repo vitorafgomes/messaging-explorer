@@ -49,7 +49,7 @@ They apply to every new screen and to every screen a change touches. A change is
 
 ## The prototype
 
-`vault/prototypes/web-app/index.html` draws the target layout as 38 artboards in one self-contained file, with its screenshots and a README beside it: every screen and dialog the app has, the window on macOS, Windows and at the minimum size, and seven screens that are proposed and not built, marked as such. The review that produced them is [[pages/roadmap/ui-review-2026-11]].
+`context/prototypes/web-app/index.html` draws the target layout as 38 artboards in one self-contained file, with its screenshots and a README beside it: every screen and dialog the app has, the window on macOS, Windows and at the minimum size, and seven screens that are proposed and not built, marked as such. The review that produced them is [[pages/roadmap/ui-review-2026-11]].
 
 The same folder holds the prototype redrawn as a design canvas: one `.dc.html` artboard per screen, placed by `canvas.json`, each with both themes, a switch for every state of the screen and a strip that says whether the screen is built. A new or redrawn screen is drawn as an artboard; `index.html` stays until each of its boards has one, and where the two differ the artboard is the newer drawing. The README of the folder lists the artboards.
 

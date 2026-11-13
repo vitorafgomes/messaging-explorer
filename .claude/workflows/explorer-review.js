@@ -29,7 +29,7 @@ const FINDINGS = {
           file: { type: 'string' },
           line: { type: 'integer' },
           severity: { type: 'string', enum: ['P1', 'P2'] },
-          cites: { type: 'string', description: 'the vault page, ADR or root Rule letter the finding violates' },
+          cites: { type: 'string', description: 'the context page, ADR or root Rule letter the finding violates' },
           why: { type: 'string' },
           fix: { type: 'string' },
         },
@@ -61,7 +61,7 @@ ${scope}
 Dispatch from the manager (map, gate 5 evidence, skill results):
 ${dispatch}
 
-Follow your procedure. Return findings ONLY where you verified the cited line in the actual code and a vault page, ADR or root Rule backs it. At most five findings, most severe first. An empty findings list on a sound diff is correct.`
+Follow your procedure. Return findings ONLY where you verified the cited line in the actual code and a context page, ADR or root Rule backs it. At most five findings, most severe first. An empty findings list on a sound diff is correct.`
 }
 
 function refutePrompt(f, lens) {
@@ -71,7 +71,7 @@ function refutePrompt(f, lens) {
   why: ${f.why}
   fix: ${f.fix}
 
-Try to REFUTE it. Open the file at the cited line, read the vault page, ADR or Rule it cites, and decide whether the code as written actually violates it in a way that changes correctness, opens the API beyond loopback and the API key, leaks a secret, loses or silently duplicates a message, lets a vendor type out of its provider, or leaves a requirement unproven. Default to refuted=true if the violation is stylistic, speculative, already handled elsewhere in the diff, or not backed by the cited page. Read-only.`
+Try to REFUTE it. Open the file at the cited line, read the context page, ADR or Rule it cites, and decide whether the code as written actually violates it in a way that changes correctness, opens the API beyond loopback and the API key, leaks a secret, loses or silently duplicates a message, lets a vendor type out of its provider, or leaves a requirement unproven. Default to refuted=true if the violation is stylistic, speculative, already handled elsewhere in the diff, or not backed by the cited page. Read-only.`
 }
 
 const results = await pipeline(

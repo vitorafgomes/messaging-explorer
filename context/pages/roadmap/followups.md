@@ -8,7 +8,7 @@ status: active
 description: "The tracker of known gaps: what the founding survey found in the code and in the build, by risk, each pointing at the service page that holds its citations."
 updated: 2026-11-12
 source:
-  - "vault/pages/services/"
+  - "context/pages/services/"
   - chat
 reliability: high
 ---
@@ -53,7 +53,7 @@ Each entry carries its date. This page is a tracker: `version` changes only when
 - **2026-11-12 - The legacy `ServiceBusService` is registered and never connected.** Delete it. [[pages/services/core]]
 - **2026-11-12 - The Angular provider registry, the provider shell and the two provider components are not wired into any route; the `kafka` folder is empty; `docs/ADDING_PROVIDERS.md` describes a flow the app does not run.** Wire it or remove it, then rewrite the guide. [[pages/services/web-app]]
 - **2026-11-12 - A 3,537-line `entity-details.component.ts.backup` is tracked beside the live file.** [[pages/services/web-app]]
-- **2026-11-12 - The project structure in `README.md` omits the test projects and the vault**, and it does not link to the vault.
+- **2026-11-12 - The project structure in `README.md` omits the test projects and the context**, and it does not link to the context.
 
 ## The gates themselves
 

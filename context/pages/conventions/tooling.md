@@ -16,7 +16,7 @@ reliability: high
 
 # Tooling
 
-The harness was founded on 2026-11-12: sh + jq hooks with case-matrix self-tests, one pipeline skill, a review workflow, an in-repo vault ([[pages/decisions/0001-in-repo-vault-and-agent-harness]]). What it deliberately does not have yet is at the end of this page. Root `CLAUDE.md` names this page; the `explorer-pipeline` skill dispatches by it.
+The harness was founded on 2026-11-12: sh + jq hooks with case-matrix self-tests, one pipeline skill, a review workflow, an in-repo context ([[pages/decisions/0001-in-repo-vault-and-agent-harness]]). What it deliberately does not have yet is at the end of this page. Root `CLAUDE.md` names this page; the `explorer-pipeline` skill dispatches by it.
 
 ## Model routing
 
@@ -24,8 +24,8 @@ The session model does every survey, plan and check; Opus implements and reviews
 
 | Who | Model, effort | Writes code? |
 |---|---|---|
-| **The manager** (the session thread): classifies, reads the vault, states the six-part plan, dispatches, checks the result against the plan line by line, owns `vault/index.md`, `vault/log.md`, the conventions and the process ADRs. | session model | Vault, docs, `.claude/**`, fast-path one-liners only. |
-| **`explorer-implementer`**: implements a non-trivial change from the plan, Rule B per edit, and proves gate 5 itself: a targeted mutation per `new behaviour` entry with the failure quoted, the file restored from a backup copy and rebuilt; behaviour locks green before and after. | opus, high | **Yes**: `src/**` and `web-app/**` of the named project(s), plus the vault pages the plan names. Never git history. |
+| **The manager** (the session thread): classifies, reads the context, states the six-part plan, dispatches, checks the result against the plan line by line, owns `context/index.md`, `context/log.md`, the conventions and the process ADRs. | session model | Context, docs, `.claude/**`, fast-path one-liners only. |
+| **`explorer-implementer`**: implements a non-trivial change from the plan, Rule B per edit, and proves gate 5 itself: a targeted mutation per `new behaviour` entry with the failure quoted, the file restored from a backup copy and rebuilt; behaviour locks green before and after. | opus, high | **Yes**: `src/**` and `web-app/**` of the named project(s), plus the context pages the plan names. Never git history. |
 | Any simple, mechanical, well-specified task (`general-purpose` on `model: sonnet`). | sonnet, medium | **Yes**, the named files only. |
 | **`explorer-mechanic`**: runs build and test commands exactly as dispatched, reports per project with warning and skipped counts, never fixes. | haiku, low | No. |
 | **`explorer-reviewer`**: gate 6, dispatched by the `explorer-review` workflow one instance per lens (`api-surface`, `secrets`, `message-safety`, `boundaries`, `invariants`); checks the gate 5 evidence the dispatch carries; each finding then faces a refute pass. | opus, high on `api-surface`, `secrets` and `message-safety`; sonnet, high on `invariants` and `boundaries`; refute pass: sonnet, high | No. |
@@ -35,7 +35,7 @@ The session model does every survey, plan and check; Opus implements and reviews
 
 ## `.claude/skills/explorer-pipeline`
 
-The single source of the pipeline: gate 0 (classify from `git status --porcelain` and `git diff HEAD --stat`, written as an instruction and never as a dynamic shell block), classification (fast path or full), the never-list, the ladder (`ponytail` after the vault, before the edit), the six-part plan, the nine gates, the two dispatch templates. Lane files `feature.md`, `bugfix.md`, `refactor.md`, `diagnose.md` carry only the stage order.
+The single source of the pipeline: gate 0 (classify from `git status --porcelain` and `git diff HEAD --stat`, written as an instruction and never as a dynamic shell block), classification (fast path or full), the never-list, the ladder (`ponytail` after the context, before the edit), the six-part plan, the nine gates, the two dispatch templates. Lane files `feature.md`, `bugfix.md`, `refactor.md`, `diagnose.md` carry only the stage order.
 
 ## `.claude/workflows/explorer-review.js`
 
@@ -43,7 +43,7 @@ Gate 6 as a `Workflow` script: `Workflow({ name: "explorer-review", args: { modu
 
 ## `.claude/skills/wiki-*`
 
-The five wiki skills (`wiki-crystallize`, `wiki-ingest`, `wiki-integrate`, `wiki-lint`, `wiki-query`) and their shared references. They read `vault/wiki-config.md` and `vault/wiki-schema.md`; the operation contract is `vault/CLAUDE.md`.
+The five wiki skills (`wiki-crystallize`, `wiki-ingest`, `wiki-integrate`, `wiki-lint`, `wiki-query`) and their shared references. They read `context/wiki-config.md` and `context/wiki-schema.md`; the operation contract is `context/CLAUDE.md`.
 
 ## `.claude/hooks/`
 
@@ -59,15 +59,15 @@ All seven fail open: a missing `jq`, malformed JSON, or any error exits 0 having
 | `stop-review-gate.sh` | Stop | **Blocks** the turn once when the session edited production code (`src/**/*.cs` outside `*.Tests`, `web-app/src/**/*.ts` that is not a spec, `web-app/electron/*.js`) without dispatching `explorer-reviewer` (an `Agent` call or a `Workflow` run of `explorer-review`). `stop_hook_active` passes on the continuation, so no loop. Keyed on what *this* session edited, in `<session>.jsonl` and every `<session>/subagents/*.jsonl`. |
 | `session-end-metrics.sh` | SessionEnd | Appends one JSON line per session to `.claude/metrics/sessions.jsonl` (gitignored): production and test edits, reviewer dispatches, review workflow runs, pipeline invocations, agents, tool calls, `endedUnreviewed`. |
 
-Every hook carries a case-matrix self-test (`<hook>.test.sh`, prints `ALL CASES PASS`). The `harness` job of `.github/workflows/ci.yml` runs all seven plus `.claude/workflows/explorer-review.test.sh`, `scripts/check-vault-refs.test.sh` and a real `scripts/check-vault-refs.sh` run.
+Every hook carries a case-matrix self-test (`<hook>.test.sh`, prints `ALL CASES PASS`). The `harness` job of `.github/workflows/ci.yml` runs all seven plus `.claude/workflows/explorer-review.test.sh`, `scripts/check-context-refs.test.sh` and a real `scripts/check-context-refs.sh` run.
 
-## `scripts/check-vault-refs.sh`
+## `scripts/check-context-refs.sh`
 
-Resolves every `path:line` citation in `vault/pages` (paths under `src`, `web-app`, `scripts`, `docs`, `.claude`, `.github`, written in full) against the working tree; fails on a missing file, a line 0 or a line past the end, and when `vault/pages` is missing. It proves the line exists, never that it still describes the claim; that part is read. A citation to a root file (`CHANGELOG.md`, `config.json`) and an abbreviated continuation (`:15`) are not checked. Pages whose `status` marks them as a record are skipped. Runs in gate 7b and in CI.
+Resolves every `path:line` citation in `context/pages` (paths under `src`, `web-app`, `scripts`, `docs`, `.claude`, `.github`, written in full) against the working tree; fails on a missing file, a line 0 or a line past the end, and when `context/pages` is missing. It proves the line exists, never that it still describes the claim; that part is read. A citation to a root file (`CHANGELOG.md`, `config.json`) and an abbreviated continuation (`:15`) are not checked. Pages whose `status` marks them as a record are skipped. Runs in gate 7b and in CI.
 
 ## Permissions
 
-`.claude/settings.json` allows without a prompt the read-only commands the gates need: `dotnet build|test`, `npm test -- --watch=false`, read-only git, `scripts/check-vault-refs.sh` and every self-test. Everything Rule E covers is a permission ask whatever the allow list says.
+`.claude/settings.json` allows without a prompt the read-only commands the gates need: `dotnet build|test`, `npm test -- --watch=false`, read-only git, `scripts/check-context-refs.sh` and every self-test. Everything Rule E covers is a permission ask whatever the allow list says.
 
 ## What the build does not enforce
 

@@ -52,7 +52,7 @@ Numbered, each with owner and target date.
 
 ## Where the spec lives
 
-A spec is composed across the vault, never one block on this page. Written at spec time, kept when the phase ships:
+A spec is composed across the context, never one block on this page. Written at spec time, kept when the phase ships:
 
 - **Domain** - one [[pages/domain/<entity>]] page per new or changed aggregate or term (template `_domain-term.md`): meaning, attributes, rules, lifecycle drawing.
 - **Flows** - one [[pages/flows/<flow>]] page per user-visible flow that crosses a module, a port, an event or a store (template `_flow.md`): the cross-module `sequenceDiagram` with every save as its own arrow, the steps with `file:line`, failure modes, idempotency, and a developer-orientation paragraph (saves and their order, what a crash leaves behind and who cleans it, where the tenant boundary is enforced, the files to touch in order).
