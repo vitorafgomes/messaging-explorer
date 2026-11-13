@@ -38,8 +38,8 @@ jobs:
           set -euo pipefail
           require=""
           if [ "$SAME_REPO" = "true" ]; then require="--require"; fi
-          bash scripts/check-private-names.sh --tree $require
-          printf '%s\n%s\n' "$PR_TITLE" "$PR_BODY" | bash scripts/check-private-names.sh --stdin $require
+          bash tools/checks/check-private-names.sh --tree $require
+          printf '%s\n%s\n' "$PR_TITLE" "$PR_BODY" | bash tools/checks/check-private-names.sh --stdin $require
           if git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
-            git log --format=%B "$BASE_SHA..$HEAD_SHA" | bash scripts/check-private-names.sh --stdin $require
+            git log --format=%B "$BASE_SHA..$HEAD_SHA" | bash tools/checks/check-private-names.sh --stdin $require
           fi

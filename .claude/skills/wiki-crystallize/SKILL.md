@@ -172,6 +172,8 @@ Choose the most specific placement using the folder structure from `index.md`. D
 
 ### Step 5 - Update index.md (new pages only)
 
+In this repo `index.md` lists the areas and each `pages/<area>/index.md` lists the pages of its area: add the entry to the index of the page's area, and a service topic page (`pages/services/<project>/<topic>.md`) to the Topics table of its map instead (`context/CLAUDE.md`, Indexes).
+
 If a new page was created in Step 4b, add an entry in the correct section of `index.md` (one sentence, 150 chars max). If an existing page was updated in Step 4a, no index change is needed.
 
 ### Step 6 - Update Overview.md if warranted

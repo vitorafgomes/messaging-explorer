@@ -1,8 +1,8 @@
 #!/bin/sh
 # Token use of one Claude Code session, per agent, read from its transcript files.
 #
-#   scripts/token-usage.sh [transcript.jsonl]   the session, then the documents by group
-#   scripts/token-usage.sh docs                 every Markdown document a model reads, by file
+#   tools/dev/token-usage.sh [transcript.jsonl]   the session, then the documents by group
+#   tools/dev/token-usage.sh docs                 every Markdown document a model reads, by file
 #
 # With no argument it takes the newest transcript Claude Code keeps for this checkout.
 # The session part prints one row for the main session and one per agent type it started.
@@ -11,7 +11,7 @@
 # A response is stored once per content block, each copy carrying the same usage, so rows are
 # counted once per message id.
 
-ROOT=$(cd "$(dirname "$0")/.." && pwd)
+ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 command -v jq >/dev/null 2>&1 || { echo "token-usage: jq is required" >&2; exit 2; }
 
 # One line per document: when it is loaded, its path, its size in characters.

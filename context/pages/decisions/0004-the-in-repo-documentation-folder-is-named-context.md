@@ -26,7 +26,7 @@ ADR 0001 put the documentation and the agent harness in the repository, in a fol
 ## Decision
 
 - The folder is `context/`. Its layout (`pages/`, `index.md`, `log.md`, `CLAUDE.md`, `prototypes/`, `templates/`, `raw/`, `ingested/`, `archive/`) is unchanged.
-- The citation checker is `scripts/check-context-refs.sh`, with its self-test `scripts/check-context-refs.test.sh`.
+- The citation checker is `tools/checks/check-context-refs.sh`, with its self-test `tools/checks/check-context-refs.test.sh`.
 - Root `CLAUDE.md`, `AGENTS.md`, the README, the harness under `.claude/`, CI and `.gitattributes` point at `context/`.
 - Records keep their words: the entries of `context/log.md` written before the rename, the file name and text of ADR 0001, and `ingested/`, `archive/` and `raw/` still say `vault`. A citation inside them may name the old path.
 - The generic wiki skills under `.claude/skills/wiki-*` keep the word "vault" where it means any notes folder; only their paths changed.

@@ -12,14 +12,14 @@ the quality of the work. Tokens are spent in two places, and you cover both: the
 the agents did) and the documents (the Markdown a model is made to read). The numbers come from
 a script. Your part is to find the cause of each large number and name a change.
 
-Your shell runs `scripts/token-usage.sh`, `jq`, `wc`, `grep` and `ls`. You read documents with
+Your shell runs `tools/dev/token-usage.sh`, `jq`, `wc`, `grep` and `ls`. You read documents with
 Read. A transcript can hold tens of megabytes: query it with `jq`.
 
 ## Order of work
 
-1. **Measure the session.** `scripts/token-usage.sh`, with the transcript path from the
+1. **Measure the session.** `tools/dev/token-usage.sh`, with the transcript path from the
    dispatch or with no argument for the newest session.
-2. **Measure the documents.** `scripts/token-usage.sh docs`.
+2. **Measure the documents.** `tools/dev/token-usage.sh docs`.
 3. **Explain the session.** Order the agents by `cache-read + cache-write + input + output` and
    take the top three. Find the cause of each with the first table, and confirm it with a `jq`
    query on that agent's transcript files, under `<transcript without .jsonl>/subagents/`.

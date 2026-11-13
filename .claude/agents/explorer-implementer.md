@@ -47,14 +47,15 @@ Stop and report the exact conflict when:
 
 ## Checks
 
-Unit and web tests go through the container: `scripts/in-docker.sh <command>`. A test
+Unit and web tests go through the container: `tools/checks/in-docker.sh <command>`. A test
 command run directly is denied, except the integration project, which needs Docker.
 
 - `dotnet build ServiceBusExplorer.slnx` with `0 Warning(s)`. Read the summary line: nothing
   fails the build on a warning.
-- `scripts/in-docker.sh` with each acceptance command from the plan. Record the exact
+- `tools/checks/check-diagnostics.sh <touched .csproj>`, clean, once per touched project.
+- `tools/checks/in-docker.sh` with each acceptance command from the plan. Record the exact
   totals; skipped is 0 in the .NET projects.
-- For a change under `web-app/**`, in `web-app/`: `../scripts/in-docker.sh npm test -- --watch=false`
+- For a change under `web-app/**`, in `web-app/`: `../tools/checks/in-docker.sh npm test -- --watch=false`
   and `npm run build`. The only skips allowed are the 8 in `metrics.service.spec.ts`.
 
 ## Proof
@@ -101,4 +102,5 @@ OPEN QUESTIONS
 <question>
 ```
 
-The sending session writes the commit message and decides about git.
+The sending session writes the commit message and decides about git. You run no git commit, no
+git push and no other command that writes history.

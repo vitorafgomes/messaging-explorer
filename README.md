@@ -155,7 +155,7 @@ To add another broker, start from [`docs/ADDING_PROVIDERS.md`](docs/ADDING_PROVI
 
 ## Contributing
 
-Issues and pull requests are welcome. For anything beyond a small fix, please open an issue first so the approach can be agreed before you write it.
+Issues and pull requests are welcome; see [CONTRIBUTING.md](.github/CONTRIBUTING.md) and the [Code of Conduct](.github/CODE_OF_CONDUCT.md). For anything beyond a small fix, please open an issue first so the approach can be agreed before you write it.
 
 A change needs a test that fails without it, a clean build and the test suites green. The [pull request template](.github/PULL_REQUEST_TEMPLATE.md) lists what a reviewer will look for, including the three safety checks that matter for a tool pointed at production brokers.
 

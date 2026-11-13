@@ -59,7 +59,7 @@ Config Discovery has already loaded `wiki-config.md` and `wiki-schema.md` into c
 
 ### Step 1 - Read the index for orientation
 
-Read `index.md` from the wiki root. Scan the full catalogue to identify pages likely to be relevant to the query. Do not read every page; use the one-line descriptions to target your search.
+Read `index.md` from the wiki root; in this repo it lists the areas, so read the index of each area the query touches (`pages/<area>/index.md`) and, for a service, its map. Scan the full catalogue to identify pages likely to be relevant to the query. Do not read every page; use the one-line descriptions to target your search.
 
 Also read `Overview.md` if the query is broad or cross-domain; it provides a fast orientation to the current state of knowledge.
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Case matrix for in-docker.sh with a fake docker on PATH that records how it was called.
 SCRIPT="$(cd "$(dirname "$0")" && pwd)/in-docker.sh"
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 TOOLS="$(cd "$(dirname "$0")/.." && pwd)"
 work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
 fail=0

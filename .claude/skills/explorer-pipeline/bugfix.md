@@ -1,6 +1,6 @@
 # Bug-fix lane
 
-1. **Read.** The project's service page and the invariants it links for the code the bug is in. If the
+1. **Read.** The topic page for the code the bug is in (its project's map lists them) and the invariants it links. If the
    bug breaks a written rule, the rule is the target of the fix, not the symptom.
 2. **Reproduce first.** The failing test is step one of the plan, written and seen red before the
    fix. A bug in the key check, in masking or in a bulk message operation has a test that fails

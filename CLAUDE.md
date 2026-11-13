@@ -8,7 +8,8 @@ Everything above holds here. What follows is how this repo uses Claude Code.
 
 Use the `explorer-pipeline` skill first, for every code task. It classifies the task by risk and
 says what the change needs: a one-line edit needs a build, and a change to the API surface, to
-secrets or to anything that moves messages needs a plan, proof and a review.
+secrets or to anything that moves messages needs a plan, proof and a review. Read the page the
+rules file names for the change before the source, not the whole `context/` folder.
 
 ## What loads without being asked
 
@@ -47,7 +48,7 @@ You do not need to remember these; a hook stops or flags them.
 
 ## Working with other sessions
 
-- Start a session with `scripts/claude-session.sh` (`worker`, or `ui` for the web app): it leaves
+- Start a session with `tools/dev/claude-session.sh` (`worker`, or `ui` for the web app): it leaves
   out the servers and plugins this repo does not use.
 - Ask the `explorer-meter` agent where a session spent its tokens.
 

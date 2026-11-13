@@ -24,7 +24,8 @@ Owns all presentation and client-side state: connection management, the entity t
   name; an error is shown as an error, not as an empty list.
 - **An IPC channel, or a change to how the API process is started, is a sensitive change** with
   the `api-surface` lens (`reference/sensitive.md` of the pipeline skill).
-- A gap written under "Known gaps" on `context/pages/services/web-app.md` may stay as it was found.
+- Each rule in full, with the code and tests that keep it: `context/pages/services/web-app/how-the-rules-are-kept.md`.
+- A gap written on `context/pages/services/web-app/known-gaps.md` may stay as it was found.
   A change never adds a gap and never widens one.
 
 ## Read before you change
@@ -33,7 +34,7 @@ Owns all presentation and client-side state: connection management, the entity t
 - `context/pages/invariants/secrets-masked-at-the-api-boundary.md` - the UI only ever receives masked connection strings and passwords.
 - `context/pages/invariants/provider-boundaries.md` - what may be provider-specific and where.
 - `context/pages/invariants/bulk-operations-are-at-least-once.md` - what cancel and retry mean for the bulk dialogs.
-- `context/pages/services/electron-shell.md` - owns `window.electronAPI`, the only source of the API port and secret.
+- `context/pages/services/electron-shell/ipc-and-tray.md` - owns `window.electronAPI`, the only source of the API port and secret.
 - `context/pages/services/api.md` and `context/pages/services/core.md` - the contract this app mirrors.
 - `context/pages/conventions/testing.md` and `context/pages/conventions/tooling.md` - how tests and builds are run.
 
@@ -41,8 +42,8 @@ Owns all presentation and client-side state: connection management, the entity t
 
 | To | Run |
 |---|---|
-| Test | `../scripts/in-docker.sh npm test -- --watch=false`. It runs vitest through the Angular builder; plain `npx vitest` has no Angular compiler and fails sound tests |
-| Test the shell | `../scripts/in-docker.sh npm run test:electron` |
+| Test | `../tools/checks/in-docker.sh npm test -- --watch=false`. It runs vitest through the Angular builder; plain `npx vitest` has no Angular compiler and fails sound tests |
+| Test the shell | `../tools/checks/in-docker.sh npm run test:electron` |
 | Build | `npm run build` |
 | End-to-end, once at the end of a lane with a visible change | `npx playwright test -c e2e`, on the machine: it starts the API and brokers |
 
@@ -57,5 +58,19 @@ The only skipped tests allowed are the 8 in `metrics.service.spec.ts`.
 | Seeing the change in the running app | The `run` skill |
 | Building what an artboard draws | `reference/prototype.md` of the pipeline skill; the artboards are under `context/prototypes/web-app/` |
 
-How the app works, its tests and its known gaps: `context/pages/services/web-app.md`. The Electron
-shell has its own rules file.
+## What to read for a change
+
+Read the one row your change matches. Pages are under `context/pages/services/web-app/`; the map, `context/pages/services/web-app.md`, lists them all. The Electron shell has its own rules file.
+
+| If the change touches | Read |
+|---|---|
+| `ApiService`, `apiPath`, `HighlightPipe` | `how-the-rules-are-kept.md` |
+| A package, the build, bootstrap, routes, the toolbar, `core/` | `stack-and-bootstrap.md` |
+| Delete, resubmit, move or send in the messages dialog | `bulk-operations.md` |
+| The automatic resubmit of a dead-letter queue | `bulk-automatic-resubmit.md` |
+| The entity form, sub-queue tabs, scheduled messages, sessions | `features-messages-and-sessions.md` |
+| The entity panel, the tree, definitions, the purge confirmation | `features-entities-panel-and-definitions.md` |
+| Settings, or a list page under `features/` | `features-settings-and-folders.md` |
+| The Monitoring screen | `features-monitoring.md` |
+| The provider registry, capabilities, `shared/` | `providers-and-shared.md` |
+| A spec or an end-to-end test | `tests.md` |

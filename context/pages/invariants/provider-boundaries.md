@@ -45,7 +45,7 @@ By convention and review only; no architecture test exists (tracked in [[pages/r
 ## How it's verified
 
 - `src/ServiceBusExplorer.Core.Tests/Providers/RabbitMQSessionTests.cs#using ServiceBusExplorer.Core.Providers.RabbitMQ;` - pins what the RabbitMQ provider answers for sessions, the one capability difference with a test.
-- Nothing fails when a vendor `using` appears outside a provider folder. The `boundaries` lens of gate 6 is the check.
+- Nothing fails when a vendor `using` appears outside a provider folder. The `boundaries` review lens is the check.
 
 ## Known exceptions
 

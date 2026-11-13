@@ -3,7 +3,7 @@
 # sessions in it, and checks what they did against something a session cannot argue with: the log
 # of instruction files that loaded, or the text a hook returned.
 #
-#   scripts/try-harness.sh [folder for the copy]     default: a new folder under ~/.cache
+#   tools/dev/try-harness.sh [folder for the copy]     default: a new folder under ~/.cache
 #
 # Prints PASS or FAIL per check and exits 1 on any FAIL. It needs claude, jq, rsync and Docker, and
 # it spends tokens: six short sessions on Sonnet. Nothing in this repository is changed; the copy
@@ -19,10 +19,10 @@ LANGUAGE_RULES=.claude/rules/dotnet-skills.md
 UNIT_TEST="dotnet test src/ServiceBusExplorer.Core.Tests -v q"
 REVIEWER=explorer-reviewer
 
-ROOT=$(cd "$(dirname "$0")/.." && pwd)
+ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 for tool in claude jq rsync docker; do command -v "$tool" >/dev/null || { echo "try-harness: $tool is required" >&2; exit 2; }; done
 # Under the home folder, not /tmp: Docker Desktop shares only the folders it is told to, and
-# scripts/in-docker.sh mounts the copy.
+# tools/checks/in-docker.sh mounts the copy.
 mkdir -p "${XDG_CACHE_HOME:-$HOME/.cache}"
 TRIAL=${1:-$(mktemp -d "${XDG_CACHE_HOME:-$HOME/.cache}/try-harness.XXXXXX")}; KEEP=${1:+yes}
 rsync -a --delete --exclude bin --exclude obj --exclude node_modules --exclude .git --exclude dist --exclude release "$ROOT/" "$TRIAL/" || exit 2
@@ -50,7 +50,7 @@ check "the rules of other parts stay out"                                 '! loa
 ask Bash "Use the Bash tool to run exactly this command, once: $UNIT_TEST   Then report word for word what the tool returned. Run no other command."
 check "a unit test run outside the container is denied, with the command to use" 'printf "%s" "$RESULT" | grep -q "in-docker.sh"'
 
-ask Bash "Run this exact command with the Bash tool, once, and wait for it: scripts/in-docker.sh $UNIT_TEST   Then repeat, word for word, the last line of its output that starts with Passed! or Failed!"
+ask Bash "Run this exact command with the Bash tool, once, and wait for it: tools/checks/in-docker.sh $UNIT_TEST   Then repeat, word for word, the last line of its output that starts with Passed! or Failed!"
 check "the same test run through the container is allowed and passes"   'printf "%s" "$RESULT" | grep -q "Passed!  - Failed:     0"'
 
 ask Agent,Read "Dispatch the $REVIEWER agent with exactly this task and report its answer word for word: \"Do three things. A: read lines 1-3 of $PART_FILE with Read. B: run the Bash command \`ls\` once and report exactly what the tool returned, including any error. C: run the Bash command \`git rev-parse --is-inside-work-tree\` and report what it returned.\""

@@ -1,7 +1,7 @@
 #!/bin/sh
 # Finds text a person does not see on screen but a model still reads.
 #
-#   scripts/check-hidden-text.sh [file-or-directory ...]
+#   tools/checks/check-hidden-text.sh [file-or-directory ...]
 #
 # With no argument it scans the text files of the repo. Give it paths to check something else,
 # for example a file from outside before a model is asked to read it.
@@ -22,7 +22,7 @@
 # The issue and pull request forms under .github may carry HTML comments: they are notes to
 # the person filling in the form.
 
-ROOT=$(cd "$(dirname "$0")/.." && pwd)
+ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 command -v perl >/dev/null 2>&1 || { echo "check-hidden-text: perl is required" >&2; exit 2; }
 [ $# -gt 0 ] || set -- "$ROOT"
 

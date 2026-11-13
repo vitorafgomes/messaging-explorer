@@ -44,8 +44,8 @@ against it line by line.
 3. **Rules at risk**: the invariant pages the change could break, and the test that pins
    each. A step that would break one is not a step: a superseding decision comes first.
 4. **Acceptance**: the literal commands, from `reference/test-surface.md`.
-5. **Out of scope**: nearby work this change leaves alone. The "Known gaps" of the project
-   page are out of scope unless the request names one.
+5. **Out of scope**: nearby work this change leaves alone. The known gaps of the project (its
+   `known-gaps*` topic pages) are out of scope unless the request names one.
 6. **Requirement table**: each requirement in the user's words, the test path and name that prove
    it, and its kind. Add a row for each behaviour the change implements beyond the request: a
    limit, a reset, a failure path. A request to build what an artboard draws follows
@@ -71,19 +71,21 @@ the xUnit test, nor a documented abstraction (the provider interface, capabiliti
 Edit, then the test for that edit, step by step. When the
 result departs from the plan, tell the owner; do not patch it over.
 
-Unit and web tests run in the container: `scripts/in-docker.sh <command>`. Dispatch forms for
+Unit and web tests run in the container: `tools/checks/in-docker.sh <command>`. Dispatch forms for
 the implementer and the reviewer are in `reference/dispatch.md`. At most two heavy lanes run at
 once on the owner's machine: a lane that starts brokers in Docker, or the end-to-end suite.
 
 ## 5. Check
 
 - `dotnet build ServiceBusExplorer.slnx` with 0 warnings on the summary line (the build does not
-  fail on a warning), and `npm run build` in `web-app/` for a web change. This repo has no
-  format or analyzer check yet: do not claim one ran.
+  fail on a warning), and `npm run build` in `web-app/` for a web change.
+- `tools/checks/check-diagnostics.sh <touched .csproj>`, clean, one project per run: it rebuilds
+  with every analyzer and the documentation file on, which the plain build does not.
 - The test surface from `reference/test-surface.md`, with a count per project and 0 skipped. It
   runs once, at the end of the lane, and again only after a fix that touched code. A change to
   `ServiceBusExplorer.Core` runs both unit projects; a provider or broker call adds the
-  integration suite; a visible web change adds the end-to-end suite, once, at the end.
+  integration suite; a visible web change adds the end-to-end suite, once, at the end. Every
+  unit project at once: `tools/checks/in-docker.sh bash tools/checks/test-per-project.sh`.
 
 ## 6. Prove (Standard and Sensitive)
 
@@ -122,7 +124,8 @@ understood: stop and hand the rest to the owner.
   |---|---|
   | The session found something no page says | `wiki-crystallize` |
   | A page was created | `wiki-integrate`, for the index and the links back |
-  | Pages changed | `wiki-lint`, then `scripts/check-context-refs.sh`; read every citation you rewrote |
+  | Pages changed | `wiki-lint`, then `tools/checks/check-context-refs.sh`; read every citation you rewrote |
+  | The owner asks whether the tests of a project would catch a bug | `stryker-project` |
 - The size check and the pull request body: `reference/records.md`.
 - Propose one conventional commit message in a code block, and stop. The owner decides about git;
   a commit the owner asks for goes on a `feat/`, `fix/`, `chore/` or `docs/` branch.

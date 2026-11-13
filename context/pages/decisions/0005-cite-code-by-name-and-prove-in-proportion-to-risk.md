@@ -29,7 +29,7 @@ Measured on 2026-11-13:
 
 ## Decision
 
-- **Cite by name.** A code citation is `path#anchor`: a member, a type, a test title or a key that occurs in the file. `scripts/check-context-refs.sh` checks that the file exists and holds the anchor, and refuses a citation by line number. The existing citations were converted on 2026-11-13.
+- **Cite by name.** A code citation is `path#anchor`: a member, a type, a test title or a key that occurs in the file. `tools/checks/check-context-refs.sh` checks that the file exists and holds the anchor, and refuses a citation by line number. The existing citations were converted on 2026-11-13.
 - **Prove in proportion to the risk.** A mutation proof is required for an entry under Rules A, F, G, H or I, or a new guard. Other new behaviour needs a failing-first spec of what the user sees; a visual refactor needs the behaviour lock (existing specs and end-to-end flows green before and after).
 - **Run the suites once per lane.** The integration suite runs only when broker code changes; the end-to-end suite once at the end of a lane that changes the screen.
 - **One review round,** a second only for a confirmed P1.

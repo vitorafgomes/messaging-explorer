@@ -12,7 +12,7 @@ The order of work for something new. Step numbers of `SKILL.md` are named where 
    - Which broker operations it can reach, and whether any removes or moves a message.
    - Which abstraction each vendor type stays behind.
    - Where the configuration lives, and how a contributor without paid credentials runs it.
-3. **Read.** The project's service page, then `reference/sensitive.md`. A feature is where a project
+3. **Read.** The project's map and the topic pages the feature touches, then `reference/sensitive.md`. A feature is where a project
    first gains an endpoint, a broker operation or a new error
    path, and its page has no rule yet for a capability it does not have. A conflict with a
    rule stops the work: a superseding decision comes first.

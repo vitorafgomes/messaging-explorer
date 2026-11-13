@@ -10,9 +10,9 @@
 # frontmatter status marks them as a record are skipped, and so is a path that names another repo
 # or a package (`other-repo/src/...`, `node_modules/...`).
 #
-# Usage: scripts/check-context-refs.sh [root]   exits 1 on any broken citation.
+# Usage: tools/checks/check-context-refs.sh [root]   exits 1 on any broken citation.
 set -uo pipefail
-root="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
+root="${1:-$(cd "$(dirname "$0")/../.." && pwd)}"
 total=0; skipped=0; broken=0
 pages=$(mktemp); trap 'rm -f "$pages"' EXIT
 if ! find "$root/context/pages" -name '*.md' -print0 > "$pages"; then

@@ -134,6 +134,7 @@ public class RabbitMQManagementClient : IDisposable
     /// Gets a specific queue by name.
     /// </summary>
     /// <param name="queueName">The name of the queue.</param>
+    /// <param name="cancellationToken">Cancels the request.</param>
     /// <returns>The queue information, or null if not found.</returns>
     public async Task<RabbitMQQueueInfo?> GetQueueAsync(string queueName, CancellationToken cancellationToken = default)
     {
@@ -407,6 +408,7 @@ public class RabbitMQManagementClient : IDisposable
     /// Gets all bindings for an exchange (bindings where this exchange is the source).
     /// </summary>
     /// <param name="exchangeName">The name of the exchange.</param>
+    /// <param name="cancellationToken">Cancels the request.</param>
     /// <returns>A list of bindings for the exchange.</returns>
     public async Task<IEnumerable<RabbitMQBindingInfo>> GetExchangeBindingsAsync(string exchangeName, CancellationToken cancellationToken = default)
     {

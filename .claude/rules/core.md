@@ -15,7 +15,9 @@ Owns the provider contract and both implementations, the bulk delete / resubmit 
 - `context/pages/invariants/bulk-operations-are-at-least-once.md` - `ResubmitCoreAsync` and `MoveCoreAsync` send before they complete
 - `context/pages/invariants/a-guard-must-be-able-to-fire.md` - the no-progress and safety-timeout exits in `DeleteMessagesCoreAsync`
 
-A gap written under "Known gaps" on `context/pages/services/core.md` may stay as it was found.
+Each rule in full, with the code and tests that keep it: `context/pages/services/core/how-the-rules-are-kept.md`.
+
+A gap written on `context/pages/services/core/known-gaps.md` or `known-gaps-more.md` may stay as it was found.
 A change never adds a gap and never widens one.
 
 ## Read before you change
@@ -41,7 +43,22 @@ A change never adds a gap and never widens one.
 
 | When | Run |
 |---|---|
-| Test | `scripts/in-docker.sh dotnet test src/ServiceBusExplorer.Core.Tests`, and the Api tests too: the Api references Core |
+| Test | `tools/checks/in-docker.sh dotnet test src/ServiceBusExplorer.Core.Tests`, and the Api tests too: the Api references Core |
 | A provider or a broker call changed | also `dotnet test src/ServiceBusExplorer.IntegrationTests`, on the machine, with Docker |
 
-How the project works, its tests and its known gaps: `context/pages/services/core.md`.
+## What to read for a change
+
+Read the one row your change matches. Pages are under `context/pages/services/core/`; the map, `context/pages/services/core.md`, lists them all.
+
+| If the change touches | Read |
+|---|---|
+| `IMessagingProvider`, capabilities, `ProviderFactory`, the entity types | `public-contract.md` |
+| Azure clients, credentials, search, entity administration, counts | `azure-provider.md` |
+| A sub-queue, scheduled messages, a disabled entity | `azure-sub-queues.md` |
+| Azure sessions | `azure-sessions.md` |
+| Export or import of entity definitions | `azure-definitions.md` |
+| Purge, bulk delete, resubmit or move on Azure | `azure-bulk-operations.md` |
+| `RabbitMQProvider`, `RabbitMQManagementClient`, `ServiceBusService` | `rabbitmq-and-legacy.md` |
+| `FileWorkspaceManager`, the metrics services | `workspace-and-metrics.md` |
+| A test in `ServiceBusExplorer.Core.Tests` | `tests-unit-azure.md`, `tests-unit-definitions-and-workspace.md` |
+| A test in `ServiceBusExplorer.IntegrationTests` | `tests-integration.md` |

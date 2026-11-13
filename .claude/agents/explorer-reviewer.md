@@ -53,12 +53,12 @@ You check that proof; you do not run it again. A row with no proof is a P1 findi
 | `secrets` | `context/pages/invariants/secrets-masked-at-the-api-boundary.md` | A connection string, a password, a client secret and the API secret leave the backend only as the mask, except on an export the user asked for with secrets. The mask never overwrites a stored secret. No log line carries one. A new secret field is in the mask, in the merge on save and import, and in a masking test. |
 | `message-safety` | `context/pages/invariants/bulk-operations-are-at-least-once.md` | Send first, complete after. A message sent and not removed from its source is reported as a possible duplicate and never resent in silence. Every failure is reported per sequence number. Scans are bounded. The caller's `CancellationToken` stops the batch. |
 | `boundaries` | `context/pages/invariants/provider-boundaries.md` | A broker is reached through `IMessagingProvider`. What a provider cannot do is declared in `IProviderCapabilities`, never a silent no-op. `Azure.*` and `RabbitMQ.Client` types stay inside `src/ServiceBusExplorer.Core/Providers/<Provider>/`. Each new call across an external boundary has a test in which the call fails (timeout, 5xx, a broker exception) and that asserts what the caller does. |
-| `invariants` | The project's service page and the invariants it links | The four checks below. |
+| `invariants` | The project's rules file and its invariants | The four checks below. |
 
 The `invariants` lens checks:
 
-- **The project's rules**, as its service page and the root instructions state them. A recorded
-  gap ("Known gaps") may stay as it was found; a change may not add one or widen one.
+- **The project's rules**, as its rules file and the root instructions state them. A recorded
+  gap (`known-gaps`) may stay as it was found; a change may not add one or widen one.
 - **Correctness:** null paths, off-by-one, a misused API, a swallowed exception, a failure
   answered as success, and a guard that cannot fire
   (`context/pages/invariants/a-guard-must-be-able-to-fire.md`). A new guard has a test whose
@@ -79,10 +79,9 @@ leaves out is P1.
 
 ## Refute one finding
 
-When the prompt starts with "Refute one finding", skip the order of work above. Read the cited
-file in the tree the prompt names, around the cited line, and the page or rule the finding cites.
-Answer `located` (the line holds what the finding describes), `refuted` and `reason`. A finding
-you could not locate is `located: false`, never refuted.
+When the prompt starts with "Refute one finding", skip the order of work. Read the cited line
+in the tree the prompt names, and the rule it cites. Answer `located`, `refuted` and `reason`; a
+finding you could not locate is `located: false`, never refuted.
 
 ## Report
 

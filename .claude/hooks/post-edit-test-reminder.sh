@@ -9,9 +9,9 @@
 jq -c '
   (.tool_input.file_path // "") as $path
   | if ($path | test("(^|[\\\\/])src[\\\\/].+\\.cs$"; "i")) and ($path | test("Tests[\\\\/]") | not)
-    then "Edited code: write or run its test now (xUnit), through scripts/in-docker.sh. Before you report: build with 0 warnings on the summary line, and both unit projects when the core changed. A change to the API surface, a secret or a message operation is never a fast path."
+    then "Edited code: write or run its test now (xUnit), through tools/checks/in-docker.sh. Before you report: build with 0 warnings on the summary line, and both unit projects when the core changed. A change to the API surface, a secret or a message operation is never a fast path."
     elif ($path | test("(^|[\\\\/])web-app[\\\\/](src|electron)[\\\\/].+\\.(ts|mts|js)$"; "i") and ($path | test("\\.(spec|test)\\.(ts|mts|js)$"; "i") | not))
-    then "Edited web code: write or run its spec now. Before you report, in web-app/: the tests through scripts/in-docker.sh npm test -- --watch=false, and npm run build. An HTTP call goes through ApiService."
+    then "Edited web code: write or run its spec now. Before you report, in web-app/: the tests through tools/checks/in-docker.sh npm test -- --watch=false, and npm run build. An HTTP call goes through ApiService."
     else empty
     end
   | { hookSpecificOutput: { hookEventName: "PostToolUse", additionalContext: . } }

@@ -7,11 +7,11 @@ while the lines are still in front of them.
 | What happened | Where it is recorded |
 |---|---|
 | Behaviour changed | A dated entry in `context/pages/history/<project>.md`: what it was, what it is, which tests changed on purpose |
-| The code a page describes changed | The project's service page, with its `updated` date and its `changes` note |
-| A test was added | The testing section of the project's service page, beside the tests of the same behaviour |
+| The code a page describes changed | The topic page that describes it, with its `updated` date and its `changes` note |
+| A test was added | The project's tests topic page, beside the tests of the same behaviour |
 | A decision was amended | A dated amendment in the decision page that names the earlier text it replaces; the earlier text stays |
 | A follow-up was closed | Its entry removed from `context/pages/roadmap/followups.md` |
-| A "Known gaps" entry was closed | Removed from the project page and from `context/pages/roadmap/followups.md`, in the same commit |
+| A "Known gaps" entry was closed | Removed from the project's `known-gaps` page and from `context/pages/roadmap/followups.md`, in the same commit |
 | Any of the above | One line at the top of `context/log.md` |
 
 A decision keeps its original text. The amendment is added below it, says which sentence of the
@@ -24,14 +24,14 @@ in the history page.
 
 Code is cited by name, `path#Member` (a member, a type, a test title or a key that occurs in the
 file), never by line number (`context/pages/decisions/0005-cite-code-by-name-and-prove-in-proportion-to-risk.md`).
-`scripts/check-context-refs.sh` refuses a line number. A citation that resolves proves the anchor
+`tools/checks/check-context-refs.sh` refuses a line number. A citation that resolves proves the anchor
 is in the file, not that the page still says what the code does: read each one you rewrite.
 
 No test counts go into the context; CI shows them.
 
 ## Before the commit message
 
-- After a change to `src/`, `web-app/` or `context/`, run `scripts/check-context-refs.sh` and fix
+- After a change to `src/`, `web-app/` or `context/`, run `tools/checks/check-context-refs.sh` and fix
   every citation it reports.
 - The pull request body uses `.github/PULL_REQUEST_TEMPLATE.md` and carries the line
   `Review: applied N, rejected M`. Its three safety boxes (API surface, secrets, message

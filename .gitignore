@@ -91,3 +91,4 @@ graphify-out/
 
 # Throwaway extraction of origin/main used by the mechanic's prove-red run
 .prove-red/
+StrykerOutput/

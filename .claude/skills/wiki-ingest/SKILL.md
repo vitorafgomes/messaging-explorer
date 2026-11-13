@@ -276,6 +276,8 @@ Move `raw/[filename]` to `ingested/assets/[filename]` instead.
 
 #### 2g. Update index.md
 
+In this repo `index.md` lists the areas and each `pages/<area>/index.md` lists the pages of its area: add the entry to the index of the page's area, and a service topic page (`pages/services/<project>/<topic>.md`) to the Topics table of its map instead (`context/CLAUDE.md`, Indexes).
+
 For each new wiki page created, add an entry in the correct section:
 `- [[Note Title]]: One sentence description, 150 chars max. \`relative/path/to/page.md\``
 

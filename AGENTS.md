@@ -15,12 +15,11 @@ Unit and web tests run in the project's container, never directly on the machine
 
 | To | Run |
 |---|---|
-| Build | `dotnet build ServiceBusExplorer.slnx` and read the summary line: nothing fails the build on a warning, and the count must be 0 |
-| Test the core | `scripts/in-docker.sh dotnet test src/ServiceBusExplorer.Core.Tests` |
-| Test the API | `scripts/in-docker.sh dotnet test src/ServiceBusExplorer.Api.Tests` |
+| Build | `dotnet build ServiceBusExplorer.slnx`, 0 warnings on the summary line; then `tools/checks/check-diagnostics.sh <touched .csproj>` clean |
+| Test every unit project | `tools/checks/in-docker.sh bash tools/checks/test-per-project.sh`, each with a count and 0 skipped |
 | Test one test | add `--filter "FullyQualifiedName~<Name>"` |
 | Integration tests | `dotnet test src/ServiceBusExplorer.IntegrationTests`, on the machine: they start brokers in Docker |
-| Web tests, in `web-app/` | `../scripts/in-docker.sh npm test -- --watch=false`. Never plain `npx vitest`: it has no Angular compiler |
+| Web tests, in `web-app/` | `../tools/checks/in-docker.sh npm test -- --watch=false`. Never plain `npx vitest`: it has no Angular compiler |
 | Web build, in `web-app/` | `npm run build` |
 
 A change to `ServiceBusExplorer.Core` runs both unit projects: the API references the core. The
@@ -31,7 +30,7 @@ a lane that changes the screen. At most two such heavy lanes run at once on the 
 
 Three things are never left for later: nobody but the local user reaches the API, a secret never
 leaves the backend unmasked or reaches a log, and a bulk operation never loses a message
-silently. Each known breach is written under "Known gaps" on the service pages and in
+silently. Each known breach is written on the `known-gaps` topic pages and in
 `context/pages/roadmap/followups.md`. A change may leave a recorded gap as it found it. It never
 adds one and never widens one.
 
@@ -72,7 +71,7 @@ provider interface, the capabilities and the factory are documented abstractions
 recommended. `docs/ADDING_PROVIDERS.md` describes a flow the code does not fully run; the service
 pages say which parts.
 
-**Documentation lives in `context/`, in English.** Code carries a `<summary>` on a public type or
+**Documentation lives in `context/`, in English, with no emojis.** Code carries a `<summary>` on a public type or
 member, and no comment that narrates inside a member or refers to a decision, a page or an issue;
 the one exception is a `ponytail:` line that names a deferral. Identifiers and comments are in
 English. An existing file is edited before a new one is created, and no planning or analysis
@@ -80,7 +79,7 @@ Markdown is written outside `context/`.
 `README.md` is the public front page; how it works and why stays in `context/`. A page cites code
 by name, `path#Member`, never by line number.
 
-**Git belongs to the owner.** No commit, push, pull request, release or merge unless the owner
+**Git belongs to the owner.** No commit, push, pull request, release, publish or merge unless the owner
 asks for that action. A batch authorisation in words covers one session's commits and pull
 requests on a `feat/`, `fix/`, `chore/` or `docs/` branch, and never a push to `main`: every
 change reaches `main` through a pull request. A commit, a pull
