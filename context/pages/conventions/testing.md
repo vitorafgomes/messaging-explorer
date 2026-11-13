@@ -2,7 +2,7 @@
 title: "Testing"
 version: "1.0"
 date: 2026-11-12
-changes: "2026-11-13: counts after the report of a failed send as possible duplicates and the protocol pin (Core 389, Api 364, Integration 94). Earlier the same day: counts after the peek without bodies and the scan-reach defect pin. Earlier the same day: counts after the peek from a position. Before: integration project against the Azure Service Bus emulator: the Running row, the emulator fixture, what the emulator cannot do; also on 2026-11-13: 2026-11-13: end-to-end tests with Playwright, the app in Chromium against the API and brokers in containers, with screenshots in both themes; the Running row, the section, the E2E workflow in What CI runs. Earlier: integration project against the Azure Service Bus emulator: the Running row, the emulator fixture, what the emulator cannot do. Also on 2026-11-13: 2026-11-13: the Running counts after the monitoring counts change; the monitoring controller and poll have tests. Earlier: integration project against the Azure Service Bus emulator: the Running row, the emulator fixture, what the emulator cannot do"
+changes: "2026-11-13: counts after the Settings screen (web 59 files and 1021 tests, Electron 32, end-to-end 16 with the Settings flow). Earlier 2026-11-13: counts after the report of a failed send as possible duplicates and the protocol pin (Core 389, Api 364, Integration 94). Earlier the same day: counts after the peek without bodies and the scan-reach defect pin. Earlier the same day: counts after the peek from a position. Before: integration project against the Azure Service Bus emulator: the Running row, the emulator fixture, what the emulator cannot do; also on 2026-11-13: 2026-11-13: end-to-end tests with Playwright, the app in Chromium against the API and brokers in containers, with screenshots in both themes; the Running row, the section, the E2E workflow in What CI runs. Earlier: integration project against the Azure Service Bus emulator: the Running row, the emulator fixture, what the emulator cannot do. Also on 2026-11-13: 2026-11-13: the Running counts after the monitoring counts change; the monitoring controller and poll have tests. Earlier: integration project against the Azure Service Bus emulator: the Running row, the emulator fixture, what the emulator cannot do"
 page_type: convention
 status: active
 description: "How Messaging Explorer is tested: xUnit with Moq for the two .NET projects, vitest for the Angular app, what runs in CI, the state at the founding, and what has no test."
@@ -33,9 +33,9 @@ reliability: high
 | Core | `dotnet test src/ServiceBusExplorer.Core.Tests` | 433 passed, 0 skipped (2026-11-13) |
 | Api | `dotnet test src/ServiceBusExplorer.Api.Tests` | 444 passed, 0 skipped (2026-11-13) |
 | Integration (Docker) | `dotnet test src/ServiceBusExplorer.IntegrationTests` | 105 passed, 0 skipped (29 RabbitMQ, 65 Azure Service Bus) on 2026-11-13, 392 s wall for the whole project run on that day, of which about 70 s is the scan-reach defect pin and about 110 s the protocol pin, each arranging 800 dead-lettered messages (231 s earlier the same day with 93); earlier, 93 to 102 s wall with the images cached, as measured when the project had 74 tests. The two collections run in parallel and the Azure one dominates: about 20 s to start SQL Server and the emulator, about 68 s of tests, of which 20 s is the deep dead-letter resubmit (350 messages arranged one by one) and 15 s three calls to a closed port that wait out the SDK retries |
-| Web | `npm test -- --watch=false` in `web-app/` | 55 files: 986 passed, 8 skipped (2026-11-13) |
-| Electron shell helpers and preload | `npm run test:electron` in `web-app/` (`node --test`) | 28 passed, 0 skipped (2026-11-13) |
-| End-to-end (Docker, Chromium) | `npx playwright test -c e2e` in `web-app/` | 15 passed, of which 3 are expected failures that pin known defects, 0 skipped; about 1 min 45 s wall with the images cached (2026-11-13) |
+| Web | `npm test -- --watch=false` in `web-app/` | 59 files: 1021 passed, 8 skipped (2026-11-13) |
+| Electron shell helpers and preload | `npm run test:electron` in `web-app/` (`node --test`) | 32 passed, 0 skipped (2026-11-13) |
+| End-to-end (Docker, Chromium) | `npx playwright test -c e2e` in `web-app/` | 16 passed, of which 3 are expected failures that pin known defects, 0 skipped; about 1 min 25 s wall with the images cached (2026-11-13) |
 | Build | `dotnet build ServiceBusExplorer.slnx` | 0 warnings, 0 errors |
 
 The Api tests share process-wide environment variables, so the assembly disables parallelisation (`src/ServiceBusExplorer.Api.Tests/Usings.cs:4`).
@@ -127,6 +127,10 @@ Since 2026-11-13, `web-app/e2e/` drives the app in Chromium with Playwright agai
     - The Connections screen lists the connection while the toolbar shows it connected.
     - The Queues and Topics screens list the entities.
     - Monitoring shows the queue with 4 after a refresh.
+  - Settings (`web-app/e2e/settings.e2e.ts:31`), with no broker: the page also gets sample update members of the preload (version, channel, the reason a package cannot update itself, a check that answers up to date) and a hook to send an update status.
+    - Opens Settings from the toolbar icon; the version and About show the sample version and the Stable channel, and the API as local.
+    - Not checked yet, then Check now: up to date; then an available version, in the screen and as the toolbar link.
+    - Opens Clear all data, whose button is disabled until the words are typed, and cancels it; nothing is cleared.
 - **Known defects are pinned as expected failures.** A flow that meets a recorded defect asserts what works. The correct behaviour sits in its own test, marked `test.fail` with the defect in one line. The suite stays green while the defect stands and turns red on the day it is fixed, when the mark is removed. Three are pinned:
   - The RabbitMQ peek returns the head message again and again ([[pages/roadmap/code-audit-2026-11]]).
   - The connection card says "Unknown Provider", because the provider type of the app is numeric and the API sends a name (same page).

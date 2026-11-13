@@ -1,0 +1,207 @@
+<main class="settings">
+  <header class="page-head">
+    <h1>Settings</h1>
+    <p class="muted">The update channel, the data saved on this computer, developer mode and About. The window has no menu bar, so they live here.</p>
+  </header>
+
+  <section class="group" aria-labelledby="updates-heading">
+    <div class="group-head">
+      <h2 id="updates-heading">Updates</h2>
+      <p class="note">Nothing downloads or installs without a click.</p>
+    </div>
+    <div class="group-body">
+      <div class="setting-row">
+        <span class="row-label">Current version</span>
+        <span class="tabular" data-testid="current-version">{{ updates.version() || 'Unknown' }}</span>
+      </div>
+
+      @if (updates.status() === 'unavailable') {
+        <div class="panel" role="status">
+          <h3><mat-icon aria-hidden="true">info</mat-icon>Updates are handled by the desktop app</h3>
+          <p>This window is not the desktop app, so it cannot check for updates or change the channel.</p>
+          <a mat-stroked-button [href]="releasesUrl" target="_blank" rel="noopener noreferrer">
+            Open the release page<mat-icon iconPositionEnd aria-hidden="true">open_in_new</mat-icon>
+          </a>
+        </div>
+      } @else {
+        <div class="setting-row">
+          <span class="row-label" id="channel-label">Channel</span>
+          <mat-button-toggle-group aria-labelledby="channel-label" [value]="updates.channel()"
+                                   (change)="setChannel($event.value)">
+            <mat-button-toggle value="latest">Stable</mat-button-toggle>
+            <mat-button-toggle value="beta">Beta</mat-button-toggle>
+          </mat-button-toggle-group>
+        </div>
+        @if (updates.channelError()) {
+          <p class="inline-error" role="alert">The channel was not changed: {{ updates.channelError() }}</p>
+        }
+        <div class="setting-row">
+          <span class="row-label">Check</span>
+          <button mat-stroked-button type="button" (click)="updates.check()" [disabled]="updates.status() === 'checking'">
+            <mat-icon>refresh</mat-icon>Check now
+          </button>
+        </div>
+        <p class="note">Checked 5 seconds after the app starts, then every 4 hours. Beta also receives pre-releases; going back to Stable never downgrades, you stay on the beta until a newer stable version is out.</p>
+
+        <div class="state" aria-live="polite" data-testid="update-state">
+          @switch (updates.status()) {
+            @case ('idle') {
+              <div class="panel">
+                <h3><mat-icon aria-hidden="true">schedule</mat-icon>Not checked yet in this session</h3>
+                <p>Check now asks the release page for a newer version on the {{ channelName() }} channel.</p>
+              </div>
+            }
+            @case ('checking') {
+              <div class="panel" role="status">
+                <h3><mat-spinner diameter="20" aria-hidden="true" />Checking for updates</h3>
+              </div>
+            }
+            @case ('dev-mode') {
+              <div class="panel">
+                <h3><mat-icon aria-hidden="true">code</mat-icon>A development build does not update</h3>
+                <p>Updates are checked only in a packaged app.</p>
+              </div>
+            }
+            @case ('up-to-date') {
+              <div class="panel">
+                <h3><mat-icon class="ok" aria-hidden="true">check_circle</mat-icon>You are up to date</h3>
+                <p>{{ updates.version() }} is the newest version on the {{ channelName() }} channel.</p>
+              </div>
+            }
+            @case ('error') {
+              <section class="panel error-panel" aria-label="Error" role="alert">
+                @if (updates.failedDuring() === 'download') {
+                  <h3><mat-icon aria-hidden="true">warning</mat-icon>The update to {{ updates.availableVersion() }} was not downloaded</h3>
+                  <p>{{ updates.error() }} You are still on {{ updates.version() }} and nothing was installed.</p>
+                } @else {
+                  <h3><mat-icon aria-hidden="true">warning</mat-icon>Could not check for updates</h3>
+                  <p>{{ updates.error() }} You are still on {{ updates.version() }}.</p>
+                }
+                <div class="actions">
+                  <button mat-stroked-button type="button" (click)="retry()"><mat-icon>refresh</mat-icon>Retry</button>
+                  <a mat-button [href]="releaseOfVersion()" target="_blank" rel="noopener noreferrer">
+                    Open the release page<mat-icon iconPositionEnd aria-hidden="true">open_in_new</mat-icon>
+                  </a>
+                </div>
+              </section>
+            }
+            @default {
+              @if (blockerReason(); as blocked) {
+                <div class="panel blocked-panel">
+                  <h3><mat-icon aria-hidden="true">info</mat-icon>
+                    @if (updates.availableVersion()) {
+                      Version {{ updates.availableVersion() }} is available, and this package cannot update itself
+                    } @else {
+                      This package cannot update itself
+                    }
+                  </h3>
+                  <p><strong>{{ blocked.platform }}:</strong> {{ blocked.reason }}</p>
+                  <p>Download the new version and replace this copy. Your connections stay: they live in the data folder, not in the app.</p>
+                  <a mat-stroked-button [href]="releasesUrl" target="_blank" rel="noopener noreferrer">
+                    Open the download page<mat-icon iconPositionEnd aria-hidden="true">open_in_new</mat-icon>
+                  </a>
+                </div>
+              } @else {
+                @switch (updates.status()) {
+                  @case ('available') {
+                    <div class="panel available-panel">
+                      <h3><mat-icon aria-hidden="true">download</mat-icon>Version {{ updates.availableVersion() }} is available</h3>
+                      <p>You have {{ updates.version() }}. Nothing is downloaded until you choose Download.</p>
+                      <div class="actions">
+                        <button mat-flat-button type="button" (click)="updates.download()"><mat-icon>download</mat-icon>Download</button>
+                        <a mat-button [href]="releaseOfVersion()" target="_blank" rel="noopener noreferrer">
+                          Open the release page<mat-icon iconPositionEnd aria-hidden="true">open_in_new</mat-icon>
+                        </a>
+                      </div>
+                    </div>
+                  }
+                  @case ('downloading') {
+                    <div class="panel" role="status">
+                      <h3><mat-spinner diameter="20" aria-hidden="true" />Downloading version {{ updates.availableVersion() }}</h3>
+                      <div class="download-progress">
+                        <mat-progress-bar mode="determinate" [value]="updates.percent()" aria-label="Download progress" />
+                        <span class="tabular">{{ updates.percent() }}%</span>
+                      </div>
+                      <p>You can keep working. The app does not restart on its own.</p>
+                    </div>
+                  }
+                  @case ('downloaded') {
+                    <div class="panel ready-panel">
+                      <h3><mat-icon aria-hidden="true">check_circle</mat-icon>Version {{ updates.availableVersion() }} is ready to install</h3>
+                      <p>Restart now, or keep working: it installs the next time you quit the app.</p>
+                      <div class="actions">
+                        <button mat-flat-button type="button" (click)="updates.install()"><mat-icon>restart_alt</mat-icon>Restart to Update</button>
+                      </div>
+                    </div>
+                  }
+                }
+              }
+            }
+          }
+        </div>
+      }
+    </div>
+  </section>
+
+  <section class="group" aria-labelledby="data-heading">
+    <div class="group-head">
+      <h2 id="data-heading">Data</h2>
+      <p class="note">Everything the app saves is on this computer.</p>
+    </div>
+    <div class="group-body">
+      <div class="setting-row">
+        <span class="row-label">Connections file</span>
+        <span>data/workspace.json in the user data folder of the app. <strong>Plain text, secrets included:</strong> protect it like a password file.</span>
+      </div>
+      <div class="danger-zone">
+        <h3><mat-icon aria-hidden="true">warning</mat-icon>Danger zone</h3>
+        <div class="danger-row">
+          <div class="danger-text">
+            <div class="strong">Clear all data</div>
+            <div class="muted">Deletes every saved connection, client and environment from this computer. No broker is touched. It cannot be undone.</div>
+          </div>
+          <button mat-stroked-button type="button" class="danger-button" (click)="openClearAllData()">
+            <mat-icon>delete_forever</mat-icon>Clear all data
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="group" aria-labelledby="developer-heading">
+    <div class="group-head">
+      <h2 id="developer-heading">Developer</h2>
+    </div>
+    <div class="group-body">
+      <div class="setting-row">
+        <span class="row-label">Developer mode</span>
+        <mat-slide-toggle [checked]="devSettings.devMode()" (change)="devSettings.toggle()">
+          Show the Debug button on the Connections screen
+        </mat-slide-toggle>
+        <span class="keys" aria-label="Shortcut Ctrl+Shift+D, or Cmd+Shift+D on a Mac"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>D</kbd></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="group" aria-labelledby="about-heading">
+    <div class="group-head">
+      <h2 id="about-heading">About</h2>
+    </div>
+    <div class="group-body">
+      <div class="product">Messaging Explorer</div>
+      <div class="muted">A universal multi-platform messaging management tool.</div>
+      <dl class="facts" data-testid="about">
+        <div><dt>Version</dt><dd class="tabular">{{ updates.version() || 'Unknown' }}, {{ channelName() }} channel</dd></div>
+        <div><dt>API</dt><dd>Local, on this computer</dd></div>
+        <div><dt>Licence</dt><dd>MIT, open source</dd></div>
+        <div><dt>Built with</dt><dd>Angular, Electron and .NET</dd></div>
+      </dl>
+      <div class="setting-row">
+        <span class="row-label">Feedback</span>
+        <button mat-stroked-button type="button" (click)="openBugReport('bug')"><mat-icon>bug_report</mat-icon>Report a bug</button>
+        <button mat-stroked-button type="button" (click)="openBugReport('feature')"><mat-icon>lightbulb</mat-icon>Suggest a feature</button>
+      </div>
+      <p class="note">Links open in your browser.</p>
+    </div>
+  </section>
+</main>

@@ -77,10 +77,6 @@ import { ExportConnectionsDialogComponent, ExportConnectionsDialogResult } from 
           <h5 class="alert-heading">
             <i class="fa fa-bug me-2"></i>
             DEBUG MODE
-            <button class="btn btn-sm btn-danger float-end ms-2" (click)="clearAllData()">
-              <i class="fa fa-trash me-1"></i>
-              Clean All
-            </button>
             <button class="btn btn-sm btn-warning float-end" (click)="refreshDebugInfo()">
               <i class="fa-solid fa-arrows-rotate me-1"></i>
               Refresh

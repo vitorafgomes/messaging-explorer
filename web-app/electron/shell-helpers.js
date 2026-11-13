@@ -124,6 +124,19 @@ function mainWindowOptions({ preload, icon, prefersDark }) {
   };
 }
 
+/**
+ * Why this package cannot replace itself with an update, or null when it can: 'macos-unsigned'
+ * (the macOS build is not signed and the macOS updater installs only into a signed app),
+ * 'windows-portable' (the portable launcher sets PORTABLE_EXECUTABLE_FILE; there is no installed
+ * copy to replace), 'linux-package' (anything but the AppImage, which sets APPIMAGE).
+ */
+function selfUpdateBlocker(platform, env) {
+  if (platform === 'darwin') return 'macos-unsigned';
+  if (platform === 'win32') return env.PORTABLE_EXECUTABLE_FILE ? 'windows-portable' : null;
+  if (platform === 'linux') return env.APPIMAGE ? null : 'linux-package';
+  return null;
+}
+
 module.exports = {
   isSafeExternalUrl,
   normalizeUpdateChannel,
@@ -132,5 +145,6 @@ module.exports = {
   stopProcess,
   applicationMenuTemplate,
   mainWindowOptions,
-  shellShortcut
+  shellShortcut,
+  selfUpdateBlocker
 };

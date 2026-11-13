@@ -5,25 +5,6 @@
     }
   </nav>
 
-  @if (appVersion()) {
-    <span class="version-badge" [matMenuTriggerFor]="channelMenu" matTooltip="Click to change update channel" style="cursor: pointer;">
-      v{{ appVersion() }}
-      @if (updateChannel() === 'beta') {
-        <span class="channel-tag beta">BETA</span>
-      }
-    </span>
-    <mat-menu #channelMenu="matMenu">
-      <button mat-menu-item (click)="switchChannel('latest')" [disabled]="updateChannel() === 'latest'">
-        <mat-icon>verified</mat-icon>
-        <span>Stable channel</span>
-      </button>
-      <button mat-menu-item (click)="switchChannel('beta')" [disabled]="updateChannel() === 'beta'">
-        <mat-icon>science</mat-icon>
-        <span>Beta channel</span>
-      </button>
-    </mat-menu>
-  }
-
   @if (connectionStatus$ | async; as status) {
     @if (status.connected) {
       <span class="connection-badge connected" [title]="status.namespace">
@@ -40,30 +21,29 @@
 
   <span class="spacer"></span>
 
-  <!-- Update Status -->
-  @switch (updateStatus()) {
+  @switch (updates.status()) {
     @case ('available') {
-      <button mat-stroked-button class="update-btn" (click)="downloadUpdate()" matTooltip="Download v{{ updateVersion() }}">
+      <a mat-stroked-button class="update-btn" routerLink="/settings" [attr.aria-label]="'Version ' + updates.availableVersion() + ' is available: open Settings'" matTooltip="Open Settings to update">
         <mat-icon>download</mat-icon>
-        Update v{{ updateVersion() }}
-      </button>
+        Update v{{ updates.availableVersion() }}
+      </a>
     }
     @case ('downloading') {
-      <span class="update-progress">
+      <a mat-button class="update-progress" routerLink="/settings" [attr.aria-label]="'Downloading the update, ' + updates.percent() + ' percent: open Settings'">
         <mat-icon>downloading</mat-icon>
-        {{ downloadPercent() }}%
-      </span>
+        {{ updates.percent() }}%
+      </a>
     }
     @case ('downloaded') {
-      <button mat-flat-button color="accent" class="update-btn" (click)="installUpdate()" matTooltip="Restart to install v{{ updateVersion() }}">
+      <a mat-flat-button class="update-btn" routerLink="/settings" [attr.aria-label]="'Version ' + updates.availableVersion() + ' is ready to install: open Settings'" matTooltip="Open Settings to restart and update">
         <mat-icon>restart_alt</mat-icon>
-        Restart to Update
-      </button>
+        Update ready
+      </a>
     }
     @case ('error') {
-      <button mat-icon-button (click)="checkForUpdates()" matTooltip="Update check failed. Click to retry.">
-        <mat-icon color="warn">error_outline</mat-icon>
-      </button>
+      <a mat-icon-button routerLink="/settings" aria-label="The update failed: open Settings" matTooltip="The update failed: open Settings">
+        <mat-icon>error_outline</mat-icon>
+      </a>
     }
   }
 
@@ -106,14 +86,18 @@
   </mat-menu>
 
   <!-- Theme Toggle -->
-  <button mat-icon-button (click)="themeService.toggle()" [matTooltip]="themeService.themeLabel()">
+  <button mat-icon-button (click)="themeService.toggle()" [matTooltip]="themeService.themeLabel()" [attr.aria-label]="'Theme: ' + themeService.themeLabel()">
     <mat-icon>{{ themeService.themeIcon() }}</mat-icon>
   </button>
+
+  <a mat-icon-button class="settings-link" routerLink="/settings" routerLinkActive="active-link" ariaCurrentWhenActive="page" aria-label="Settings" matTooltip="Settings">
+    <mat-icon>tune</mat-icon>
+  </a>
 </mat-toolbar>
 
 <!-- Download progress bar -->
-@if (updateStatus() === 'downloading') {
-  <mat-progress-bar mode="determinate" [value]="downloadPercent()" class="update-progress-bar"></mat-progress-bar>
+@if (updates.status() === 'downloading') {
+  <mat-progress-bar mode="determinate" [value]="updates.percent()" class="update-progress-bar" aria-label="Download progress of the update"></mat-progress-bar>
 }
 
 <mat-sidenav-container class="app-container" [hasBackdrop]="false">

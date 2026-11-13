@@ -4,7 +4,7 @@ const { spawn } = require('child_process');
 const { autoUpdater } = require('electron-updater');
 const crypto = require('crypto');
 const Store = require('electron-store');
-const { isSafeExternalUrl, normalizeUpdateChannel, applyUpdateChannel, waitForHealth, stopProcess, applicationMenuTemplate, mainWindowOptions, shellShortcut } = require('./shell-helpers');
+const { isSafeExternalUrl, normalizeUpdateChannel, applyUpdateChannel, waitForHealth, stopProcess, applicationMenuTemplate, mainWindowOptions, shellShortcut, selfUpdateBlocker } = require('./shell-helpers');
 
 // Generate a per-session API secret for Electron <-> .NET API authentication
 const API_SECRET = crypto.randomBytes(32).toString('hex');
@@ -948,3 +948,6 @@ ipcMain.on('connections-updated', () => {
   console.log('Connections list updated, refreshing tray menu');
   updateTrayMenu();
 });
+
+// IPC: why this package cannot update itself, or null
+ipcMain.handle('get-self-update-blocker', () => selfUpdateBlocker(process.platform, process.env));

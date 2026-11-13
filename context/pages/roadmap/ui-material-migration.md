@@ -6,7 +6,7 @@ changes: "Initial initiative page"
 page_type: roadmap
 status: active
 description: "The web app ends on one design system: every screen built from Angular Material and coloured by its theme, with end-to-end tests that drive the real app and capture each screen."
-updated: 2026-11-12
+updated: 2026-11-13
 source:
   - chat
   - "context/pages/conventions/ui.md"
@@ -34,6 +34,7 @@ No dates are set; the owner sets them.
 
 - **As of 2026-11-12:** the convention is written and the target layout is drawn in `context/prototypes/web-app/` (38 artboards since the review of [[pages/roadmap/ui-review-2026-11]], light and dark, with screenshots); nothing is built in the application. Phase 0 waits for the Azure emulator fixture of [[pages/roadmap/tests-of-everything]] Phase 1, which gives a broker with data to point the app at.
 - **As of 2026-11-13:** Phase 0 is in progress. The end-to-end tests and their screenshots exist and pass locally; CI, three of the planned flows and the owner's review remain.
+- **2026-11-13, the visual migration starts with Settings,** a new screen built from its artboard (`context/prototypes/web-app/Settings.dc.html`) in Material components and theme tokens only: updates with every state of the artboard, the data file and the danger zone with a typed confirmation, developer mode, About. Its end-to-end flow (`web-app/e2e/settings.e2e.ts`) asserts the version and the update state and saves four screens in light and dark. Connections, Messages and Send come next, one change each.
 
 ## Phases
 
@@ -59,7 +60,7 @@ No dates are set; the owner sets them.
 - **Success criteria:** no purge or delete can be confirmed without the entity and the connection on screen.
 
 ### Phase 3 - Material, screen by screen
-- **Status:** not started
+- **Status:** started 2026-11-13 with Settings, a screen that did not exist: no Bootstrap class, Font Awesome icon or literal colour in `web-app/src/app/features/settings/`; the warning and success tokens the artboard uses are not defined in `styles.scss` yet, so the cannot-update panel takes the tertiary container and the ready panel the primary container.
 - **Scope:** in this order: entity details, entities tree, connections, messages dialog, monitoring, queues and topics pages. Per screen: buttons and form controls to Material, Font Awesome to `mat-icon`, `--bs-*` and hex colours to theme tokens, styles into their own file, the three states of rule 9, names on icon controls.
 - **Success criteria:** per screen, the counts on [[pages/conventions/ui]] reach zero for that screen and its end-to-end flow still passes; the light and dark screenshots are reviewed.
 

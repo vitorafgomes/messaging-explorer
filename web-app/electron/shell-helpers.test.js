@@ -8,7 +8,8 @@ const {
   stopProcess,
   applicationMenuTemplate,
   mainWindowOptions,
-  shellShortcut
+  shellShortcut,
+  selfUpdateBlocker
 } = require('./shell-helpers');
 
 test('no File/Edit/View/Window/Help bar: no application menu on win32 and linux', () => {
@@ -286,4 +287,18 @@ test('the SIGKILL fallback must be able to fire: SIGKILL when the child is still
   assert.equal(child.killed, true);
   timer.callback();
   assert.deepEqual(child.signals, ['SIGTERM', 'SIGKILL']);
+});
+
+test('a macOS build cannot update itself, because it is not signed', () => {
+  assert.equal(selfUpdateBlocker('darwin', {}), 'macos-unsigned');
+});
+
+test('the portable Windows build cannot update itself; the installed one can', () => {
+  assert.equal(selfUpdateBlocker('win32', { PORTABLE_EXECUTABLE_FILE: 'C:\\apps\\Messaging Explorer.exe' }), 'windows-portable');
+  assert.equal(selfUpdateBlocker('win32', {}), null);
+});
+
+test('on Linux the AppImage can update itself; the deb package cannot', () => {
+  assert.equal(selfUpdateBlocker('linux', { APPIMAGE: '/home/user/Messaging-Explorer.AppImage' }), null);
+  assert.equal(selfUpdateBlocker('linux', {}), 'linux-package');
 });
