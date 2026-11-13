@@ -1,3 +1,5 @@
+import { MessageInfo } from './message.model';
+
 /** The queue or the subscription whose sessions are read. */
 export type SessionEntity = { queueName: string } | { topicName: string; subscriptionName: string };
 
@@ -24,6 +26,8 @@ export interface SessionDetail {
   state: string | null;
   stateIsBinary: boolean;
   lockedUntil: string;
+  /** The session's messages read under the same lock; null when none were asked for. */
+  messages?: MessageInfo[] | null;
 }
 
 /** A state write, refused by the server when the current state differs from `expectedState`. */

@@ -20,34 +20,30 @@ describe('SessionService: the eight session routes, through ApiService only', ()
     service = TestBed.inject(SessionService);
   });
 
-  it('a queue: list, detail, messages and state write under api/queues/{name}/sessions', () => {
+  it('a queue: list, detail with its messages, and state write under api/queues/{name}/sessions', () => {
     service.list(QUEUE).subscribe();
     service.list(QUEUE, 250).subscribe();
     service.get(QUEUE, 'order-1001').subscribe();
-    service.messages(QUEUE, 'order-1001').subscribe();
     service.setState(QUEUE, 'order-1001', { state: '{"step":4}', expectedState: '{"step":3}' }).subscribe();
 
     expect(api.get.mock.calls.map(c => c[0])).toStrictEqual([
       'queues/orders/sessions?maxMessages=1000',
       'queues/orders/sessions?maxMessages=250',
-      'queues/orders/sessions/order-1001',
-      'queues/orders/sessions/order-1001/messages?count=100'
+      'queues/orders/sessions/order-1001?messageCount=100'
     ]);
     expect(api.put.mock.calls).toStrictEqual([
       ['queues/orders/sessions/order-1001/state', { state: '{"step":4}', expectedState: '{"step":3}' }]
     ]);
   });
 
-  it('a subscription: the same four routes under api/topics/{topic}/subscriptions/{subscription}/sessions', () => {
+  it('a subscription: the same three routes under api/topics/{topic}/subscriptions/{subscription}/sessions', () => {
     service.list(SUBSCRIPTION).subscribe();
-    service.get(SUBSCRIPTION, 'order-1001').subscribe();
-    service.messages(SUBSCRIPTION, 'order-1001', 20).subscribe();
+    service.get(SUBSCRIPTION, 'order-1001', 20).subscribe();
     service.setState(SUBSCRIPTION, 'order-1001', { state: null, expectedState: null }).subscribe();
 
     expect(api.get.mock.calls.map(c => c[0])).toStrictEqual([
       'topics/order-events/subscriptions/billing/sessions?maxMessages=1000',
-      'topics/order-events/subscriptions/billing/sessions/order-1001',
-      'topics/order-events/subscriptions/billing/sessions/order-1001/messages?count=20'
+      'topics/order-events/subscriptions/billing/sessions/order-1001?messageCount=20'
     ]);
     expect(api.put.mock.calls).toStrictEqual([
       ['topics/order-events/subscriptions/billing/sessions/order-1001/state', { state: null, expectedState: null }]
@@ -63,13 +59,11 @@ describe('SessionService: the eight session routes, through ApiService only', ()
   it('names and session ids with / and a space stay one segment each', () => {
     service.list({ queueName: 'q/1' }).subscribe();
     service.get({ topicName: 't/1', subscriptionName: 's 2' }, 'id/with space').subscribe();
-    service.messages({ queueName: 'q/1' }, 'id/with space').subscribe();
     service.setState({ topicName: 't/1', subscriptionName: 's 2' }, 'id/with space', { state: 'x', expectedState: null }).subscribe();
 
     expect(api.get.mock.calls.map(c => c[0])).toStrictEqual([
       'queues/q%2F1/sessions?maxMessages=1000',
-      'topics/t%2F1/subscriptions/s%202/sessions/id%2Fwith%20space',
-      'queues/q%2F1/sessions/id%2Fwith%20space/messages?count=100'
+      'topics/t%2F1/subscriptions/s%202/sessions/id%2Fwith%20space?messageCount=100'
     ]);
     expect(api.put.mock.calls[0][0]).toBe('topics/t%2F1/subscriptions/s%202/sessions/id%2Fwith%20space/state');
   });

@@ -173,6 +173,23 @@ public sealed class AzureServiceBusSessionTests(AzureServiceBusFixture fixture) 
     }
 
     [Fact]
+    public async Task The_detail_asked_for_messages_answers_the_state_and_that_session_s_messages_and_releases_the_session()
+    {
+        var queue = await CreateSessionQueueAsync("detail-messages");
+        await SendToSessionsAsync(queue, ("order-1", "a"), ("order-2", "b"), ("order-1", "c"));
+        await using (var arrange = await AcceptWithinFiveSecondsAsync(queue, "order-1"))
+            await arrange.SetSessionStateAsync(BinaryData.FromString("{\"step\":3}"));
+
+        var detail = await _messaging.GetSessionAsync(queue, null, "order-1", 10);
+
+        Assert.Equal("{\"step\":3}", detail.State);
+        Assert.Equal([("order-1", "a"), ("order-1", "c")], detail.Messages!.Select(m => (m.SessionId, m.Body)));
+        Assert.Equal(3, (await _messaging.GetSessionsAsync(queue, null, 1000)).ScannedMessages);
+        await using var again = await AcceptWithinFiveSecondsAsync(queue, "order-1");
+        Assert.Equal("order-1", again.SessionId);
+    }
+
+    [Fact]
     public async Task The_messages_of_one_session_are_peeked_without_removing_them_and_the_session_is_released()
     {
         var queue = await CreateSessionQueueAsync("session-messages");

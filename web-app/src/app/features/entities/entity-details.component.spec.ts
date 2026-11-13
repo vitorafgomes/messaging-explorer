@@ -616,6 +616,59 @@ describe('EntityDetailsComponent: the Sessions tab on the queue panel and the su
     expect(text((fixture.nativeElement as HTMLElement).querySelector('[role="tab"][aria-selected="true"]'))).toBe('Properties');
   });
 
+  it('coming back to the queue Sessions tab keeps the list: no second scan while the same queue stays selected', async () => {
+    const fixture = render(queue('orders', true));
+    await select(fixture, 'Sessions');
+    const first = sessions(fixture);
+
+    await select(fixture, 'Properties');
+    await select(fixture, 'Sessions');
+
+    expect(list.mock.calls, 'one scan').toStrictEqual([[{ queueName: 'orders' }]]);
+    expect(sessions(fixture), 'the same component, not a new one').toBe(first);
+  });
+
+  it('a reload of the same subscription (after a purge, say) drops the kept list and scans nothing until the tab opens; an update shown without a reload keeps it', async () => {
+    const fixture = render(subscription('billing'));
+    await select(fixture, 'Sessions');
+    const shown = subscription('billing');
+
+    state$.next({ selection: shown, loading: false, error: null });
+    fixture.detectChanges();
+    expect(sessions(fixture), 'kept, hidden, after an update shown without a reload').not.toBeNull();
+
+    state$.next({ selection: shown, loading: true, error: null });
+    fixture.detectChanges();
+    state$.next({ selection: shown, loading: false, error: null });
+    fixture.detectChanges();
+    expect(sessions(fixture), 'nothing mounted after the reload until the tab opens').toBeNull();
+    expect(list, 'no scan without opening the tab').toHaveBeenCalledTimes(1);
+
+    await select(fixture, 'Sessions');
+    expect(list, 'reopened after the reload: a new scan').toHaveBeenCalledTimes(2);
+  });
+
+  it('coming back to the subscription Sessions tab keeps the list, hidden in between, and another subscription still starts afresh', async () => {
+    const fixture = render(subscription('billing'));
+    await select(fixture, 'Sessions');
+    const first = sessions(fixture);
+
+    await select(fixture, 'Description');
+    expect(sessions(fixture), 'kept while another tab shows').toBe(first);
+    expect(sessions(fixture)!.closest('[hidden]'), 'hidden while another tab shows').not.toBeNull();
+    await select(fixture, 'Sessions');
+
+    expect(list.mock.calls, 'one scan').toStrictEqual([[{ topicName: 'order-events', subscriptionName: 'billing' }]]);
+    expect(sessions(fixture)).toBe(first);
+    expect(sessions(fixture)!.closest('[hidden]'), 'shown again').toBeNull();
+
+    state$.next({ selection: subscription('shipping'), loading: false, error: null });
+    fixture.detectChanges();
+    expect(sessions(fixture), 'another subscription: nothing mounted until its tab opens').toBeNull();
+    await select(fixture, 'Sessions');
+    expect(list.mock.calls.at(-1)).toStrictEqual([{ topicName: 'order-events', subscriptionName: 'shipping' }]);
+  });
+
   it('the subscription Sessions tab mounts the same component for that subscription, read when opened, and goes on a switch', async () => {
     const fixture = render(subscription('billing'));
     expect(sessions(fixture)).toBeNull();

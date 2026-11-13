@@ -320,6 +320,62 @@ public class AzureServiceBusProviderSessionTests
     }
 
     [Fact]
+    public async Task Opening_a_session_with_messages_reads_its_state_and_peeks_its_messages_under_one_accept_and_releases_it()
+    {
+        var broker = new FakeSessionBroker(Utf8("{\"step\":3}"));
+        broker.Session.SetupSequence(s => s.PeekMessagesAsync(It.IsAny<int>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Batch(Msg(4, "order-1"), Msg(9, "order-1")))
+            .ReturnsAsync(Batch());
+
+        var (detail, messages) = await AzureServiceBusProvider.ReadSessionCoreAsync(
+            broker.Client.Object, "orders", null, "order-1", 10, TimeSpan.FromSeconds(5), CancellationToken.None);
+
+        Assert.Equal(("order-1", "{\"step\":3}", false), (detail.SessionId, detail.State, detail.StateIsBinary));
+        Assert.Equal([4L, 9L], messages!.Select(m => m.SequenceNumber));
+        broker.Client.Verify(c => c.AcceptSessionAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<ServiceBusSessionReceiverOptions>(), It.IsAny<CancellationToken>()), Times.Once);
+        broker.Released();
+    }
+
+    [Fact]
+    public async Task The_detail_maps_the_peeked_messages_of_the_session_when_asked_for_them()
+    {
+        var broker = new FakeSessionBroker();
+        broker.Session.SetupSequence(s => s.PeekMessagesAsync(It.IsAny<int>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Batch(Msg(4, "order-1"), Msg(9, "order-1")))
+            .ReturnsAsync(Batch());
+
+        var detail = await broker.Provider().GetSessionAsync("orders", null, "order-1", 3);
+
+        Assert.Equal([(4L, "order-1"), (9L, "order-1")], detail.Messages!.Select(m => (m.SequenceNumber!.Value, m.SessionId)));
+        Assert.Equal(3, (int)broker.Session.Invocations.First(i => i.Method.Name == nameof(ServiceBusReceiver.PeekMessagesAsync)).Arguments[0]);
+    }
+
+    [Fact]
+    public async Task The_detail_without_a_message_count_peeks_nothing_and_answers_no_messages()
+    {
+        var broker = new FakeSessionBroker();
+
+        var detail = await broker.Provider().GetSessionAsync("orders", null, "order-1");
+
+        Assert.Null(detail.Messages);
+        broker.Session.Verify(s => s.PeekMessagesAsync(It.IsAny<int>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task A_peek_that_fails_after_the_state_was_read_reaches_the_caller_and_the_session_is_still_released()
+    {
+        var broker = new FakeSessionBroker(Utf8("s"));
+        var failure = Broker(ServiceBusFailureReason.ServiceCommunicationProblem);
+        broker.Session.Setup(s => s.PeekMessagesAsync(It.IsAny<int>(), It.IsAny<long?>(), It.IsAny<CancellationToken>())).ThrowsAsync(failure);
+
+        var reached = await Assert.ThrowsAsync<ServiceBusException>(() => broker.Provider().GetSessionAsync("orders", null, "order-1", 10));
+
+        Assert.Same(failure, reached);
+        broker.Session.Verify(s => s.GetSessionStateAsync(It.IsAny<CancellationToken>()), Times.Once);
+        broker.Released();
+    }
+
+    [Fact]
     public async Task The_messages_of_one_session_are_peeked_through_that_session_up_to_count_and_nothing_is_received()
     {
         var broker = new FakeSessionBroker();
