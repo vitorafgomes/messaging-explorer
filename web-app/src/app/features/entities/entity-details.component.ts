@@ -6,6 +6,9 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatTabsModule } from '@angular/material/tabs';
+import { MatButtonModule } from '@angular/material/button';
+import { MatDividerModule } from '@angular/material/divider';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { delay } from 'rxjs/operators';
 import { EntitySelection, QueueInfo, TopicInfo, SubscriptionInfo, TreeNode, SubscriptionNodeData } from '../../core/models';
@@ -25,6 +28,9 @@ import { EntitySessionsComponent } from './entity-sessions.component';
 
 const NOT_SET = 'Not set';
 
+/** A property of an entity as shown: its label and its value as text. */
+type PropertyRow = [label: string, value: string];
+
 @Component({
   selector: 'app-entity-details',
   standalone: true,
@@ -36,1803 +42,251 @@ const NOT_SET = 'Not set';
     MatIconModule,
     MatTooltipModule,
     MatTabsModule,
+    MatButtonModule,
+    MatDividerModule,
+    MatProgressSpinnerModule,
     TransferMonitorComponent,
     EntityAdminActionsComponent,
     SubscriptionRulesComponent,
     EntitySessionsComponent
   ],
   template: `
+    <ng-template #propertyTable let-rows>
+      <div class="property-columns">
+        @for (column of halves(rows); track $index) {
+          <table class="property-grid info-table">
+            <tbody>
+              @for (row of column; track row[0]) {
+                <tr class="property form-section">
+                  <th scope="row" class="property-label section-header label-cell">{{ row[0] }}</th>
+                  <td class="property-value value-cell" [class.not-set]="row[1] === notSet">{{ row[1] }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </div>
+    </ng-template>
+
     <div class="details-container">
       @if (state$ | async; as state) {
         @if (state.loading) {
-          <div class="details-loading">
-            <div class="spinner-border text-primary" role="status">
-              <span class="visually-hidden">Loading...</span>
-            </div>
+          <div class="details-state" role="status">
+            <mat-progress-spinner mode="indeterminate" diameter="32" aria-hidden="true" />
+            <p>Loading the entity</p>
           </div>
         } @else if (!state.selection) {
-          <div class="details-empty">
-            <i class="fa fa-hand-pointer-o fa-3x mb-3 text-muted"></i>
+          <div class="details-state">
+            <mat-icon class="state-icon" fontIcon="touch_app" aria-hidden="true" />
             <h3>Select an entity</h3>
-            <p>Choose a queue, topic, or subscription from the tree to view its details</p>
+            <p>Choose a queue, topic or subscription from the tree to see its counts, its properties and its messages.</p>
           </div>
         } @else if (state.selection.type === 'category') {
-          <div class="details-category">
-            <i class="fa fa-folder fa-3x mb-3 text-primary"></i>
+          <div class="details-state">
+            <mat-icon class="state-icon" fontIcon="folder" aria-hidden="true" />
             <h2>{{ state.selection.node.name }}</h2>
             <p>{{ state.selection.node.children?.length || 0 }} items</p>
           </div>
-        } @else if (state.selection.type === 'queue' && state.selection.entity) {
-        @let queueEntity = $any(state.selection.entity);
-        <div class="entity-header entity-header-queue">
-          <div class="entity-icon-wrapper">
-            <i class="fa fa-inbox entity-icon queue-icon"></i>
+        } @else if (state.error) {
+          <div class="panel">
+            <header class="entity-header">
+              <div class="entity-title">
+                <span class="entity-kind">{{ kindLabel(state.selection.type) }}</span>
+                <h2>{{ state.selection.node.name }}</h2>
+              </div>
+            </header>
+            <section class="error-panel" role="alert">
+              <mat-icon fontIcon="error" aria-hidden="true" />
+              <div class="error-text">
+                <h3>Could not load the {{ state.selection.type }} {{ state.selection.node.name }}</h3>
+                <p>{{ state.error }}</p>
+                <p>The details could not be read. Check the entity before acting on it again.</p>
+                <button mat-stroked-button type="button" (click)="refresh()"><mat-icon fontIcon="refresh" />Retry</button>
+              </div>
+            </section>
           </div>
-          <div class="entity-title">
-            <h2>{{ queueEntity.name }}</h2>
-            <span class="badge bg-success-subtle text-success border border-success-subtle">Queue</span>
+        } @else if (state.selection.type === 'topic' && state.selection.entity) {
+          @let topicEntity = $any(state.selection.entity);
+          <div class="panel">
+            <header class="entity-header">
+              <div class="entity-title">
+                <span class="entity-kind">Topic</span>
+                <h2>{{ topicEntity.name }}</h2>
+              </div>
+              <div class="entity-actions">
+                <app-entity-admin-actions kind="topic" [entity]="topicEntity" />
+              </div>
+            </header>
+            <section class="entity-properties" aria-labelledby="topic-properties-title">
+              <h3 id="topic-properties-title">Properties</h3>
+              <ng-container *ngTemplateOutlet="propertyTable; context: { $implicit: topicProperties(topicEntity) }" />
+            </section>
           </div>
-          <app-entity-admin-actions kind="queue" [entity]="queueEntity" />
-        </div>
-
-        <div class="entity-actions">
-          <button class="btn btn-primary" (click)="sendMessage()">
-            <i class="fa fa-paper-plane me-2"></i>Send Message
-          </button>
-          <button class="btn btn-outline-primary" (click)="importMessages()">
-            <i class="fa fa-upload me-2"></i>Import
-          </button>
-          <button class="btn btn-secondary" (click)="viewMessages()">
-            <i class="fa fa-eye me-2"></i>View Messages
-          </button>
-          <button class="btn btn-danger" (click)="purgeMessages()" [disabled]="queueEntity.activeMessageCount === 0">
-            <i class="fa fa-trash me-2"></i>Purge
-          </button>
-          @if ((queueEntity.deadLetterMessageCount > 0 || autoResubmitRun()) && supports('supportsDeadLetterQueue')) {
-            <button class="btn btn-warning" (click)="openAutoResubmit()">
-              <i class="fa fa-repeat me-2"></i>@if (autoResubmitRun(); as run) {Resubmit {{ run.progress().status }}: {{ run.progress().read }} of {{ run.progress().total }}} @else {Auto Resubmit ({{ queueEntity.deadLetterMessageCount }})}
-            </button>
-          }
-        </div>
-
-        <hr class="my-3">
-
-        <div class="entity-stats">
-          <div class="stat-card stat-card-queue clickable" (click)="viewMessages(0)">
-            <span class="stat-value">{{ queueEntity.activeMessageCount }}</span>
-            <span class="stat-label">Active Messages</span>
-          </div>
-          @if (supports('supportsDeadLetterQueue')) {
-            <div class="stat-card stat-card-queue clickable" [class.warning]="queueEntity.deadLetterMessageCount > 0" (click)="viewMessages(1)">
-              <span class="stat-value">{{ queueEntity.deadLetterMessageCount }}</span>
-              <span class="stat-label">Dead Letter</span>
-            </div>
-            @if (queueEntity.transferDeadLetterMessageCount > 0) {
-              <div class="stat-card stat-card-queue"
-                [class.clickable]="transferDeadLetterReachable()"
-                [attr.role]="transferDeadLetterReachable() ? 'button' : null"
-                [attr.tabindex]="transferDeadLetterReachable() ? 0 : null"
-                [attr.aria-label]="transferDeadLetterReachable() ? 'View the ' + queueEntity.transferDeadLetterMessageCount + ' transfer dead-letter messages' : null"
-                (click)="openTransferDeadLetter()"
-                (keydown.enter)="openTransferDeadLetter()"
-                (keydown.space)="$event.preventDefault(); openTransferDeadLetter()">
-                <span class="stat-value">{{ queueEntity.transferDeadLetterMessageCount }}</span>
-                <span class="stat-label">Transfer Dead Letter</span>
-              </div>
-            }
-          }
-          @if (supports('supportsScheduledMessages')) {
-            <div class="stat-card stat-card-queue clickable" role="button" tabindex="0"
-              [attr.aria-label]="'View the ' + queueEntity.scheduledMessageCount + ' scheduled messages'"
-              (click)="viewMessages(0, 'Scheduled')"
-              (keydown.enter)="viewMessages(0, 'Scheduled')"
-              (keydown.space)="$event.preventDefault(); viewMessages(0, 'Scheduled')">
-              <span class="stat-value">{{ queueEntity.scheduledMessageCount }}</span>
-              <span class="stat-label">Scheduled</span>
-            </div>
-          }
-          <div class="stat-card stat-card-queue">
-            <span class="stat-value">{{ formatSize(queueEntity.sizeInBytes) }}</span>
-            <span class="stat-label">Size</span>
-          </div>
-        </div>
-
-        <hr class="my-3">
-
-        <mat-tab-group [selectedIndex]="queueTab()" (selectedIndexChange)="setQueueTab($event)" animationDuration="0ms" [preserveContent]="true">
-        <mat-tab label="Properties">
-        <div class="entity-properties">
-          <div class="property-grid">
-            <div class="property">
-              <span class="property-label">Max Delivery Count</span>
-              <span class="property-value">{{ queueEntity.maxDeliveryCount }}</span>
-            </div>
-            <div class="property">
-              <span class="property-label">Lock Duration</span>
-              <span class="property-value">{{ formatDuration(queueEntity.lockDuration) }}</span>
-            </div>
-            <div class="property">
-              <span class="property-label">Message TTL</span>
-              <span class="property-value">{{ formatDuration(queueEntity.defaultMessageTimeToLive) }}</span>
-            </div>
-            <div class="property">
-              <span class="property-label">Max Size</span>
-              <span class="property-value">{{ queueEntity.maxSizeInMegabytes }} MB</span>
-            </div>
-            <div class="property">
-              <span class="property-label">Requires Session</span>
-              <span class="property-value">{{ queueEntity.requiresSession ? 'Yes' : 'No' }}</span>
-            </div>
-            <div class="property">
-              <span class="property-label">Partitioning</span>
-              <span class="property-value">{{ queueEntity.enablePartitioning ? 'Enabled' : 'Disabled' }}</span>
-            </div>
-            <div class="property">
-              <span class="property-label">Status</span>
-              <span class="property-value">{{ queueEntity.status || notSet }}</span>
-            </div>
-            <div class="property">
-              <span class="property-label">Created At (UTC)</span>
-              <span class="property-value">{{ formatDate(queueEntity.createdAt) }}</span>
-            </div>
-            <div class="property">
-              <span class="property-label">Updated At (UTC)</span>
-              <span class="property-value">{{ formatDate(queueEntity.updatedAt) }}</span>
-            </div>
-            <div class="property">
-              <span class="property-label">Accessed At (UTC)</span>
-              <span class="property-value">{{ formatDate(queueEntity.accessedAt) }}</span>
-            </div>
-            <div class="property">
-              <span class="property-label">Dead-lettering On Expiration</span>
-              <span class="property-value">{{ enabledText(queueEntity.deadLetteringOnMessageExpiration) }}</span>
-            </div>
-            <div class="property">
-              <span class="property-label">Auto Delete On Idle</span>
-              <span class="property-value">{{ formatDuration(queueEntity.autoDeleteOnIdle) }}</span>
-            </div>
-            <div class="property">
-              <span class="property-label">Forward To</span>
-              <span class="property-value">{{ queueEntity.forwardTo || notSet }}</span>
-            </div>
-            <div class="property">
-              <span class="property-label">Forward Dead-lettered To</span>
-              <span class="property-value">{{ queueEntity.forwardDeadLetteredMessagesTo || notSet }}</span>
-            </div>
-            <div class="property">
-              <span class="property-label">Duplicate Detection</span>
-              <span class="property-value">{{ duplicateDetectionText(queueEntity) }}</span>
-            </div>
-            <div class="property">
-              <span class="property-label">User Metadata</span>
-              <span class="property-value">{{ queueEntity.userMetadata || notSet }}</span>
-            </div>
-          </div>
-        </div>
-        </mat-tab>
-        @if (queueEntity.requiresSession && supports('supportsSessions')) {
-          <mat-tab label="Sessions">
-            <ng-template matTabContent>
-              @if (sessionsOpened()) {
-                <app-entity-sessions [entity]="{ queueName: queueEntity.name }" />
-              }
-            </ng-template>
-          </mat-tab>
-        }
-        </mat-tab-group>
-      } @else if (state.selection.type === 'topic' && state.selection.entity) {
-        @let topicEntity = $any(state.selection.entity);
-        <div class="topic-container">
-          <div class="entity-header entity-header-topic">
-            <div class="entity-icon-wrapper">
-              <i class="fa-solid fa-tower-broadcast entity-icon topic-icon"></i>
-            </div>
-            <div class="entity-title">
-              <h2>{{ topicEntity.name }}</h2>
-              <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Topic</span>
-            </div>
-            <app-entity-admin-actions kind="topic" [entity]="topicEntity" />
-          </div>
-
-          <hr class="my-3">
-
-          <div class="entity-properties">
-            <h3>Properties</h3>
-            <div class="property-grid">
-              <div class="property">
-                <span class="property-label">Status</span>
-                <span class="property-value">{{ topicEntity.status || notSet }}</span>
-              </div>
-              <div class="property">
-                <span class="property-label">Max Size</span>
-                <span class="property-value">{{ topicEntity.maxSizeInMegabytes != null ? topicEntity.maxSizeInMegabytes + ' MB' : notSet }}</span>
-              </div>
-              <div class="property">
-                <span class="property-label">Message Time To Live</span>
-                <span class="property-value">{{ formatDuration(topicEntity.defaultMessageTimeToLive) }}</span>
-              </div>
-              <div class="property">
-                <span class="property-label">Auto Delete On Idle</span>
-                <span class="property-value">{{ formatDuration(topicEntity.autoDeleteOnIdle) }}</span>
-              </div>
-              <div class="property">
-                <span class="property-label">Duplicate Detection</span>
-                <span class="property-value">{{ duplicateDetectionText(topicEntity) }}</span>
-              </div>
-              <div class="property">
-                <span class="property-label">Batched Operations</span>
-                <span class="property-value">{{ enabledText(topicEntity.enableBatchedOperations) }}</span>
-              </div>
-              <div class="property">
-                <span class="property-label">Partitioning</span>
-                <span class="property-value">{{ enabledText(topicEntity.enablePartitioning) }}</span>
-              </div>
-              <div class="property">
-                <span class="property-label">Support Ordering</span>
-                <span class="property-value">{{ enabledText(topicEntity.supportOrdering) }}</span>
-              </div>
-              <div class="property">
-                <span class="property-label">User Metadata</span>
-                <span class="property-value">{{ topicEntity.userMetadata || notSet }}</span>
-              </div>
-              <div class="property">
-                <span class="property-label">Created At (UTC)</span>
-                <span class="property-value">{{ formatDate(topicEntity.createdAt) }}</span>
-              </div>
-              <div class="property">
-                <span class="property-label">Updated At (UTC)</span>
-                <span class="property-value">{{ formatDate(topicEntity.updatedAt) }}</span>
-              </div>
-              <div class="property">
-                <span class="property-label">Accessed At (UTC)</span>
-                <span class="property-value">{{ formatDate(topicEntity.accessedAt) }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      } @else if (state.selection.type === 'subscription') {
-        @let subscriptionEntity = $any(state.selection.entity);
-
-        <!-- Subscription Header -->
-        <div class="entity-header entity-header-subscription">
-          <div class="entity-icon-wrapper">
-            <i class="fa-solid fa-bell entity-icon subscription-icon"></i>
-          </div>
-          <div class="entity-title">
-            <h2>{{ subscriptionEntity?.name || state.selection.node.name }}</h2>
-            <span class="badge bg-info-subtle text-info border border-info-subtle">Subscription</span>
-          </div>
-          <app-entity-admin-actions kind="subscription" [entity]="subscriptionEntity" />
-        </div>
-
-        <hr class="my-3">
-
-        <div class="entity-actions">
-          <button class="btn btn-danger" [matMenuTriggerFor]="purgeMenu" [disabled]="!subscriptionEntity">
-            <i class="fa fa-trash"></i> Purge <i class="fa fa-caret-down ms-1"></i>
-          </button>
-          <mat-menu #purgeMenu="matMenu">
-            <button mat-menu-item (click)="purgeMessages('active')" [disabled]="!subscriptionEntity || subscriptionEntity.activeMessageCount === 0">
-              <mat-icon>mail</mat-icon>
-              <span>Purge Active Messages</span>
-            </button>
-            <button mat-menu-item (click)="purgeMessages('deadletter')" [disabled]="!subscriptionEntity || subscriptionEntity.deadLetterMessageCount === 0">
-              <mat-icon>error</mat-icon>
-              <span>Purge Dead-letter Messages</span>
-            </button>
-            <button mat-menu-item (click)="purgeMessages('all')" [disabled]="!subscriptionEntity || (subscriptionEntity.activeMessageCount === 0 && subscriptionEntity.deadLetterMessageCount === 0)">
-              <mat-icon>delete_forever</mat-icon>
-              <span>Purge All Messages</span>
-            </button>
-          </mat-menu>
-          @if (subscriptionEntity && (subscriptionEntity.deadLetterMessageCount > 0 || autoResubmitRun()) && supports('supportsDeadLetterQueue')) {
-            <button class="btn btn-warning" (click)="openAutoResubmit()">
-              <i class="fa fa-repeat me-2"></i>@if (autoResubmitRun(); as run) {Resubmit {{ run.progress().status }}: {{ run.progress().read }} of {{ run.progress().total }}} @else {Auto Resubmit ({{ subscriptionEntity.deadLetterMessageCount }})}
-            </button>
-          }
-        </div>
-
-        @if (subscriptionEntity) {
-          <div class="entity-stats">
-            <app-transfer-monitor
-              [topicName]="subscriptionEntity.topicName"
-              [subscriptionName]="subscriptionEntity.name"
-              (subscriptionUpdated)="onSubscriptionUpdated($event)"
-              (clicked)="viewMessages(0)" />
-            @if (supports('supportsDeadLetterQueue')) {
-              <div class="metric-card warning-card clickable" (click)="viewMessages(1)">
-                <div class="card-header">
-                  <i class="fa fa-exclamation-circle"></i>
-                  <span>Dead Letter</span>
+        } @else if (state.selection.type === 'queue' || state.selection.type === 'subscription') {
+          @let isQueue = state.selection.type === 'queue';
+          @let holder = $any(state.selection.entity);
+          @if (holder) {
+            <div class="panel">
+              <header class="entity-header">
+                <div class="entity-title">
+                  <span class="entity-kind">@if (isQueue) {Queue} @else {Subscription in topic {{ holder.topicName }}}</span>
+                  <h2>{{ holder.name || state.selection.node.name }}</h2>
                 </div>
-                <div class="card-body">
-                  <div class="metric-value">{{ liveDeadLetterCount() ?? subscriptionEntity.deadLetterMessageCount }}</div>
-                  <div class="metric-label">Failed messages</div>
+                <div class="entity-actions">
+                  <app-entity-admin-actions [kind]="isQueue ? 'queue' : 'subscription'" [entity]="holder" />
+                  <button mat-flat-button type="button" (click)="viewMessages()"><mat-icon fontIcon="visibility" />View Messages</button>
+                  @if (isQueue) {
+                    <button matButton="tonal" type="button" (click)="sendMessage()"><mat-icon fontIcon="send" />Send Message</button>
+                  }
+                  <button mat-icon-button type="button" [matMenuTriggerFor]="moreMenu" aria-label="More actions" matTooltip="More actions">
+                    <mat-icon fontIcon="more_vert" />
+                  </button>
+                  <mat-menu #moreMenu="matMenu" xPosition="before" class="entity-more-menu">
+                    @if (isQueue) {
+                      <button mat-menu-item type="button" (click)="importMessages()">Import messages</button>
+                      <mat-divider />
+                    }
+                    <div class="menu-caption">Cannot be undone</div>
+                    @if (isQueue) {
+                      <button mat-menu-item type="button" class="danger" (click)="purgeMessages('active')" [disabled]="holder.activeMessageCount === 0">
+                        Purge active messages <span class="menu-count">{{ liveActiveCount() ?? holder.activeMessageCount | number }}</span>
+                      </button>
+                    } @else {
+                      <button mat-menu-item type="button" class="danger" (click)="purgeMessages('active')" [disabled]="holder.activeMessageCount === 0">
+                        Purge Active Messages <span class="menu-count">{{ liveActiveCount() ?? holder.activeMessageCount | number }}</span>
+                      </button>
+                      <button mat-menu-item type="button" class="danger" (click)="purgeMessages('deadletter')" [disabled]="holder.deadLetterMessageCount === 0">
+                        Purge Dead-letter Messages <span class="menu-count">{{ liveDeadLetterCount() ?? holder.deadLetterMessageCount | number }}</span>
+                      </button>
+                      <button mat-menu-item type="button" class="danger" (click)="purgeMessages('all')" [disabled]="holder.activeMessageCount === 0 && holder.deadLetterMessageCount === 0">
+                        Purge All Messages <span class="menu-count">{{ (liveActiveCount() ?? holder.activeMessageCount) + (liveDeadLetterCount() ?? holder.deadLetterMessageCount) | number }}</span>
+                      </button>
+                    }
+                  </mat-menu>
                 </div>
-              </div>
-              @if (subscriptionEntity.transferDeadLetterMessageCount > 0) {
-                <div class="metric-card warning-card"
-                  [class.clickable]="transferDeadLetterReachable()"
-                  [attr.role]="transferDeadLetterReachable() ? 'button' : null"
-                  [attr.tabindex]="transferDeadLetterReachable() ? 0 : null"
-                  [attr.aria-label]="transferDeadLetterReachable() ? 'View the ' + subscriptionEntity.transferDeadLetterMessageCount + ' transfer dead-letter messages' : null"
-                  (click)="openTransferDeadLetter()"
-                  (keydown.enter)="openTransferDeadLetter()"
-                  (keydown.space)="$event.preventDefault(); openTransferDeadLetter()">
-                  <div class="card-header">
-                    <span>Transfer Dead Letter</span>
+              </header>
+
+              <div class="entity-stats">
+                @if (isQueue) {
+                  <div class="stat-card metric-card clickable" role="button" tabindex="0"
+                    [attr.aria-label]="'View the ' + holder.activeMessageCount + ' active messages'"
+                    (click)="viewMessages(0)"
+                    (keydown.enter)="viewMessages(0)"
+                    (keydown.space)="$event.preventDefault(); viewMessages(0)">
+                    <span class="stat-label">Active Messages</span>
+                    <span class="stat-value metric-value">{{ holder.activeMessageCount | number }}</span>
+                    <span class="stat-note">Open the active messages</span>
                   </div>
-                  <div class="card-body">
-                    <div class="metric-value">{{ subscriptionEntity.transferDeadLetterMessageCount }}</div>
-                    <div class="metric-label">Could not be forwarded</div>
-                  </div>
-                </div>
-              }
-            }
-          </div>
-
-          <hr class="my-3">
-
-          <ul class="nav nav-tabs subscription-tabs mb-3" role="tablist">
-            <li class="nav-item" role="presentation">
-              <button class="nav-link" [class.active]="activeSubscriptionTab() === 'description'" (click)="setSubscriptionTab('description')" type="button">
-                <i class="fa-regular fa-file-lines me-2"></i>Description
-              </button>
-            </li>
-            <li class="nav-item" role="presentation">
-              <button class="nav-link" [class.active]="activeSubscriptionTab() === 'rules'" (click)="setSubscriptionTab('rules')" type="button">
-                <i class="fa fa-filter me-2"></i>Subscription Rules
-              </button>
-            </li>
-            @if (subscriptionEntity.requiresSession && supports('supportsSessions')) {
-              <li class="nav-item" role="presentation">
-                <button class="nav-link" [class.active]="activeSubscriptionTab() === 'sessions'" (click)="setSubscriptionTab('sessions')" type="button">
-                  <i class="fa-solid fa-layer-group me-2"></i>Sessions
-                </button>
-              </li>
-            }
-          </ul>
-          <div class="tab-content">
-            <!-- Description Tab -->
-            <div class="description-tab" [hidden]="activeSubscriptionTab() !== 'description'" id="subscription-description-tab">
-                <!-- Subscription Details - 3 Column Layout -->
-                <div class="subscription-details-layout">
-
-                    <!-- 3-Column Layout -->
-                    <div class="three-column-layout">
-                      <!-- Column 1 (30%) - Name, Lock Duration, Subscription Properties -->
-                      <div class="column column-1">
-                        <!-- Name Section -->
-                        <div class="form-section">
-                          <div class="section-header">Name</div>
-                          <div class="form-group">
-                            <label>Subscription Name</label>
-                            <input type="text" class="form-control" [value]="subscriptionEntity.name" readonly />
-                          </div>
-                        </div>
-
-                        <!-- Lock Duration Section -->
-                        <div class="form-section">
-                          <div class="section-header">Lock Duration</div>
-                          <div class="form-group"><span class="property-value">{{ formatDuration(subscriptionEntity.lockDuration) }}</span></div>
-                        </div>
-
-                        <!-- Subscription Properties Section -->
-                        <div class="form-section">
-                          <div class="section-header">Subscription Properties</div>
-                          <div class="form-group">
-                            <label>Max Delivery Count</label>
-                            <input type="number" class="form-control" [value]="subscriptionEntity.maxDeliveryCount" readonly />
-                          </div>
-                          <div class="form-group">
-                            <label>User Description</label>
-                            <textarea class="form-control" rows="2" [value]="subscriptionEntity.userMetadata || ''" readonly></textarea>
-                          </div>
-                          <div class="form-group">
-                            <label>Forward To</label>
-                            <div class="input-with-button">
-                              <input type="text" class="form-control" [value]="subscriptionEntity.forwardTo || ''" readonly />
-                              <button class="browse-btn" disabled>[...]</button>
-                            </div>
-                          </div>
-                          <div class="form-group">
-                            <label>Forward Dead-lettered Messages To</label>
-                            <div class="input-with-button">
-                              <input type="text" class="form-control" [value]="subscriptionEntity.forwardDeadLetteredMessagesTo || ''" readonly />
-                              <button class="browse-btn" disabled>[...]</button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <!-- Column 2 (35%) - Auto Delete, Default TTL, Subscription Settings -->
-                      <div class="column column-2">
-                        <!-- Auto Delete On Idle Section -->
-                        <div class="form-section">
-                          <div class="section-header">Auto Delete On Idle</div>
-                          <div class="form-group"><span class="property-value">{{ formatDuration(subscriptionEntity.autoDeleteOnIdle) }}</span></div>
-                        </div>
-
-                        <!-- Default Message Time To Live Section -->
-                        <div class="form-section">
-                          <div class="section-header">Default Message Time To Live</div>
-                          <div class="form-group"><span class="property-value">{{ formatDuration(subscriptionEntity.defaultMessageTimeToLive) }}</span></div>
-                        </div>
-
-                        <!-- Subscription Settings Section -->
-                        <div class="form-section">
-                          <div class="section-header">Subscription Settings</div>
-                          <div class="checkbox-list">
-                            <div class="checkbox-item">
-                              <input type="checkbox" [checked]="subscriptionEntity.requiresSession" disabled />
-                              <label>Enable Sessions</label>
-                            </div>
-                            <div class="checkbox-item">
-                              <input type="checkbox" [checked]="subscriptionEntity.deadLetteringOnMessageExpiration" disabled />
-                              <label>Enable Dead Lettering On Message Expiration</label>
-                            </div>
-                            <div class="checkbox-item">
-                              <input type="checkbox" [checked]="subscriptionEntity.deadLetteringOnFilterEvaluationExceptions" disabled />
-                              <label>Enable Dead Lettering On Filter Evaluation Exceptions</label>
-                            </div>
-                            <div class="checkbox-item">
-                              <input type="checkbox" [checked]="subscriptionEntity.enableBatchedOperations" disabled />
-                              <label>Enable Batched Operations</label>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <!-- Column 3 (35%) - Subscription Information -->
-                      <div class="column column-3">
-                        <div class="form-section">
-                          <div class="section-header">Subscription Information</div>
-                          <div class="info-table">
-                            <table>
-                              <tbody>
-                                <tr>
-                                  <td class="label-cell">Message Count</td>
-                                  <td class="value-cell">{{ subscriptionEntity.activeMessageCount || 0 }}</td>
-                                </tr>
-                                <tr>
-                                  <td class="label-cell">Size in Bytes</td>
-                                  <td class="value-cell">{{ subscriptionEntity.sizeInBytes || 0 }}</td>
-                                </tr>
-                                <tr>
-                                  <td class="label-cell">Created At (UTC)</td>
-                                  <td class="value-cell">{{ formatDate(subscriptionEntity.createdAt) }}</td>
-                                </tr>
-                                <tr>
-                                  <td class="label-cell">Updated At (UTC)</td>
-                                  <td class="value-cell">{{ formatDate(subscriptionEntity.updatedAt) }}</td>
-                                </tr>
-                                <tr>
-                                  <td class="label-cell">Accessed At (UTC)</td>
-                                  <td class="value-cell">{{ formatDate(subscriptionEntity.accessedAt) }}</td>
-                                </tr>
-                                <tr>
-                                  <td class="label-cell">User Metadata</td>
-                                  <td class="value-cell">{{ subscriptionEntity.userMetadata || '' }}</td>
-                                </tr>
-                                <tr>
-                                  <td class="label-cell">Status</td>
-                                  <td class="value-cell">{{ subscriptionEntity.status }}</td>
-                                </tr>
-                                <tr>
-                                  <td class="label-cell">Subscription Name</td>
-                                  <td class="value-cell">{{ subscriptionEntity.name }}</td>
-                                </tr>
-                                <tr>
-                                  <td class="label-cell">Topic Name</td>
-                                  <td class="value-cell">{{ subscriptionEntity.topicName }}</td>
-                                </tr>
-                                <tr>
-                                  <td class="label-cell">Active Message Count</td>
-                                  <td class="value-cell">{{ subscriptionEntity.activeMessageCount || 0 }}</td>
-                                </tr>
-                                <tr>
-                                  <td class="label-cell">Dead Letter Message Count</td>
-                                  <td class="value-cell">{{ subscriptionEntity.deadLetterMessageCount || 0 }}</td>
-                                </tr>
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      </div>
+                } @else {
+                  <app-transfer-monitor class="live-card"
+                    [topicName]="holder.topicName"
+                    [subscriptionName]="holder.name"
+                    (subscriptionUpdated)="onSubscriptionUpdated($event)"
+                    (clicked)="viewMessages(0)" />
+                }
+                @if (supports('supportsDeadLetterQueue')) {
+                  @let deadLetter = liveDeadLetterCount() ?? holder.deadLetterMessageCount;
+                  <div class="dead-letter-card" [class.warning]="deadLetter > 0">
+                    <div class="stat-card metric-card clickable" role="button" tabindex="0"
+                      [attr.aria-label]="'View the ' + deadLetter + ' dead-letter messages'"
+                      (click)="viewMessages(1)"
+                      (keydown.enter)="viewMessages(1)"
+                      (keydown.space)="$event.preventDefault(); viewMessages(1)">
+                      <span class="stat-label">@if (deadLetter > 0) {<mat-icon class="label-icon" fontIcon="warning" aria-hidden="true" />}Dead Letter</span>
+                      <span class="stat-value metric-value">{{ deadLetter | number }}</span>
+                      <span class="stat-note">{{ deadLetter > 0 ? 'Open to resubmit or delete' : 'None waiting' }}</span>
                     </div>
-                </div>
+                    @if (holder.deadLetterMessageCount > 0 || autoResubmitRun()) {
+                      <button mat-stroked-button type="button" class="auto-resubmit" (click)="openAutoResubmit()">
+                        <mat-icon fontIcon="replay" />@if (autoResubmitRun(); as run) {Resubmit {{ run.progress().status }}: {{ run.progress().read }} of {{ run.progress().total }}} @else {Auto Resubmit ({{ holder.deadLetterMessageCount }})}
+                      </button>
+                    }
+                  </div>
+                  @if (holder.transferDeadLetterMessageCount > 0) {
+                    <div class="stat-card metric-card"
+                      [class.clickable]="transferDeadLetterReachable()"
+                      [attr.role]="transferDeadLetterReachable() ? 'button' : null"
+                      [attr.tabindex]="transferDeadLetterReachable() ? 0 : null"
+                      [attr.aria-label]="transferDeadLetterReachable() ? 'View the ' + holder.transferDeadLetterMessageCount + ' transfer dead-letter messages' : null"
+                      (click)="openTransferDeadLetter()"
+                      (keydown.enter)="openTransferDeadLetter()"
+                      (keydown.space)="$event.preventDefault(); openTransferDeadLetter()">
+                      <span class="stat-label">Transfer Dead Letter</span>
+                      <span class="stat-value metric-value">{{ holder.transferDeadLetterMessageCount }}</span>
+                      <span class="stat-note">Could not be forwarded</span>
+                    </div>
+                  }
+                }
+                @if (isQueue) {
+                  @if (supports('supportsScheduledMessages')) {
+                    <div class="stat-card metric-card clickable" role="button" tabindex="0"
+                      [attr.aria-label]="'View the ' + holder.scheduledMessageCount + ' scheduled messages'"
+                      (click)="viewMessages(0, 'Scheduled')"
+                      (keydown.enter)="viewMessages(0, 'Scheduled')"
+                      (keydown.space)="$event.preventDefault(); viewMessages(0, 'Scheduled')">
+                      <span class="stat-label">Scheduled</span>
+                      <span class="stat-value metric-value">{{ holder.scheduledMessageCount | number }}</span>
+                      <span class="stat-note">Not yet deliverable</span>
+                    </div>
+                  }
+                  <div class="stat-card metric-card">
+                    <span class="stat-label">Size</span>
+                    <span class="stat-value metric-value">{{ formatSize(holder.sizeInBytes) }}</span>
+                    <span class="stat-note">{{ holder.maxSizeInMegabytes != null ? 'Max Size ' + holder.maxSizeInMegabytes + ' MB' : '' }}</span>
+                  </div>
+                }
               </div>
+
+              @if (isQueue) {
+                <mat-tab-group [selectedIndex]="queueTab()" (selectedIndexChange)="setQueueTab($event)" animationDuration="0ms" [preserveContent]="true" mat-stretch-tabs="false" mat-align-tabs="start">
+                  <mat-tab label="Properties">
+                    <ng-container *ngTemplateOutlet="propertyTable; context: { $implicit: queueProperties(holder) }" />
+                  </mat-tab>
+                  @if (holder.requiresSession && supports('supportsSessions')) {
+                    <mat-tab label="Sessions">
+                      <ng-template matTabContent>
+                        @if (sessionsOpened()) {
+                          <app-entity-sessions [entity]="{ queueName: holder.name }" />
+                        }
+                      </ng-template>
+                    </mat-tab>
+                  }
+                </mat-tab-group>
+              } @else {
+                @let hasSessions = holder.requiresSession && supports('supportsSessions');
+                <nav mat-tab-nav-bar [tabPanel]="subscriptionPanel" animationDuration="0ms" aria-label="Sections of the subscription" mat-stretch-tabs="false" mat-align-tabs="start">
+                  <button mat-tab-link type="button" [active]="activeSubscriptionTab() === 'description'" (click)="setSubscriptionTab('description')">Description</button>
+                  @if (hasSessions) {
+                    <button mat-tab-link type="button" [active]="activeSubscriptionTab() === 'sessions'" (click)="setSubscriptionTab('sessions')">Sessions</button>
+                  }
+                  <button mat-tab-link type="button" [active]="activeSubscriptionTab() === 'rules'" (click)="setSubscriptionTab('rules')">Rules</button>
+                </nav>
+                <mat-tab-nav-panel #subscriptionPanel>
+                  <div [hidden]="activeSubscriptionTab() !== 'description'" id="subscription-description-tab">
+                    <ng-container *ngTemplateOutlet="propertyTable; context: { $implicit: subscriptionProperties(holder) }" />
+                  </div>
+                  <div [hidden]="activeSubscriptionTab() !== 'rules'" id="subscription-rules-tab">
+                    <app-subscription-rules [subscription]="holder" />
+                  </div>
+                  @if (hasSessions && sessionsOpened()) {
+                    <div [hidden]="activeSubscriptionTab() !== 'sessions'">
+                      <app-entity-sessions [entity]="{ topicName: holder.topicName, subscriptionName: holder.name }" />
+                    </div>
+                  }
+                </mat-tab-nav-panel>
+              }
             </div>
-
-            <!-- Subscription Rules Tab -->
-            <div [hidden]="activeSubscriptionTab() !== 'rules'" id="subscription-rules-tab">
-              <app-subscription-rules [subscription]="subscriptionEntity" />
+          } @else if (!isQueue) {
+            <div class="details-state" role="status">
+              <mat-progress-spinner mode="indeterminate" diameter="32" aria-hidden="true" />
+              <p>Loading subscription details...</p>
             </div>
-
-            @if (subscriptionEntity.requiresSession && supports('supportsSessions') && sessionsOpened()) {
-              <div [hidden]="activeSubscriptionTab() !== 'sessions'">
-                <app-entity-sessions [entity]="{ topicName: subscriptionEntity.topicName, subscriptionName: subscriptionEntity.name }" />
-              </div>
-            }
-
-        } @else {
-          <div class="details-loading" style="padding: 24px;">
-            <p>Loading subscription details...</p>
-          </div>
+          }
         }
       }
-    }
     </div>
   `,
-  styles: [`
-    .details-container {
-      flex: 1;
-      overflow: auto;
-      padding: 0;
-      background: var(--bs-secondary-bg);
-    }
-
-    .details-loading, .details-empty {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 400px;
-      padding: 60px 20px;
-      color: var(--bs-secondary-color);
-      text-align: center;
-
-      mat-icon {
-        font-size: 64px;
-        width: 64px;
-        height: 64px;
-        margin-bottom: 16px;
-      }
-
-      h3 {
-        margin: 0 0 8px;
-        color: var(--bs-body-color);
-      }
-
-      p {
-        margin: 0;
-        max-width: 300px;
-      }
-    }
-
-    .details-category {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100%;
-      text-align: center;
-
-      .category-icon {
-        font-size: 64px;
-        width: 64px;
-        height: 64px;
-        color: #7b1fa2;
-        margin-bottom: 16px;
-      }
-
-      h2 {
-        margin: 0 0 8px;
-      }
-
-      p {
-        color: var(--bs-secondary-color);
-        margin: 0;
-      }
-    }
-
-    .entity-header {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      padding: 16px;
-      border-radius: 8px;
-      background: var(--bs-body-bg);
-      border: 1px solid var(--bs-border-color);
-      margin-bottom: 24px;
-      transition: all 0.2s ease;
-
-      // Subscription header needs margin to match topic container padding
-      &.entity-header-subscription {
-        margin: 16px 16px 24px 16px;
-      }
-
-      .entity-icon-wrapper {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 64px;
-        height: 64px;
-        border-radius: 50%;
-        background: rgba(var(--bs-emphasis-color-rgb), 0.03);
-        flex-shrink: 0;
-      }
-
-      .entity-icon {
-        font-size: 32px;
-        width: 32px;
-        height: 32px;
-
-        &.queue-icon { color: #66bb6a; }
-        &.topic-icon { color: #ffa726; }
-        &.subscription-icon { color: #42a5f5; }
-      }
-
-      .entity-title {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-
-        h2 {
-          margin: 0;
-          font-size: 20px;
-          font-weight: 600;
-          color: var(--bs-body-color);
-        }
-
-        .badge {
-          align-self: flex-start;
-        }
-
-        .entity-subtitle {
-          display: block;
-          color: var(--bs-secondary-color);
-          margin-bottom: 8px;
-          font-size: 14px;
-        }
-      }
-
-      // Colored borders for each entity type
-      &.entity-header-queue {
-        border-left: 4px solid #66bb6a;
-        background: linear-gradient(90deg, rgba(102, 187, 106, 0.05) 0%, var(--bs-body-bg) 100%);
-      }
-
-      &.entity-header-topic {
-        border-left: 4px solid #ffa726;
-        background: linear-gradient(90deg, rgba(255, 167, 38, 0.05) 0%, var(--bs-body-bg) 100%);
-      }
-
-      &.entity-header-subscription {
-        border-left: 4px solid #42a5f5;
-        background: linear-gradient(90deg, rgba(66, 165, 245, 0.05) 0%, var(--bs-body-bg) 100%);
-      }
-    }
-
-    .entity-actions {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-      margin: 16px 16px 24px 16px;
-      justify-content: flex-end;
-
-      button mat-icon {
-        margin-right: 8px;
-      }
-    }
-
-    mat-divider {
-      margin: 24px 0;
-    }
-
-    .entity-stats {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-      gap: 16px;
-      margin: 0 16px;
-      padding: 0;
-
-      .stat-card {
-        background: var(--bs-body-bg);
-        border: 1px solid var(--bs-border-color);
-        border-radius: 8px;
-        padding: 16px;
-        text-align: center;
-        transition: all 0.2s ease;
-        position: relative;
-        overflow: hidden;
-
-        &::before {
-          content: '';
-          position: absolute;
-          top: 0;
-          left: 0;
-          width: 4px;
-          height: 100%;
-          background: var(--bs-primary);
-          opacity: 0.5;
-          transition: opacity 0.2s ease;
-        }
-
-        &.warning {
-          border-color: #ff9800;
-
-          &::before {
-            background: #ff9800;
-            opacity: 1;
-          }
-        }
-
-        &.clickable {
-          cursor: pointer;
-
-          &:hover {
-            border-color: var(--bs-primary);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-
-            &::before {
-              opacity: 1;
-              width: 100%;
-              background: linear-gradient(90deg, rgba(var(--bs-primary-rgb), 0.1) 0%, transparent 100%);
-            }
-          }
-
-          &.warning:hover {
-            border-color: #ff9800;
-
-            &::before {
-              background: linear-gradient(90deg, rgba(255, 152, 0, 0.15) 0%, transparent 100%);
-            }
-          }
-        }
-
-        // Color variations for different entity types
-        &.stat-card-queue::before {
-          background: #66bb6a;
-        }
-
-        &.stat-card-topic::before {
-          background: #ffa726;
-        }
-
-        &.stat-card-subscription::before {
-          background: #42a5f5;
-        }
-
-        .stat-value {
-          display: block;
-          font-size: 28px;
-          font-weight: 500;
-          color: var(--bs-body-color);
-        }
-
-        .stat-label {
-          display: block;
-          font-size: 12px;
-          color: var(--bs-secondary-color);
-          margin-top: 4px;
-        }
-      }
-    }
-
-    .entity-properties {
-      padding: 0 16px;
-
-      h3 {
-        margin: 0 0 16px;
-        font-size: 16px;
-        font-weight: 500;
-      }
-
-      .property-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 16px;
-
-        .property {
-          .property-label {
-            display: block;
-            font-size: 12px;
-            color: var(--bs-secondary-color);
-            margin-bottom: 4px;
-          }
-
-          .property-value {
-            display: block;
-            font-size: 14px;
-            color: var(--bs-body-color);
-          }
-        }
-      }
-    }
-
-    .duration-inputs-vertical {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .duration-field-vertical {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-
-      label {
-        font-size: 11px;
-        color: var(--bs-secondary-color);
-        font-weight: 500;
-        min-width: 65px;
-      }
-
-      input {
-        flex: 1;
-        padding: 4px 6px;
-        border: 1px solid var(--bs-border-color);
-        border-radius: 2px;
-        font-size: 13px;
-        color: var(--bs-body-color);
-        background: var(--bs-body-bg);
-        text-align: center;
-        font-family: 'Consolas', 'Courier New', monospace;
-
-        &:focus {
-          outline: none;
-          border-color: #1976d2;
-        }
-      }
-    }
-
-    .subscription-tabs {
-      margin: 16px 16px 0 16px;
-
-      ::ng-deep .mat-mdc-tab-labels {
-        .mat-mdc-tab {
-          mat-icon {
-            margin-right: 8px;
-          }
-        }
-      }
-    }
-
-    .tab-content {
-      padding: 16px 0;
-    }
-
-    /* Description Tab - ServiceBusExplorer-like Layout */
-    .description-tab {
-      padding: 16px !important;
-    }
-
-    .description-layout {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1.2fr;
-      gap: 16px;
-      height: 100%;
-    }
-
-    .description-column {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .info-column {
-      .groupbox {
-        height: 100%;
-      }
-    }
-
-    .timespan-value {
-      display: block;
-      font-size: 13px;
-      color: var(--bs-body-color);
-      padding: 6px 8px;
-      background: var(--bs-body-bg);
-      border: 1px solid var(--bs-border-color);
-      border-radius: 2px;
-      font-family: 'Consolas', 'Courier New', monospace;
-    }
-
-    .settings-list {
-      .setting-item {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 4px 0;
-        border: none;
-        background: transparent;
-
-        mat-icon {
-          font-size: 18px;
-          width: 18px;
-          height: 18px;
-          color: var(--bs-secondary-color);
-
-          &.enabled {
-            color: #1976d2;
-          }
-        }
-
-        span {
-          font-size: 12px;
-          color: var(--bs-body-color);
-        }
-
-        &.disabled {
-          opacity: 0.6;
-        }
-      }
-    }
-
-    .info-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 12px;
-
-      th, td {
-        padding: 4px 8px;
-        text-align: left;
-        border-bottom: 1px solid var(--bs-border-color);
-      }
-
-      th {
-        background: var(--bs-secondary-bg);
-        font-weight: 600;
-        color: var(--bs-body-color);
-      }
-
-      td {
-        color: var(--bs-body-color);
-
-        &.status-active {
-          color: #4caf50;
-          font-weight: 500;
-        }
-
-        &.warning {
-          color: #f44336;
-          font-weight: 500;
-        }
-      }
-
-      .section-header td {
-        background: #e3f2fd;
-        font-weight: 600;
-        color: #1976d2;
-        padding: 6px 8px;
-      }
-    }
-
-    @media (max-width: 1200px) {
-      .description-layout {
-        grid-template-columns: 1fr 1fr;
-      }
-
-      .info-column {
-        grid-column: span 2;
-      }
-    }
-
-    @media (max-width: 768px) {
-      .description-layout {
-        grid-template-columns: 1fr;
-      }
-
-      .info-column {
-        grid-column: span 1;
-      }
-    }
-
-    /* Style Selector */
-    .style-selector {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 16px;
-      padding: 8px;
-      background: var(--bs-secondary-bg);
-      border-radius: 4px;
-    }
-
-    .style-btn {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      padding: 6px 12px;
-      border: 1px solid var(--bs-border-color);
-      background: var(--bs-body-bg);
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 12px;
-      transition: all 0.2s;
-
-      mat-icon {
-        font-size: 18px;
-        width: 18px;
-        height: 18px;
-      }
-
-      &:hover {
-        background: #e3f2fd;
-        border-color: #1976d2;
-      }
-
-      &.active {
-        background: #1976d2;
-        color: white;
-        border-color: #1976d2;
-      }
-    }
-
-    /* Style 1: Modern Metric Cards */
-    .description-style-cards {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .cards-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 16px;
-    }
-
-    .metric-card {
-      background: var(--bs-body-bg);
-      border: 1px solid var(--bs-border-color);
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      overflow: hidden;
-      transition: transform 0.2s, box-shadow 0.2s;
-
-      &:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-      }
-
-      .card-header {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 12px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        font-size: 13px;
-        font-weight: 500;
-
-        mat-icon {
-          font-size: 20px;
-          width: 20px;
-          height: 20px;
-        }
-      }
-
-      .card-body {
-        padding: 16px;
-      }
-
-      .metric-value {
-        font-size: 28px;
-        font-weight: 600;
-        color: var(--bs-body-color);
-        margin-bottom: 4px;
-
-        &.status-active {
-          color: #4caf50;
-        }
-      }
-
-      .metric-label {
-        font-size: 12px;
-        color: var(--bs-secondary-color);
-      }
-
-      &.status-card .card-header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      }
-
-      &.primary-card .card-header {
-        background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%);
-      }
-
-      &.warning-card .card-header {
-        background: linear-gradient(135deg, #f44336 0%, #c62828 100%);
-      }
-
-      &.info-card .card-header {
-        background: linear-gradient(135deg, #00acc1 0%, #00838f 100%);
-      }
-
-      &.success-card .card-header {
-        background: linear-gradient(135deg, #66bb6a 0%, #43a047 100%);
-      }
-    }
-
-    .config-panels {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 16px;
-    }
-
-    .config-panel {
-      background: var(--bs-body-bg);
-      border-radius: 8px;
-      padding: 16px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-
-      h3 {
-        margin: 0 0 12px;
-        font-size: 14px;
-        font-weight: 600;
-        color: var(--bs-body-color);
-        border-bottom: 2px solid #1976d2;
-        padding-bottom: 8px;
-      }
-    }
-
-    /* Style 2: Info Box Grid */
-    .description-style-infobox {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .infobox-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      gap: 12px;
-    }
-
-    .info-box {
-      background: var(--bs-body-bg);
-      border: 1px solid var(--bs-border-color);
-      border-radius: 4px;
-      padding: 12px;
-      transition: all 0.2s;
-
-      &:hover {
-        border-color: #1976d2;
-        box-shadow: 0 2px 4px rgba(25, 118, 210, 0.1);
-      }
-
-      .info-label {
-        font-size: 11px;
-        color: var(--bs-secondary-color);
-        text-transform: uppercase;
-        margin-bottom: 6px;
-        font-weight: 500;
-      }
-
-      .info-value {
-        font-size: 14px;
-        color: var(--bs-body-color);
-        font-weight: 500;
-
-        &.small {
-          font-size: 11px;
-          word-break: break-all;
-        }
-
-        &.large {
-          font-size: 24px;
-          font-weight: 600;
-        }
-
-        &.status-active {
-          color: #4caf50;
-        }
-      }
-
-      &.metric {
-        background: var(--bs-tertiary-bg);
-        border-color: var(--bs-border-color);
-
-        .info-value {
-          color: #1976d2;
-        }
-      }
-
-      &.warning {
-        background: #fff3e0;
-        border-color: #ff9800;
-
-        .info-value {
-          color: #f57c00;
-        }
-      }
-    }
-
-    .infobox-settings {
-      background: var(--bs-body-bg);
-      border: 1px solid var(--bs-border-color);
-      border-radius: 4px;
-      padding: 16px;
-
-      h3 {
-        margin: 0 0 12px;
-        font-size: 14px;
-        font-weight: 600;
-        color: var(--bs-body-color);
-      }
-    }
-
-    .settings-checklist {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .check-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px;
-      background: var(--bs-secondary-bg);
-      border-radius: 4px;
-
-      mat-icon {
-        font-size: 20px;
-        width: 20px;
-        height: 20px;
-        color: var(--bs-tertiary-color);
-      }
-
-      span {
-        font-size: 13px;
-        color: var(--bs-secondary-color);
-      }
-
-      &.checked {
-        background: #e8f5e9;
-
-        mat-icon {
-          color: #4caf50;
-        }
-
-        span {
-          color: #2e7d32;
-        }
-      }
-    }
-
-    /* Style 3: Clean Property List */
-    .description-style-list {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .property-section {
-      background: var(--bs-body-bg);
-      border-radius: 4px;
-      overflow: hidden;
-
-      .section-title {
-        margin: 0;
-        padding: 12px 16px;
-        background: linear-gradient(to right, #1976d2, #1565c0);
-        color: white;
-        font-size: 13px;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-      }
-    }
-
-    .property-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 10px 16px;
-      border-bottom: 1px solid var(--bs-border-color);
-      transition: background 0.2s;
-
-      &:last-child {
-        border-bottom: none;
-      }
-
-      &:hover {
-        background: var(--bs-secondary-bg);
-      }
-
-      .prop-label {
-        font-size: 13px;
-        color: var(--bs-secondary-color);
-        font-weight: 500;
-      }
-
-      .prop-value {
-        font-size: 13px;
-        color: var(--bs-body-color);
-        text-align: right;
-
-        &.highlight {
-          color: #1976d2;
-          font-weight: 600;
-        }
-
-        &.warning {
-          color: #f44336;
-          font-weight: 600;
-        }
-
-        &.status-active {
-          color: #4caf50;
-          font-weight: 600;
-        }
-      }
-
-      .bool-icon {
-        font-size: 20px;
-        width: 20px;
-        height: 20px;
-        color: var(--bs-tertiary-color);
-
-        &.true {
-          color: #4caf50;
-        }
-      }
-    }
-
-    /* Style 4: Hybrid Dashboard */
-    .description-style-hybrid {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .metrics-bar {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-      gap: 12px;
-    }
-
-    .metric-tile {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      background: var(--bs-body-bg);
-      border-radius: 4px;
-      padding: 12px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-      transition: transform 0.2s;
-
-      &:hover {
-        transform: translateY(-2px);
-      }
-
-      .tile-icon {
-        font-size: 32px;
-        width: 32px;
-        height: 32px;
-
-        &.primary {
-          color: #1976d2;
-        }
-
-        &.warning {
-          color: #f57c00;
-        }
-
-        &.info {
-          color: #00acc1;
-        }
-
-        &.success {
-          color: #66bb6a;
-        }
-      }
-
-      .tile-content {
-        flex: 1;
-      }
-
-      .tile-value {
-        font-size: 20px;
-        font-weight: 600;
-        color: var(--bs-body-color);
-      }
-
-      .tile-label {
-        font-size: 11px;
-        color: var(--bs-secondary-color);
-        text-transform: uppercase;
-      }
-    }
-
-    .hybrid-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 16px;
-    }
-
-    .hybrid-panel {
-      background: var(--bs-body-bg);
-      border-radius: 4px;
-      overflow: hidden;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-
-      .panel-header {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 12px;
-        background: var(--bs-secondary-bg);
-        border-bottom: 1px solid var(--bs-border-color);
-
-        mat-icon {
-          font-size: 20px;
-          width: 20px;
-          height: 20px;
-          color: #1976d2;
-        }
-
-        h3 {
-          margin: 0;
-          font-size: 13px;
-          font-weight: 600;
-          color: var(--bs-body-color);
-        }
-      }
-
-      .panel-body {
-        padding: 12px;
-      }
-    }
-
-    .compact-table {
-      width: 100%;
-      font-size: 12px;
-
-      tr {
-        border-bottom: 1px solid var(--bs-border-color);
-
-        &:last-child {
-          border-bottom: none;
-        }
-      }
-
-      td {
-        padding: 6px 0;
-
-        &:first-child {
-          color: var(--bs-secondary-color);
-          font-weight: 500;
-        }
-
-        &:last-child {
-          text-align: right;
-          color: var(--bs-body-color);
-        }
-
-        &.status-active {
-          color: #4caf50;
-        }
-      }
-    }
-
-    .feature-list {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .feature-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px;
-      background: var(--bs-secondary-bg);
-      border-radius: 4px;
-      font-size: 12px;
-      color: var(--bs-tertiary-color);
-
-      mat-icon {
-        font-size: 18px;
-        width: 18px;
-        height: 18px;
-        color: var(--bs-tertiary-color);
-      }
-
-      &.enabled {
-        background: #e8f5e9;
-        color: #2e7d32;
-
-        mat-icon {
-          color: #4caf50;
-        }
-      }
-    }
-
-    .hybrid-info-panel {
-      background: var(--bs-body-bg);
-      border-radius: 4px;
-      padding: 16px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-
-      .info-item {
-        display: flex;
-        justify-content: space-between;
-        padding-bottom: 12px;
-        border-bottom: 1px solid var(--bs-border-color);
-
-        &:last-child {
-          border-bottom: none;
-          padding-bottom: 0;
-        }
-
-        .info-label {
-          font-size: 12px;
-          color: var(--bs-secondary-color);
-          font-weight: 500;
-        }
-
-        .info-value {
-          font-size: 12px;
-          color: var(--bs-body-color);
-          text-align: right;
-        }
-      }
-    }
-
-    /* Topic Layout Styles - CSS Grid 2x3 with Left/Right Columns */
-    .topic-container {
-      padding: 16px;
-      height: 100%;
-      overflow: auto;
-      display: flex;
-      flex-direction: column;
-      background: var(--bs-secondary-bg);
-    }
-
-    .topic-info-panel {
-      height: 100%;
-    }
-
-    /* Subscription 3-Column Layout Styles */
-    .subscription-details-layout {
-      padding-bottom: 16px;
-    }
-
-    .three-column-layout {
-      display: flex;
-      gap: 20px;
-      width: 100%;
-      max-width: 100%;
-      box-sizing: border-box;
-    }
-
-    .three-column-layout .column {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      min-width: 0;
-      flex-shrink: 1;
-      box-sizing: border-box;
-    }
-
-    .three-column-layout .column-1 {
-      flex: 0 0 calc(30% - 13.33px);
-      max-width: calc(30% - 13.33px);
-    }
-
-    .three-column-layout .column-2 {
-      flex: 0 0 calc(35% - 13.33px);
-      max-width: calc(35% - 13.33px);
-    }
-
-    .three-column-layout .column-3 {
-      flex: 0 0 calc(35% - 13.34px);
-      max-width: calc(35% - 13.34px);
-    }
-
-    /* Form Sections */
-    .form-section {
-      background: var(--bs-body-bg);
-      border: 1px solid var(--bs-border-color);
-      border-radius: 4px;
-      overflow: hidden;
-    }
-
-    .section-header {
-      background: #4a90a4;
-      color: white;
-      padding: 8px 12px;
-      font-weight: 500;
-      font-size: 14px;
-    }
-
-    .form-group {
-      padding: 12px;
-      border-bottom: 1px solid var(--bs-border-color);
-    }
-
-    .form-group:last-child {
-      border-bottom: none;
-    }
-
-    .form-group label {
-      display: block;
-      font-size: 12px;
-      color: var(--bs-secondary-color);
-      margin-bottom: 4px;
-      font-weight: 500;
-    }
-
-    .form-control {
-      width: 100%;
-      padding: 6px 10px;
-      border: 1px solid var(--bs-border-color);
-      border-radius: 3px;
-      font-size: 13px;
-      background: var(--bs-secondary-bg);
-    }
-
-    .form-control:disabled,
-    .form-control[readonly] {
-      background: var(--bs-secondary-bg);
-      cursor: not-allowed;
-    }
-
-    textarea.form-control {
-      resize: vertical;
-      min-height: 50px;
-    }
-
-    /* Input with Browse Button */
-    .input-with-button {
-      display: flex;
-      gap: 4px;
-    }
-
-    .input-with-button .form-control {
-      flex: 1;
-    }
-
-    .browse-btn {
-      padding: 6px 12px;
-      border: 1px solid var(--bs-border-color);
-      border-radius: 3px;
-      background: var(--bs-secondary-bg);
-      cursor: pointer;
-      font-size: 13px;
-      min-width: 40px;
-    }
-
-    .browse-btn:hover:not(:disabled) {
-      background: var(--bs-tertiary-bg);
-    }
-
-    .browse-btn:disabled {
-      cursor: not-allowed;
-      opacity: 0.6;
-    }
-
-    /* Checkbox List */
-    .checkbox-list {
-      padding: 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .checkbox-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .checkbox-item input[type="checkbox"] {
-      width: 16px;
-      height: 16px;
-      cursor: pointer;
-    }
-
-    .checkbox-item input[type="checkbox"]:disabled {
-      cursor: not-allowed;
-    }
-
-    .checkbox-item label {
-      font-size: 13px;
-      color: var(--bs-body-color);
-      cursor: pointer;
-      margin: 0;
-    }
-
-    .checkbox-item input[type="checkbox"]:disabled + label {
-      cursor: not-allowed;
-      opacity: 0.7;
-    }
-
-    /* Info Table */
-    .info-table {
-      padding: 0;
-    }
-
-    .info-table table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-
-    .info-table tbody tr {
-      border-bottom: 1px solid var(--bs-border-color);
-    }
-
-    .info-table tbody tr:last-child {
-      border-bottom: none;
-    }
-
-    .info-table tbody tr:nth-child(even) {
-      background-color: var(--bs-secondary-bg);
-    }
-
-    .info-table .label-cell {
-      padding: 10px 12px;
-      font-size: 12px;
-      color: var(--bs-secondary-color);
-      font-weight: 500;
-      width: 45%;
-      vertical-align: top;
-    }
-
-    .info-table .value-cell {
-      padding: 10px 12px;
-      font-size: 13px;
-      color: var(--bs-body-color);
-      word-break: break-word;
-    }
-
-    /* Responsive adjustments for subscription layout */
-    @media (max-width: 1200px) {
-      .three-column-layout {
-        flex-direction: column;
-      }
-
-      .three-column-layout .column-1,
-      .three-column-layout .column-2,
-      .three-column-layout .column-3 {
-        flex: 1 1 100%;
-      }
-    }
-
-    // Badge animations (like connections)
-    .badge {
-      font-size: 11px;
-      padding: 4px 8px;
-      font-weight: 600;
-      letter-spacing: 0.3px;
-    }
-
-    .pulse-badge {
-      animation: pulse-badge 2s ease-in-out infinite;
-      position: relative;
-      display: inline-flex;
-      align-items: center;
-      padding: 0.35em 0.65em;
-      font-weight: 600;
-
-      i {
-        animation: pulse-dot 2s ease-in-out infinite;
-      }
-    }
-
-    @keyframes pulse-badge {
-      0%, 100% {
-        box-shadow: 0 0 0 0 rgba(25, 135, 84, 0.4);
-      }
-      50% {
-        box-shadow: 0 0 0 5px rgba(25, 135, 84, 0);
-      }
-    }
-
-    @keyframes pulse-dot {
-      0%, 100% {
-        opacity: 1;
-      }
-      50% {
-        opacity: 0.5;
-      }
-    }
-  `]
+  styleUrl: './entity-details.component.scss'
 })
 export class EntityDetailsComponent {
   private selectionService = inject(EntitySelectionService);
@@ -1967,6 +421,76 @@ export class EntityDetailsComponent {
     return entity.requiresDuplicateDetection
       ? `Enabled, window ${this.formatDuration(entity.duplicateDetectionHistoryTimeWindow)}`
       : 'Disabled';
+  }
+
+  kindLabel(type: string): string {
+    return type.charAt(0).toUpperCase() + type.slice(1);
+  }
+
+  /** The rows in two columns, the first one longer when the count is odd. */
+  halves(rows: PropertyRow[]): PropertyRow[][] {
+    const half = Math.ceil(rows.length / 2);
+    return [rows.slice(0, half), rows.slice(half)];
+  }
+
+  queueProperties(queue: QueueInfo): PropertyRow[] {
+    return [
+      ['Max Delivery Count', queue.maxDeliveryCount != null ? String(queue.maxDeliveryCount) : NOT_SET],
+      ['Lock Duration', this.formatDuration(queue.lockDuration)],
+      ['Message TTL', this.formatDuration(queue.defaultMessageTimeToLive)],
+      ['Max Size', queue.maxSizeInMegabytes != null ? `${queue.maxSizeInMegabytes} MB` : NOT_SET],
+      ['Requires Session', queue.requiresSession ? 'Yes' : 'No'],
+      ['Partitioning', queue.enablePartitioning ? 'Enabled' : 'Disabled'],
+      ['Status', queue.status || NOT_SET],
+      ['Dead-lettering On Expiration', this.enabledText(queue.deadLetteringOnMessageExpiration)],
+      ['Auto Delete On Idle', this.formatDuration(queue.autoDeleteOnIdle)],
+      ['Forward To', queue.forwardTo || NOT_SET],
+      ['Forward Dead-lettered To', queue.forwardDeadLetteredMessagesTo || NOT_SET],
+      ['Duplicate Detection', this.duplicateDetectionText(queue)],
+      ['User Metadata', queue.userMetadata || NOT_SET],
+      ['Created At (UTC)', this.formatDate(queue.createdAt)],
+      ['Updated At (UTC)', this.formatDate(queue.updatedAt)],
+      ['Accessed At (UTC)', this.formatDate(queue.accessedAt)]
+    ];
+  }
+
+  topicProperties(topic: TopicInfo): PropertyRow[] {
+    return [
+      ['Status', topic.status || NOT_SET],
+      ['Max Size', topic.maxSizeInMegabytes != null ? `${topic.maxSizeInMegabytes} MB` : NOT_SET],
+      ['Message Time To Live', this.formatDuration(topic.defaultMessageTimeToLive)],
+      ['Auto Delete On Idle', this.formatDuration(topic.autoDeleteOnIdle)],
+      ['Duplicate Detection', this.duplicateDetectionText(topic)],
+      ['Batched Operations', this.enabledText(topic.enableBatchedOperations)],
+      ['Partitioning', this.enabledText(topic.enablePartitioning)],
+      ['Support Ordering', this.enabledText(topic.supportOrdering)],
+      ['User Metadata', topic.userMetadata || NOT_SET],
+      ['Created At (UTC)', this.formatDate(topic.createdAt)],
+      ['Updated At (UTC)', this.formatDate(topic.updatedAt)],
+      ['Accessed At (UTC)', this.formatDate(topic.accessedAt)]
+    ];
+  }
+
+  subscriptionProperties(subscription: SubscriptionInfo): PropertyRow[] {
+    const yesNo = (value: boolean | null | undefined) => value == null ? NOT_SET : value ? 'Yes' : 'No';
+    return [
+      ['Topic Name', subscription.topicName || NOT_SET],
+      ['Lock Duration', this.formatDuration(subscription.lockDuration)],
+      ['Max Delivery Count', subscription.maxDeliveryCount != null ? String(subscription.maxDeliveryCount) : NOT_SET],
+      ['Default Message Time To Live', this.formatDuration(subscription.defaultMessageTimeToLive)],
+      ['Auto Delete On Idle', this.formatDuration(subscription.autoDeleteOnIdle)],
+      ['Forward To', subscription.forwardTo || NOT_SET],
+      ['Forward Dead-lettered Messages To', subscription.forwardDeadLetteredMessagesTo || NOT_SET],
+      ['Status', subscription.status || NOT_SET],
+      ['Enable Sessions', yesNo(subscription.requiresSession)],
+      ['Enable Dead Lettering On Message Expiration', yesNo(subscription.deadLetteringOnMessageExpiration)],
+      ['Enable Dead Lettering On Filter Evaluation Exceptions', yesNo(subscription.deadLetteringOnFilterEvaluationExceptions)],
+      ['Enable Batched Operations', yesNo(subscription.enableBatchedOperations)],
+      ['User Metadata', subscription.userMetadata || NOT_SET],
+      ['Created At (UTC)', this.formatDate(subscription.createdAt)],
+      ['Updated At (UTC)', this.formatDate(subscription.updatedAt)],
+      ['Accessed At (UTC)', this.formatDate(subscription.accessedAt)]
+    ];
   }
 
   getTopicNameFromNode(node: TreeNode): string {

@@ -209,7 +209,7 @@ describe('EntityDetailsComponent panels', () => {
       expect(all(hiddenQueue, 'button').some(b => b.startsWith('Auto Resubmit'))).toBe(false);
       TestBed.resetTestingModule();
       const hiddenSubscription = render(subscription({}), NO_DEAD_LETTER);
-      expect(all(hiddenSubscription, '.card-header')).not.toContain('Dead Letter');
+      expect(all(hiddenSubscription, '.stat-label')).not.toContain('Dead Letter');
       expect(all(hiddenSubscription, 'button').some(b => b.startsWith('Auto Resubmit'))).toBe(false);
       TestBed.resetTestingModule();
 
@@ -218,7 +218,7 @@ describe('EntityDetailsComponent panels', () => {
       expect(all(shownQueue, 'button')).toContain('Auto Resubmit (7)');
       TestBed.resetTestingModule();
       const shownSubscription = render(subscription({}), DEFAULT_AZURE_CAPABILITIES);
-      expect(all(shownSubscription, '.card-header')).toContain('Dead Letter');
+      expect(all(shownSubscription, '.stat-label')).toContain('Dead Letter');
       expect(all(shownSubscription, 'button')).toContain('Auto Resubmit (3)');
     });
   });
@@ -520,7 +520,7 @@ describe('EntityDetailsComponent: the subscription panel has a Transfer Dead Let
   }
 
   const card = (el: HTMLElement) => Array.from(el.querySelectorAll<HTMLElement>('.metric-card'))
-    .find(c => c.querySelector('.card-header')?.textContent?.trim() === 'Transfer Dead Letter');
+    .find(c => c.querySelector('.stat-label')?.textContent?.trim() === 'Transfer Dead Letter');
 
   it('with the API saying supportsTransferDeadLetter, the card shows the count and opens the dialog on the transfer tab, by click or by Enter', () => {
     const el = render(subscription(4), { ...DEFAULT_AZURE_CAPABILITIES, supportsTransferDeadLetter: true });
@@ -707,5 +707,114 @@ describe('EntityDetailsComponent: the Sessions tab on the queue panel and the su
     state$.next({ selection: subscription('shipping'), loading: false, error: null });
     fixture.detectChanges();
     expect(sessions(fixture)).toBeNull();
+  });
+});
+
+describe('EntityDetailsComponent: one panel shape for a queue and a subscription', () => {
+  let open: ReturnType<typeof vi.fn>;
+  let refreshCurrentSelection: ReturnType<typeof vi.fn>;
+
+  const queue: EntitySelection = {
+    type: 'queue',
+    node: { id: 'orders', name: 'orders', type: 'queue', icon: 'inbox', expandable: false, level: 1 },
+    entity: { name: 'orders', activeMessageCount: 120, deadLetterMessageCount: 7, scheduledMessageCount: 2, sizeInBytes: 2048 } as never
+  };
+  const subscription: EntitySelection = {
+    type: 'subscription',
+    node: { id: 'events/billing', name: 'billing', type: 'subscription', icon: 'mail', expandable: false, level: 2, data: { topicName: 'events' } as never },
+    entity: { topicName: 'events', name: 'billing', activeMessageCount: 5, deadLetterMessageCount: 3, rules: [] } as never
+  };
+  const failed = (selection: EntitySelection) => ({ selection: { type: selection.type, node: selection.node }, loading: false, error: 'Http failure response for queues/orders: 504 Gateway Timeout' });
+
+  function render(state: { selection: EntitySelection; loading: boolean; error: string | null }) {
+    refreshCurrentSelection = vi.fn();
+    TestBed.configureTestingModule({
+      imports: [EntityDetailsComponent],
+      providers: [
+        { provide: EntitySelectionService, useValue: { state$: of(state), currentSelection: state.selection, isLoading: false, refreshCurrentSelection } },
+        { provide: ConnectionService, useValue: { currentTarget: 'prod.example.net' } },
+        { provide: QueueService, useValue: {} },
+        { provide: TopicService, useValue: { getSubscription: () => NEVER } },
+        { provide: SessionService, useValue: {} },
+        { provide: MatSnackBar, useValue: { open: vi.fn() } },
+        { provide: ProviderService, useValue: { capabilities: signal(DEFAULT_AZURE_CAPABILITIES) } },
+        resubmitRuns
+      ]
+    });
+    const fixture = TestBed.createComponent(EntityDetailsComponent);
+    open = vi.spyOn(fixture.debugElement.injector.get(MatDialog), 'open')
+      .mockReturnValue({ afterClosed: () => of(false) } as never) as unknown as ReturnType<typeof vi.fn>;
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  const text = (e: Element | null) => (e?.textContent ?? '').replace(/\s+/g, ' ').trim();
+  const buttons = (root: ParentNode) => Array.from(root.querySelectorAll<HTMLButtonElement>('button'));
+  const button = (root: ParentNode, label: string) => buttons(root).find(b => text(b) === label || b.getAttribute('aria-label') === label);
+  const openMenu = async (fixture: ReturnType<typeof render>) => {
+    button(fixture.nativeElement, 'More actions')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    return Array.from(document.querySelectorAll<HTMLButtonElement>('.mat-mdc-menu-panel [mat-menu-item]'));
+  };
+
+  it('a queue that failed to load says what failed and offers Retry, which reads it again; it is not a blank panel', () => {
+    const el = render(failed(queue)).nativeElement as HTMLElement;
+
+    const alert = el.querySelector('[role="alert"]');
+    expect(text(alert)).toContain('Could not load the queue orders');
+    expect(text(alert)).toContain('504 Gateway Timeout');
+    expect(text(alert), 'a re-read can follow a purge or a send, so the panel claims nothing about the broker').not.toContain('nothing on the broker was changed');
+    button(el, 'Retry')!.click();
+    expect(refreshCurrentSelection).toHaveBeenCalledTimes(1);
+  });
+
+  it('a subscription that failed to load says so, instead of "Loading subscription details..." that never ends', () => {
+    const el = render(failed(subscription)).nativeElement as HTMLElement;
+
+    expect(text(el.querySelector('[role="alert"]'))).toContain('Could not load the subscription billing');
+    expect(text(el)).not.toContain('Loading subscription details');
+  });
+
+  it('Purge is never beside View Messages: the queue row holds View Messages and Send Message, and Purge sits in More actions with the same confirmation', async () => {
+    const fixture = render({ selection: queue, loading: false, error: null });
+    const el = fixture.nativeElement as HTMLElement;
+    expect(buttons(el).map(text).filter(t => /purge/i.test(t)), 'purge in the panel before the menu opens').toStrictEqual([]);
+    expect(button(el, 'View Messages')).toBeDefined();
+    expect(button(el, 'Send Message')).toBeDefined();
+
+    const items = await openMenu(fixture);
+
+    expect(items.map(text)).toStrictEqual(['Import messages', 'Purge active messages 120']);
+    expect(items[1].classList.contains('danger'), 'purge in the error colour').toBe(true);
+    items[1].click();
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(open.mock.calls[0][0]).toBe(ConfirmDialogComponent);
+    expect(open.mock.calls[0][1].data.message).toBe('This deletes every active message in queue "orders" on prod.example.net: 120 when the queue was loaded. It cannot be undone.');
+  });
+
+  it('the subscription panel has View Messages like the queue panel, and its three purges sit in More actions', async () => {
+    const fixture = render({ selection: subscription, loading: false, error: null });
+
+    button(fixture.nativeElement, 'View Messages')!.click();
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(open.mock.calls[0][0]).toBe(ViewMessagesDialogComponent);
+    expect(open.mock.calls[0][1].data).toMatchObject({ entityType: 'subscription', entityName: 'billing', topicName: 'events' });
+
+    const items = await openMenu(fixture);
+    expect(items.map(text)).toStrictEqual(['Purge Active Messages 5', 'Purge Dead-letter Messages 3', 'Purge All Messages 8']);
+  });
+
+  it('the Active and Dead Letter cards are buttons named with their count that open the messages on their tab, by Enter', () => {
+    const el = render({ selection: queue, loading: false, error: null }).nativeElement as HTMLElement;
+    const card = (label: string) => Array.from(el.querySelectorAll<HTMLElement>('.stat-card')).find(c => text(c.querySelector('.stat-label')) === label)!;
+
+    expect(card('Active Messages').getAttribute('role')).toBe('button');
+    expect(card('Active Messages').getAttribute('aria-label')).toBe('View the 120 active messages');
+    expect(card('Dead Letter').getAttribute('aria-label')).toBe('View the 7 dead-letter messages');
+    card('Active Messages').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    card('Dead Letter').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+
+    expect(open.mock.calls.map(c => c[1].data.initialTab)).toStrictEqual([0, 1]);
   });
 });

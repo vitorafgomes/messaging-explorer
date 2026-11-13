@@ -50,7 +50,7 @@ No dates are set; the owner sets them.
 - **Notes:** these flows are also the behaviour lock for every later phase. A flow that exposes a defect of [[pages/roadmap/code-audit-2026-11]] is reported, not worked around.
 
 ### Phase 1 - A queue looks and works like a subscription
-- **Status:** not started
+- **Status:** in progress (2026-11-13). The panel half is built, in the web app only: a queue and a subscription share one panel shape, with the same header, the same cards, Material tabs and the same More actions menu holding the purges (details on [[pages/services/web-app]]). Not done: `GetQueueAsync` reading runtime and configuration together (Core), and live counts for a queue, which need a poll the queue does not have; a queue's purge stays the purge of its active messages, the dead-letter and all purges of a subscription were not added to a queue. The screenshots of a queue and a subscription differ by the live Active card, the Scheduled and Size cards and Send Message of a queue, the topic in the header, the Rules tab, and the tab name Description, which the specs select by name.
 - **Scope:** `GetQueueAsync` reads configuration and runtime properties together, as the topic and the subscription already do; the queue panel uses the subscription panel's cards, live counts, tabs and purge menu, and gains the sessions tab. One shared panel, not two copies (rule 7).
 - **Success criteria:** a queue created with a 2-minute lock, 7 deliveries and sessions shows exactly those values; the end-to-end screenshots of a queue and a subscription differ only by the rules tab.
 
@@ -61,6 +61,7 @@ No dates are set; the owner sets them.
 - **Success criteria:** no purge or delete can be confirmed without the entity and the connection on screen.
 
 ### Phase 3 - Material, screen by screen
+- **2026-11-13, the main screen,** the entities tree, the entity panel, its container and the live Active card of a subscription, drawn from `context/prototypes/web-app/Main.dc.html`, with the end-to-end flows green before and after. Counts in `entity-details`, `entities-tree`, `entities-container` and `transfer-monitor`: Bootstrap classes 98 to 0, Font Awesome 65 to 0, literal colours 80 to 0, `--bs-*` 140 to 0. The styles of the three larger components are in their own files. The light and dark screenshots wait for the owner's review.
 - **Status:** started 2026-11-13 with Settings, a screen that did not exist: no Bootstrap class, Font Awesome icon or literal colour in `web-app/src/app/features/settings/`; the warning and success tokens the artboard uses are not defined in `styles.scss` yet, so the cannot-update panel takes the tertiary container and the ready panel the primary container.
 - **Scope:** in this order: entity details, entities tree, connections, messages dialog, monitoring, queues and topics pages. Per screen: buttons and form controls to Material, Font Awesome to `mat-icon`, `--bs-*` and hex colours to theme tokens, styles into their own file, the three states of rule 9, names on icon controls.
 - **Success criteria:** per screen, the counts on [[pages/conventions/ui]] reach zero for that screen and its end-to-end flow still passes; the light and dark screenshots are reviewed.

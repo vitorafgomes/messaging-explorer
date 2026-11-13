@@ -5,6 +5,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import {finalize, Subject, Subscription} from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { TreeNode } from '../../core/models';
@@ -22,60 +23,84 @@ import { ImportDefinitionsDialogComponent } from './import-definitions-dialog.co
     MatSnackBarModule,
     MatButtonModule,
     MatIconModule,
-    MatTooltipModule
+    MatTooltipModule,
+    MatProgressSpinnerModule
   ],
   template: `
     <ng-template #createAction let-node>
       @if (canCreate() && createLabel(node); as label) {
         <button mat-icon-button type="button" class="create-btn" [attr.aria-label]="label" [matTooltip]="label" (click)="openCreate(node, $event)">
-          <mat-icon>add</mat-icon>
+          <mat-icon fontIcon="add" />
         </button>
       }
     </ng-template>
+    <ng-template #toggle let-node>
+      <button type="button" class="node-icon-wrapper node-icon-expandable"
+              [attr.aria-label]="(isExpanded(node) ? 'Collapse ' : 'Expand ') + node.name"
+              [attr.aria-expanded]="isExpanded(node)"
+              (click)="toggleNode(node, $event)">
+        <mat-icon class="node-icon" [fontIcon]="isExpanded(node) ? 'expand_more' : 'chevron_right'" />
+      </button>
+    </ng-template>
+    <ng-template #counts let-data>
+      <div class="node-badges">
+        @if (data.activeMessageCount > 0) {
+          <span class="count-chip" title="Active Messages">{{ data.activeMessageCount | number }}</span>
+        }
+        @if (data.deadLetterMessageCount > 0) {
+          <span class="count-chip dead-letter" title="Dead Letter Messages">
+            <mat-icon class="chip-icon" fontIcon="warning" aria-hidden="true" />{{ data.deadLetterMessageCount | number }}
+          </span>
+        }
+      </div>
+    </ng-template>
+    <ng-template #pattern let-topicData>
+      <span class="count-chip pattern"
+            [title]="topicData.detectedPattern ? 'Pattern: ' + topicData.patternDisplay + ' (Confidence: ' + (topicData.detectedPattern.confidence * 100).toFixed(0) + '%) - ' + topicData.detectedPattern.reason : topicData.patternDisplay">
+        <mat-icon class="chip-icon" fontIcon="account_tree" aria-hidden="true" />{{ topicData.patternDisplay }}
+      </span>
+    </ng-template>
     <div class="tree-container">
       <div class="tree-header">
-        <div class="header-content">
-          <i class="fa fa-sitemap header-icon"></i>
-          <span class="tree-title">Service Bus Entities</span>
-        </div>
+        <h2 class="tree-title">Entities</h2>
         @if (canUseDefinitions() && isConnected) {
           <button mat-icon-button type="button" class="definitions-btn" aria-label="Export definitions" matTooltip="Export definitions" (click)="openExportDefinitions()">
-            <mat-icon>download</mat-icon>
+            <mat-icon fontIcon="download" />
           </button>
           <button mat-icon-button type="button" class="definitions-btn" aria-label="Import definitions" matTooltip="Import definitions" (click)="openImportDefinitions()">
-            <mat-icon>upload</mat-icon>
+            <mat-icon fontIcon="upload" />
           </button>
         }
-        <button class="btn btn-sm btn-outline-secondary refresh-btn"
+        <button mat-icon-button type="button" class="refresh-btn"
                 (click)="loadTree()"
                 [disabled]="loading() || !isConnected"
-                title="Refresh Entities">
-          <i class="fa-solid fa-arrows-rotate"></i>
+                aria-label="Refresh entities"
+                matTooltip="Refresh entities">
+          <mat-icon fontIcon="refresh" />
         </button>
       </div>
 
       @if (!isConnected) {
         <div class="tree-empty">
-          <i class="fa fa-cloud fa-4x empty-icon"></i>
+          <mat-icon class="empty-icon" fontIcon="cloud_off" aria-hidden="true" />
           <span class="empty-title">Not Connected</span>
           <span class="empty-subtitle">Connect to a Service Bus to view entities</span>
         </div>
       } @else if (loading()) {
-        <div class="tree-loading">
-          <div class="spinner-border text-primary" role="status">
-            <span class="visually-hidden">Loading...</span>
-          </div>
+        <div class="tree-loading" role="status">
+          <mat-progress-spinner mode="indeterminate" diameter="32" aria-hidden="true" />
           <span class="loading-text">Loading entities...</span>
         </div>
       } @else if (loadError()) {
         <div class="tree-empty" role="alert">
-          <i class="fa fa-exclamation-triangle fa-4x empty-icon"></i>
+          <mat-icon class="empty-icon error" fontIcon="error" aria-hidden="true" />
           <span class="empty-title">Could not load entities</span>
-          <span class="empty-subtitle">The broker did not answer the list of queues and topics. Refresh to try again.</span>
+          <span class="empty-subtitle">The broker did not answer the list of queues and topics.</span>
+          <button mat-stroked-button type="button" (click)="loadTree()"><mat-icon fontIcon="refresh" />Retry</button>
         </div>
       } @else if (treeData.length === 0) {
         <div class="tree-empty">
-          <i class="fa fa-inbox fa-4x empty-icon"></i>
+          <mat-icon class="empty-icon" fontIcon="inbox" aria-hidden="true" />
           <span class="empty-title">No Entities Found</span>
           <span class="empty-subtitle">No queues or topics available</span>
         </div>
@@ -88,60 +113,32 @@ import { ImportDefinitionsDialogComponent } from './import-definitions-dialog.co
                      [class.selected]="isSelected(node)"
                      [class.node-category]="node.type === 'category'"
                      [class.node-topic]="node.type === 'topic'">
-                  <div class="node-icon-wrapper node-icon-expandable" (click)="toggleNode(node, $event)">
-                    <i class="fa node-icon"
-                       [class.fa-plus-square-o]="!isExpanded(node)"
-                       [class.fa-minus-square-o]="isExpanded(node)"></i>
-                  </div>
-                  <div class="node-icon-wrapper" [class]="getIconClass(node)" (click)="selectNode(node)">
-                    <i class="fa node-icon"
-                       [class.fa-folder-open]="node.type === 'category' && isExpanded(node)"
-                       [class.fa-folder]="node.type === 'category' && !isExpanded(node)"
-                       [class.fa-tower-broadcast]="node.type === 'topic'"></i>
-                  </div>
+                  <ng-container *ngTemplateOutlet="toggle; context: { $implicit: node }" />
                   <span class="node-name" (click)="selectNode(node)">{{ node.name }}</span>
                   @if (node.type === 'category') {
-                    <span class="node-count">
-                      <i class="fa-solid fa-hashtag count-icon"></i>
-                      {{ node.children?.length || 0 }}
-                    </span>
+                    <span class="node-count" [title]="(node.children?.length || 0) + ' ' + node.name.toLowerCase()">{{ node.children?.length || 0 }}</span>
                     <ng-container *ngTemplateOutlet="createAction; context: { $implicit: node }" />
                   }
                   @if (node.type === 'topic' && node.data) {
                     @let topicData = $any(node.data);
-                    <span class="node-count">
-                      <i class="fa-solid fa-bell count-icon"></i>
-                      {{ topicData.subscriptionCount }}
-                    </span>
+                    <span class="node-count" [title]="topicData.subscriptionCount + ' subscriptions'">{{ topicData.subscriptionCount }}</span>
                   }
                 </div>
                 @if (isExpanded(node) && node.children) {
                   <div class="tree-children">
                     @for (child of node.children; track child.id) {
                       @if (hasChild(0, child)) {
-                        <!-- Topic with subscriptions - expandable -->
                         <div class="tree-node tree-node-parent"
                              [class.selected]="isSelected(child)"
                              [class.node-topic]="child.type === 'topic'">
-                          <div class="node-icon-wrapper node-icon-expandable" (click)="toggleNode(child, $event)">
-                            <i class="fa-solid node-icon"
-                               [class.fa-square-plus]="!isExpanded(child)"
-                               [class.fa-square-minus]="isExpanded(child)"></i>
-                          </div>
+                          <ng-container *ngTemplateOutlet="toggle; context: { $implicit: child }" />
                           <span class="node-name" (click)="selectNode(child)">{{ child.name }}</span>
                           @if (child.type === 'topic' && child.data) {
                             @let topicData = $any(child.data);
-                            <span class="node-count">
-                              <i class="fa-solid fa-bell count-icon"></i>
-                              {{ topicData.subscriptionCount }}
-                            </span>
+                            <span class="node-count" [title]="topicData.subscriptionCount + ' subscriptions'">{{ topicData.subscriptionCount }}</span>
                             @if (topicData.patternDisplay) {
                               <div class="node-badges">
-                                <span class="badge badge-pattern"
-                                      [title]="topicData.detectedPattern ? 'Pattern: ' + topicData.patternDisplay + ' (Confidence: ' + (topicData.detectedPattern.confidence * 100).toFixed(0) + '%) - ' + topicData.detectedPattern.reason : topicData.patternDisplay">
-                                  <i class="fa fa-project-diagram badge-icon"></i>
-                                  {{ topicData.patternDisplay }}
-                                </span>
+                                <ng-container *ngTemplateOutlet="pattern; context: { $implicit: topicData }" />
                               </div>
                             }
                           }
@@ -154,92 +151,35 @@ import { ImportDefinitionsDialogComponent } from './import-definitions-dialog.co
                                    [class.selected]="isSelected(subscription)"
                                    [class.node-subscription]="subscription.type === 'subscription'"
                                    (click)="selectNode(subscription)">
-
-                                <div class="node-icon-wrapper" [class]="getIconClass(subscription)">
-                                  <i class="fa node-icon fa-rss"></i>
-                                </div>
+                                <mat-icon class="node-icon" fontIcon="subdirectory_arrow_right" aria-hidden="true" />
                                 <span class="node-name">{{ subscription.name }}</span>
                                 @if (subscription.type === 'subscription' && subscription.data) {
-                                  @let subData = $any(subscription.data);
-                                  <div class="node-badges">
-                                    @if (subData.activeMessageCount > 0) {
-                                      <span class="badge badge-active" title="Active Messages">
-                                        <i class="fa fa-envelope badge-icon"></i>
-                                        {{ subData.activeMessageCount }}
-                                      </span>
-                                    }
-                                    @if (subData.deadLetterMessageCount > 0) {
-                                      <span class="badge badge-warning" title="Dead Letter Messages">
-                                        <i class="fa fa-exclamation-circle badge-icon"></i>
-                                        {{ subData.deadLetterMessageCount }}
-                                      </span>
-                                    }
-                                  </div>
+                                  <ng-container *ngTemplateOutlet="counts; context: { $implicit: subscription.data }" />
                                 }
                               </div>
                             }
                           </div>
                         }
                       } @else {
-                        <!-- Queue or topic without subscriptions - not expandable -->
                         <div class="tree-node"
                              [class.selected]="isSelected(child)"
                              [class.node-queue]="child.type === 'queue'"
                              [class.node-topic]="child.type === 'topic'"
                              (click)="selectNode(child)">
-                          <div class="node-icon-wrapper" [class]="getIconClass(child)">
-                            <i class="fa node-icon"
-                               [class.fa-inbox]="child.type === 'queue'"
-                               [class.fa-tower-broadcast]="child.type === 'topic'"></i>
-                          </div>
+                          <mat-icon class="node-icon" [fontIcon]="child.type === 'topic' ? 'campaign' : 'inbox'" aria-hidden="true" />
                           <span class="node-name">{{ child.name }}</span>
-                        @if (child.type === 'queue' && child.data) {
-                          @let queueData = $any(child.data);
-                          <div class="node-badges">
-                            @if (queueData.activeMessageCount > 0) {
-                              <span class="badge badge-active" title="Active Messages">
-                                <i class="fa fa-envelope badge-icon"></i>
-                                {{ queueData.activeMessageCount }}
-                              </span>
-                            }
-                            @if (queueData.deadLetterMessageCount > 0) {
-                              <span class="badge badge-warning" title="Dead Letter Messages">
-                                <i class="fa fa-exclamation-circle badge-icon"></i>
-                                {{ queueData.deadLetterMessageCount }}
-                              </span>
-                            }
-                          </div>
-                        }
-                        @if (child.type === 'subscription' && child.data) {
-                          @let subData = $any(child.data);
-                          <div class="node-badges">
-                            @if (subData.activeMessageCount > 0) {
-                              <span class="badge badge-active" title="Active Messages">
-                                <i class="fa fa-envelope badge-icon"></i>
-                                {{ subData.activeMessageCount }}
-                              </span>
-                            }
-                            @if (subData.deadLetterMessageCount > 0) {
-                              <span class="badge badge-warning" title="Dead Letter Messages">
-                                <i class="fa fa-exclamation-circle badge-icon"></i>
-                                {{ subData.deadLetterMessageCount }}
-                              </span>
-                            }
-                          </div>
-                        }
-                        @if (child.type === 'topic' && child.data) {
-                          @let topicData = $any(child.data);
-                          <div class="node-badges">
-                            @if (topicData.patternDisplay) {
-                              <span class="badge badge-pattern"
-                                    [title]="topicData.detectedPattern ? 'Pattern: ' + topicData.patternDisplay + ' (Confidence: ' + (topicData.detectedPattern.confidence * 100).toFixed(0) + '%) - ' + topicData.detectedPattern.reason : topicData.patternDisplay">
-                                <i class="fa fa-project-diagram badge-icon"></i>
-                                {{ topicData.patternDisplay }}
-                              </span>
-                            }
-                          </div>
-                        }
-                        <ng-container *ngTemplateOutlet="createAction; context: { $implicit: child }" />
+                          @if ((child.type === 'queue' || child.type === 'subscription') && child.data) {
+                            <ng-container *ngTemplateOutlet="counts; context: { $implicit: child.data }" />
+                          }
+                          @if (child.type === 'topic' && child.data) {
+                            @let topicData = $any(child.data);
+                            <div class="node-badges">
+                              @if (topicData.patternDisplay) {
+                                <ng-container *ngTemplateOutlet="pattern; context: { $implicit: topicData }" />
+                              }
+                            </div>
+                          }
+                          <ng-container *ngTemplateOutlet="createAction; context: { $implicit: child }" />
                         </div>
                       }
                     }
@@ -251,46 +191,11 @@ import { ImportDefinitionsDialogComponent } from './import-definitions-dialog.co
                      [class.node-queue]="node.type === 'queue'"
                      [class.node-subscription]="node.type === 'subscription'"
                      (click)="selectNode(node)">
-                  <div class="node-icon-wrapper" [class]="getIconClass(node)">
-                    <i class="fa node-icon"
-                       [class.fa-inbox]="node.type === 'queue'"
-                       [class.fa-rss]="node.type === 'subscription'"></i>
-                  </div>
+                  <mat-icon class="node-icon" [fontIcon]="node.type === 'category' ? 'folder' : node.type === 'subscription' ? 'subdirectory_arrow_right' : 'inbox'" aria-hidden="true" />
                   <span class="node-name">{{ node.name }}</span>
                   <ng-container *ngTemplateOutlet="createAction; context: { $implicit: node }" />
-                  @if (node.type === 'queue' && node.data) {
-                    @let queueData = $any(node.data);
-                    <div class="node-badges">
-                      @if (queueData.activeMessageCount > 0) {
-                        <span class="badge badge-active" title="Active Messages">
-                          <i class="fa fa-envelope badge-icon"></i>
-                          {{ queueData.activeMessageCount }}
-                        </span>
-                      }
-                      @if (queueData.deadLetterMessageCount > 0) {
-                        <span class="badge badge-warning" title="Dead Letter Messages">
-                          <i class="fa fa-exclamation-circle badge-icon"></i>
-                          {{ queueData.deadLetterMessageCount }}
-                        </span>
-                      }
-                    </div>
-                  }
-                  @if (node.type === 'subscription' && node.data) {
-                    @let subData = $any(node.data);
-                    <div class="node-badges">
-                      @if (subData.activeMessageCount > 0) {
-                        <span class="badge badge-active" title="Active Messages">
-                          <i class="fa fa-envelope badge-icon"></i>
-                          {{ subData.activeMessageCount }}
-                        </span>
-                      }
-                      @if (subData.deadLetterMessageCount > 0) {
-                        <span class="badge badge-warning" title="Dead Letter Messages">
-                          <i class="fa fa-exclamation-circle badge-icon"></i>
-                          {{ subData.deadLetterMessageCount }}
-                        </span>
-                      }
-                    </div>
+                  @if ((node.type === 'queue' || node.type === 'subscription') && node.data) {
+                    <ng-container *ngTemplateOutlet="counts; context: { $implicit: node.data }" />
                   }
                 </div>
               }
@@ -300,408 +205,7 @@ import { ImportDefinitionsDialogComponent } from './import-definitions-dialog.co
       }
     </div>
   `,
-  styles: [`
-    .tree-container {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      background: var(--bs-body-bg);
-      height: 100%;
-    }
-
-    .tree-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 10px 12px;
-      background: var(--bs-secondary-bg);
-      border-bottom: 1px solid var(--bs-border-color);
-    }
-
-    .header-content {
-      display: flex;
-      flex: 1;
-      min-width: 0;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .header-icon {
-      font-size: 18px;
-      color: var(--bs-secondary-color);
-    }
-
-    .tree-title {
-      font-weight: 600;
-      font-size: 13px;
-      color: var(--bs-body-color);
-    }
-
-    .refresh-btn {
-      padding: 4px 8px;
-
-      i {
-        font-size: 14px;
-      }
-    }
-
-    .tree-loading, .tree-empty {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 40px 20px;
-      color: var(--bs-secondary-color);
-      gap: 12px;
-      text-align: center;
-    }
-
-    .empty-icon {
-      color: var(--bs-secondary-color);
-      opacity: 0.5;
-    }
-
-    .empty-title {
-      font-size: 14px;
-      font-weight: 500;
-      color: var(--bs-body-color);
-    }
-
-    .empty-subtitle {
-      font-size: 12px;
-      color: var(--bs-secondary-color);
-    }
-
-    .loading-text {
-      margin-top: 8px;
-      font-size: 13px;
-      color: var(--bs-secondary-color);
-    }
-
-    .entity-tree {
-      flex: 1;
-      overflow: auto;
-      padding: 4px 0;
-    }
-
-    .tree-node-wrapper {
-      position: relative;
-    }
-
-    .tree-node {
-      display: flex;
-      align-items: center;
-      padding: 0 8px;
-      min-height: 28px;
-      transition: background-color 0.15s ease;
-      user-select: none;
-      position: relative;
-
-      &:hover {
-        background: var(--bs-secondary-bg);
-      }
-
-      &.node-category .node-icon {
-        color: var(--bs-secondary-color);
-      }
-
-      &.node-queue .node-icon {
-        color: #66bb6a;
-      }
-
-      &.node-topic .node-icon {
-        color: #ffa726;
-      }
-
-      &.node-subscription .node-icon {
-        color: #42a5f5;
-      }
-
-      &.selected {
-        background: rgba(var(--bs-primary-rgb), 0.1);
-        border-left: 4px solid var(--bs-primary);
-        animation: pulse-selection 2s ease-in-out infinite;
-        position: relative;
-
-        .node-name {
-          font-weight: 600;
-          color: var(--bs-primary);
-        }
-
-        &.node-category {
-          background: var(--bs-secondary-bg);
-          border-left: 4px solid var(--bs-secondary-color);
-          animation: none;
-
-          .node-name {
-            color: var(--bs-body-color);
-            font-weight: 600;
-          }
-
-          .node-icon {
-            color: var(--bs-secondary-color);
-          }
-        }
-
-        &.node-queue {
-          background: rgba(102, 187, 106, 0.15);
-          border-left: 4px solid #4caf50;
-          box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.4);
-
-          .node-name {
-            color: #2e7d32;
-            font-weight: 600;
-          }
-
-          .node-icon {
-            color: #4caf50;
-            animation: pulse-icon 2s ease-in-out infinite;
-          }
-        }
-
-        &.node-topic {
-          background: rgba(255, 167, 38, 0.15);
-          border-left: 4px solid #ff9800;
-          box-shadow: 0 0 0 0 rgba(255, 152, 0, 0.4);
-
-          .node-name {
-            color: #e65100;
-            font-weight: 600;
-          }
-
-          .node-icon {
-            color: #ff9800;
-            animation: pulse-icon 2s ease-in-out infinite;
-          }
-        }
-
-        &.node-subscription {
-          background: rgba(66, 165, 245, 0.15);
-          border-left: 4px solid #1976d2;
-          box-shadow: 0 0 0 0 rgba(25, 118, 210, 0.4);
-
-          .node-name {
-            color: #1565c0;
-            font-weight: 600;
-          }
-
-          .node-icon {
-            color: #1976d2;
-            animation: pulse-icon 2s ease-in-out infinite;
-          }
-        }
-      }
-
-      &.tree-node-parent {
-        .node-name {
-          font-weight: 500;
-        }
-      }
-    }
-
-    .node-toggle {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 20px;
-      height: 20px;
-      margin-right: 4px;
-      flex-shrink: 0;
-      cursor: pointer;
-      transition: transform 0.2s ease;
-
-      &:hover .toggle-icon {
-        color: var(--bs-primary);
-      }
-    }
-
-    .toggle-icon {
-      font-size: 14px;
-      color: var(--bs-secondary-color);
-      transition: color 0.15s ease, transform 0.2s ease;
-    }
-
-    .node-icon-wrapper {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 20px;
-      height: 20px;
-      margin-right: 4px;
-      flex-shrink: 0;
-
-      &.node-icon-expandable {
-        cursor: pointer;
-        margin-right: 2px;
-
-        &:hover .node-icon {
-          opacity: 0.7;
-          transform: scale(1.1);
-        }
-      }
-
-      &:hover .node-icon {
-        opacity: 0.7;
-      }
-    }
-
-    .node-icon {
-      font-size: 16px;
-      transition: color 0.15s ease, opacity 0.15s ease, transform 0.15s ease;
-    }
-
-    .node-name {
-      flex: 1;
-      font-size: 13px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      color: var(--bs-body-color);
-      line-height: 28px;
-      cursor: pointer;
-    }
-
-    .create-btn {
-      --mat-icon-button-state-layer-size: 24px;
-      width: 24px;
-      height: 24px;
-      padding: 0;
-      margin-left: 4px;
-      flex-shrink: 0;
-
-      mat-icon {
-        font-size: 1.125rem;
-        width: 18px;
-        height: 18px;
-      }
-    }
-
-    .node-badges {
-      display: flex;
-      gap: 4px;
-      margin-left: 8px;
-      flex-shrink: 0;
-    }
-
-    .badge {
-      display: flex;
-      align-items: center;
-      gap: 3px;
-      padding: 2px 6px;
-      border-radius: 10px;
-      font-size: 10px;
-      font-weight: 600;
-      line-height: 1;
-
-      &.badge-active {
-        background: rgba(var(--bs-primary-rgb), 0.15);
-        color: var(--bs-primary);
-      }
-
-      &.badge-warning {
-        background: rgba(var(--bs-danger-rgb), 0.15);
-        color: var(--bs-danger);
-      }
-
-      &.badge-pattern {
-        background: rgba(var(--bs-success-rgb), 0.15);
-        color: var(--bs-success);
-      }
-    }
-
-    .badge-icon {
-      font-size: 10px;
-    }
-
-    .node-count {
-      display: flex;
-      align-items: center;
-      gap: 3px;
-      color: var(--bs-secondary-color);
-      font-size: 11px;
-      margin-left: 6px;
-      flex-shrink: 0;
-    }
-
-    .count-icon {
-      font-size: 12px;
-    }
-
-    .tree-children {
-      padding-left: 24px;
-      position: relative;
-
-      /* Vertical line for subscriptions (inside topics) */
-      .tree-children {
-        &::before {
-          content: '';
-          position: absolute;
-          left: 12px;
-          top: 0;
-          bottom: 0;
-          width: 1px;
-          background: var(--bs-border-color);
-        }
-
-        .tree-node::after {
-          content: '';
-          position: absolute;
-          left: 12px;
-          top: 14px;
-          width: 8px;
-          height: 1px;
-          background: var(--bs-border-color);
-        }
-
-        .tree-node:last-child::before {
-          content: '';
-          position: absolute;
-          left: 12px;
-          top: 14px;
-          bottom: 0;
-          width: 1px;
-          background: var(--bs-body-bg);
-        }
-      }
-    }
-
-    .entity-tree::-webkit-scrollbar {
-      width: 8px;
-    }
-
-    .entity-tree::-webkit-scrollbar-track {
-      background: var(--bs-secondary-bg);
-    }
-
-    .entity-tree::-webkit-scrollbar-thumb {
-      background: var(--bs-border-color);
-      border-radius: 4px;
-
-      &:hover {
-        background: var(--bs-secondary-color);
-      }
-    }
-
-    @keyframes pulse-selection {
-      0%, 100% {
-        box-shadow: 0 0 0 0 rgba(var(--bs-primary-rgb), 0.4);
-      }
-      50% {
-        box-shadow: 0 0 0 4px rgba(var(--bs-primary-rgb), 0);
-      }
-    }
-
-    @keyframes pulse-icon {
-      0%, 100% {
-        opacity: 1;
-        transform: scale(1);
-      }
-      50% {
-        opacity: 0.7;
-        transform: scale(1.1);
-      }
-    }
-  `]
+  styleUrl: './entities-tree.component.scss'
 })
 export class EntitiesTreeComponent implements OnInit, OnDestroy {
   private treeDataBuilder = inject(TreeDataBuilderService);
