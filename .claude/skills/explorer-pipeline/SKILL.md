@@ -128,11 +128,19 @@ stated too fast: fix the plan.
    | `.claude/workflows/explorer-review.js` | `.claude/workflows/explorer-review.test.sh` (`ALL CASES PASS`) |
    | `scripts/*.sh` | the script's `.test.sh` (`ALL CASES PASS`) and a run of the script itself on the real tree |
    | contract/config/doc text only (`context/**`, `*.md`, and `.claude/**` paths no row above matches) | no executable surface - record gates 3-4 as N/A and say why |
+   | `src/ServiceBusExplorer.Core/Providers/**` or any broker, management-API or emulator call | add `dotnet test src/ServiceBusExplorer.IntegrationTests` (Docker); only then |
+   | `web-app/**` with a visible change | add `npx playwright test -c e2e` in `web-app/`, once, at the end |
 
-   **Web baseline** (`context/pages/conventions/testing.md`): 21 spec files, 8 tests skipped in
-   `metrics.service.spec.ts`. Those 8 are the only skips allowed; a new one fails the gate.
-5. **Prove the requirement.** The implementer proves the map inside its own run and reports the
-   evidence; the manager checks it.
+   The surface runs **once, at the end** of the lane and again only after a fix that touched code;
+   never after each edit. The 8 skips in `metrics.service.spec.ts` are the only skips allowed; a
+   new one fails the gate. Test counts are not written into the context; CI shows them.
+5. **Prove the requirement, in proportion to the risk.** The implementer proves the map inside its
+   own run and reports the evidence; the manager checks it. A **mutation proof is required only**
+   for an entry under Rules A, F, G, H or I, or a new guard ([[pages/invariants/a-guard-must-be-able-to-fire]]):
+   the API boundary, provider boundaries, secrets, message safety, an external call. Any other new
+   behaviour (screens, layout, wiring, labels, documentation) needs only a failing-first spec that
+   asserts what the user sees; a visual refactor needs only the behaviour lock (the existing specs
+   and the end-to-end flows green before and after).
    - **`new behaviour`:** for each entry, back up the production file, apply one targeted mutation
      (or revert the rule) that removes exactly the behaviour under test - complete before send,
      return the raw secret, skip the key check, drop a guard - run the mapped test, and quote its
@@ -146,7 +154,7 @@ stated too fast: fix the plan.
    - A missing or incomplete result for any entry blocks the PR.
 
    The implementer also runs `dotnet-test:test-anti-patterns` and `dotnet-test:assertion-quality`
-   over every mapped test path and quotes both results in its report. The gate output holds the
+   over the mapped .NET tests of an A, F, G, H or I entry and quotes both results in its report. The gate output holds the
    unchanged map, each mutation with its quoted failure and restore, the behaviour-lock runs, both
    skill results, and the verdict.
 6. **Review gate: one workflow run, the lenses the diff names.** Lenses: `api-surface`, `secrets`,
@@ -174,8 +182,8 @@ stated too fast: fix the plan.
      named in `unresolvedLenses` and blocks until that lens is run again and returns. The reviewer
      checks the evidence the dispatch carries; it never rebuilds the map or reruns the proofs. If
      the Workflow tool is unavailable, dispatch `explorer-reviewer` directly with the same
-     template. **Budget: two fix-and-review rounds**; a third means the change is not understood -
-     stop and hand the rest to the owner.
+     template. **Budget: one fix-and-review round**; a second only for a confirmed P1, and a third
+     means the change is not understood - stop and hand the rest to the owner.
    - **`/code-review`** runs only when the diff touches `Program.cs`, `IMessagingProvider` or the
      owner asks; always `medium`, never `--fix`.
    - **Receiving a batch:** before applying any finding, verify it against the code the way
@@ -186,8 +194,8 @@ stated too fast: fix the plan.
    that context diff, owns `index.md`, `log.md`, the conventions and process ADRs, and uses
    `wiki-crystallize` for anything the session found beyond the plan. A change that closes a
    "Known gaps" entry removes it from the project page and from `pages/roadmap/followups.md` in the
-   same commit. **7b.** Run `wiki-lint` when the context changed; it does not check `file:line`
-   drift, so also run `bash scripts/check-context-refs.sh` on every lane that touched `src/`,
+   same commit. **7b.** Run `wiki-lint` when the context changed; it does not check code
+   citations, so also run `bash scripts/check-context-refs.sh` on every lane that touched `src/`,
    `web-app/` or `context/` and fix every ref it reports. Then read every ref you rewrote. A page
    over 300 lines that is not a tracker fails the gate.
 8. **The PR body** uses `.github/PULL_REQUEST_TEMPLATE.md`, ticks the three safety boxes (API
@@ -234,3 +242,7 @@ Check this evidence; do not rebuild it. Findings: CONFIRMED with file:line and t
   with literal commands; it never fixes.
 - The manager edits only context, docs, `.claude/**` and fast-path one-liners; simple well-specified
   changes go to a `sonnet` agent instead of `explorer-implementer`.
+- At most two heavy lanes at once (a lane that starts Docker brokers or the end-to-end suite): more
+  overloads the owner's machine and every suite slows down or times out.
+- Code is cited by name in the context (`path#Member`), never by line number, so an edit does not
+  send anyone back to re-point citations.

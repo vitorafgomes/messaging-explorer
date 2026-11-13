@@ -20,7 +20,7 @@ reliability: high
 
 ## Where the app is today
 
-Measured on 2026-11-12. The move from Bootstrap to Angular Material stopped halfway (`web-app/src/styles.scss:4` still imports Bootstrap as "temporary"):
+Measured on 2026-11-12. The move from Bootstrap to Angular Material stopped halfway (`web-app/src/styles.scss#@use 'bootstrap/scss/bootstrap';` still imports Bootstrap as "temporary"):
 
 | | Bootstrap side | Material side |
 |---|---|---|
@@ -28,7 +28,7 @@ Measured on 2026-11-12. The move from Bootstrap to Angular Material stopped half
 | Icons | 208 Font Awesome | 47 `mat-icon` |
 | Colour variables in components | about 560 `--bs-*` | 1 `--mat-sys-*` |
 
-The toolbar and the dialogs are Material; the entity screens are Bootstrap. The dark theme of those screens therefore comes from Bootstrap's variables, not from the Material theme defined at `web-app/src/styles.scss:36`. There are 264 literal hex colours, 99 fixed pixel widths against 13 media queries, no `aria-label` anywhere, and 1,685 lines of styles inside `entity-details.component.ts`. `ng-bootstrap` is a dependency nothing uses.
+The toolbar and the dialogs are Material; the entity screens are Bootstrap. The dark theme of those screens therefore comes from Bootstrap's variables, not from the Material theme defined at `web-app/src/styles.scss#@include mat.theme((`. There are 264 literal hex colours, 99 fixed pixel widths against 13 media queries, no `aria-label` anywhere, and 1,685 lines of styles inside `entity-details.component.ts`. `ng-bootstrap` is a dependency nothing uses.
 
 ## The rules
 

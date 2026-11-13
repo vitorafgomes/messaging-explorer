@@ -58,7 +58,7 @@ The requirement in the owner's words: "my user has several Service Bus namespace
 
 ## Where it stands (checked 2026-11-12)
 
-- **Done:** the five credential types exist (`src/ServiceBusExplorer.Core/Providers/Azure/AzureAuthType.cs:11`) and the factory builds each one (`src/ServiceBusExplorer.Core/Providers/Azure/AzureCredentialFactory.cs:31`); the default chain excludes managed identity, as decided. Neither rejected credential appears in the code.
+- **Done:** the five credential types exist (`src/ServiceBusExplorer.Core/Providers/Azure/AzureAuthType.cs#AzureAuthType`) and the factory builds each one (`src/ServiceBusExplorer.Core/Providers/Azure/AzureCredentialFactory.cs#Create`); the default chain excludes managed identity, as decided. Neither rejected credential appears in the code.
 - **Not done:** resource discovery. No project references the Azure resource management libraries and no endpoint lists subscriptions or namespaces, so a signed-in user still types the namespace. This is the half of the decision that delivers the stated requirement.
 - **Departures found by the audit** ([[pages/roadmap/code-audit-2026-11]]): the interactive credential keeps no token cache or authentication record, and test and connect each build a new credential, so the user is prompted on every test and every connect; the metrics service builds a plain default credential that includes the managed identity probe this decision excludes.
 

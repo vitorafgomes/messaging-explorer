@@ -8,11 +8,11 @@ status: active
 description: "A broker is reached through IMessagingProvider, what a provider cannot do is declared in IProviderCapabilities, and vendor SDK types stay inside their provider folder."
 updated: 2026-11-12
 enforced_by:
-  - "src/ServiceBusExplorer.Core/Abstractions/IMessagingProvider.cs:19"
-  - "src/ServiceBusExplorer.Core/Providers/ProviderFactory.cs:33"
-  - "src/ServiceBusExplorer.Api/Controllers/QueuesController.cs:22"
+  - "src/ServiceBusExplorer.Core/Abstractions/IMessagingProvider.cs#IMessagingProvider"
+  - "src/ServiceBusExplorer.Core/Providers/ProviderFactory.cs#CreateProvider"
+  - "src/ServiceBusExplorer.Api/Controllers/QueuesController.cs#GetProvider"
 verified_by:
-  - "src/ServiceBusExplorer.Core.Tests/Providers/RabbitMQSessionTests.cs:1"
+  - "src/ServiceBusExplorer.Core.Tests/Providers/RabbitMQSessionTests.cs#using ServiceBusExplorer.Core.Providers.RabbitMQ;"
 source:
   - "src/ServiceBusExplorer.Core/Abstractions/"
   - "src/ServiceBusExplorer.Core/Providers/"
@@ -38,13 +38,13 @@ The product is "one tool, several brokers". Every vendor type that leaks into a 
 
 By convention and review only; no architecture test exists (tracked in [[pages/roadmap/followups]]). `reliability: medium` for that reason.
 
-- `src/ServiceBusExplorer.Core/Abstractions/IMessagingProvider.cs:19` - the provider contract; `Abstractions/` references no vendor SDK.
-- `src/ServiceBusExplorer.Core/Providers/ProviderFactory.cs:33` - the one place a provider type is chosen from `ProviderType`.
-- `src/ServiceBusExplorer.Api/Controllers/QueuesController.cs:22` - controllers obtain the active `IMessagingProvider` and call the contract.
+- `src/ServiceBusExplorer.Core/Abstractions/IMessagingProvider.cs#IMessagingProvider` - the provider contract; `Abstractions/` references no vendor SDK.
+- `src/ServiceBusExplorer.Core/Providers/ProviderFactory.cs#CreateProvider` - the one place a provider type is chosen from `ProviderType`.
+- `src/ServiceBusExplorer.Api/Controllers/QueuesController.cs#GetProvider` - controllers obtain the active `IMessagingProvider` and call the contract.
 
 ## How it's verified
 
-- `src/ServiceBusExplorer.Core.Tests/Providers/RabbitMQSessionTests.cs:1` - pins what the RabbitMQ provider answers for sessions, the one capability difference with a test.
+- `src/ServiceBusExplorer.Core.Tests/Providers/RabbitMQSessionTests.cs#using ServiceBusExplorer.Core.Providers.RabbitMQ;` - pins what the RabbitMQ provider answers for sessions, the one capability difference with a test.
 - Nothing fails when a vendor `using` appears outside a provider folder. The `boundaries` lens of gate 6 is the check.
 
 ## Known exceptions
