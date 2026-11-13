@@ -720,7 +720,7 @@ public sealed class AzureServiceBusProviderTests(AzureServiceBusFixture fixture)
         await fixture.Admin.UpdateQueueAsync(properties);
     }
 
-    private async Task<List<(string Body, string State)>> PeekBodiesAndStatesAsync(string queue) =>
+    private async Task<List<(string? Body, string State)>> PeekBodiesAndStatesAsync(string queue) =>
         (await _messaging.PeekMessagesAsync(queue, 10)).Select(m => (m.Body, m.State)).ToList();
 
     [Fact]
@@ -778,6 +778,21 @@ public sealed class AzureServiceBusProviderTests(AzureServiceBusFixture fixture)
 
         Assert.Equal(["dead"], (await _messaging.PeekMessagesAsync(queue, 10, MessageSubQueue.DeadLetter)).Select(m => m.Body));
         Assert.Empty(await _messaging.PeekMessagesAsync(queue, 10));
+    }
+
+    [Fact]
+    public async Task A_dead_letter_peek_from_the_sequence_number_of_the_third_message_does_not_return_the_first_two()
+    {
+        var queue = await CreateQueueAsync("dlq-from");
+        await fixture.SendToDeadLetterAsync(queue, "m1", "m2", "m3", "m4", "m5");
+        var third = await DeadLetterSequenceOfAsync(queue, "m3");
+
+        var peeked = await _messaging.PeekMessagesAsync(queue, 10, MessageSubQueue.DeadLetter, fromSequenceNumber: third);
+
+        Assert.Equal(["m3", "m4", "m5"], peeked.Select(m => m.Body));
+        Assert.Equal(third, peeked.First().SequenceNumber);
+        Assert.Equal(["m1", "m2", "m3", "m4", "m5"],
+            (await _messaging.PeekMessagesAsync(queue, 10, MessageSubQueue.DeadLetter, fromSequenceNumber: 0)).Select(m => m.Body));
     }
 
     /// <summary>

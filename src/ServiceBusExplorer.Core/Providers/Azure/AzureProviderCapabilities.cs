@@ -133,4 +133,7 @@ public class AzureProviderCapabilities : IProviderCapabilities
     /// Returns the version of the Azure.Messaging.ServiceBus SDK being used.
     /// </remarks>
     public string ProviderVersion => "7.21.0";
+
+    /// <inheritdoc />
+    public bool SupportsPeekFromSequenceNumber => true;
 }

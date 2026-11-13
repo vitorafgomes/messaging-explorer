@@ -1181,28 +1181,28 @@ public class AzureServiceBusProvider : IMessagingProvider
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<IMessage>> PeekMessagesAsync(string entityName, int count = 10, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<IMessage>> PeekMessagesAsync(string entityName, int count = 10, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, long? fromSequenceNumber = null, bool includeBody = true, CancellationToken cancellationToken = default)
     {
         EnsureConnected();
 
         await using var receiver = CreateReceiver(_client!, entityName, subscriptionName, subQueue);
-        var messages = await RefuseDisabledAsync(() => PeekCoreAsync(receiver, count, cancellationToken));
+        var messages = await RefuseDisabledAsync(() => PeekCoreAsync(receiver, count, fromSequenceNumber, cancellationToken));
 
-        return messages.Select(m => MapToMessageInfo(m, subQueue != MessageSubQueue.Active));
+        return messages.Select(m => MapToMessageInfo(m, subQueue != MessageSubQueue.Active, includeBody));
     }
 
     /// <summary>
-    /// Peeks up to <paramref name="count"/> messages in batches of at most 250, the SDK's limit per call. A batch
+    /// Peeks up to <paramref name="count"/> messages in batches of at most 250, the SDK's limit per call, from
+    /// <paramref name="fromSequenceNumber"/> when it is given and from the head otherwise. A batch
     /// shorter than asked is not the end: the broker returns one where a scheduled message or a dropped duplicate
     /// sits between messages. The peek goes on from the last sequence number until a batch is empty or
     /// <paramref name="count"/> is reached; every batch that is not empty brings it closer to <paramref name="count"/>,
     /// so it makes at most <paramref name="count"/> plus one calls. The caller's token is checked before each call
     /// and handed to the SDK, so an aborted request stops the peek.
     /// </summary>
-    internal static async Task<List<ServiceBusReceivedMessage>> PeekCoreAsync(ServiceBusReceiver receiver, int count, CancellationToken cancellationToken)
+    internal static async Task<List<ServiceBusReceivedMessage>> PeekCoreAsync(ServiceBusReceiver receiver, int count, long? fromSequenceNumber, CancellationToken cancellationToken)
     {
         var allMessages = new List<ServiceBusReceivedMessage>();
-        long? fromSequenceNumber = null;
 
         while (allMessages.Count < count)
         {
@@ -1450,6 +1450,8 @@ public class AzureServiceBusProvider : IMessagingProvider
     private static readonly TimeSpan ScanSafetyTimeout = TimeSpan.FromMinutes(2);
     private const string NotFoundError = "Not found within scan window";
     private const string MoveDuplicateError = "Message was moved to the target but could not be removed from the source and may be duplicated: {0}";
+    private const string ResubmitDuplicateError = "Message was resubmitted but could not be removed from the dead-letter queue and may be duplicated on retry: {0}";
+    private const string SendOutcomeUnknown = "the send failed and the broker may have accepted it.";
 
     /// <inheritdoc />
     public async Task<BatchOperationResult> DeleteMessagesAsync(string entityName, long[] sequenceNumbers, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, bool all = false, CancellationToken cancellationToken = default)
@@ -1798,7 +1800,7 @@ public class AzureServiceBusProvider : IMessagingProvider
                 if (cycleTargets.Count > 0)
                 {
                     // Send first (at-least-once), then complete immediately in the same cycle.
-                    await SendResubmitBatchAsync(sender, cycleTargets, token);
+                    await SendOrReportDuplicatesAsync(sender, cycleTargets, located, result, ResubmitDuplicateError, cancellationToken, token);
                     await CompleteResubmittedAsync(receiver, cycleTargets, located, result, token);
                 }
 
@@ -1850,15 +1852,57 @@ public class AzureServiceBusProvider : IMessagingProvider
     }
 
     /// <summary>
+    /// Sends <paramref name="messages"/> and, when a send throws, reports as a possible duplicate every message whose
+    /// send returned or whose send threw, then lets the exception go on. A message never handed to a send is left for
+    /// the caller to report. A send the broker refused because the entity is disabled sent nothing, so its own
+    /// messages are left too; a cancellation by the caller propagates without a report.
+    /// </summary>
+    private static async Task SendOrReportDuplicatesAsync(
+        ServiceBusSender sender,
+        List<ServiceBusReceivedMessage> messages,
+        HashSet<long> located,
+        BatchOperationResult result,
+        string duplicateError,
+        CancellationToken callerToken,
+        CancellationToken token)
+    {
+        var accepted = new List<ServiceBusReceivedMessage>();
+        var inFlight = new List<ServiceBusReceivedMessage>();
+        try
+        {
+            await SendResubmitBatchAsync(sender, messages, accepted, inFlight, token);
+        }
+        catch (Exception ex) when (!callerToken.IsCancellationRequested)
+        {
+            var unknown = ex is ServiceBusException refusal && IsEntityDisabled(refusal) ? accepted : accepted.Concat(inFlight);
+            foreach (var message in unknown.Where(m => located.Add(m.SequenceNumber)))
+            {
+                result.FailureCount++;
+                result.Failures.Add(new BatchOperationFailure
+                {
+                    SequenceNumber = message.SequenceNumber,
+                    Error = string.Format(duplicateError, SendOutcomeUnknown)
+                });
+            }
+
+            throw;
+        }
+    }
+
+    /// <summary>
     /// Sends the supplied dead-lettered messages to the destination, splitting them across
-    /// as many <see cref="ServiceBusMessageBatch"/> instances as their size requires.
+    /// as many <see cref="ServiceBusMessageBatch"/> instances as their size requires. The messages of a send are in
+    /// <paramref name="inFlight"/> while it runs and move to <paramref name="accepted"/> when it returns.
     /// </summary>
     private static async Task SendResubmitBatchAsync(
         ServiceBusSender sender,
         List<ServiceBusReceivedMessage> messages,
+        List<ServiceBusReceivedMessage> accepted,
+        List<ServiceBusReceivedMessage> inFlight,
         CancellationToken cancellationToken)
     {
         var batch = await sender.CreateMessageBatchAsync(cancellationToken);
+        var batched = new List<ServiceBusReceivedMessage>();
         try
         {
             foreach (var received in messages)
@@ -1866,30 +1910,47 @@ public class AzureServiceBusProvider : IMessagingProvider
                 var outgoing = new ServiceBusMessage(received);
 
                 if (batch.TryAddMessage(outgoing))
-                    continue;
-
-                if (batch.Count == 0)
                 {
-                    // Message is larger than an empty batch; send it on its own.
-                    await sender.SendMessageAsync(outgoing, cancellationToken);
+                    batched.Add(received);
                     continue;
                 }
 
-                await sender.SendMessagesAsync(batch, cancellationToken);
+                if (batch.Count == 0)
+                {
+                    await SendTrackedAsync(() => sender.SendMessageAsync(outgoing, cancellationToken), [received], accepted, inFlight);
+                    continue;
+                }
+
+                await SendTrackedAsync(() => sender.SendMessagesAsync(batch, cancellationToken), batched, accepted, inFlight);
+                batched = [];
                 batch.Dispose();
                 batch = await sender.CreateMessageBatchAsync(cancellationToken);
 
-                if (!batch.TryAddMessage(outgoing))
-                    await sender.SendMessageAsync(outgoing, cancellationToken);
+                if (batch.TryAddMessage(outgoing))
+                    batched.Add(received);
+                else
+                    await SendTrackedAsync(() => sender.SendMessageAsync(outgoing, cancellationToken), [received], accepted, inFlight);
             }
 
             if (batch.Count > 0)
-                await sender.SendMessagesAsync(batch, cancellationToken);
+                await SendTrackedAsync(() => sender.SendMessagesAsync(batch, cancellationToken), batched, accepted, inFlight);
         }
         finally
         {
             batch.Dispose();
         }
+    }
+
+    private static async Task SendTrackedAsync(
+        Func<Task> send,
+        List<ServiceBusReceivedMessage> messages,
+        List<ServiceBusReceivedMessage> accepted,
+        List<ServiceBusReceivedMessage> inFlight)
+    {
+        inFlight.AddRange(messages);
+        await send();
+        accepted.AddRange(inFlight);
+        inFlight.Clear();
     }
 
     /// <summary>
@@ -1933,7 +1994,7 @@ public class AzureServiceBusProvider : IMessagingProvider
                     result.Failures.Add(new BatchOperationFailure
                     {
                         SequenceNumber = r.SequenceNumber,
-                        Error = $"Message was resubmitted but could not be removed from the dead-letter queue and may be duplicated on retry: {r.Error}"
+                        Error = string.Format(ResubmitDuplicateError, r.Error)
                     });
                 }
             }
@@ -2026,7 +2087,7 @@ public class AzureServiceBusProvider : IMessagingProvider
                 if (cycleTargets.Count > 0)
                 {
                     // Send first (at-least-once), then complete immediately in the same cycle.
-                    await SendResubmitBatchAsync(sender, cycleTargets, token);
+                    await SendOrReportDuplicatesAsync(sender, cycleTargets, located, result, MoveDuplicateError, cancellationToken, token);
                     await CompleteMovedAsync(receiver, cycleTargets, located, result, token);
                 }
 
@@ -2258,12 +2319,12 @@ public class AzureServiceBusProvider : IMessagingProvider
         return message;
     }
 
-    internal static MessageInfo MapToMessageInfo(ServiceBusReceivedMessage message, bool isDeadLettered)
+    internal static MessageInfo MapToMessageInfo(ServiceBusReceivedMessage message, bool isDeadLettered, bool includeBody = true)
     {
-        string body;
+        string? body;
         try
         {
-            body = message.Body.ToString();
+            body = includeBody ? message.Body.ToString() : null;
         }
         catch
         {
@@ -2401,7 +2462,7 @@ public class AzureServiceBusProvider : IMessagingProvider
     {
         await using var session = await RefuseDisabledAsync(() => AcceptSessionCoreAsync(client, entityName, subscriptionName, sessionId, wait, cancellationToken));
         var (state, isBinary) = DecodeSessionState(await session.GetSessionStateAsync(cancellationToken));
-        var messages = messageCount > 0 ? await PeekCoreAsync(session, messageCount, cancellationToken) : null;
+        var messages = messageCount > 0 ? await PeekCoreAsync(session, messageCount, null, cancellationToken) : null;
         return (new SessionDetail { SessionId = session.SessionId, State = state, StateIsBinary = isBinary, LockedUntil = session.SessionLockedUntil }, messages);
     }
 
@@ -2411,7 +2472,7 @@ public class AzureServiceBusProvider : IMessagingProvider
         ValidateSessionId(sessionId);
         EnsureConnected();
         await using var session = await RefuseDisabledAsync(() => AcceptSessionCoreAsync(_client!, entityName, subscriptionName, sessionId, SessionAcceptWait, cancellationToken));
-        var messages = await PeekCoreAsync(session, count, cancellationToken);
+        var messages = await PeekCoreAsync(session, count, null, cancellationToken);
         return messages.Select(m => MapToMessageInfo(m, false));
     }
 

@@ -147,4 +147,10 @@ public class RabbitMQProviderCapabilities : IProviderCapabilities
     /// Returns the version of the RabbitMQ.Client library being used.
     /// </remarks>
     public string ProviderVersion => "6.8.1";
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// A queue is read from its head; the provider refuses a peek that names a start.
+    /// </remarks>
+    public bool SupportsPeekFromSequenceNumber => false;
 }

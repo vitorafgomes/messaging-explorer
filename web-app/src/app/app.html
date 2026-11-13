@@ -67,6 +67,8 @@
     }
   }
 
+  <app-resubmit-run-indicator />
+
   <!-- Notifications -->
   <button mat-icon-button [matMenuTriggerFor]="notifMenu" matTooltip="Notifications"
     [matBadge]="dlqService.alertCount()" [matBadgeHidden]="!dlqService.hasAlerts()" matBadgeColor="warn" matBadgeSize="small">

@@ -28,6 +28,8 @@ Each entry carries its date. This page is a tracker: `version` changes only when
 - **2026-11-12 - The single-message resubmit returns silently when the original is not found after the send.** [[pages/services/core]]
 - **2026-11-12 - Secrets are stored in plain text in `workspace.json`.** Not a breach of Rule G, which is about the boundary; an owner decision is needed on OS keychain or `safeStorage`. [[pages/services/core]]
 
+- **2026-11-13 - The resubmit, delete and move scans reach only a few hundred messages past the head.** Measured on the emulator: a target about 300 deep in a dead-letter queue of 800 comes back "Not found within scan window" (pinned as a defect test), and consecutive calls can find their targets still locked by the previous call's prefetch. Delete and move share the same prefetch (`ScanPrefetchCount`), so the same exposure exists on `main`. Nothing is sent or removed when it happens, so no message is lost, but bulk work on a deep queue stops early. Owner decisions needed, after one measurement on a real namespace the owner names: hold the non-target locks until a bounded scan ends; or, for an unfiltered resubmit, receive the next batch from the head with no search; and where a message that fails to send then goes (deferring it inside the dead-letter queue changes its state). [[pages/conventions/decisions-that-look-like-defects]].
+
 ## P2 - weakens the API boundary
 
 - **2026-11-12 - The loopback binding in `Program.cs` never runs under Electron** (`ASPNETCORE_URLS` is always set), and host filtering has two sources with no test sending a foreign Host. [[pages/services/api]], [[pages/invariants/local-authenticated-api]]

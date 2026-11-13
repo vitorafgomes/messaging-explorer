@@ -251,4 +251,195 @@ public class MessageRouteTests
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
+
+    public static TheoryData<string, MessageSubQueue> DeadLetterPeekRoutes => new()
+    {
+        { "/api/queues/orders/deadletter", MessageSubQueue.DeadLetter },
+        { "/api/queues/orders/transferdeadletter", MessageSubQueue.TransferDeadLetter },
+        { Subscription + "/deadletter", MessageSubQueue.DeadLetter },
+        { Subscription + "/transferdeadletter", MessageSubQueue.TransferDeadLetter }
+    };
+
+    [Theory]
+    [MemberData(nameof(DeadLetterPeekRoutes))]
+    public async Task A_dead_letter_peek_with_fromSequenceNumber_hands_the_provider_that_position_with_the_count_and_the_sub_queue(string path, MessageSubQueue subQueue)
+    {
+        var answered = await SendAsync("GET", path + "?count=5&fromSequenceNumber=42", null, ProviderAnswers);
+
+        Assert.Equal(HttpStatusCode.OK, answered.Status);
+        var call = Assert.Single(answered.Calls);
+        Assert.Equal((nameof(IMessagingProvider.PeekMessagesAsync), 5, subQueue),
+            (call.Method, call.Args.OfType<int>().Single(), call.Args.OfType<MessageSubQueue>().Single()));
+        Assert.Equal(42L, Assert.Single(call.Args.OfType<long>()));
+    }
+
+    [Theory]
+    [MemberData(nameof(DeadLetterPeekRoutes))]
+    public async Task A_dead_letter_peek_from_position_0_reads_from_sequence_number_0(string path, MessageSubQueue subQueue)
+    {
+        var answered = await SendAsync("GET", path + "?fromSequenceNumber=0", null, ProviderAnswers);
+
+        Assert.Equal(HttpStatusCode.OK, answered.Status);
+        var call = Assert.Single(answered.Calls);
+        Assert.Equal(subQueue, call.Args.OfType<MessageSubQueue>().Single());
+        Assert.Equal(0L, Assert.Single(call.Args.OfType<long>()));
+    }
+
+    [Theory]
+    [InlineData("/api/queues/orders/deadletter?count=5")]
+    [InlineData("/api/queues/orders/deadletter?count=5&fromSequenceNumber=")]
+    [InlineData("/api/queues/orders/transferdeadletter?count=5")]
+    [InlineData(Subscription + "/deadletter?count=5")]
+    [InlineData(Subscription + "/transferdeadletter?count=5")]
+    public async Task A_dead_letter_peek_without_fromSequenceNumber_reads_from_the_head_as_before(string path)
+    {
+        var answered = await SendAsync("GET", path, null, ProviderAnswers);
+
+        Assert.Equal(HttpStatusCode.OK, answered.Status);
+        var call = Assert.Single(answered.Calls);
+        Assert.Equal(5, call.Args.OfType<int>().Single());
+        Assert.Empty(call.Args.OfType<long>());
+    }
+
+    [Theory]
+    [InlineData("/api/queues/orders/deadletter", "-1")]
+    [InlineData("/api/queues/orders/transferdeadletter", "-1")]
+    [InlineData(Subscription + "/deadletter", "-1")]
+    [InlineData(Subscription + "/transferdeadletter", "-1")]
+    [InlineData("/api/queues/orders/deadletter", "abc")]
+    [InlineData("/api/queues/orders/deadletter", "1.5")]
+    [InlineData("/api/queues/orders/deadletter", "%2B3")]
+    [InlineData("/api/queues/orders/deadletter", "%203")]
+    [InlineData("/api/queues/orders/deadletter", "1e3")]
+    [InlineData("/api/queues/orders/deadletter", "99999999999999999999")]
+    public async Task A_dead_letter_peek_whose_fromSequenceNumber_is_not_a_whole_number_of_0_or_more_answers_400_naming_the_field_and_is_never_called(
+        string path, string value)
+    {
+        var answered = await SendAsync("GET", $"{path}?fromSequenceNumber={value}", null, ProviderAnswers);
+
+        Assert.Equal(HttpStatusCode.BadRequest, answered.Status);
+        Assert.Equal("""{"message":"fromSequenceNumber must be a whole number of 0 or more."}""", answered.Body);
+        Assert.Empty(answered.Calls);
+    }
+
+    [Theory]
+    [MemberData(nameof(DeadLetterPeekRoutes))]
+    public async Task A_provider_that_cannot_read_from_a_position_answers_400_with_that_text_to_a_dead_letter_peek_with_fromSequenceNumber_and_is_never_called(
+        string path, MessageSubQueue _)
+    {
+        var answered = await SendAsync("GET", path + "?fromSequenceNumber=3", null, ProviderAnswers, ProviderType.RabbitMQ);
+
+        Assert.Equal(HttpStatusCode.BadRequest, answered.Status);
+        Assert.Equal("""{"message":"This provider cannot read the dead-letter queue from a position."}""", answered.Body);
+        Assert.Empty(answered.Calls);
+    }
+
+    [Theory]
+    [InlineData("/api/queues/orders/deadletter")]
+    [InlineData(Subscription + "/deadletter")]
+    public async Task A_provider_that_cannot_read_from_a_position_still_peeks_the_dead_letter_queue_from_the_head(string path)
+    {
+        var answered = await SendAsync("GET", path, null, ProviderAnswers, ProviderType.RabbitMQ);
+
+        Assert.Equal(HttpStatusCode.OK, answered.Status);
+        Assert.Empty(Assert.Single(answered.Calls).Args.OfType<long>());
+    }
+
+    [Theory]
+    [MemberData(nameof(DeadLetterPeekRoutes))]
+    public async Task A_dead_letter_peek_from_a_position_that_fails_answers_the_same_constant_500_as_a_failed_peek_from_the_head(string path, MessageSubQueue _)
+    {
+        var failing = Fails(nameof(IMessagingProvider.PeekMessagesAsync), new TimeoutException(Sentinel));
+
+        var fromHead = await SendAsync("GET", path, null, failing);
+        var fromPosition = await SendAsync("GET", path + "?fromSequenceNumber=3", null, failing);
+
+        Assert.Equal((HttpStatusCode.InternalServerError, """{"message":"An internal error occurred."}"""), (fromPosition.Status, fromPosition.Body));
+        Assert.Equal((fromHead.Status, fromHead.Body), (fromPosition.Status, fromPosition.Body));
+        Assert.Equal(3L, Assert.Single(Assert.Single(fromPosition.Calls).Args.OfType<long>()));
+    }
+
+    [Theory]
+    [InlineData("AzureServiceBus", true)]
+    [InlineData("RabbitMQ", false)]
+    public async Task The_capabilities_say_whether_the_provider_can_peek_from_a_sequence_number(string providerType, bool expected)
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Api-Key", ApiFactory.TestApiSecret);
+
+        using var response = await client.GetAsync($"/api/connections/providers/{providerType}/capabilities");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.True(json.RootElement.TryGetProperty("supportsPeekFromSequenceNumber", out var flag), "the capabilities answer has no supportsPeekFromSequenceNumber");
+        Assert.Equal(expected, flag.GetBoolean());
+    }
+
+    [Theory]
+    [MemberData(nameof(DeadLetterPeekRoutes))]
+    public async Task A_dead_letter_peek_with_fromSequenceNumber_without_the_api_key_is_refused_with_401(string path, MessageSubQueue _)
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync(path + "?fromSequenceNumber=3");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Theory]
+    [MemberData(nameof(DeadLetterPeekRoutes))]
+    public async Task A_dead_letter_peek_with_includeBody_false_asks_the_provider_for_no_bodies_and_answers_body_null(string path, MessageSubQueue subQueue)
+    {
+        var answered = await SendAsync("GET", path + "?count=5&includeBody=false", null, (m, args) => m.Name == nameof(IMessagingProvider.PeekMessagesAsync)
+            ? Task.FromResult<IEnumerable<IMessage>>(new List<MessageInfo>
+            {
+                new() { SequenceNumber = 7, Body = args.OfType<bool>().Single() ? "order" : null, Subject = "created", DeadLetterReason = "rejected" }
+            })
+            : null);
+
+        Assert.Equal(HttpStatusCode.OK, answered.Status);
+        var call = Assert.Single(answered.Calls);
+        Assert.Equal((5, subQueue), (call.Args.OfType<int>().Single(), call.Args.OfType<MessageSubQueue>().Single()));
+        Assert.False(Assert.Single(call.Args.OfType<bool>()));
+        using var json = JsonDocument.Parse(answered.Body);
+        var message = Assert.Single(json.RootElement.EnumerateArray().ToList());
+        Assert.Equal((JsonValueKind.Null, 7L, "created", "rejected"),
+            (message.GetProperty("body").ValueKind, message.GetProperty("sequenceNumber").GetInt64(), message.GetProperty("subject").GetString(), message.GetProperty("deadLetterReason").GetString()));
+    }
+
+    [Theory]
+    [InlineData("/api/queues/orders/deadletter?includeBody=true")]
+    [InlineData("/api/queues/orders/deadletter")]
+    [InlineData("/api/queues/orders/deadletter?includeBody=")]
+    [InlineData("/api/queues/orders/transferdeadletter")]
+    [InlineData(Subscription + "/deadletter")]
+    [InlineData(Subscription + "/transferdeadletter?includeBody=true")]
+    [InlineData("/api/queues/orders/messages")]
+    [InlineData(Subscription + "/messages")]
+    public async Task A_peek_with_includeBody_true_or_absent_asks_the_provider_for_the_bodies_as_before(string path)
+    {
+        var answered = await SendAsync("GET", path, null, ProviderAnswers);
+
+        Assert.Equal(HttpStatusCode.OK, answered.Status);
+        Assert.True(Assert.Single(Assert.Single(answered.Calls).Args.OfType<bool>()));
+        Assert.Contains("\"body\":\"order\"", answered.Body);
+    }
+
+    [Theory]
+    [InlineData("/api/queues/orders/deadletter", "False")]
+    [InlineData("/api/queues/orders/transferdeadletter", "0")]
+    [InlineData(Subscription + "/deadletter", "yes")]
+    [InlineData(Subscription + "/transferdeadletter", "1")]
+    [InlineData("/api/queues/orders/deadletter", "%20false")]
+    [InlineData("/api/queues/orders/deadletter", "TRUE")]
+    public async Task A_dead_letter_peek_whose_includeBody_is_not_true_or_false_answers_400_naming_the_field_and_is_never_called(string path, string value)
+    {
+        var answered = await SendAsync("GET", $"{path}?includeBody={value}", null, ProviderAnswers);
+
+        Assert.Equal(HttpStatusCode.BadRequest, answered.Status);
+        Assert.Equal("""{"message":"includeBody must be true or false."}""", answered.Body);
+        Assert.Empty(answered.Calls);
+    }
 }

@@ -44,4 +44,30 @@ public class RabbitMQSubQueueTests
 
         Assert.Equal("RabbitMQ does not support scheduled messages.", error.Message);
     }
+
+    [Theory]
+    [InlineData(MessageSubQueue.Active)]
+    [InlineData(MessageSubQueue.DeadLetter)]
+    public async Task RabbitMQ_refuses_a_peek_from_a_sequence_number_and_declares_that_it_cannot_read_from_a_position(MessageSubQueue subQueue)
+    {
+        var provider = new RabbitMQProvider();
+
+        var error = await Assert.ThrowsAsync<NotSupportedException>(() => provider.PeekMessagesAsync("orders", 10, subQueue, fromSequenceNumber: 0));
+
+        Assert.Equal("RabbitMQ cannot peek from a sequence number.", error.Message);
+        Assert.False(provider.Capabilities.SupportsPeekFromSequenceNumber);
+    }
+
+    [Fact]
+    public void A_RabbitMQ_message_read_without_its_body_has_a_null_body_and_everything_else_as_with_it()
+    {
+        var result = new RabbitMQ.Client.BasicGetResult(1, false, "dlx", "orders.created", 0, null, System.Text.Encoding.UTF8.GetBytes("payload"));
+
+        var withBody = RabbitMQProvider.MapBasicGetToMessageInfo(result, isDeadLettered: true);
+        var withoutBody = RabbitMQProvider.MapBasicGetToMessageInfo(result, isDeadLettered: true, includeBody: false);
+
+        Assert.Equal("payload", withBody.Body);
+        Assert.Null(withoutBody.Body);
+        Assert.Equal(("orders.created", 7L, "dlx", true), (withoutBody.Subject, withoutBody.SizeInBytes, withoutBody.DeadLetterSource, withoutBody.IsDeadLettered));
+    }
 }

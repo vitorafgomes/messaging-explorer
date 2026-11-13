@@ -151,4 +151,11 @@ public interface IProviderCapabilities
     /// Gets the provider version or connection library version.
     /// </summary>
     string ProviderVersion { get; }
+
+    /// <summary>
+    /// Indicates whether a peek can start at a given sequence number instead of the head of the queue.
+    /// For Azure Service Bus: true.
+    /// For RabbitMQ: false (a queue is read from its head only).
+    /// </summary>
+    bool SupportsPeekFromSequenceNumber { get; }
 }

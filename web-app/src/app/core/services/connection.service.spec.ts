@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { firstValueFrom, of, throwError } from 'rxjs';
 import { ConnectionService } from './connection.service';
 import { ApiService } from './api.service';
 
@@ -19,19 +19,19 @@ describe('ConnectionService knows which stored connection is active', () => {
     expect(service.currentConnectionId).toBeNull();
   });
 
-  it('a successful connect remembers the id; a disconnect forgets it', () => {
+  it('a successful connect remembers the id; a disconnect forgets it', async () => {
     post.mockReturnValueOnce(of({ connected: true, namespace: 'ns.example.net' }));
-    service.connect('c-1').subscribe();
+    await firstValueFrom(service.connect('c-1'));
     expect(service.currentConnectionId).toBe('c-1');
 
     post.mockReturnValueOnce(of({ connected: false }));
-    service.disconnect().subscribe();
+    await firstValueFrom(service.disconnect());
     expect(service.currentConnectionId).toBeNull();
   });
 
-  it('a connect that fails keeps no id', () => {
+  it('a connect that fails keeps no id', async () => {
     post.mockReturnValueOnce(throwError(() => new Error('500')));
-    service.connect('c-2').subscribe({ error: () => undefined });
+    await expect(firstValueFrom(service.connect('c-2'))).rejects.toThrow('500');
 
     expect(service.currentConnectionId).toBeNull();
   });

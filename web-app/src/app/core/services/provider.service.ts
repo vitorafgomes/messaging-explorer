@@ -76,10 +76,18 @@ const DISCONNECTED_STATE: ProviderSelectionState = {
 
 /**
  * The built-in defaults standing in for an API answer: entity administration, the rules editor, the
- * transfer dead-letter queue and the definitions export and import need the API's own explicit true, because an older API that lacks the routes does not send the flag.
+ * transfer dead-letter queue, the dead-letter peek from a position and the definitions export and import
+ * need the API's own explicit true, because an older API that lacks them does not send the flag.
  */
 function unconfirmed(capabilities: ProviderCapabilities): ProviderCapabilities {
-  return { ...capabilities, supportsEntityUpdate: false, supportsSubscriptionRules: false, supportsTransferDeadLetter: false, supportsDefinitions: false };
+  return {
+    ...capabilities,
+    supportsEntityUpdate: false,
+    supportsSubscriptionRules: false,
+    supportsTransferDeadLetter: false,
+    supportsPeekFromSequenceNumber: false,
+    supportsDefinitions: false
+  };
 }
 
 /**
@@ -184,6 +192,7 @@ export class ProviderService {
         supportsEntityUpdate: capabilities.supportsEntityUpdate === true,
         supportsSubscriptionRules: capabilities.supportsSubscriptionRules === true,
         supportsTransferDeadLetter: capabilities.supportsTransferDeadLetter === true,
+        supportsPeekFromSequenceNumber: capabilities.supportsPeekFromSequenceNumber === true,
         supportsDefinitions: capabilities.supportsDefinitions === true
       })),
       tap(capabilities => {

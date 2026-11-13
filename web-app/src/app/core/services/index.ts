@@ -17,4 +17,5 @@ export * from './monitoring.service';
 export * from './dev-settings.service';
 export * from './session.service';
 export * from './message-template.service';
+export * from './resubmit-run.service';
 export * from './definitions.service';

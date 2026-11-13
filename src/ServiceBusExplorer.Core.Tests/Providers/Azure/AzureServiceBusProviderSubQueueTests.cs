@@ -165,7 +165,7 @@ public class AzureServiceBusProviderSubQueueTests
         receiver.Setup(r => r.PeekMessagesAsync(5, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(Batch(Msg(1), Msg(2), Msg(3), Msg(4), Msg(5)));
 
-        var peeked = await AzureServiceBusProvider.PeekCoreAsync(receiver.Object, 5, CancellationToken.None);
+        var peeked = await AzureServiceBusProvider.PeekCoreAsync(receiver.Object, 5, null, CancellationToken.None);
 
         Assert.Equal(new long[] { 1, 2, 3, 4, 5 }, peeked.Select(m => m.SequenceNumber).ToArray());
         receiver.Verify(r => r.PeekMessagesAsync(It.IsAny<int>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()), Times.Once);
@@ -181,7 +181,7 @@ public class AzureServiceBusProviderSubQueueTests
             .ReturnsAsync((int max, long? from, CancellationToken _) =>
                 Enumerable.Range(0, max).Select(i => Msg((from ?? 1) + i)).ToList());
 
-        var peeked = await AzureServiceBusProvider.PeekCoreAsync(receiver.Object, 300, CancellationToken.None);
+        var peeked = await AzureServiceBusProvider.PeekCoreAsync(receiver.Object, 300, null, CancellationToken.None);
 
         Assert.Equal(300, peeked.Count);
         Assert.Equal(new[] { 250, 50 }, asked.ToArray());
@@ -201,7 +201,7 @@ public class AzureServiceBusProviderSubQueueTests
             })
             .ReturnsAsync(Batch(Msg(1)));
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => AzureServiceBusProvider.PeekCoreAsync(receiver.Object, 1000, cts.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => AzureServiceBusProvider.PeekCoreAsync(receiver.Object, 1000, null, cts.Token));
 
         Assert.Equal(new[] { true }, tokens.Select(t => t.IsCancellationRequested).ToArray());
     }
@@ -214,7 +214,7 @@ public class AzureServiceBusProviderSubQueueTests
         var receiver = new Mock<ServiceBusReceiver>();
         receiver.Setup(r => r.PeekMessagesAsync(It.IsAny<int>(), It.IsAny<long?>(), It.IsAny<CancellationToken>())).ReturnsAsync(Batch());
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => AzureServiceBusProvider.PeekCoreAsync(receiver.Object, 10, cts.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => AzureServiceBusProvider.PeekCoreAsync(receiver.Object, 10, null, cts.Token));
 
         receiver.Verify(r => r.PeekMessagesAsync(It.IsAny<int>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()), Times.Never);
     }
@@ -231,7 +231,7 @@ public class AzureServiceBusProviderSubQueueTests
             .Callback(() => calls++)
             .ReturnsAsync((int _, long? from, CancellationToken _) => Batch(Msg(from ?? 1)));
 
-        var peeked = await AzureServiceBusProvider.PeekCoreAsync(receiver.Object, count, CancellationToken.None);
+        var peeked = await AzureServiceBusProvider.PeekCoreAsync(receiver.Object, count, null, CancellationToken.None);
 
         Assert.Equal(Enumerable.Range(1, count).Select(i => (long)i), peeked.Select(m => m.SequenceNumber));
         Assert.InRange(calls, count, count + 1);
@@ -569,5 +569,155 @@ public class AzureServiceBusProviderSubQueueTests
 
         Assert.Equal(500, result.SuccessCount);
         broker.Sender.Verify(s => s.CancelScheduledMessagesAsync(numbers, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Theory]
+    [InlineData(MessageSubQueue.Active)]
+    [InlineData(MessageSubQueue.DeadLetter)]
+    [InlineData(MessageSubQueue.TransferDeadLetter)]
+    public async Task A_peek_from_a_sequence_number_starts_there_returns_nothing_before_it_and_reads_on_past_a_short_batch(MessageSubQueue subQueue)
+    {
+        var broker = new FakeBroker();
+        var asked = new List<long?>();
+        broker.Receiver.Setup(r => r.PeekMessagesAsync(It.IsAny<int>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()))
+            .Callback((int _, long? from, CancellationToken _) => asked.Add(from))
+            .ReturnsAsync((int _, long? from, CancellationToken _) => (from ?? 1) <= 5 ? Batch(Msg(from ?? 1)) : Batch());
+
+        var peeked = await broker.Provider().PeekMessagesAsync("orders", 10, subQueue, fromSequenceNumber: 3);
+
+        Assert.Equal(new long?[] { 3, 4, 5 }, peeked.Select(m => m.SequenceNumber).ToArray());
+        Assert.Equal(new long?[] { 3, 4, 5, 6 }, asked.ToArray());
+    }
+
+    [Fact]
+    public async Task A_peek_from_a_sequence_number_whose_sdk_call_fails_gives_the_caller_the_same_broker_error_as_a_peek_from_the_head()
+    {
+        var broker = new FakeBroker();
+        broker.Receiver.Setup(r => r.PeekMessagesAsync(It.IsAny<int>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(Broker(ServiceBusFailureReason.ServiceTimeout));
+
+        var fromHead = await Assert.ThrowsAsync<ServiceBusException>(() =>
+            broker.Provider().PeekMessagesAsync("orders", 10, MessageSubQueue.DeadLetter));
+        var fromPosition = await Assert.ThrowsAsync<ServiceBusException>(() =>
+            broker.Provider().PeekMessagesAsync("orders", 10, MessageSubQueue.DeadLetter, fromSequenceNumber: 3));
+
+        Assert.Equal((ServiceBusFailureReason.ServiceTimeout, fromHead.Message), (fromPosition.Reason, fromPosition.Message));
+    }
+
+    [Fact]
+    public void Azure_declares_that_a_peek_can_start_at_a_sequence_number()
+    {
+        Assert.True(new AzureServiceBusProvider().Capabilities.SupportsPeekFromSequenceNumber);
+    }
+
+    [Theory]
+    [InlineData(MessageSubQueue.DeadLetter)]
+    [InlineData(MessageSubQueue.TransferDeadLetter)]
+    public async Task A_peek_without_bodies_answers_each_message_with_a_null_body_and_everything_else_as_with_bodies(MessageSubQueue subQueue)
+    {
+        var broker = new FakeBroker();
+        var enqueued = new DateTimeOffset(2026, 11, 13, 9, 30, 0, TimeSpan.Zero);
+        broker.Receiver.Setup(r => r.PeekMessagesAsync(It.IsAny<int>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((int _, long? from, CancellationToken _) => from is null or 1
+                ? Batch(ServiceBusModelFactory.ServiceBusReceivedMessage(body: BinaryData.FromString("payload"), subject: "order", sequenceNumber: 1,
+                    properties: new Dictionary<string, object> { ["DeadLetterReason"] = "rejected" }, enqueuedTime: enqueued))
+                : Batch());
+
+        var withBody = Assert.Single(await broker.Provider().PeekMessagesAsync("orders", 10, subQueue));
+        var withoutBody = Assert.Single(await broker.Provider().PeekMessagesAsync("orders", 10, subQueue, includeBody: false));
+
+        Assert.Equal("payload", withBody.Body);
+        Assert.Null(withoutBody.Body);
+        Assert.Equal((1L, enqueued, "rejected", "order", 7L, true),
+            (withoutBody.SequenceNumber, withoutBody.EnqueuedTime, withoutBody.DeadLetterReason, withoutBody.Subject, withoutBody.SizeInBytes, withoutBody.IsDeadLettered));
+        Assert.Equal((withBody.SequenceNumber, withBody.EnqueuedTime, withBody.DeadLetterReason, withBody.Subject, withBody.SizeInBytes),
+            (withoutBody.SequenceNumber, withoutBody.EnqueuedTime, withoutBody.DeadLetterReason, withoutBody.Subject, withoutBody.SizeInBytes));
+    }
+
+    private const string ResubmitSendUnknown =
+        "Message was resubmitted but could not be removed from the dead-letter queue and may be duplicated on retry: the send failed and the broker may have accepted it.";
+    private const string MoveSendUnknown =
+        "Message was moved to the target but could not be removed from the source and may be duplicated: the send failed and the broker may have accepted it.";
+
+    /// <summary>A message batch that holds at most <paramref name="capacity"/> messages.</summary>
+    private static ServiceBusMessageBatch BatchHolding(int capacity)
+    {
+        var store = new List<ServiceBusMessage>();
+        return ServiceBusModelFactory.ServiceBusMessageBatch(long.MaxValue, store, new CreateMessageBatchOptions(), _ => store.Count < capacity);
+    }
+
+    /// <summary>A sender whose batches hold two messages and whose batch sends answer, in order, as <paramref name="sends"/> says.</summary>
+    private static Mock<ServiceBusSender> SenderOfPairs(params Exception?[] sends)
+    {
+        var answers = new Queue<Exception?>(sends);
+        var sender = new Mock<ServiceBusSender>();
+        sender.Setup(s => s.CreateMessageBatchAsync(It.IsAny<CancellationToken>())).Returns(() => new ValueTask<ServiceBusMessageBatch>(BatchHolding(2)));
+        sender.Setup(s => s.SendMessagesAsync(It.IsAny<ServiceBusMessageBatch>(), It.IsAny<CancellationToken>()))
+            .Returns(() => answers.Dequeue() is { } error ? Task.FromException(error) : Task.CompletedTask);
+        return sender;
+    }
+
+    private static Task<BatchOperationResult> ResubmitOrMove(string operation, Mock<ServiceBusReceiver> receiver, Mock<ServiceBusSender> sender, long[] sequenceNumbers) =>
+        operation == "resubmit"
+            ? AzureServiceBusProvider.ResubmitCoreAsync(receiver.Object, sender.Object, sequenceNumbers, CancellationToken.None)
+            : AzureServiceBusProvider.MoveCoreAsync(receiver.Object, sender.Object, sequenceNumbers, CancellationToken.None);
+
+    [Theory]
+    [InlineData("resubmit", ResubmitSendUnknown)]
+    [InlineData("move", MoveSendUnknown)]
+    public async Task A_resubmit_or_move_whose_second_send_times_out_reports_both_sends_as_possible_duplicates_and_nothing_as_not_found(string operation, string duplicate)
+    {
+        var receiver = ReceiverFailingAfter([Batch(Msg(1), Msg(2), Msg(3), Msg(4))], Broker(ServiceBusFailureReason.ServiceTimeout));
+        var sender = SenderOfPairs(null, Broker(ServiceBusFailureReason.ServiceTimeout));
+
+        var result = await ResubmitOrMove(operation, receiver, sender, [1, 2, 3, 4]);
+
+        Assert.Equal(0, result.SuccessCount);
+        Assert.Equal(new[] { (1L, duplicate), (2L, duplicate), (3L, duplicate), (4L, duplicate) },
+            result.Failures.Select(f => (f.SequenceNumber, f.Error)).OrderBy(f => f.SequenceNumber).ToArray());
+        receiver.Verify(r => r.CompleteMessageAsync(It.IsAny<ServiceBusReceivedMessage>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData("resubmit", ResubmitSendUnknown)]
+    [InlineData("move", MoveSendUnknown)]
+    public async Task A_resubmit_or_move_whose_first_send_throws_reports_its_messages_as_possible_duplicates(string operation, string duplicate)
+    {
+        var receiver = ReceiverFailingAfter([Batch(Msg(1), Msg(2))], Broker(ServiceBusFailureReason.ServiceTimeout));
+        var sender = SenderOfPairs(Broker(ServiceBusFailureReason.ServiceTimeout));
+
+        var result = await ResubmitOrMove(operation, receiver, sender, [1, 2]);
+
+        Assert.Equal((0, 2), (result.SuccessCount, result.FailureCount));
+        Assert.All(result.Failures, f => Assert.Equal(duplicate, f.Error));
+        Assert.Equal(new long[] { 1, 2 }, result.Failures.Select(f => f.SequenceNumber).Order().ToArray());
+    }
+
+    [Theory]
+    [InlineData("resubmit", ResubmitSendUnknown)]
+    [InlineData("move", MoveSendUnknown)]
+    public async Task A_target_never_handed_to_a_send_after_a_send_failed_is_reported_not_found_and_only_it(string operation, string duplicate)
+    {
+        var receiver = ReceiverFailingAfter([Batch(Msg(1), Msg(2), Msg(3))], Broker(ServiceBusFailureReason.ServiceTimeout));
+        var sender = SenderOfPairs(Broker(ServiceBusFailureReason.ServiceTimeout));
+
+        var result = await ResubmitOrMove(operation, receiver, sender, [1, 2, 3]);
+
+        Assert.Equal(new[] { (1L, duplicate), (2L, duplicate), (3L, "Not found within scan window") },
+            result.Failures.Select(f => (f.SequenceNumber, f.Error)).OrderBy(f => f.SequenceNumber).ToArray());
+    }
+
+    [Theory]
+    [InlineData("resubmit", ResubmitSendUnknown)]
+    [InlineData("move", MoveSendUnknown)]
+    public async Task A_resubmit_or_move_whose_second_send_is_refused_as_disabled_reports_only_the_first_send_as_possible_duplicates(string operation, string duplicate)
+    {
+        var receiver = ReceiverFailingAfter([Batch(Msg(1), Msg(2), Msg(3), Msg(4))], Broker(ServiceBusFailureReason.ServiceTimeout));
+        var sender = SenderOfPairs(null, Broker(ServiceBusFailureReason.MessagingEntityDisabled));
+
+        var result = await ResubmitOrMove(operation, receiver, sender, [1, 2, 3, 4]);
+
+        Assert.Equal(new[] { (1L, duplicate), (2L, duplicate), (3L, Disabled), (4L, Disabled) },
+            result.Failures.Select(f => (f.SequenceNumber, f.Error)).OrderBy(f => f.SequenceNumber).ToArray());
     }
 }

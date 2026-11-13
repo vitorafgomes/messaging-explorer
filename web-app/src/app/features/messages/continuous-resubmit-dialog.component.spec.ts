@@ -1,34 +1,64 @@
 import { TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { signal } from '@angular/core';
+import { Subject, of } from 'rxjs';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { ContinuousResubmitDialogComponent } from './continuous-resubmit-dialog.component';
-import { QueueService, TopicService } from '../../core/services';
-import { BatchOperationResult, MessageInfo } from '../../core/models';
+import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { AT_LEAST_ONCE, ContinuousResubmitDialogComponent } from './continuous-resubmit-dialog.component';
+import { ConnectionService, MessageExportService, QueueService, ResubmitRunService, TopicService } from '../../core/services';
+import { ProviderService } from '../../core/services/provider.service';
+import { BatchOperationResult, MessageInfo, ProviderCapabilities } from '../../core/models';
 
 const head = (from: number, count: number) =>
   Array.from({ length: count }, (_, i) => ({ sequenceNumber: from + i }) as MessageInfo);
 
+const old = (from: number, count: number) =>
+  Array.from({ length: count }, (_, i) => ({
+    sequenceNumber: from + i,
+    enqueuedTime: '2020-01-01T00:00:00Z',
+    deadLetterReason: 'MaxDeliveryCountExceeded',
+    body: 'sample body'
+  }) as unknown as MessageInfo);
+
 const ok = (count: number): BatchOperationResult => ({ success: true, successCount: count, failureCount: 0, failures: [] });
 
-describe('ContinuousResubmitDialogComponent', () => {
-  let queueService: { peekDeadLetterMessages: ReturnType<typeof vi.fn>; resubmitDeadLetterMessages: ReturnType<typeof vi.fn> };
+const flush = () => new Promise(resolve => setTimeout(resolve));
 
-  function create() {
+describe('ContinuousResubmitDialogComponent', () => {
+  let queueService: {
+    getQueue: ReturnType<typeof vi.fn>;
+    peekDeadLetterMessages: ReturnType<typeof vi.fn>;
+    resubmitDeadLetterMessages: ReturnType<typeof vi.fn>;
+  };
+  let capabilities: Partial<ProviderCapabilities> | null;
+  let exporter: { downloadFile: ReturnType<typeof vi.fn> };
+
+  function configure() {
     TestBed.configureTestingModule({
       providers: [
+        provideNoopAnimations(),
         { provide: MAT_DIALOG_DATA, useValue: { entityType: 'queue', entityName: 'orders', deadLetterMessageCount: 3 } },
         { provide: MatDialogRef, useValue: { close: vi.fn(), disableClose: false } },
         { provide: QueueService, useValue: queueService },
-        { provide: TopicService, useValue: {} }
+        { provide: TopicService, useValue: {} },
+        { provide: ProviderService, useValue: { capabilities: signal(capabilities) } },
+        { provide: ConnectionService, useValue: { connectionStatus$: of({ connected: true }), currentTarget: 'sample.example.net', onBeforeSwitch: vi.fn() } },
+        { provide: MessageExportService, useValue: exporter }
       ]
     });
+  }
+
+  function create() {
+    configure();
     const component = TestBed.runInInjectionContext(() => new ContinuousResubmitDialogComponent());
     component.batchSize = 3;
     return component;
   }
 
   beforeEach(() => {
+    capabilities = null;
+    exporter = { downloadFile: vi.fn() };
     queueService = {
+      getQueue: vi.fn().mockReturnValue(of({ name: 'orders', deadLetterMessageCount: 3 })),
       peekDeadLetterMessages: vi.fn()
         .mockReturnValueOnce(of(head(1, 3)))
         .mockReturnValueOnce(of(head(1, 3)))
@@ -95,6 +125,270 @@ describe('ContinuousResubmitDialogComponent', () => {
       expect(component.statusMessage()).toBe('Unexpected error occurred');
       const dialogRef = TestBed.inject(MatDialogRef);
       expect(dialogRef.close).toHaveBeenCalledWith(expect.objectContaining({ completed: false, stopped: false }));
+    });
+  });
+
+  describe('falls back where the broker cannot read from a position', () => {
+    it.each([
+      ['an API that does not send the capability', null],
+      ['an API that says it cannot', { supportsPeekFromSequenceNumber: false }]
+    ])('with %s the dialog runs the head-of-queue loop of before and starts no run', async (_, given) => {
+      capabilities = given as Partial<ProviderCapabilities> | null;
+      queueService.resubmitDeadLetterMessages.mockReturnValue(of(ok(3)));
+      const component = create();
+
+      await component.start();
+
+      expect(queueService.peekDeadLetterMessages.mock.calls[0]).toEqual(['orders', 3]);
+      expect(TestBed.inject(ResubmitRunService).activeRuns()).toEqual([]);
+      expect(component.run()).toBeUndefined();
+    });
+
+    it('when the API says exactly true the dialog starts a run that reads from position 0', async () => {
+      capabilities = { supportsPeekFromSequenceNumber: true };
+      queueService.peekDeadLetterMessages = vi.fn().mockReturnValueOnce(of(old(1, 3))).mockReturnValue(of([]));
+      queueService.resubmitDeadLetterMessages.mockReturnValue(of(ok(3)));
+      const component = create();
+
+      await component.start();
+      await component.run()!.done;
+
+      expect(queueService.peekDeadLetterMessages.mock.calls[0]).toEqual(['orders', 3, 0, false]);
+      expect(TestBed.inject(ResubmitRunService).find(component.target)).toBe(component.run());
+      expect(component.run()!.progress()).toMatchObject({ status: 'completed', resubmitted: 3 });
+    });
+  });
+
+  describe('runs with the dialog closed', () => {
+    it('closing and destroying the dialog keeps the run going, and the dialog opened again shows that run', async () => {
+      capabilities = { supportsPeekFromSequenceNumber: true };
+      const peek = new Subject<MessageInfo[]>();
+      queueService.peekDeadLetterMessages = vi.fn().mockReturnValueOnce(peek).mockReturnValue(of([]));
+      queueService.resubmitDeadLetterMessages.mockReturnValue(of(ok(3)));
+      const component = create();
+      await component.start();
+      await flush();
+
+      component.close();
+      component.ngOnDestroy();
+      peek.next(old(1, 3));
+      peek.complete();
+      const run = component.run()!;
+      await run.done;
+
+      expect(TestBed.inject(MatDialogRef).close).toHaveBeenCalledWith(undefined);
+      expect(queueService.resubmitDeadLetterMessages.mock.calls.map(call => call[1])).toEqual([[1, 2, 3]]);
+      expect(run.progress().status).toBe('completed');
+      const reopened = TestBed.runInInjectionContext(() => new ContinuousResubmitDialogComponent());
+      expect(reopened.run()).toBe(run);
+    });
+  });
+
+  describe('final report, retry the failed without the duplicates', () => {
+    async function finishedWithOneFailedAndOneDuplicate() {
+      capabilities = { supportsPeekFromSequenceNumber: true };
+      queueService.peekDeadLetterMessages = vi.fn().mockReturnValueOnce(of(old(1, 3))).mockReturnValue(of([]));
+      queueService.resubmitDeadLetterMessages.mockReturnValueOnce(of({
+        success: false, successCount: 1, failureCount: 2,
+        failures: [
+          { sequenceNumber: 2, error: 'The entity is disabled for this operation.' },
+          { sequenceNumber: 3, error: 'Message was resubmitted but could not be removed from the dead-letter queue and may be duplicated on retry: lock lost' }
+        ]
+      }));
+      const component = create();
+      await component.start();
+      await component.run()!.done;
+      return component;
+    }
+
+    it('Save report writes a JSON file with the failed and possible-duplicate sequence numbers and no message body', async () => {
+      const component = await finishedWithOneFailedAndOneDuplicate();
+
+      component.saveReport(component.run()!);
+
+      const [content, filename, mimeType] = exporter.downloadFile.mock.calls[0];
+      const report = JSON.parse(content);
+      expect(filename).toMatch(/^resubmit-report-orders-.*\.json$/);
+      expect(mimeType).toBe('application/json');
+      expect(report.failedMessages.map((entry: { sequenceNumber: number }) => entry.sequenceNumber)).toEqual([2]);
+      expect(report.possibleDuplicateMessages.map((entry: { sequenceNumber: number }) => entry.sequenceNumber)).toEqual([3]);
+      expect(content).not.toContain('sample body');
+    });
+
+    it('Retry the failed resubmits exactly the failed sequence number, never the possible duplicate', async () => {
+      const component = await finishedWithOneFailedAndOneDuplicate();
+      queueService.resubmitDeadLetterMessages.mockReturnValue(of(ok(1)));
+
+      component.retryFailed(component.run()!);
+      await component.run()!.done;
+
+      expect(queueService.resubmitDeadLetterMessages.mock.calls.map(call => call[1])).toEqual([[1, 2, 3], [2]]);
+    });
+  });
+
+  describe('the screen states the at-least-once caveat', () => {
+    it.each([
+      ['the run', { supportsPeekFromSequenceNumber: true }],
+      ['the head-of-queue loop', null]
+    ])('the configure step of %s says that a message sent but not removed may be delivered twice', (_, given) => {
+      capabilities = given as Partial<ProviderCapabilities> | null;
+      configure();
+      const fixture = TestBed.createComponent(ContinuousResubmitDialogComponent);
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.textContent).toContain(AT_LEAST_ONCE);
+      expect(AT_LEAST_ONCE).toContain('at-least-once');
+      expect(AT_LEAST_ONCE).toContain('sent but not removed');
+      expect(AT_LEAST_ONCE).toContain('delivered twice');
+    });
+
+    it('the report of a finished run says it as well, beside the messages it left behind', async () => {
+      capabilities = { supportsPeekFromSequenceNumber: true };
+      queueService.peekDeadLetterMessages = vi.fn().mockReturnValueOnce(of(old(1, 2))).mockReturnValue(of([]));
+      queueService.resubmitDeadLetterMessages.mockReturnValue(of({
+        success: false, successCount: 1, failureCount: 1, failures: [{ sequenceNumber: 2, error: 'The entity is disabled for this operation.' }]
+      }));
+      configure();
+      const fixture = TestBed.createComponent(ContinuousResubmitDialogComponent);
+      fixture.componentInstance.batchSize = 2;
+      await fixture.componentInstance.start();
+      await fixture.componentInstance.run()!.done;
+      fixture.detectChanges();
+
+      const text: string = fixture.nativeElement.textContent;
+      expect(text).toContain(AT_LEAST_ONCE);
+      expect(text).toContain('Failed, not sent. The entity is disabled for this operation.');
+      expect(text).toContain('Retry the 1 failed');
+    });
+  });
+
+  describe('the batch size of a run', () => {
+    it('a run starts at 250 per batch, what the server reads per scan, and says that a smaller batch costs the broker more; the head-of-queue loop keeps 10', () => {
+      capabilities = { supportsPeekFromSequenceNumber: true };
+      configure();
+      const fixture = TestBed.createComponent(ContinuousResubmitDialogComponent);
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.batchSize).toBe(250);
+      expect(fixture.nativeElement.textContent).toContain('A smaller batch costs the broker more scans');
+
+      TestBed.resetTestingModule();
+      capabilities = null;
+      configure();
+      expect(TestBed.createComponent(ContinuousResubmitDialogComponent).componentInstance.batchSize).toBe(10);
+    });
+  });
+
+  describe('the left-behind table keeps its rows while the run goes on', () => {
+    it('a row of a message left behind is the same element after the next batch, not drawn again', async () => {
+      capabilities = { supportsPeekFromSequenceNumber: true };
+      const second = new Subject<MessageInfo[]>();
+      queueService.peekDeadLetterMessages = vi.fn().mockReturnValueOnce(of(old(1, 2))).mockReturnValueOnce(second).mockReturnValue(of([]));
+      queueService.resubmitDeadLetterMessages
+        .mockReturnValueOnce(of({ success: false, successCount: 1, failureCount: 1, failures: [{ sequenceNumber: 2, error: 'The entity is disabled for this operation.' }] }))
+        .mockReturnValue(of(ok(2)));
+      configure();
+      const fixture = TestBed.createComponent(ContinuousResubmitDialogComponent);
+      fixture.componentInstance.batchSize = 2;
+      await fixture.componentInstance.start();
+      await flush();
+      fixture.detectChanges();
+      const row = () => Array.from<HTMLElement>(fixture.nativeElement.querySelectorAll('tr.mat-mdc-row')).find(tr => tr.textContent?.includes('The entity is disabled'));
+      const before = row();
+
+      second.next(old(3, 2));
+      second.complete();
+      await fixture.componentInstance.run()!.done;
+      fixture.detectChanges();
+
+      expect(before).toBeDefined();
+      expect(fixture.componentInstance.run()!.progress().read).toBe(3);
+      expect(row()).toBe(before);
+    });
+  });
+
+  describe('no run starts while the connection is changing', () => {
+    it('Start during a connect says so and reads nothing from the broker', async () => {
+      capabilities = { supportsPeekFromSequenceNumber: true };
+      configure();
+      const fixture = TestBed.createComponent(ContinuousResubmitDialogComponent);
+      const connection = TestBed.inject(ConnectionService) as unknown as { onBeforeSwitch: ReturnType<typeof vi.fn> };
+      await connection.onBeforeSwitch.mock.calls[0][0]();
+
+      await fixture.componentInstance.start();
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.run()).toBeUndefined();
+      expect(queueService.getQueue).not.toHaveBeenCalled();
+      expect(fixture.nativeElement.textContent).toContain('The connection is changing, so no run was started.');
+    });
+  });
+
+  describe('the configure screen says what a run continues past and what a filter costs', () => {
+    function configureScreen() {
+      capabilities = { supportsPeekFromSequenceNumber: true };
+      configure();
+      const fixture = TestBed.createComponent(ContinuousResubmitDialogComponent);
+      fixture.detectChanges();
+      return fixture;
+    }
+
+    it('"continue past a failure" is said to cover a refused send and a possible duplicate, never a message the server cannot find', () => {
+      const text: string = configureScreen().nativeElement.textContent;
+
+      expect(text).toContain('Continuing applies to a message the broker refused and to a possible duplicate. A message the server cannot find is tried again once its lock is released, and then stops the run.');
+    });
+
+    it('with a filter set, the screen warns that a filtered run may stop early; without one it does not', async () => {
+      const fixture = configureScreen();
+      const warning = 'A filter leaves the messages it skips at the head of the queue; the server can reach only a few hundred messages past them, so a filtered run may stop early.';
+      expect(fixture.nativeElement.textContent).not.toContain(warning);
+
+      fixture.componentInstance.reasonFilter = 'MaxDeliveryCountExceeded';
+      fixture.changeDetectorRef.markForCheck();
+      fixture.detectChanges();
+      expect(fixture.nativeElement.textContent).toContain(warning);
+
+      fixture.componentInstance.reasonFilter = ' ';
+      fixture.componentInstance.textFilter = 'order-7';
+      fixture.changeDetectorRef.markForCheck();
+      fixture.detectChanges();
+      expect(fixture.nativeElement.textContent).toContain(warning);
+    });
+  });
+
+  describe('Pause and Resume through the buttons of the dialog', () => {
+    it('Pause holds the run after the request in flight, with no peek or resubmit, and Resume carries it on', async () => {
+      capabilities = { supportsPeekFromSequenceNumber: true };
+      const answer = new Subject<BatchOperationResult>();
+      queueService.peekDeadLetterMessages = vi.fn().mockReturnValueOnce(of(old(1, 2))).mockReturnValue(of([]));
+      queueService.resubmitDeadLetterMessages.mockReturnValueOnce(answer);
+      configure();
+      const fixture = TestBed.createComponent(ContinuousResubmitDialogComponent);
+      fixture.detectChanges();
+      const button = (label: string) =>
+        Array.from<HTMLButtonElement>(fixture.nativeElement.querySelectorAll('button')).find(b => b.textContent?.trim().endsWith(label))!;
+      const status = () => (fixture.nativeElement.querySelector('.status')?.textContent ?? '').replace(/\s+/g, ' ').trim();
+
+      button('Start').click();
+      await flush();
+      fixture.detectChanges();
+      button('Pause').click();
+      answer.next(ok(2));
+      answer.complete();
+      await flush();
+      fixture.detectChanges();
+
+      expect(status()).toContain('Paused.');
+      expect(queueService.peekDeadLetterMessages).toHaveBeenCalledTimes(1);
+      expect(queueService.resubmitDeadLetterMessages).toHaveBeenCalledTimes(1);
+
+      button('Resume').click();
+      await flush();
+      fixture.detectChanges();
+
+      expect(queueService.peekDeadLetterMessages).toHaveBeenCalledTimes(2);
+      expect(status()).toContain('Finished.');
     });
   });
 });

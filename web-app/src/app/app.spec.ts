@@ -5,7 +5,7 @@ import { of } from 'rxjs';
 import { Component, signal } from '@angular/core';
 import { App } from './app';
 import { routes } from './app.routes';
-import { ConnectionService, ThemeService, EntitySelectionService, DevSettingsService } from './core/services';
+import { ConnectionService, ThemeService, EntitySelectionService, DevSettingsService, ResubmitRunService } from './core/services';
 import { DeadLetterNotificationService } from './core/services/dead-letter-notification.service';
 
 @Component({ template: '' })
@@ -47,6 +47,7 @@ describe('App', () => {
         { provide: ThemeService, useValue: mockThemeService },
         { provide: EntitySelectionService, useValue: mockEntitySelectionService },
         { provide: DeadLetterNotificationService, useValue: mockDlqService },
+        { provide: ResubmitRunService, useValue: { activeRuns: signal([]) } },
       ],
     }).compileComponents();
   });

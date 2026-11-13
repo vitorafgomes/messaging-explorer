@@ -30,6 +30,8 @@ export interface ProviderCapabilities {
   supportsSubscriptionRules?: boolean;
   /** The transfer dead-letter queue can be listed and cleaned up. An older API does not send it; only an explicit true enables it. */
   supportsTransferDeadLetter?: boolean;
+  /** A dead-letter peek can start at a sequence number. An older API does not send it; only an explicit true enables it. */
+  supportsPeekFromSequenceNumber?: boolean;
   /** The definitions of every entity can be exported to a file and imported, creating only what does not exist. An older API does not send it; only an explicit true enables it. */
   supportsDefinitions?: boolean;
   supportedExchangeTypes: string[];

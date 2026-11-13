@@ -9,7 +9,7 @@ import { MatTabsModule } from '@angular/material/tabs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { delay } from 'rxjs/operators';
 import { EntitySelection, QueueInfo, TopicInfo, SubscriptionInfo, TreeNode, SubscriptionNodeData } from '../../core/models';
-import { EntitySelectionService, QueueService, TopicService, ConnectionService } from '../../core/services';
+import { EntitySelectionService, QueueService, TopicService, ConnectionService, ResubmitRun, ResubmitRunService } from '../../core/services';
 import { SendMessageDialogComponent } from '../messages/send-message-dialog.component';
 import { ImportMessagesDialogComponent } from '../messages/import-messages-dialog.component';
 import { ViewMessagesDialogComponent } from '../messages/view-messages-dialog.component';
@@ -88,9 +88,9 @@ const NOT_SET = 'Not set';
           <button class="btn btn-danger" (click)="purgeMessages()" [disabled]="queueEntity.activeMessageCount === 0">
             <i class="fa fa-trash me-2"></i>Purge
           </button>
-          @if (queueEntity.deadLetterMessageCount > 0 && supports('supportsDeadLetterQueue')) {
+          @if ((queueEntity.deadLetterMessageCount > 0 || autoResubmitRun()) && supports('supportsDeadLetterQueue')) {
             <button class="btn btn-warning" (click)="openAutoResubmit()">
-              <i class="fa fa-repeat me-2"></i>Auto Resubmit ({{ queueEntity.deadLetterMessageCount }})
+              <i class="fa fa-repeat me-2"></i>@if (autoResubmitRun(); as run) {Resubmit {{ run.progress().status }}: {{ run.progress().read }} of {{ run.progress().total }}} @else {Auto Resubmit ({{ queueEntity.deadLetterMessageCount }})}
             </button>
           }
         </div>
@@ -325,9 +325,9 @@ const NOT_SET = 'Not set';
               <span>Purge All Messages</span>
             </button>
           </mat-menu>
-          @if (subscriptionEntity && subscriptionEntity.deadLetterMessageCount > 0 && supports('supportsDeadLetterQueue')) {
+          @if (subscriptionEntity && (subscriptionEntity.deadLetterMessageCount > 0 || autoResubmitRun()) && supports('supportsDeadLetterQueue')) {
             <button class="btn btn-warning" (click)="openAutoResubmit()">
-              <i class="fa fa-repeat me-2"></i>Auto Resubmit ({{ subscriptionEntity.deadLetterMessageCount }})
+              <i class="fa fa-repeat me-2"></i>@if (autoResubmitRun(); as run) {Resubmit {{ run.progress().status }}: {{ run.progress().read }} of {{ run.progress().total }}} @else {Auto Resubmit ({{ subscriptionEntity.deadLetterMessageCount }})}
             </button>
           }
         </div>
@@ -1843,6 +1843,7 @@ export class EntityDetailsComponent {
   private dialog = inject(MatDialog);
   private readonly destroyRef = inject(DestroyRef);
   private readonly providerService = inject(ProviderService);
+  private readonly resubmitRuns = inject(ResubmitRunService);
 
   readonly notSet = NOT_SET;
 
@@ -2050,6 +2051,19 @@ export class EntityDetailsComponent {
       height: '90vh',
       data: { entityType, entityName, topicName, activeMessageCount, deadLetterMessageCount, transferDeadLetterMessageCount, initialTab, initialStateFilter }
     });
+  }
+
+  /** The automatic dead-letter resubmit running or paused on the selected queue or subscription. */
+  autoResubmitRun(): ResubmitRun | undefined {
+    const selection = this.selection;
+    if (!selection || (selection.type !== 'queue' && selection.type !== 'subscription')) return undefined;
+    const run = this.resubmitRuns.find({
+      entityType: selection.type,
+      entityName: selection.node.name,
+      topicName: selection.type === 'subscription' ? (selection.node.data as SubscriptionNodeData)?.topicName : undefined,
+      subQueue: 'deadletter'
+    });
+    return run?.isActive() ? run : undefined;
   }
 
   openAutoResubmit() {
