@@ -434,15 +434,6 @@ export class ConnectionsComponent implements OnInit {
       }
     });
 
-    // Listen for IPC messages from Electron — only execute when devMode is enabled
-    if ((window as any).electron) {
-      (window as any).electron.on('clear-all-data', () => {
-        if (!this.devSettingsService.devMode()) return;
-        console.log('[IPC] Received clear-all-data message from Electron menu');
-        this.clearAllData();
-      });
-    }
-
     this.loadData();
   }
 
