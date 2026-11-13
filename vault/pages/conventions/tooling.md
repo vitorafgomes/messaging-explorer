@@ -2,7 +2,7 @@
 title: "Tooling"
 version: "1.0"
 date: 2026-11-12
-changes: "2026-11-13: removed the stale line that CI runs no web test; CI runs them since 2026-11-12. Founded with the harness on 2026-11-12"
+changes: "2026-11-13: the private-names check. Earlier on 2026-11-13: removed the stale line that CI runs no web test; CI runs them since 2026-11-12. Founded with the harness on 2026-11-12"
 page_type: convention
 status: active
 description: "Who runs on which model and writes what, what lives in .claude/ and scripts/, what each hook does, and how the review workflow fits the gates."
@@ -64,6 +64,10 @@ Every hook carries a case-matrix self-test (`<hook>.test.sh`, prints `ALL CASES 
 ## `scripts/check-vault-refs.sh`
 
 Resolves every `path:line` citation in `vault/pages` (paths under `src`, `web-app`, `scripts`, `docs`, `.claude`, `.github`, written in full) against the working tree; fails on a missing file, a line 0 or a line past the end, and when `vault/pages` is missing. It proves the line exists, never that it still describes the claim; that part is read. A citation to a root file (`CHANGELOG.md`, `config.json`) and an abbreviated continuation (`:15`) are not checked. Pages whose `status` marks them as a record are skipped. Runs in gate 7b and in CI.
+
+## `scripts/check-private-names.sh`
+
+Fails when a private name appears in the tracked files (`--tree`) or in text on stdin (`--stdin`): names the owner keeps out of this public repository, such as other projects and employers. The names are never written in the repository; the script reads them from the `PRIVATE_NAMES` secret in CI and from `~/.config/messaging-explorer/private-names` on a workstation. A name matches in any case and with one separator between its letters, and the report gives the file and line or the text line, never the matched text, because CI logs are public. `.github/workflows/private-names.yml` runs it on every push to `main` and on every pull request, opened, edited or pushed, over the tree, the title and body, and every commit message of the range, and is a required check of `main`; `--require` there turns a missing secret into a failure. A pull request from a fork has no secret and is checked again by the push that merges it. Before a commit, a pull request or a release note, the manager runs it locally. Its case matrix is `scripts/check-private-names.test.sh`, run by the `harness` job with made-up names.
 
 ## Permissions
 
