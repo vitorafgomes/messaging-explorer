@@ -1,48 +1,59 @@
-# CLAUDE.md - Messaging Explorer
+@AGENTS.md
 
-Loaded into every session in this repo, for me, for every subagent I spawn, and for anyone pairing with Claude here. One source per rule: this file carries the snapshot, the standard, the ten team rules and pointers. It never restates what the pipeline skill, the tooling page or the context already say.
+# Claude Code in this repo
 
-## Read first
+Everything above holds here. What follows is how this repo uses Claude Code.
 
-- **Context:** [`context/index.md`](./context/index.md), then `context/pages/services/<project>.md`, the invariants it links, the relevant ADRs. Context first, source last. Operation contract: @context/CLAUDE.md
-- **Pipeline:** every code task, however small, routes through the `explorer-pipeline` skill before the first edit. It classifies the task, takes the fast path for trivial edits, and walks the gates (plan, Rule B, build, test surface, prove the requirement, review, crystallize, PR body, stop at the commit message).
-- **Who does what, on which model, with which tools:** `context/pages/conventions/tooling.md` (routing table, agents under `.claude/agents/`, hooks, scripts, the review workflow).
-- **.NET mechanics:** [`AGENTS.md`](./AGENTS.md) maps tasks to the installed `dotnet/skills` plugins.
+## Before you edit code
 
-## Project snapshot
+Use the `explorer-pipeline` skill first, for every code task. It classifies the task by risk and
+says what the change needs: a one-line edit needs a build, and a change to the API surface, to
+secrets or to anything that moves messages needs a plan, proof and a review.
 
-- **What:** open-source (MIT) desktop and web tool to explore and manage messaging brokers: Azure Service Bus and RabbitMQ. It lists and creates queues, topics, subscriptions and exchanges, peeks, sends, receives, resubmits, moves, deletes and purges messages, including dead-letter queues, on brokers that are usually someone's production.
-- **Stack:** .NET 10 (`ServiceBusExplorer.slnx`), ASP.NET Core API, `Azure.Messaging.ServiceBus`, `Azure.Identity`, `RabbitMQ.Client`; Angular 21 with Angular Material and ng-bootstrap; Electron 41 with `electron-builder` and `electron-updater`; npm.
-- **Projects:** `src/ServiceBusExplorer.Core` (provider abstraction, the two providers, workspace storage, metrics), `src/ServiceBusExplorer.Api` (controllers, key middleware, monitoring), their test projects `src/ServiceBusExplorer.Core.Tests` and `src/ServiceBusExplorer.Api.Tests` (under `src/`, not `tests/`), the integration project `src/ServiceBusExplorer.IntegrationTests`, which starts its brokers in Docker, `web-app/` (Angular app, `web-app/electron/` shell), `docs/` (the GitHub Pages site). `context/pages/architecture/project-map.md`.
-- **Runtime shape:** the Electron main process generates an API secret per launch, starts the API as a child process on loopback and hands the secret to the renderer over IPC; every HTTP call carries it as `X-Api-Key`. One active broker connection per API process.
-- **Storage:** connections and groups in one `workspace.json` under the data path, secrets in plain text on disk; `context/pages/services/core.md`.
-- **Tests:** xUnit with Moq and plain `Assert`; `dotnet test` per test project. The two unit projects are the fast gate; the integration project needs Docker and is run by name (ADR 0002). Web: vitest through the Angular builder, `npm test -- --watch=false` in `web-app/` (never plain `npx vitest`, which has no Angular compiler). `context/pages/conventions/testing.md`.
-- **CI:** `.github/workflows/ci.yml` (harness self-tests, .NET build and unit tests, integration tests against brokers in containers, web and Electron tests and build; no lint) and `release.yml` (tag-driven packaging for three OSes, unsigned).
+## What loads without being asked
 
-## The standard
+Opening a file loads the rules of the part of the project it belongs to: what that part must keep,
+what to read before changing it, and its commands.
 
-Correct, tested, clean, and **safe to point at a production broker**. Three things are never "harden later": nobody but the local user reaches the API (Rule A), a secret never leaves the backend unmasked or reaches a log (Rule G), and a bulk operation never loses a message silently (Rule H). The code does not meet all three everywhere today; each known breach is written down with its citation under "Known gaps" on the service pages and in `context/pages/roadmap/followups.md`. A change may leave a recorded gap as it found it; it may never add one, and it may never widen one.
+| A file under | Loads |
+|---|---|
+| `src/ServiceBusExplorer.Core/` and its tests | `.claude/rules/core.md` |
+| `src/ServiceBusExplorer.Api/` and its tests | `.claude/rules/api.md` |
+| `src/ServiceBusExplorer.IntegrationTests/` | `.claude/rules/integration-tests.md` |
+| `web-app/src/`, `web-app/e2e/` | `.claude/rules/web-app.md`, with the tools for Angular work |
+| `web-app/electron/` | `.claude/rules/electron-shell.md` |
+| any `.cs` or `.csproj` | `.claude/rules/dotnet-skills.md` |
+| `context/` | `context/CLAUDE.md`, the contract of the documentation folder |
 
-## Team rules
+For where a type lives or who calls it, ask the code graph before reading files:
+`graphify explain "<Type>"`, `graphify affected "<Type>" --depth 1`.
 
-The letters are stable; hooks, skills and the context reference them by letter. B to E and J are general working rules; A and F to I are specific to this product.
+## One task per session
 
-- **A - Local, authenticated API.** The API listens on loopback only, filters the Host header, restricts CORS to the configured front end, and refuses every request without the per-launch `X-Api-Key` compared in fixed time; `/health` is the one exemption. The Angular app reaches it only through `ApiService`. `context/pages/invariants/local-authenticated-api.md`.
-- **B - Edit, test, validate, per edit.** Every edit ships with a test that fails without it and asserts the requirement in the words the request used; a refactor names behaviour-lock tests green before and after. Then `dotnet build ServiceBusExplorer.slnx` at 0 warnings (read the summary line; nothing fails the build on a warning), the test surface of the pipeline's gate 4, and for `web-app/**` `npm test -- --watch=false` and `npm run build`. `context/pages/conventions/testing.md`.
-- **C - No premature abstraction.** One concrete user means no generic, base class or helper; three similar lines beat a speculative abstraction. A documented abstraction (the provider interface, capabilities, the factory) is not premature.
-- **D - Verify before citing.** Read the file, class or convention before recommending it; nothing here is stable enough to quote from memory. `docs/ADDING_PROVIDERS.md` describes a flow the code does not fully run; the service pages say which parts.
-- **E - Claude never commits by default.** No history-writing git, no `gh pr`, no release, no publish, unless the owner asks for that action; a batch authorisation in words covers one session's commits and PRs on a `feat/ fix/ chore/ docs/` branch and never a push to `main`. Every change lands on `main` through a PR. **Never an AI attribution line** (`Co-Authored-By`, "Generated with") in a commit, a PR or a source file. The `pre-git-guard` hook turns these into a permission ask.
-- **F - Provider boundaries.** A broker is reached through `IMessagingProvider`; what a provider cannot do is declared in `IProviderCapabilities`, never a silent no-op. `Azure.*` and `RabbitMQ.Client` types stay inside `src/ServiceBusExplorer.Core/Providers/<Provider>/`; controllers, models, abstractions and the Angular app never name one. `context/pages/invariants/provider-boundaries.md`.
-- **G - Secrets masked, never logged.** A connection string, a password, a client secret and the API secret leave the backend only as the mask, except on an export the user asked for with secrets; the mask never overwrites a stored secret; nothing logs or echoes one. A new secret field is added to the mask, to the merge on save and import, and to a masking test, in one change. `context/pages/invariants/secrets-masked-at-the-api-boundary.md`.
-- **H - A bulk operation never loses a message silently.** Send first, complete after; a message that was sent and could not be removed from its source is reported as a possible duplicate, never resent in silence; every failure is reported per sequence number; scans are bounded; the caller's `CancellationToken` stops the batch. Operations are at-least-once, and the UI says so. `context/pages/invariants/bulk-operations-are-at-least-once.md`.
-- **I - One failing-call test per external boundary.** A change that adds or alters a call to a broker SDK, the RabbitMQ management API, Azure Monitor, the filesystem or a subprocess ships one test where that call fails (timeout, 5xx, a broker exception) and asserts what the caller does. `context/pages/conventions/testing.md`.
-- **J - Documentation lives in the context.** English only, no emojis, no AI-attribution comments or headers. A `<summary>` on a public type or member is fine; no narration inside a member, no reference to an ADR, a page or an issue in code; the one exception is a `ponytail:` deferral line. `README.md` is the public front page: what the app does, download, connect, what to know before production, develop, and links; how it works and why stays in the context.
+Start a new session for each task. A session that carries many tasks reads its whole history
+again on every request: the largest one measured here made 758 requests with over a million
+tokens of context, and that alone was a third of what the session cost.
 
-Also mandatory: identifiers and comments in English; never run a destructive operation (receive, purge, delete, move, resubmit) against a broker the owner did not name for that purpose; no real namespaces, hosts, connection strings or ids from the owner's environment in code, tests, context or commits.
+## What a hook already enforces
 
-## When working here
+You do not need to remember these; a hook stops or flags them.
 
-- Announce classification and the skills in play before the first edit; the `explorer-pipeline` skill says how.
-- One git worktree per concurrent piece of work; an agent never edits the owner's checkout while the owner has uncommitted work in the same files.
-- After a session with new findings: `/wiki-crystallize`, and one line at the top of `context/log.md`.
-- Prefer editing an existing file over creating one; no planning or analysis markdown outside the context. The owner's private notes stay in the Obsidian vault at `~/WorkSpace/obsidian-vault/explorer-messages/`; nothing from there is copied here without the owner's word, because this repo is public. On 2026-11-12 he gave it for the product history, the Azure authentication decision and the feature backlog; security audits, session logs and plans stay private.
+| Enforced | By |
+|---|---|
+| Git that writes history, discards work or changes where a push goes; a write to GitHub; a publish: asks first | `pre-git-guard` |
+| A unit or web test run outside the container: denied, with the command to use | `pre-test-in-docker` |
+| A reviewing agent's shell: read-only git | `agent-read-only-bash` |
+| Code edited and no review ran: blocks the reply once | `stop-review-gate` |
+
+## Working with other sessions
+
+- Start a session with `scripts/claude-session.sh` (`worker`, or `ui` for the web app): it leaves
+  out the servers and plugins this repo does not use.
+- Ask the `explorer-meter` agent where a session spent its tokens.
+
+- One git worktree per piece of work running at the same time. An agent never edits the owner's
+  checkout while the owner has uncommitted work in the same files.
+- When a session found something worth keeping, run `/wiki-crystallize` and add one line at the
+  top of `context/log.md`.
+- The owner's private notes are outside this repository. Nothing from them is copied here without
+  the owner's word: this repository is public.

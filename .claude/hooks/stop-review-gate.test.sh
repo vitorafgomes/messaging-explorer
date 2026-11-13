@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Case matrix for stop-review-gate.sh: WARN = must emit the gate 6 block, QUIET = must emit nothing.
+# Case matrix for stop-review-gate.sh: WARN = must block and ask for the review, QUIET = must emit nothing.
 HOOK="${1:-$(dirname "$0")/stop-review-gate.sh}"
 work=$(mktemp -d); trap 'rm -rf "$work"' EXIT
 fail=0

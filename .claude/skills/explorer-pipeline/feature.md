@@ -1,27 +1,24 @@
 # Feature lane
 
-Stages in order. Repo facts live in the linked context pages; this file carries only the stage order.
+The order of work for something new. Step numbers of `SKILL.md` are named where they apply.
 
-0. **Discovery** - when the request is an owner sentence with no spec in the context yet, run
-   `superpowers:brainstorming` and `product-management:write-spec` first, write the outcome into a
-   roadmap page under `context/pages/roadmap/` (problem, users, scope, non-goals, acceptance, open
-   decisions), and only then continue.
-1. **Pre-flight** - decide before coding: which project owns it (a feature that seems to need the
-   API and the web app usually needs one provider member, one endpoint and one Angular service
-   method, in that order); whether it touches the API surface, a secret, or a message (and in which
-   order it receives, sends and completes); which provider supports it and what the other provider
-   answers (a capability flag in `IProviderCapabilities`, never a silent no-op).
-2. **Context route** - `context/pages/services/<project>.md` + linked invariants + relevant ADRs, **then
-   the capability check in SKILL.md gate 1**. Exit: no invariant conflict (else stop, superseding
-   ADR first).
-3. **Plan** - state the six-part plan from SKILL.md before implementation; a sequence diagram when
-   the flow crosses Angular, the API and a broker.
-4. **Implement** - dispatch `explorer-implementer` (opus) with the six-part plan, then check its
-   diff against the plan and report any departure to the owner. Rule B per edit. A new provider
-   member ships in both providers (implemented, or declared unsupported through capabilities) and
-   ships its failing-call test (Rule I).
-5. **Scans (diff-gated)** - per `AGENTS.md`; the test-quality skills run as part of gate 5. A scan
-   whose surface the diff does not touch does not run.
-6. **Gates 3-9** from SKILL.md (build -> full test surface -> **Prove the requirement** -> review
-   workflow -> crystallize -> PR body -> commit message). A brand-new provider or feature uses
-   `mutation proof` (SKILL.md gate 5).
+1. **Discovery, when there is no spec.** If the request is one sentence from the owner and no
+   roadmap page describes it, run `superpowers:brainstorming` and `product-management:write-spec`,
+   write the result as a page under `context/pages/roadmap/` (problem, users, scope, non-goals,
+   acceptance, open decisions), and continue from there.
+2. **Decide before coding.**
+   - Which project owns it. A feature that seems to need two projects usually needs one project
+     plus a contract the Angular app reads.
+   - Which broker operations it can reach, and whether any removes or moves a message.
+   - Which abstraction each vendor type stays behind.
+   - Where the configuration lives, and how a contributor without paid credentials runs it.
+3. **Read.** The project's service page, then `reference/sensitive.md`. A feature is where a project
+   first gains an endpoint, a broker operation or a new error
+   path, and its page has no rule yet for a capability it does not have. A conflict with a
+   rule stops the work: a superseding decision comes first.
+4. **Plan** (`SKILL.md` step 3). When the feature is a screen an artboard draws, write the
+   inventory of `reference/prototype.md` first; the plan's requirement table is that inventory. Add a sequence diagram when the flow crosses the control plane or
+   a chat platform.
+5. **Build** (step 4). A new provider registers through the existing
+   abstraction and ships one test in which its external call fails.
+6. **Check, prove, review, record** (steps 5 to 8). A new project or slice uses `mutation proof`.
