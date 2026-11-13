@@ -6,7 +6,7 @@ changes: "Integration project against the Azure Service Bus emulator: the Runnin
 page_type: convention
 status: active
 description: "How Messaging Explorer is tested: xUnit with Moq for the two .NET projects, vitest for the Angular app, what runs in CI, the state at the founding, and what has no test."
-updated: 2026-11-12
+updated: 2026-11-13
 source:
   - "src/ServiceBusExplorer.Core.Tests/"
   - "src/ServiceBusExplorer.Api.Tests/"
@@ -33,8 +33,8 @@ reliability: high
 | Core | `dotnet test src/ServiceBusExplorer.Core.Tests` | 373 passed, 0 skipped (2026-11-13) |
 | Api | `dotnet test src/ServiceBusExplorer.Api.Tests` | 315 passed, 0 skipped (2026-11-13) |
 | Integration (Docker) | `dotnet test src/ServiceBusExplorer.IntegrationTests` | 91 passed, 0 skipped (29 RabbitMQ, 62 Azure Service Bus) on 2026-11-13, 165 s wall for the whole project run on that day; earlier, 93 to 102 s wall with the images cached, as measured when the project had 74 tests. The two collections run in parallel and the Azure one dominates: about 20 s to start SQL Server and the emulator, about 68 s of tests, of which 20 s is the deep dead-letter resubmit (350 messages arranged one by one) and 15 s three calls to a closed port that wait out the SDK retries |
-| Web | `npm test -- --watch=false` in `web-app/` | 47 files: 872 passed, 8 skipped (2026-11-13) |
-| Electron shell helpers | `npm run test:electron` in `web-app/` (`node --test`) | 17 passed, 0 skipped |
+| Web | `npm test -- --watch=false` in `web-app/` | 47 files: 874 passed, 8 skipped (2026-11-13) |
+| Electron shell helpers and preload | `npm run test:electron` in `web-app/` (`node --test`) | 28 passed, 0 skipped (2026-11-13) |
 | Build | `dotnet build ServiceBusExplorer.slnx` | 0 warnings, 0 errors |
 
 The Api tests share process-wide environment variables, so the assembly disables parallelisation (`src/ServiceBusExplorer.Api.Tests/Usings.cs:4`).
@@ -111,7 +111,7 @@ From the founding survey; each is on its service page.
 
 - **Core:** `ProviderFactory`, `RabbitMQPatternDetector`. The RabbitMQ provider and its management client are reached only by the integration project, through the provider's public surface; their bulk resubmit and move, search and pattern detection have no test of their working path.
 - **Api:** `QueuesController` and `TopicsController` beyond the entity administration, rule and message routes, which have tests since 2026-11-12 (the message routes in `src/ServiceBusExplorer.Api.Tests/MessageRouteTests.cs:51`; the session routes since 2026-11-13, `src/ServiceBusExplorer.Api.Tests/SessionRouteTests.cs:79`), `ConnectionGroupsController`, `MonitoringController`, the monitoring service, port resolution, the loopback binding.
-- **Electron shell:** `main.js` and `preload.js`. The pure helpers in `web-app/electron/shell-helpers.js` are tested with `node:test`; the wiring around them (dialogs, window order, quit, IPC handlers) needs Electron and has no test.
+- **Electron shell:** `main.js`. The pure helpers in `web-app/electron/shell-helpers.js` are tested with `node:test`, and what `preload.js` exposes is tested against a fake `electron` module (`web-app/electron/preload.test.js:30`); the wiring around them (dialogs, window order, quit, IPC handlers) needs Electron and has no test.
 
 A refactor of any of these starts with pinning tests (the refactor lane, step 3).
 

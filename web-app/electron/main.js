@@ -1,10 +1,10 @@
-const { app, BrowserWindow, shell, Menu, Tray, nativeImage, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, shell, Menu, Tray, nativeImage, nativeTheme, ipcMain, dialog } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const { autoUpdater } = require('electron-updater');
 const crypto = require('crypto');
 const Store = require('electron-store');
-const { isSafeExternalUrl, normalizeUpdateChannel, applyUpdateChannel, waitForHealth, stopProcess } = require('./shell-helpers');
+const { isSafeExternalUrl, normalizeUpdateChannel, applyUpdateChannel, waitForHealth, stopProcess, applicationMenuTemplate, mainWindowOptions, shellShortcut } = require('./shell-helpers');
 
 // Generate a per-session API secret for Electron <-> .NET API authentication
 const API_SECRET = crypto.randomBytes(32).toString('hex');
@@ -91,116 +91,6 @@ if (!gotTheLock) {
       }
     }
   });
-}
-
-// Create native menu
-function createMenu() {
-  const template = [
-    {
-      label: 'File',
-      submenu: [
-        {
-          label: 'Connection',
-          accelerator: 'CmdOrCtrl+N',
-          click: () => {
-            showAndFocusWindow();
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              mainWindow.webContents.send('navigate', '/connections');
-            }
-          }
-        },
-        { type: 'separator' },
-        {
-          label: 'Clear All Data (Testing)',
-          accelerator: 'CmdOrCtrl+Shift+Delete',
-          click: () => {
-            console.log('[Menu] Clear All Data clicked');
-            showAndFocusWindow();
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              console.log('[Menu] Sending clear-all-data message to renderer');
-              mainWindow.webContents.send('clear-all-data');
-            }
-          }
-        },
-        { type: 'separator' },
-        {
-          label: 'Exit',
-          accelerator: process.platform === 'darwin' ? 'Cmd+Q' : 'Alt+F4',
-          click: () => {
-            app.quit();
-          }
-        }
-      ]
-    },
-    {
-      label: 'View',
-      submenu: [
-        ...(isDev ? [{
-          label: 'Toggle Developer Tools',
-          accelerator: 'F12',
-          click: () => {
-            mainWindow.webContents.toggleDevTools();
-          }
-        },
-        { type: 'separator' }] : []),
-        {
-          label: 'Developer Mode',
-          accelerator: 'CmdOrCtrl+Shift+D',
-          click: () => {
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              mainWindow.webContents.send('toggle-dev-mode');
-            }
-          }
-        },
-        { type: 'separator' },
-        {
-          label: 'Toggle Full Screen',
-          accelerator: 'F11',
-          click: () => {
-            mainWindow.setFullScreen(!mainWindow.isFullScreen());
-          }
-        }
-      ]
-    },
-    {
-      label: 'Help',
-      submenu: [
-        {
-          label: 'About Messaging Explorer',
-          click: () => {
-            const { dialog } = require('electron');
-            dialog.showMessageBox(mainWindow, {
-              type: 'info',
-              title: 'About',
-              message: 'Messaging Explorer',
-              detail: `Version ${app.getVersion()}\n\nA universal multi-platform messaging management tool.\n\nBuilt with Angular + Electron + .NET`
-            });
-          }
-        },
-      ]
-    }
-  ];
-
-  // macOS specific menu
-  if (process.platform === 'darwin') {
-    template.unshift({
-      label: app.getName(),
-      submenu: [
-        { role: 'about' },
-        { type: 'separator' },
-        { role: 'services' },
-        { type: 'separator' },
-        { role: 'hide' },
-        { role: 'hideOthers' },
-        { role: 'unhide' },
-        { type: 'separator' },
-        { role: 'quit' }
-      ]
-    });
-  }
-
-  const menu = Menu.buildFromTemplate(template);
-  Menu.setApplicationMenu(menu);
 }
 
 // Get the correct assets path for both dev and packaged modes
@@ -592,56 +482,23 @@ function createSplashScreen() {
   }
 }
 
-// Get platform-specific window configuration options
-function getPlatformWindowOptions() {
-  switch (process.platform) {
-    case 'darwin':
-      // macOS - Hidden inset title bar with vibrancy effects
-      return {
-        titleBarStyle: 'hiddenInset',
-        vibrancy: 'sidebar',
-        trafficLightPosition: { x: 15, y: 15 }
-      };
-    case 'linux':
-      // Linux - Use native frame decorations (compositor handles rounded corners)
-      return {
-        frame: true
-      };
-    case 'win32':
-    default:
-      // Windows - Native frame (Windows 11 auto-applies rounded corners)
-      return {
-        frame: true
-      };
-  }
-}
-
 function createWindow() {
-  // Build base window options
-  const baseOptions = {
-    width: 1400,
-    height: 900,
-    minWidth: 1000,
-    minHeight: 700,
-    show: false, // Don't show until ready
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      sandbox: true,
-      preload: path.join(__dirname, 'preload.js')
-    },
+  mainWindow = new BrowserWindow(mainWindowOptions({
+    preload: path.join(__dirname, 'preload.js'),
     icon: path.join(getAssetsPath(), 'icon.png'),
-    title: 'Messaging Explorer',
-    backgroundColor: '#4A90E2'
-  };
+    prefersDark: nativeTheme.shouldUseDarkColors
+  }));
 
-  // Merge with platform-specific options
-  const windowOptions = {
-    ...baseOptions,
-    ...getPlatformWindowOptions()
-  };
-
-  mainWindow = new BrowserWindow(windowOptions);
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    const action = shellShortcut(input, { platform: process.platform, isDev });
+    if (!action) return;
+    event.preventDefault();
+    if (action === 'toggleFullScreen') {
+      mainWindow.setFullScreen(!mainWindow.isFullScreen());
+    } else {
+      mainWindow.webContents.toggleDevTools();
+    }
+  });
 
   // Content Security Policy
   const { session } = require('electron');
@@ -660,9 +517,6 @@ function createWindow() {
       }
     });
   });
-
-  // Create native menu
-  createMenu();
 
   if (isDev) {
     mainWindow.loadURL(`http://localhost:${frontendPort}`);
@@ -936,6 +790,8 @@ async function openWindowWhenApiReady(startFailure) {
 }
 
 app.whenReady().then(() => {
+  const menuTemplate = applicationMenuTemplate(process.platform);
+  Menu.setApplicationMenu(menuTemplate && Menu.buildFromTemplate(menuTemplate));
   createSplashScreen();
   const startFailure = startApi();
   createTray();
