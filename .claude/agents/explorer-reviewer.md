@@ -77,6 +77,13 @@ When the dispatch carries an inventory of an artboard, open the artboard file un
 with no spec or screenshot that shows it is P1. Something the artboard draws that the inventory
 leaves out is P1.
 
+## Refute one finding
+
+When the prompt starts with "Refute one finding", skip the order of work above. Read the cited
+file in the tree the prompt names, around the cited line, and the page or rule the finding cites.
+Answer `located` (the line holds what the finding describes), `refuted` and `reason`. A finding
+you could not locate is `located: false`, never refuted.
+
 ## Report
 
 Three sections, in this order, with nothing before them.
