@@ -162,6 +162,7 @@ Each item lists what exists, what to build by layer, the SDK members, and its co
 - **Copy the body.** The copy action exists in a component no template uses (`web-app/src/app/shared/components/message-body-editor/message-body-editor.component.ts#onViewModeChange`); add it to the detail pane, which also omits session id, subject, to, reply to, scheduled time and expiry (`web-app/src/app/features/messages/view-messages-dialog.component.ts#@if (selectedMessage) {`).
 - **Filter the tree by name.** Client side over the loaded tree (`web-app/src/app/features/entities/entities-tree.component.ts#<div class="tree-container">`). A server-side filter comes only if a namespace is too large to list; the list calls take no parameter today (`src/ServiceBusExplorer.Core/Abstractions/IMessagingProvider.cs#IMessagingProvider`).
 - **Dates on the queue panel.** Created, updated and accessed are already returned (`src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs#MapToQueueInfo`) and shown for topics and subscriptions only.
+- **Sort the message list.** The list is a virtual scroll of cards (`web-app/src/app/features/messages/view-messages-dialog.component.ts#<cdk-virtual-scroll-viewport itemSize="64" class="messages-list">`); sorting loaded messages by sequence, time, delivery count or size is client side once F5 lands.
 
 ### 12. Sovereign clouds
 

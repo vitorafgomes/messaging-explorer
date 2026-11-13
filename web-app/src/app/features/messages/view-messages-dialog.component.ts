@@ -7,6 +7,12 @@ import { Observable, Subject, finalize } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatButtonModule } from '@angular/material/button';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatIconModule } from '@angular/material/icon';
+import { MatInputModule } from '@angular/material/input';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { QueueService, TopicService, ConnectionService, MessageSearchService, AdvancedMessageFilterService, BulkOperationsService, MessageExportService, isPossibleDuplicate } from '../../core/services';
 import { MessageInfo, AdvancedFilterState, FilterLogic, SubQueue, BatchOperationResult } from '../../core/models';
 import { HighlightPipe } from '../../shared/pipes';
@@ -50,97 +56,87 @@ const MAX_CANCEL_SCHEDULED = 500;
     ScrollingModule,
     MatDialogModule,
     MatSnackBarModule,
+    MatButtonModule,
+    MatFormFieldModule,
+    MatIconModule,
+    MatInputModule,
+    MatProgressSpinnerModule,
+    MatTooltipModule,
     HighlightPipe,
     AdvancedFilterPanelComponent,
     BulkActionsToolbarComponent
   ],
   template: `
-    <div class="modal-header">
-      <h5 class="modal-title d-flex align-items-center gap-2">
-        <i class="fa fa-envelope text-primary"></i>
-        Messages: {{ data.entityName }}
-      </h5>
-    </div>
+    <h2 mat-dialog-title class="title">Messages: {{ data.entityName }}</h2>
 
-    <div class="modal-body">
-      <ul class="nav nav-tabs mb-3" role="tablist">
-        <li class="nav-item" role="presentation">
-          <button class="nav-link" [class.active]="selectedTabIndex === 0" (click)="setTab(0)" type="button">
-            <i class="fa fa-inbox me-2"></i>
-            Active Messages
-            <span class="badge bg-primary ms-2">{{ activeMessageCount() ?? activeMessages.length }}</span>
-          </button>
-        </li>
+    <div class="body">
+      <nav class="sub-queues" [attr.aria-label]="'Sub-queues of ' + data.entityName">
+        <button mat-button type="button" class="sub-queue-tab" [class.current]="selectedTabIndex === 0" [attr.aria-current]="selectedTabIndex === 0 ? 'true' : null" (click)="setTab(0)">
+          Active Messages
+          <span class="count">{{ activeMessageCount() ?? activeMessages.length }}</span>
+        </button>
         @if (capabilities()?.supportsDeadLetterQueue !== false) {
-          <li class="nav-item" role="presentation">
-            <button class="nav-link" [class.active]="selectedTabIndex === 1" (click)="setTab(1)" type="button">
-              <i class="fa fa-exclamation-triangle me-2"></i>
-              Dead Letter
-              <span class="badge bg-danger ms-2">{{ deadLetterMessageCount() ?? deadLetterMessages.length }}</span>
-            </button>
-          </li>
+          <button mat-button type="button" class="sub-queue-tab" [class.current]="selectedTabIndex === 1" [attr.aria-current]="selectedTabIndex === 1 ? 'true' : null" (click)="setTab(1)">
+            Dead Letter
+            <span class="count dead-letter">{{ deadLetterMessageCount() ?? deadLetterMessages.length }}</span>
+          </button>
         }
         @if (capabilities()?.supportsTransferDeadLetter === true) {
-          <li class="nav-item" role="presentation">
-            <button class="nav-link" [class.active]="selectedTabIndex === 2" (click)="setTab(2)" type="button">
-              Transfer dead-letter
-              <span class="badge bg-secondary ms-2">{{ transferDeadLetterMessageCount() ?? transferMessages.length }}</span>
-            </button>
-          </li>
+          <button mat-button type="button" class="sub-queue-tab" [class.current]="selectedTabIndex === 2" [attr.aria-current]="selectedTabIndex === 2 ? 'true' : null" (click)="setTab(2)">
+            Transfer dead-letter
+            <span class="count">{{ transferDeadLetterMessageCount() ?? transferMessages.length }}</span>
+          </button>
         }
-      </ul>
+      </nav>
 
+      <div class="panes">
       @if (selectedTabIndex === 0) {
         <div class="tab-pane-content">
           <div class="toolbar">
-            <div class="count-field">
-              <label class="form-label">Count</label>
-              <input class="form-control" type="number" [(ngModel)]="peekCount" (ngModelChange)="onCountChange($event)" min="0">
-            </div>
+            <mat-form-field appearance="outline" subscriptSizing="dynamic" class="count-field">
+              <mat-label>Count</mat-label>
+              <input matInput type="number" [(ngModel)]="peekCount" (ngModelChange)="onCountChange($event)" min="0">
+            </mat-form-field>
             <div class="filter-field">
-              <label class="form-label">Quick search</label>
-              <div class="input-group" [class.has-error]="activeRegexError">
-                <span class="input-group-text"><i class="fa fa-search"></i></span>
-                <input class="form-control" [class.is-invalid]="activeRegexError" [(ngModel)]="activeFilterText" (ngModelChange)="onFilterChange()" placeholder="Search in any field...">
-                <button
-                  class="btn btn-outline-secondary regex-toggle"
-                  [class.active]="activeRegexMode"
-                  (click)="toggleActiveRegexMode()"
-                  title="Toggle regex search mode">
-                  <span class="regex-icon">.*</span>
-                </button>
+              <mat-form-field appearance="outline" subscriptSizing="dynamic" class="search" [class.invalid]="activeRegexError">
+                <mat-label>Quick search</mat-label>
+                <mat-icon matPrefix fontIcon="search" aria-hidden="true"></mat-icon>
+                <input matInput [(ngModel)]="activeFilterText" (ngModelChange)="onFilterChange()" placeholder="Search in any field...">
                 @if (activeFilterText) {
-                  <button class="btn btn-outline-secondary" (click)="clearActiveFilter()">
-                    <i class="fa fa-times"></i>
+                  <button matSuffix mat-icon-button type="button" (click)="clearActiveFilter()" aria-label="Clear the search" matTooltip="Clear the search">
+                    <mat-icon fontIcon="close" aria-hidden="true"></mat-icon>
                   </button>
                 }
-              </div>
-              @if (activeRegexError) {
-                <div class="regex-error">
-                  <i class="fa fa-exclamation-circle"></i>
-                  {{ activeRegexError }}
-                </div>
-              }
+              </mat-form-field>
+              <button mat-stroked-button type="button" class="regex-toggle" [class.on]="activeRegexMode" [attr.aria-pressed]="activeRegexMode" (click)="toggleActiveRegexMode()" title="Toggle regex search mode">
+                @if (activeRegexMode) { <mat-icon fontIcon="check" aria-hidden="true"></mat-icon> }
+                Regex
+              </button>
             </div>
             @if (capabilities()?.supportsScheduledMessages !== false) {
               <div class="state-field">
-                <label class="form-label" for="activeStateFilter">Show</label>
-                <select id="activeStateFilter" class="form-select" [ngModel]="activeStateFilter" (ngModelChange)="setStateFilter($event)">
-                  <option value="All">All</option>
-                  <option value="Scheduled">Scheduled</option>
-                </select>
+                <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                  <mat-label>Show</mat-label>
+                  <select matNativeControl id="activeStateFilter" [ngModel]="activeStateFilter" (ngModelChange)="setStateFilter($event)">
+                    <option value="All">All</option>
+                    <option value="Scheduled">Scheduled</option>
+                  </select>
+                </mat-form-field>
                 <span class="state-count">{{ scheduledLoadedCount() }} scheduled of {{ activeMessages.length }} loaded</span>
               </div>
             }
-            <div class="refresh-button-container">
-              <button class="btn btn-outline-primary" (click)="loadActiveMessages()" [disabled]="loadingActive()">
-                <i class="fa-solid fa-arrows-rotate me-2"></i>
-                Refresh
-              </button>
-            </div>
+            <button mat-stroked-button type="button" class="refresh" (click)="loadActiveMessages()" [disabled]="loadingActive()">
+              <mat-icon fontIcon="refresh" aria-hidden="true"></mat-icon>
+              Refresh
+            </button>
           </div>
+          @if (activeRegexError) {
+            <p class="regex-error" role="alert">
+              <mat-icon fontIcon="error" aria-hidden="true"></mat-icon>
+              {{ activeRegexError }}
+            </p>
+          }
 
-          <!-- Advanced Filter Panel -->
           <div class="advanced-filter-wrapper">
             <app-advanced-filter-panel
               [filterState]="activeAdvancedFilterState"
@@ -154,116 +150,104 @@ const MAX_CANCEL_SCHEDULED = 500;
           @if (activeFilterText || activeAdvancedFilterState.conditions.length > 0) {
             <div class="filter-info">
               <span class="filter-summary">{{ getActiveFilterSummary() }}</span>
-              <button class="clear-link" (click)="clearAllActiveFilters()">
-                <i class="fa fa-times-circle me-1"></i>Clear all
-              </button>
+              <button mat-button type="button" (click)="clearAllActiveFilters()">Clear all</button>
             </div>
           }
 
+          <div class="list-pane">
           @if (loadingActive()) {
-            <div class="loading">
-              <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Loading...</span>
-              </div>
+            <div class="list-state" role="status">
+              <mat-progress-spinner mode="indeterminate" diameter="24" aria-hidden="true"></mat-progress-spinner>
+              <span>Loading the active messages of {{ data.entityName }}</span>
             </div>
           } @else if (activeMessages.length === 0) {
-            <div class="text-center py-5">
-              <i class="fa fa-check-circle fa-4x text-secondary mb-3"></i>
-              <p class="mb-0">No active messages</p>
+            <div class="list-state">
+              <mat-icon fontIcon="check_circle" aria-hidden="true"></mat-icon>
+              <p class="state-title">No active messages</p>
             </div>
           } @else if (filteredActiveMessages.length === 0) {
-            <div class="text-center py-5">
-              <i class="fa fa-search fa-4x text-secondary mb-3"></i>
-              <p class="mb-0">No messages match your filter</p>
+            <div class="list-state">
+              <mat-icon fontIcon="search_off" aria-hidden="true"></mat-icon>
+              <p class="state-title">No messages match your filter</p>
             </div>
           } @else {
             <div class="select-all-row">
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="selectAllActive"
+              <label class="check-label">
+                <input type="checkbox" id="selectAllActive"
                   [checked]="isAllActiveSelected()"
                   [indeterminate]="isActiveIndeterminate()"
                   (change)="toggleAllActive($any($event.target).checked)">
-                <label class="form-check-label" for="selectAllActive">
-                  Select All ({{ filteredActiveMessages.length }})
-                </label>
-              </div>
+                Select All ({{ filteredActiveMessages.length }})
+              </label>
             </div>
-            <cdk-virtual-scroll-viewport itemSize="80" class="messages-list">
+            <cdk-virtual-scroll-viewport itemSize="64" class="messages-list">
               @for (msg of filteredActiveMessages; track msg.sequenceNumber) {
                 <div class="message-card" (click)="selectMessage(msg)" [class.selected]="selectedMessage === msg">
-                  <div class="message-row">
-                    <div class="form-check">
-                      <input class="form-check-input" type="checkbox" [id]="'activeMsg-' + msg.sequenceNumber"
-                        [checked]="isActiveMessageSelected(msg.sequenceNumber)"
-                        (change)="toggleActiveSelection(msg, $any($event.target).checked)"
-                        (click)="$event.stopPropagation()">
+                  <input type="checkbox" [id]="'activeMsg-' + msg.sequenceNumber"
+                    [attr.aria-label]="'Select ' + msg.sequenceNumber"
+                    [checked]="isActiveMessageSelected(msg.sequenceNumber)"
+                    (change)="toggleActiveSelection(msg, $any($event.target).checked)"
+                    (click)="$event.stopPropagation()">
+                  <div class="message-content">
+                    <div class="message-header">
+                      <span class="seq">#{{ msg.sequenceNumber }}</span>
+                      <span class="id">{{ msg.messageId }}</span>
+                      @if (msg.state === 'Scheduled' || msg.state === 'Deferred') {
+                        <span class="state-chip">{{ msg.state }}</span>
+                      }
+                      <span class="time">{{ msg.enqueuedTime | date:'short' }}</span>
                     </div>
-                    <div class="message-content">
-                      <div class="message-header">
-                        <span class="seq">#{{ msg.sequenceNumber }}</span>
-                        <span class="id">{{ msg.messageId }}</span>
-                        @if (msg.state === 'Scheduled' || msg.state === 'Deferred') {
-                          <span class="state-chip">{{ msg.state }}</span>
-                        }
-                        <span class="time">{{ msg.enqueuedTime | date:'short' }}</span>
-                      </div>
-                      <div class="message-preview" [innerHTML]="getTruncatedBody(msg.body) | highlight:activeFilterText:{ mode: activeRegexMode ? 'regex' : 'text', caseSensitive: false }"></div>
-                    </div>
+                    <div class="message-preview" [innerHTML]="getTruncatedBody(msg.body) | highlight:activeFilterText:{ mode: activeRegexMode ? 'regex' : 'text', caseSensitive: false }"></div>
                   </div>
                 </div>
               }
             </cdk-virtual-scroll-viewport>
           }
+          </div>
         </div>
       }
 
       @if (selectedTabIndex === 1) {
         <div class="tab-pane-content">
           @if (data.entityType === 'subscription') {
-            <div class="filter-warning">
-              <i class="fa fa-info-circle"></i>
+            <p class="filter-warning" role="note">
+              <mat-icon fontIcon="info" aria-hidden="true"></mat-icon>
               <span>Resubmitted messages will be sent to the topic and will pass through all subscription filters. If this subscription has filters configured, the message may not return to it.</span>
-            </div>
+            </p>
           }
           <div class="toolbar">
-            <div class="count-field">
-              <label class="form-label">Count</label>
-              <input class="form-control" type="number" [(ngModel)]="peekCount" (ngModelChange)="onCountChange($event)" min="0">
-            </div>
+            <mat-form-field appearance="outline" subscriptSizing="dynamic" class="count-field">
+              <mat-label>Count</mat-label>
+              <input matInput type="number" [(ngModel)]="peekCount" (ngModelChange)="onCountChange($event)" min="0">
+            </mat-form-field>
             <div class="filter-field">
-              <label class="form-label">Quick search</label>
-              <div class="input-group" [class.has-error]="dlRegexError">
-                <span class="input-group-text"><i class="fa fa-search"></i></span>
-                <input class="form-control" [class.is-invalid]="dlRegexError" [(ngModel)]="dlFilterText" (ngModelChange)="onDLFilterChange()" placeholder="Search in any field...">
-                <button
-                  class="btn btn-outline-secondary regex-toggle"
-                  [class.active]="dlRegexMode"
-                  (click)="toggleDLRegexMode()"
-                  title="Toggle regex search mode">
-                  <span class="regex-icon">.*</span>
-                </button>
+              <mat-form-field appearance="outline" subscriptSizing="dynamic" class="search" [class.invalid]="dlRegexError">
+                <mat-label>Quick search</mat-label>
+                <mat-icon matPrefix fontIcon="search" aria-hidden="true"></mat-icon>
+                <input matInput [(ngModel)]="dlFilterText" (ngModelChange)="onDLFilterChange()" placeholder="Search in any field...">
                 @if (dlFilterText) {
-                  <button class="btn btn-outline-secondary" (click)="clearDLFilter()">
-                    <i class="fa fa-times"></i>
+                  <button matSuffix mat-icon-button type="button" (click)="clearDLFilter()" aria-label="Clear the search" matTooltip="Clear the search">
+                    <mat-icon fontIcon="close" aria-hidden="true"></mat-icon>
                   </button>
                 }
-              </div>
-              @if (dlRegexError) {
-                <div class="regex-error">
-                  <i class="fa fa-exclamation-circle"></i>
-                  {{ dlRegexError }}
-                </div>
-              }
-            </div>
-            <div class="refresh-button-container">
-              <button class="btn btn-outline-primary" (click)="loadDeadLetterMessages()" [disabled]="loadingDL()">
-                <i class="fa-solid fa-arrows-rotate me-2"></i>
-                Refresh
+              </mat-form-field>
+              <button mat-stroked-button type="button" class="regex-toggle" [class.on]="dlRegexMode" [attr.aria-pressed]="dlRegexMode" (click)="toggleDLRegexMode()" title="Toggle regex search mode">
+                @if (dlRegexMode) { <mat-icon fontIcon="check" aria-hidden="true"></mat-icon> }
+                Regex
               </button>
             </div>
+            <button mat-stroked-button type="button" class="refresh" (click)="loadDeadLetterMessages()" [disabled]="loadingDL()">
+              <mat-icon fontIcon="refresh" aria-hidden="true"></mat-icon>
+              Refresh
+            </button>
           </div>
+          @if (dlRegexError) {
+            <p class="regex-error" role="alert">
+              <mat-icon fontIcon="error" aria-hidden="true"></mat-icon>
+              {{ dlRegexError }}
+            </p>
+          }
 
-          <!-- Advanced Filter Panel -->
           <div class="advanced-filter-wrapper">
             <app-advanced-filter-panel
               [filterState]="dlAdvancedFilterState"
@@ -277,68 +261,62 @@ const MAX_CANCEL_SCHEDULED = 500;
           @if (dlFilterText || dlAdvancedFilterState.conditions.length > 0) {
             <div class="filter-info">
               <span class="filter-summary">{{ getDLFilterSummary() }}</span>
-              <button class="clear-link" (click)="clearAllDLFilters()">
-                <i class="fa fa-times-circle me-1"></i>Clear all
-              </button>
+              <button mat-button type="button" (click)="clearAllDLFilters()">Clear all</button>
             </div>
           }
 
-            @if (loadingDL()) {
-              <div class="text-center py-5">
-                <div class="spinner-border text-primary" role="status">
-                  <span class="visually-hidden">Loading...</span>
-                </div>
-              </div>
-            } @else if (deadLetterMessages.length === 0) {
-              <div class="text-center py-5">
-                <i class="fa fa-check-circle fa-4x text-secondary mb-3"></i>
-                <p class="mb-0">No dead letter messages</p>
-              </div>
-            } @else if (filteredDeadLetterMessages.length === 0) {
-              <div class="text-center py-5">
-                <i class="fa fa-search fa-4x text-secondary mb-3"></i>
-                <p class="mb-0">No messages match your filter</p>
-              </div>
-            } @else {
-              <div class="select-all-row">
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" id="selectAllDL"
-                    [checked]="isAllDeadLetterSelected()"
-                    [indeterminate]="isDeadLetterIndeterminate()"
-                    (change)="toggleAllDeadLetter($any($event.target).checked)">
-                  <label class="form-check-label" for="selectAllDL">
-                    Select All ({{ filteredDeadLetterMessages.length }})
-                  </label>
-                </div>
-              </div>
-              <cdk-virtual-scroll-viewport itemSize="80" class="messages-list">
-                @for (msg of filteredDeadLetterMessages; track msg.sequenceNumber) {
-                  <div class="message-card dead-letter" (click)="selectMessage(msg)" [class.selected]="selectedMessage === msg">
-                    <div class="message-row">
-                      <div class="form-check">
-                        <input class="form-check-input" type="checkbox" [id]="'dlMsg-' + msg.sequenceNumber"
-                          [checked]="isDeadLetterMessageSelected(msg.sequenceNumber)"
-                          (change)="toggleDeadLetterSelection(msg, $any($event.target).checked)"
-                          (click)="$event.stopPropagation()">
-                      </div>
-                      <div class="message-content">
-                        <div class="message-header">
-                          <span class="seq">#{{ msg.sequenceNumber }}</span>
-                          <span class="reason">{{ msg.deadLetterReason || 'Unknown' }}</span>
-                          @if (msg.state === 'Scheduled' || msg.state === 'Deferred') {
-                            <span class="state-chip">{{ msg.state }}</span>
-                          }
-                          <span class="time">{{ msg.enqueuedTime | date:'short' }}</span>
-                        </div>
-                        <div class="message-preview" [innerHTML]="getTruncatedBody(msg.body) | highlight:dlFilterText:{ mode: dlRegexMode ? 'regex' : 'text', caseSensitive: false }"></div>
-                      </div>
+          <div class="list-pane">
+          @if (loadingDL()) {
+            <div class="list-state" role="status">
+              <mat-progress-spinner mode="indeterminate" diameter="24" aria-hidden="true"></mat-progress-spinner>
+              <span>Loading the dead-letter messages of {{ data.entityName }}</span>
+            </div>
+          } @else if (deadLetterMessages.length === 0) {
+            <div class="list-state">
+              <mat-icon fontIcon="check_circle" aria-hidden="true"></mat-icon>
+              <p class="state-title">No dead letter messages</p>
+            </div>
+          } @else if (filteredDeadLetterMessages.length === 0) {
+            <div class="list-state">
+              <mat-icon fontIcon="search_off" aria-hidden="true"></mat-icon>
+              <p class="state-title">No messages match your filter</p>
+            </div>
+          } @else {
+            <div class="select-all-row">
+              <label class="check-label">
+                <input type="checkbox" id="selectAllDL"
+                  [checked]="isAllDeadLetterSelected()"
+                  [indeterminate]="isDeadLetterIndeterminate()"
+                  (change)="toggleAllDeadLetter($any($event.target).checked)">
+                Select All ({{ filteredDeadLetterMessages.length }})
+              </label>
+            </div>
+            <cdk-virtual-scroll-viewport itemSize="64" class="messages-list">
+              @for (msg of filteredDeadLetterMessages; track msg.sequenceNumber) {
+                <div class="message-card dead-letter" (click)="selectMessage(msg)" [class.selected]="selectedMessage === msg">
+                  <input type="checkbox" [id]="'dlMsg-' + msg.sequenceNumber"
+                    [attr.aria-label]="'Select ' + msg.sequenceNumber"
+                    [checked]="isDeadLetterMessageSelected(msg.sequenceNumber)"
+                    (change)="toggleDeadLetterSelection(msg, $any($event.target).checked)"
+                    (click)="$event.stopPropagation()">
+                  <div class="message-content">
+                    <div class="message-header">
+                      <span class="seq">#{{ msg.sequenceNumber }}</span>
+                      <span class="reason">{{ msg.deadLetterReason || 'Unknown' }}</span>
+                      @if (msg.state === 'Scheduled' || msg.state === 'Deferred') {
+                        <span class="state-chip">{{ msg.state }}</span>
+                      }
+                      <span class="time">{{ msg.enqueuedTime | date:'short' }}</span>
                     </div>
+                    <div class="message-preview" [innerHTML]="getTruncatedBody(msg.body) | highlight:dlFilterText:{ mode: dlRegexMode ? 'regex' : 'text', caseSensitive: false }"></div>
                   </div>
-                }
-              </cdk-virtual-scroll-viewport>
-            }
+                </div>
+              }
+            </cdk-virtual-scroll-viewport>
+          }
           </div>
-        }
+        </div>
+      }
 
       @if (selectedTabIndex === 2) {
         <div class="tab-pane-content">
@@ -347,196 +325,202 @@ const MAX_CANCEL_SCHEDULED = 500;
             They can be resubmitted to the {{ data.entityType === 'queue' ? 'queue' : 'topic' }} or deleted.
           </p>
           @if (data.entityType === 'subscription') {
-            <div class="filter-warning">
+            <p class="filter-warning" role="note">
+              <mat-icon fontIcon="info" aria-hidden="true"></mat-icon>
               <span>Resubmitted messages will be sent to the topic and will pass through all subscription filters. If this subscription has filters configured, the message may not return to it.</span>
-            </div>
+            </p>
           }
           <div class="toolbar">
-            <div class="count-field">
-              <label class="form-label" for="tdlCount">Count</label>
-              <input id="tdlCount" class="form-control" type="number" [(ngModel)]="peekCount" (ngModelChange)="onCountChange($event)" min="0">
-            </div>
+            <mat-form-field appearance="outline" subscriptSizing="dynamic" class="count-field">
+              <mat-label>Count</mat-label>
+              <input matInput id="tdlCount" type="number" [(ngModel)]="peekCount" (ngModelChange)="onCountChange($event)" min="0">
+            </mat-form-field>
             <div class="filter-field">
-              <label class="form-label" for="tdlSearch">Quick search</label>
-              <div class="input-group" [class.has-error]="tdlRegexError">
-                <input id="tdlSearch" class="form-control" [class.is-invalid]="tdlRegexError" [(ngModel)]="tdlFilterText" (ngModelChange)="applyTDLFilter()" placeholder="Search in any field...">
-                <button
-                  class="btn btn-outline-secondary regex-toggle"
-                  [class.active]="tdlRegexMode"
-                  [attr.aria-pressed]="tdlRegexMode"
-                  aria-label="Regular expression"
-                  (click)="toggleTDLRegexMode()"
-                  title="Toggle regex search mode">
-                  <span class="regex-icon" aria-hidden="true">.*</span>
-                </button>
+              <mat-form-field appearance="outline" subscriptSizing="dynamic" class="search" [class.invalid]="tdlRegexError">
+                <mat-label>Quick search</mat-label>
+                <mat-icon matPrefix fontIcon="search" aria-hidden="true"></mat-icon>
+                <input matInput id="tdlSearch" [(ngModel)]="tdlFilterText" (ngModelChange)="applyTDLFilter()" placeholder="Search in any field...">
                 @if (tdlFilterText) {
-                  <button class="btn btn-outline-secondary" (click)="clearTDLFilter()">Clear</button>
+                  <button matSuffix mat-icon-button type="button" (click)="clearTDLFilter()" aria-label="Clear the search" matTooltip="Clear the search">
+                    <mat-icon fontIcon="close" aria-hidden="true"></mat-icon>
+                  </button>
                 }
-              </div>
-              @if (tdlRegexError) {
-                <div class="regex-error" role="alert">{{ tdlRegexError }}</div>
-              }
+              </mat-form-field>
+              <button mat-stroked-button type="button" class="regex-toggle" [class.on]="tdlRegexMode" [attr.aria-pressed]="tdlRegexMode" (click)="toggleTDLRegexMode()" title="Toggle regex search mode">
+                @if (tdlRegexMode) { <mat-icon fontIcon="check" aria-hidden="true"></mat-icon> }
+                Regex
+              </button>
             </div>
-            <div class="refresh-button-container">
-              <button class="btn btn-outline-primary" (click)="loadTransferDeadLetterMessages()" [disabled]="loadingTDL()">Refresh</button>
-            </div>
+            <button mat-stroked-button type="button" class="refresh" (click)="loadTransferDeadLetterMessages()" [disabled]="loadingTDL()">
+              <mat-icon fontIcon="refresh" aria-hidden="true"></mat-icon>
+              Refresh
+            </button>
           </div>
+          @if (tdlRegexError) {
+            <p class="regex-error" role="alert">
+              <mat-icon fontIcon="error" aria-hidden="true"></mat-icon>
+              {{ tdlRegexError }}
+            </p>
+          }
 
+          <div class="list-pane">
           @if (loadingTDL()) {
-            <div class="text-center py-5">
-              <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Loading...</span>
-              </div>
+            <div class="list-state" role="status">
+              <mat-progress-spinner mode="indeterminate" diameter="24" aria-hidden="true"></mat-progress-spinner>
+              <span>Loading the transfer dead-letter messages of {{ data.entityName }}</span>
             </div>
           } @else if (transferMessages.length === 0) {
-            <div class="text-center py-5">
-              <p class="mb-0">No transfer dead-letter messages</p>
+            <div class="list-state">
+              <mat-icon fontIcon="check_circle" aria-hidden="true"></mat-icon>
+              <p class="state-title">No transfer dead-letter messages</p>
             </div>
           } @else if (filteredTransferMessages.length === 0) {
-            <div class="text-center py-5">
-              <p class="mb-0">No messages match your filter</p>
+            <div class="list-state">
+              <mat-icon fontIcon="search_off" aria-hidden="true"></mat-icon>
+              <p class="state-title">No messages match your filter</p>
             </div>
           } @else {
             <div class="select-all-row">
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="selectAllTDL"
+              <label class="check-label">
+                <input type="checkbox" id="selectAllTDL"
                   [checked]="isAllSelectedIn('transferdeadletter')"
                   [indeterminate]="bulkOperationsService.isIndeterminate('transferdeadletter')"
                   (change)="toggleAll('transferdeadletter', $any($event.target).checked)">
-                <label class="form-check-label" for="selectAllTDL">
-                  Select All ({{ filteredTransferMessages.length }})
-                </label>
-              </div>
+                Select All ({{ filteredTransferMessages.length }})
+              </label>
             </div>
-            <cdk-virtual-scroll-viewport itemSize="80" class="messages-list">
+            <cdk-virtual-scroll-viewport itemSize="64" class="messages-list">
               @for (msg of filteredTransferMessages; track msg.sequenceNumber) {
                 <div class="message-card dead-letter" (click)="selectMessage(msg)" [class.selected]="selectedMessage === msg">
-                  <div class="message-row">
-                    <div class="form-check">
-                      <input class="form-check-input" type="checkbox" [id]="'tdlMsg-' + msg.sequenceNumber"
-                        [attr.aria-label]="'Select ' + msg.sequenceNumber"
-                        [checked]="bulkOperationsService.isSelected('transferdeadletter', msg.sequenceNumber)"
-                        (change)="toggleSelection('transferdeadletter', msg, $any($event.target).checked)"
-                        (click)="$event.stopPropagation()">
+                  <input type="checkbox" [id]="'tdlMsg-' + msg.sequenceNumber"
+                    [attr.aria-label]="'Select ' + msg.sequenceNumber"
+                    [checked]="bulkOperationsService.isSelected('transferdeadletter', msg.sequenceNumber)"
+                    (change)="toggleSelection('transferdeadletter', msg, $any($event.target).checked)"
+                    (click)="$event.stopPropagation()">
+                  <div class="message-content">
+                    <div class="message-header">
+                      <span class="seq">#{{ msg.sequenceNumber }}</span>
+                      <span class="reason">{{ msg.deadLetterReason || 'Unknown' }}</span>
+                      @if (msg.state === 'Scheduled' || msg.state === 'Deferred') {
+                        <span class="state-chip">{{ msg.state }}</span>
+                      }
+                      <span class="time">{{ msg.enqueuedTime | date:'short' }}</span>
                     </div>
-                    <div class="message-content">
-                      <div class="message-header">
-                        <span class="seq">#{{ msg.sequenceNumber }}</span>
-                        <span class="reason">{{ msg.deadLetterReason || 'Unknown' }}</span>
-                        @if (msg.state === 'Scheduled' || msg.state === 'Deferred') {
-                          <span class="state-chip">{{ msg.state }}</span>
-                        }
-                        <span class="time">{{ msg.enqueuedTime | date:'short' }}</span>
-                      </div>
-                      <div class="message-preview" [innerHTML]="getTruncatedBody(msg.body) | highlight:tdlFilterText:{ mode: tdlRegexMode ? 'regex' : 'text', caseSensitive: false }"></div>
-                    </div>
+                    <div class="message-preview" [innerHTML]="getTruncatedBody(msg.body) | highlight:tdlFilterText:{ mode: tdlRegexMode ? 'regex' : 'text', caseSensitive: false }"></div>
                   </div>
                 </div>
               }
             </cdk-virtual-scroll-viewport>
           }
+          </div>
         </div>
       }
 
       @if (selectedMessage) {
-        <div class="message-detail">
-          <h4 class="mb-3">Message Details</h4>
+        <section class="detail-pane message-detail" aria-label="Message details">
+          <h3 class="pane-title">Message Details</h3>
           <div class="detail-grid">
             <div class="detail-item">
-              <label class="text-muted small">Message ID</label>
-              <span class="fw-medium">{{ selectedMessage.messageId }}</span>
+              <label>Message ID</label>
+              <span>{{ selectedMessage.messageId }}</span>
             </div>
             <div class="detail-item">
-              <label class="text-muted small">Sequence Number</label>
-              <span class="fw-medium">{{ selectedMessage.sequenceNumber }}</span>
+              <label>Sequence Number</label>
+              <span>{{ selectedMessage.sequenceNumber }}</span>
             </div>
             <div class="detail-item">
-              <label class="text-muted small">Correlation ID</label>
-              <span class="fw-medium">{{ selectedMessage.correlationId || '-' }}</span>
+              <label>Correlation ID</label>
+              <span>{{ selectedMessage.correlationId || '-' }}</span>
             </div>
             <div class="detail-item">
-              <label class="text-muted small">Content Type</label>
-              <span class="fw-medium">{{ selectedMessage.contentType || '-' }}</span>
+              <label>Content Type</label>
+              <span>{{ selectedMessage.contentType || '-' }}</span>
             </div>
             <div class="detail-item">
-              <label class="text-muted small">Enqueued Time</label>
-              <span class="fw-medium">{{ selectedMessage.enqueuedTime | date:'medium' }}</span>
+              <label>Enqueued Time</label>
+              <span>{{ selectedMessage.enqueuedTime | date:'medium' }}</span>
             </div>
             <div class="detail-item">
-              <label class="text-muted small">Delivery Count</label>
-              <span class="fw-medium">{{ selectedMessage.deliveryCount }}</span>
+              <label>Delivery Count</label>
+              <span>{{ selectedMessage.deliveryCount }}</span>
             </div>
             @if (selectedMessage.state && selectedMessage.state !== 'Active') {
               <div class="detail-item">
-                <label class="text-muted small">State</label>
-                <span class="fw-medium">{{ selectedMessage.state }}</span>
+                <label>State</label>
+                <span>{{ selectedMessage.state }}</span>
                 @if (selectedMessage.state === 'Deferred') {
                   <small class="state-note">This app cannot receive a deferred message.</small>
                 }
               </div>
             }
             <div class="detail-item">
-              <label class="text-muted small">Size</label>
-              <span class="fw-medium">{{ selectedMessage.sizeInBytes != null ? (selectedMessage.sizeInBytes | number) + ' bytes' : '-' }}</span>
+              <label>Size</label>
+              <span>{{ selectedMessage.sizeInBytes != null ? (selectedMessage.sizeInBytes | number) + ' bytes' : '-' }}</span>
             </div>
             <div class="detail-item">
-              <label class="text-muted small">Session ID</label>
-              <span class="fw-medium">{{ selectedMessage.sessionId || '-' }}</span>
+              <label>Session ID</label>
+              <span>{{ selectedMessage.sessionId || '-' }}</span>
             </div>
             <div class="detail-item">
-              <label class="text-muted small">Subject</label>
-              <span class="fw-medium">{{ selectedMessage.subject || '-' }}</span>
+              <label>Subject</label>
+              <span>{{ selectedMessage.subject || '-' }}</span>
             </div>
             <div class="detail-item">
-              <label class="text-muted small">To</label>
-              <span class="fw-medium">{{ selectedMessage.to || '-' }}</span>
+              <label>To</label>
+              <span>{{ selectedMessage.to || '-' }}</span>
             </div>
             <div class="detail-item">
-              <label class="text-muted small">Reply To</label>
-              <span class="fw-medium">{{ selectedMessage.replyTo || '-' }}</span>
+              <label>Reply To</label>
+              <span>{{ selectedMessage.replyTo || '-' }}</span>
             </div>
             <div class="detail-item">
-              <label class="text-muted small">Scheduled Time</label>
-              <span class="fw-medium">{{ isDateSet(selectedMessage.scheduledEnqueueTime) ? (selectedMessage.scheduledEnqueueTime | date:'medium') : '-' }}</span>
+              <label>Scheduled Time</label>
+              <span>{{ isDateSet(selectedMessage.scheduledEnqueueTime) ? (selectedMessage.scheduledEnqueueTime | date:'medium') : '-' }}</span>
             </div>
             <div class="detail-item">
-              <label class="text-muted small">Expires At</label>
-              <span class="fw-medium">{{ isDateSet(selectedMessage.expiresAt) ? (selectedMessage.expiresAt | date:'medium') : '-' }}</span>
+              <label>Expires At</label>
+              <span>{{ isDateSet(selectedMessage.expiresAt) ? (selectedMessage.expiresAt | date:'medium') : '-' }}</span>
             </div>
           </div>
 
-          <h4 class="mb-3 mt-4">Body</h4>
+          <h4 class="section-title">Body</h4>
           <pre class="body-content" [innerHTML]="formatBody(selectedMessage.body) | highlight:getActiveFilterText():{ mode: getActiveRegexMode() ? 'regex' : 'text', caseSensitive: false }"></pre>
 
           @if (selectedMessage.applicationProperties && hasProperties(selectedMessage.applicationProperties)) {
-            <h4 class="mb-3 mt-4">Application Properties</h4>
-            <div class="properties">
+            <h4 class="section-title">Application Properties</h4>
+            <dl class="properties">
               @for (prop of getProperties(selectedMessage.applicationProperties); track prop.key) {
                 <div class="property">
-                  <span class="key">{{ prop.key }}:</span>
-                  <span class="value" [innerHTML]="prop.value | highlight:getActiveFilterText():{ mode: getActiveRegexMode() ? 'regex' : 'text', caseSensitive: false }"></span>
+                  <dt class="key">{{ prop.key }}:</dt>
+                  <dd class="value" [innerHTML]="prop.value | highlight:getActiveFilterText():{ mode: getActiveRegexMode() ? 'regex' : 'text', caseSensitive: false }"></dd>
                 </div>
               }
-            </div>
+            </dl>
           }
 
           @if (subQueue === 'deadletter') {
-            <div class="message-actions mt-4">
-              <button class="btn btn-outline-warning" (click)="editAndResubmit(selectedMessage)">
-                <i class="fa fa-pencil me-2"></i>
+            <div class="message-actions">
+              <button mat-stroked-button type="button" (click)="editAndResubmit(selectedMessage)">
+                <mat-icon fontIcon="edit" aria-hidden="true"></mat-icon>
                 Edit & Resubmit
               </button>
-              <button class="btn btn-outline-success" (click)="resubmit(selectedMessage)">
-                <i class="fa fa-rotate-right me-2"></i>
+              <button mat-flat-button type="button" class="tonal" (click)="resubmit(selectedMessage)">
+                <mat-icon fontIcon="replay" aria-hidden="true"></mat-icon>
                 Resubmit
               </button>
             </div>
           }
+        </section>
+      } @else if (shownOf(subQueue).length > 0) {
+        <div class="detail-pane detail-empty">
+          <mat-icon fontIcon="visibility" aria-hidden="true"></mat-icon>
+          <p class="state-title">Select a message to see its details</p>
+          <p>Click a row to read its properties and body. Tick rows to act on several at once.</p>
         </div>
       }
+      </div>
     </div>
 
-    <!-- Bulk Actions Toolbar -->
     <app-bulk-actions-toolbar
       [selectedCount]="getSelectedCount()"
       [detail]="getSelectionSummary()"
@@ -550,436 +534,7 @@ const MAX_CANCEL_SCHEDULED = 500;
       (clearSelection)="onClearSelection()">
     </app-bulk-actions-toolbar>
   `,
-  styles: [`
-    .modal-header {
-      border-bottom: 1px solid var(--bs-border-color);
-      padding: 16px 24px;
-    }
-
-    .modal-title {
-      margin: 0;
-      font-size: 18px;
-      font-weight: 500;
-      color: var(--bs-body-color);
-
-      i {
-        font-size: 20px;
-      }
-    }
-
-    .modal-body {
-      padding: 24px;
-      min-width: 800px;
-      min-height: 500px;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .tab-content {
-      padding: 16px 0;
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .tab-pane-content {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .state-field {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    .state-count,
-    .state-note {
-      font: var(--mat-sys-body-small);
-      color: var(--mat-sys-on-surface-variant);
-    }
-
-    .state-chip {
-      padding: 0 8px;
-      border: 1px solid var(--mat-sys-outline);
-      border-radius: 8px;
-      font: var(--mat-sys-label-small);
-      color: var(--mat-sys-on-surface);
-    }
-
-    .sub-queue-note {
-      margin: 0 0 12px;
-      color: var(--mat-sys-on-surface-variant);
-    }
-
-    .filter-warning {
-      display: flex;
-      align-items: flex-start;
-      gap: 12px;
-      padding: 12px 16px;
-      background: var(--bs-warning-bg-subtle);
-      border-left: 4px solid var(--bs-warning);
-      border-radius: 4px;
-      margin-bottom: 16px;
-      font-size: 13px;
-      line-height: 1.5;
-
-      i {
-        color: var(--bs-warning);
-        font-size: 20px;
-        margin-top: 2px;
-      }
-
-      span {
-        flex: 1;
-        color: var(--bs-warning-text-emphasis);
-      }
-    }
-
-    .toolbar {
-      display: flex;
-      gap: 12px;
-      align-items: flex-end;
-      margin-bottom: 16px;
-      flex-wrap: wrap;
-    }
-
-    .advanced-filter-wrapper {
-      margin-bottom: 16px;
-    }
-
-    .count-field,
-    .filter-property-field,
-    .filter-field,
-    .refresh-button-container,
-    .resubmit-button-container {
-      label {
-        display: block;
-        font-size: 13px;
-        margin-bottom: 4px;
-        color: var(--bs-secondary-color);
-      }
-    }
-
-    .count-field {
-      width: 100px;
-    }
-
-    .filter-field {
-      flex: 1;
-      min-width: 200px;
-
-      .input-group.has-error {
-        .form-control.is-invalid {
-          border-color: var(--bs-danger);
-          border-right: none;
-
-          &:focus {
-            border-color: var(--bs-danger);
-            box-shadow: 0 0 0 0.25rem rgba(var(--bs-danger-rgb), 0.25);
-          }
-        }
-
-        .input-group-text {
-          border-color: var(--bs-danger);
-        }
-
-        .btn-outline-secondary {
-          border-color: var(--bs-danger);
-        }
-      }
-    }
-
-    .regex-error {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin-top: 6px;
-      padding: 6px 10px;
-      background: var(--bs-danger-bg-subtle);
-      border-left: 3px solid var(--bs-danger);
-      border-radius: 4px;
-      font-size: 12px;
-      color: var(--bs-danger-text-emphasis);
-
-      i {
-        color: var(--bs-danger);
-        font-size: 14px;
-      }
-    }
-
-    .filter-property-field {
-      width: 180px;
-    }
-
-    .regex-toggle {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: monospace;
-      font-weight: 600;
-      font-size: 14px;
-      min-width: 48px;
-      transition: all 0.2s;
-
-      &:hover {
-        background: var(--bs-secondary-bg);
-      }
-
-      &.active {
-        background: var(--bs-primary);
-        color: var(--bs-white);
-        border-color: var(--bs-primary);
-
-        &:hover {
-          background: var(--bs-primary-text-emphasis);
-          border-color: var(--bs-primary-text-emphasis);
-        }
-      }
-
-      .regex-icon {
-        display: inline-block;
-        line-height: 1;
-      }
-    }
-
-    .filter-info {
-      padding: 8px 12px;
-      background: var(--bs-primary-bg-subtle);
-      border-left: 4px solid var(--bs-primary);
-      border-radius: 4px;
-      margin-bottom: 12px;
-      font-size: 13px;
-      color: var(--bs-primary-text-emphasis);
-      font-weight: 500;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-
-      .filter-summary {
-        flex: 1;
-      }
-
-      .clear-link {
-        background: transparent;
-        border: none;
-        color: var(--bs-primary);
-        font-size: 13px;
-        font-weight: 500;
-        cursor: pointer;
-        padding: 4px 8px;
-        border-radius: 4px;
-        display: flex;
-        align-items: center;
-        transition: all 0.2s;
-        white-space: nowrap;
-
-        &:hover {
-          background: var(--bs-primary);
-          color: var(--bs-white);
-        }
-
-        i {
-          font-size: 14px;
-        }
-      }
-    }
-
-    .messages-list {
-      height: 250px;
-      width: 100%;
-    }
-
-    // Virtual scroll viewport styles
-    cdk-virtual-scroll-viewport {
-      height: 100%;
-      width: 100%;
-    }
-
-    // Content wrapper for virtual scroll items
-    ::ng-deep .cdk-virtual-scroll-content-wrapper {
-      width: 100%;
-    }
-
-    .message-card {
-      padding: 12px;
-      border: 1px solid var(--bs-border-color);
-      border-radius: 4px;
-      margin-bottom: 8px;
-      cursor: pointer;
-      transition: all 0.2s;
-
-      &:hover {
-        background: var(--bs-secondary-bg);
-      }
-
-      &.selected {
-        border-color: var(--bs-primary);
-        background: var(--bs-primary-bg-subtle);
-      }
-
-      &.dead-letter {
-        border-left: 4px solid var(--bs-danger);
-      }
-    }
-
-    .message-header {
-      display: flex;
-      gap: 16px;
-      font-size: 12px;
-      color: var(--bs-secondary-color);
-      margin-bottom: 8px;
-
-      .seq {
-        font-weight: 500;
-        color: var(--bs-primary);
-      }
-
-      .reason {
-        color: var(--bs-danger);
-      }
-
-      .time {
-        margin-left: auto;
-      }
-    }
-
-    .message-preview {
-      font-family: monospace;
-      font-size: 13px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .select-all-row {
-      padding: 8px 12px;
-      background: var(--bs-secondary-bg);
-      border-radius: 4px;
-      margin-bottom: 8px;
-    }
-
-    .message-row {
-      display: flex;
-      align-items: flex-start;
-      gap: 12px;
-    }
-
-    .message-content {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .message-detail {
-      margin-top: 24px;
-      padding-top: 24px;
-      border-top: 1px solid var(--bs-border-color);
-
-      h4 {
-        color: var(--bs-secondary-color);
-        font-size: 14px;
-        font-weight: 500;
-      }
-    }
-
-    .detail-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 16px;
-      margin-bottom: 24px;
-    }
-
-    .detail-item {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-
-      label {
-        font-size: 11px;
-        text-transform: uppercase;
-      }
-
-      span {
-        font-size: 13px;
-      }
-    }
-
-    .body-content {
-      background: var(--bs-dark);
-      color: var(--bs-light);
-      padding: 16px;
-      border-radius: 4px;
-      overflow-x: auto;
-      font-size: 13px;
-      max-height: 200px;
-    }
-
-    .properties {
-      background: var(--bs-secondary-bg);
-      padding: 12px;
-      border-radius: 4px;
-    }
-
-    .property {
-      margin-bottom: 8px;
-
-      .key {
-        font-weight: 500;
-        color: var(--bs-primary);
-      }
-
-      .value {
-        margin-left: 8px;
-      }
-    }
-
-    .message-actions {
-      display: flex;
-      gap: 8px;
-      padding-top: 16px;
-      border-top: 1px solid var(--bs-border-color);
-    }
-
-    // Highlight styles for search matches
-    mark,
-    ::ng-deep mark {
-      background-color: var(--bs-warning);
-      color: var(--bs-dark);
-      padding: 2px 4px;
-      border-radius: 2px;
-      font-weight: 500;
-
-      // Ensure visibility in dark theme
-      [data-bs-theme="dark"] & {
-        background-color: #ffc107;
-        color: #212529;
-      }
-    }
-
-    // Special handling for highlights within code/pre blocks
-    .body-content {
-      mark,
-      ::ng-deep mark {
-        background-color: #ffc107;
-        color: #212529;
-        padding: 2px 4px;
-        border-radius: 2px;
-        font-weight: 600;
-        box-shadow: 0 0 0 1px rgba(255, 193, 7, 0.3);
-      }
-    }
-
-    // Ensure proper rendering of consecutive highlights
-    .message-preview,
-    .body-content,
-    .properties {
-      ::ng-deep mark + mark {
-        margin-left: 0;
-      }
-    }
-  `]
+  styleUrl: './view-messages-dialog.component.scss'
 })
 export class ViewMessagesDialogComponent implements OnInit {
   data = inject<ViewMessagesDialogData>(MAT_DIALOG_DATA);
@@ -2559,6 +2114,7 @@ export class ViewMessagesDialogComponent implements OnInit {
 
     this.dialog.open(MessageDiffDialogComponent, {
       width: '1000px',
+      maxWidth: '95vw',
       data: {
         left: selected[0],
         right: selected[1],
