@@ -7,6 +7,7 @@ import { TopicService } from './topic.service';
 import { ConnectionService } from './connection.service';
 import { isNotFoundInScanWindow, isPossibleDuplicate } from './bulk-operations.service';
 import { messageCallFailure } from '../../features/messages/message-call-failure';
+import { parseDuration } from '../../features/entities/duration';
 
 /** The entity and dead-letter sub-queue a run resubmits from. */
 export interface ResubmitRunTarget {
@@ -89,7 +90,8 @@ export interface ResubmitRunReport {
 }
 
 interface RunBroker {
-  count(): Observable<number>;
+  /** The dead-letter count, and how long to wait for the locks of a batch the server left behind. */
+  count(): Observable<{ count: number; lockWaitMs: number }>;
   peek(fromSequenceNumber: number, count: number, includeBody: boolean): Observable<MessageInfo[]>;
   resubmit(sequenceNumbers: number[]): Observable<BatchOperationResult>;
 }
@@ -99,6 +101,16 @@ const NO_REASON = '(none)';
 const OTHER_REASONS = '(other reasons)';
 const MAX_REASONS = 50;
 const RATE_WINDOW_MS = 60_000;
+const DEFAULT_LOCK_MS = 60_000;
+const MAX_LOCK_WAIT_MS = 300_000;
+const SCAN_WALL = 'The server could not find messages of the last batch even after their locks were released: the head of the dead-letter queue holds messages it cannot scan past, so the run stops here. They stay in the queue and are listed as failed.';
+
+/** The entity's lock duration, 1 minute when it cannot be read, never more than 5 minutes. */
+function lockWait(lockDuration: string | undefined): number {
+  const d = parseDuration(lockDuration ?? '');
+  const ms = ((((d.days * 24 + d.hours) * 60 + d.minutes) * 60 + d.seconds) * 1000) + d.milliseconds;
+  return Math.min(ms > 0 ? ms : DEFAULT_LOCK_MS, MAX_LOCK_WAIT_MS);
+}
 
 function keyOf(target: ResubmitRunTarget): string {
   return [target.entityType, target.topicName ?? '', target.entityName, target.subQueue].join('\u0000');
@@ -137,6 +149,8 @@ export class ResubmitRun {
   private pauseRequested = false;
   private wake: (() => void) | null = null;
   private readonly textPattern: RegExp | null;
+  private readonly stopped = firstValueFrom(this.stop$);
+  private lockWaitMs: number | null = null;
 
   constructor(
     readonly target: ResubmitRunTarget,
@@ -146,6 +160,7 @@ export class ResubmitRun {
     readonly generation: number,
     private readonly broker: RunBroker,
     private readonly now: () => number,
+    private readonly sleep: (ms: number) => Promise<void>,
     retryOf?: LeftBehind[]
   ) {
     this.startedAt = now();
@@ -220,16 +235,17 @@ export class ResubmitRun {
   }
 
   private async scan(): Promise<void> {
-    let total: number | typeof STOPPED;
+    let info: { count: number; lockWaitMs: number } | typeof STOPPED;
     try {
-      total = await this.call(this.broker.count());
+      info = await this.call(this.broker.count());
     } catch {
       return this.end('failed', 'Could not read the dead-letter count.');
     }
-    if (total === STOPPED) {
+    if (info === STOPPED) {
       return this.end('stopped', this.stopReason);
     }
-    this.total = Math.max(0, Number(total) || 0);
+    this.total = Math.max(0, Number(info.count) || 0);
+    this.lockWaitMs = info.lockWaitMs;
     this.message = 'Reading the dead-letter queue.';
     this.publish();
 
@@ -303,8 +319,11 @@ export class ResubmitRun {
     this.end('completed', `The ${entries.length} failed messages were tried again.`);
   }
 
-  /** Resubmits one batch and records its outcome; false when the run ended. */
-  private async resubmit(targets: Map<number, string>): Promise<boolean> {
+  /**
+   * Resubmits one batch and records its outcome; false when the run ended. A message the server did
+   * not find is sent once more after the locks of the batch are released; still not found, it ends the run.
+   */
+  private async resubmit(targets: Map<number, string>, secondTry = false): Promise<boolean> {
     if (!(await this.waitWhilePaused())) {
       this.end('stopped', this.stopReason);
       return false;
@@ -330,44 +349,82 @@ export class ResubmitRun {
 
     const failedNow: number[] = [];
     const duplicatesNow: number[] = [];
+    const notFound = new Map<number, LeftBehind>();
     for (const failure of answer.failures) {
-      if (!targets.has(failure.sequenceNumber) || failedNow.includes(failure.sequenceNumber) || duplicatesNow.includes(failure.sequenceNumber)) {
+      const seq = failure.sequenceNumber;
+      if (!targets.has(seq) || failedNow.includes(seq) || duplicatesNow.includes(seq) || notFound.has(seq)) {
         continue;
       }
-      const reason = targets.get(failure.sequenceNumber)!;
-      const entry = { sequenceNumber: failure.sequenceNumber, deadLetterReason: reason, error: failure.error };
+      const reason = targets.get(seq)!;
+      const entry = { sequenceNumber: seq, deadLetterReason: reason, error: failure.error };
       if (isPossibleDuplicate(failure)) {
-        duplicatesNow.push(failure.sequenceNumber);
+        duplicatesNow.push(seq);
         this.possibleDuplicates.push(entry);
         this.totalsOf(reason).possibleDuplicates++;
+      } else if (isNotFoundInScanWindow(failure)) {
+        notFound.set(seq, entry);
       } else {
-        failedNow.push(failure.sequenceNumber);
-        this.failed.push(entry);
-        this.totalsOf(reason).failed++;
+        failedNow.push(seq);
+        this.recordFailed(entry);
       }
     }
     for (const [sequenceNumber, reason] of targets) {
-      if (!failedNow.includes(sequenceNumber) && !duplicatesNow.includes(sequenceNumber)) {
+      if (!failedNow.includes(sequenceNumber) && !duplicatesNow.includes(sequenceNumber) && !notFound.has(sequenceNumber)) {
         this.resubmitted++;
         this.totalsOf(reason).resubmitted++;
       }
     }
     this.publish();
 
-    const notFound = answer.failures.filter(failure => targets.has(failure.sequenceNumber) && isNotFoundInScanWindow(failure)).length;
-    if (failedNow.length === targets.size && notFound === targets.size) {
-      this.end('failed', 'The head of the dead-letter queue holds the messages this run left behind, so the resubmit cannot reach further. Nothing was sent from the last batch.');
-      return false;
-    }
     if (this.options.stopAtFirstFailure && (failedNow.length > 0 || duplicatesNow.length > 0)) {
+      notFound.forEach(entry => this.recordFailed(entry));
       const parts = [
         failedNow.length > 0 ? `failed: ${failedNow.join(', ')}` : '',
-        duplicatesNow.length > 0 ? `possible duplicate, do not retry: ${duplicatesNow.join(', ')}` : ''
+        duplicatesNow.length > 0 ? `possible duplicate, do not retry: ${duplicatesNow.join(', ')}` : '',
+        notFound.size > 0 ? `not found: ${[...notFound.keys()].join(', ')}` : ''
       ].filter(part => part !== '');
       this.end('failed', `Stopped at the first failure (${parts.join('; ')}).`);
       return false;
     }
-    return true;
+    if (notFound.size === 0) {
+      return true;
+    }
+    if (secondTry) {
+      notFound.forEach(entry => this.recordFailed(entry));
+      this.end('failed', SCAN_WALL);
+      return false;
+    }
+    if (!(await this.waitForLocks())) {
+      this.end('stopped', this.stopReason);
+      return false;
+    }
+    return this.resubmit(new Map([...notFound].map(([seq, entry]) => [seq, entry.deadLetterReason])), true);
+  }
+
+  private recordFailed(entry: LeftBehind): void {
+    this.failed.push(entry);
+    this.totalsOf(entry.deadLetterReason).failed++;
+  }
+
+  /** Waits the entity's lock duration, at most 5 minutes, one second at a time; false when the run was stopped. */
+  private async waitForLocks(): Promise<boolean> {
+    if (this.lockWaitMs === null) {
+      const info = await this.call(this.broker.count()).catch(() => null);
+      this.lockWaitMs = info && info !== STOPPED ? info.lockWaitMs : MAX_LOCK_WAIT_MS;
+    }
+    const until = this.now() + this.lockWaitMs;
+    while (!this.stopping) {
+      const left = until - this.now();
+      if (left <= 0) {
+        this.message = 'Sending the messages of the last batch again.';
+        this.publish();
+        return true;
+      }
+      this.message = `Waiting for the broker to release the messages of the last batch: ${Math.ceil(left / 1000)} s left.`;
+      this.publish();
+      await Promise.race([this.sleep(Math.min(1000, left)), this.stopped]);
+    }
+    return false;
   }
 
   private unknownOutcome(targets: Map<number, string>, error: string): void {
@@ -463,6 +520,7 @@ export class ResubmitRunService {
   private switching = false;
 
   now = () => Date.now();
+  sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
   /** Runs that are running or paused. */
   readonly activeRuns = computed(() => [...this.runs().values()].filter(run => run.isActive()));
@@ -500,7 +558,7 @@ export class ResubmitRunService {
     if (active?.isActive()) {
       return active;
     }
-    return this.keep(new ResubmitRun(target, options, this.connections.currentTarget ?? null, this.generation, this.brokerFor(target), this.now));
+    return this.keep(new ResubmitRun(target, options, this.connections.currentTarget ?? null, this.generation, this.brokerFor(target), this.now, this.sleep));
   }
 
   /** A finished run can be retried only under the connection it ran on. */
@@ -521,7 +579,7 @@ export class ResubmitRunService {
       return run;
     }
     const failed = run.failed.map(entry => ({ ...entry }));
-    return this.keep(new ResubmitRun(run.target, run.options, this.connections.currentTarget ?? null, this.generation, this.brokerFor(run.target), this.now, failed));
+    return this.keep(new ResubmitRun(run.target, run.options, this.connections.currentTarget ?? null, this.generation, this.brokerFor(run.target), this.now, this.sleep, failed));
   }
 
   find(target: ResubmitRunTarget): ResubmitRun | undefined {
@@ -549,7 +607,10 @@ export class ResubmitRunService {
     if (target.entityType === 'queue') {
       return {
         count: () => this.queues.getQueue(name).pipe(
-          map(queue => (transfer ? queue.transferDeadLetterMessageCount : queue.deadLetterMessageCount) ?? 0)
+          map(queue => ({
+            count: (transfer ? queue.transferDeadLetterMessageCount : queue.deadLetterMessageCount) ?? 0,
+            lockWaitMs: lockWait(queue.lockDuration)
+          }))
         ),
         peek: (from, count, includeBody) => transfer
           ? this.queues.peekTransferDeadLetterMessages(name, count, from, includeBody)
@@ -562,7 +623,10 @@ export class ResubmitRunService {
     const topic = target.topicName ?? '';
     return {
       count: () => this.topics.getSubscription(topic, name).pipe(
-        map(subscription => (transfer ? subscription.transferDeadLetterMessageCount : subscription.deadLetterMessageCount) ?? 0)
+        map(subscription => ({
+          count: (transfer ? subscription.transferDeadLetterMessageCount : subscription.deadLetterMessageCount) ?? 0,
+          lockWaitMs: lockWait(subscription.lockDuration)
+        }))
       ),
       peek: (from, count, includeBody) => transfer
         ? this.topics.peekTransferDeadLetterMessages(topic, name, count, from, includeBody)

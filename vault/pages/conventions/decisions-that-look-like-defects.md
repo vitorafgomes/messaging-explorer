@@ -31,7 +31,7 @@ An entry is a claim about the code today: when the code under it changes, the en
 ## Bulk operations
 
 - **A bulk operation can report a possible duplicate and still be correct.** Operations are at-least-once by design ([[pages/invariants/bulk-operations-are-at-least-once]]); the alternative is completing before the send, which can lose the message. Locked by `src/ServiceBusExplorer.Core.Tests/Providers/Azure/AzureServiceBusProviderBatchTests.cs:196`.
-- **A selected message can come back "Not found within scan window".** The scan is bounded on purpose; an unbounded scan of a large dead-letter queue holds locks until they expire. Locked by `src/ServiceBusExplorer.Core.Tests/Providers/Azure/AzureServiceBusProviderBatchTests.cs:110`.
+- **A selected message can come back "Not found within scan window".** The scan is bounded on purpose; an unbounded scan of a large dead-letter queue holds locks until they expire. Measured on the emulator on 2026-11-13, the bound is shallow: the scan receives from the head and abandons what it does not send, an abandoned message is delivered again first, so it gets past the head only through its 250-message prefetch, about 250 to 500 messages deep; and right after one call, the next call's targets can come back not found until the previous call's prefetched messages are released. Not yet measured on a real namespace. A change to the scan supersedes this decision and needs an ADR ([[pages/roadmap/followups]]). Locked by `src/ServiceBusExplorer.Core.Tests/Providers/Azure/AzureServiceBusProviderBatchTests.cs:110`.
 - **An empty selection returns an empty result, not an error.** Locked by `src/ServiceBusExplorer.Core.Tests/Providers/Azure/AzureServiceBusProviderBatchTests.cs:226`.
 
 ## RabbitMQ

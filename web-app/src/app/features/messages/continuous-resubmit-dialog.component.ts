@@ -193,6 +193,12 @@ export function formatDuration(ms: number): string {
               <input matInput name="text" [(ngModel)]="textFilter" autocomplete="off">
               <mat-hint>Applied to each batch as it is read; the run counts what matched so far</mat-hint>
             </mat-form-field>
+            @if (reasonFilter.trim() || textFilter.trim()) {
+              <p class="note warn" role="note">
+                <mat-icon aria-hidden="true">warning</mat-icon>
+                <span>A filter leaves the messages it skips at the head of the queue; the server can reach only a few hundred messages past them, so a filtered run may stop early.</span>
+              </p>
+            }
           </fieldset>
           <fieldset class="group">
             <legend>When a message fails</legend>
@@ -200,6 +206,7 @@ export function formatDuration(ms: number): string {
               <mat-radio-button [value]="false">Skip it, continue, and report it at the end</mat-radio-button>
               <mat-radio-button [value]="true">Stop at the first failure</mat-radio-button>
             </mat-radio-group>
+            <p class="hint">Continuing applies to a message the broker refused and to a possible duplicate. A message the server cannot find is tried again once its lock is released, and then stops the run.</p>
           </fieldset>
         }
         <mat-form-field appearance="outline" class="batch">

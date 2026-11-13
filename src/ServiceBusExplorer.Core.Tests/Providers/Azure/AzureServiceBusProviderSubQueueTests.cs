@@ -633,4 +633,77 @@ public class AzureServiceBusProviderSubQueueTests
         Assert.Equal((withBody.SequenceNumber, withBody.EnqueuedTime, withBody.DeadLetterReason, withBody.Subject, withBody.SizeInBytes),
             (withoutBody.SequenceNumber, withoutBody.EnqueuedTime, withoutBody.DeadLetterReason, withoutBody.Subject, withoutBody.SizeInBytes));
     }
+
+    private const string ResubmitSendUnknown =
+        "Message was resubmitted but could not be removed from the dead-letter queue and may be duplicated on retry: the send failed and the broker may have accepted it.";
+    private const string MoveSendUnknown =
+        "Message was moved to the target but could not be removed from the source and may be duplicated: the send failed and the broker may have accepted it.";
+
+    /// <summary>A message batch that holds at most <paramref name="capacity"/> messages.</summary>
+    private static ServiceBusMessageBatch BatchHolding(int capacity)
+    {
+        var store = new List<ServiceBusMessage>();
+        return ServiceBusModelFactory.ServiceBusMessageBatch(long.MaxValue, store, new CreateMessageBatchOptions(), _ => store.Count < capacity);
+    }
+
+    /// <summary>A sender whose batches hold two messages and whose batch sends answer, in order, as <paramref name="sends"/> says.</summary>
+    private static Mock<ServiceBusSender> SenderOfPairs(params Exception?[] sends)
+    {
+        var answers = new Queue<Exception?>(sends);
+        var sender = new Mock<ServiceBusSender>();
+        sender.Setup(s => s.CreateMessageBatchAsync(It.IsAny<CancellationToken>())).Returns(() => new ValueTask<ServiceBusMessageBatch>(BatchHolding(2)));
+        sender.Setup(s => s.SendMessagesAsync(It.IsAny<ServiceBusMessageBatch>(), It.IsAny<CancellationToken>()))
+            .Returns(() => answers.Dequeue() is { } error ? Task.FromException(error) : Task.CompletedTask);
+        return sender;
+    }
+
+    private static Task<BatchOperationResult> ResubmitOrMove(string operation, Mock<ServiceBusReceiver> receiver, Mock<ServiceBusSender> sender, long[] sequenceNumbers) =>
+        operation == "resubmit"
+            ? AzureServiceBusProvider.ResubmitCoreAsync(receiver.Object, sender.Object, sequenceNumbers, CancellationToken.None)
+            : AzureServiceBusProvider.MoveCoreAsync(receiver.Object, sender.Object, sequenceNumbers, CancellationToken.None);
+
+    [Theory]
+    [InlineData("resubmit", ResubmitSendUnknown)]
+    [InlineData("move", MoveSendUnknown)]
+    public async Task A_resubmit_or_move_whose_second_send_times_out_reports_both_sends_as_possible_duplicates_and_nothing_as_not_found(string operation, string duplicate)
+    {
+        var receiver = ReceiverFailingAfter([Batch(Msg(1), Msg(2), Msg(3), Msg(4))], Broker(ServiceBusFailureReason.ServiceTimeout));
+        var sender = SenderOfPairs(null, Broker(ServiceBusFailureReason.ServiceTimeout));
+
+        var result = await ResubmitOrMove(operation, receiver, sender, [1, 2, 3, 4]);
+
+        Assert.Equal(0, result.SuccessCount);
+        Assert.Equal(new[] { (1L, duplicate), (2L, duplicate), (3L, duplicate), (4L, duplicate) },
+            result.Failures.Select(f => (f.SequenceNumber, f.Error)).OrderBy(f => f.SequenceNumber).ToArray());
+        receiver.Verify(r => r.CompleteMessageAsync(It.IsAny<ServiceBusReceivedMessage>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData("resubmit", ResubmitSendUnknown)]
+    [InlineData("move", MoveSendUnknown)]
+    public async Task A_resubmit_or_move_whose_first_send_throws_reports_its_messages_as_possible_duplicates(string operation, string duplicate)
+    {
+        var receiver = ReceiverFailingAfter([Batch(Msg(1), Msg(2))], Broker(ServiceBusFailureReason.ServiceTimeout));
+        var sender = SenderOfPairs(Broker(ServiceBusFailureReason.ServiceTimeout));
+
+        var result = await ResubmitOrMove(operation, receiver, sender, [1, 2]);
+
+        Assert.Equal((0, 2), (result.SuccessCount, result.FailureCount));
+        Assert.All(result.Failures, f => Assert.Equal(duplicate, f.Error));
+        Assert.Equal(new long[] { 1, 2 }, result.Failures.Select(f => f.SequenceNumber).Order().ToArray());
+    }
+
+    [Theory]
+    [InlineData("resubmit", ResubmitSendUnknown)]
+    [InlineData("move", MoveSendUnknown)]
+    public async Task A_target_never_handed_to_a_send_after_a_send_failed_is_reported_not_found_and_only_it(string operation, string duplicate)
+    {
+        var receiver = ReceiverFailingAfter([Batch(Msg(1), Msg(2), Msg(3))], Broker(ServiceBusFailureReason.ServiceTimeout));
+        var sender = SenderOfPairs(Broker(ServiceBusFailureReason.ServiceTimeout));
+
+        var result = await ResubmitOrMove(operation, receiver, sender, [1, 2, 3]);
+
+        Assert.Equal(new[] { (1L, duplicate), (2L, duplicate), (3L, "Not found within scan window") },
+            result.Failures.Select(f => (f.SequenceNumber, f.Error)).OrderBy(f => f.SequenceNumber).ToArray());
+    }
 }

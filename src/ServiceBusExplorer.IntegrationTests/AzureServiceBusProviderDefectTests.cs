@@ -313,10 +313,53 @@ public sealed class AzureServiceBusProviderDefectTests(AzureServiceBusFixture fi
     }
 
     /// <summary>
+    /// Correct: resubmitting, page by page from a cursor and without bodies, every dead letter whose reason is not
+    /// <c>skip</c> puts exactly those 500 in the queue and leaves the 300 <c>skip</c> dead-lettered. The 300 sit at the
+    /// head, and the resubmit's scan gets past an abandoned head only as far as its prefetch reaches, so it does not
+    /// reach the 500 and reports them "Not found within scan window". What it reports holds: every message is where its
+    /// outcome says, none lost and none in the queue twice, and a message in both places is reported as a possible
+    /// duplicate.
+    /// </summary>
+    [Fact]
+    public async Task Defect_resubmitting_the_500_behind_300_skipped_dead_letters_by_cursor_is_stopped_by_the_scan_wall_and_loses_nothing()
+    {
+        await _messaging.ResubmitDeadLetterMessagesAsync(await CreateQueueAsync("dlq-warm-up"), [1]);
+        var queue = await CreateQueueAsync("dlq-protocol", o => o.LockDuration = TimeSpan.FromSeconds(30));
+        await DeadLetterManyAsync(queue, 800, body => int.Parse(body[1..]) < 300 ? "skip" : "other");
+        var bodyOf = (await _messaging.PeekMessagesAsync(queue, 800, MessageSubQueue.DeadLetter)).ToDictionary(m => m.SequenceNumber!.Value, m => m.Body!);
+        Assert.Equal(800, bodyOf.Count);
+
+        var sent = new List<long>();
+        var failures = new Dictionary<long, string>();
+        long cursor = 0;
+        for (var page = 0; page < 800 / 250 + 1; page++)
+        {
+            var peeked = (await _messaging.PeekMessagesAsync(queue, 250, MessageSubQueue.DeadLetter, fromSequenceNumber: cursor, includeBody: false)).ToList();
+            if (peeked.Count == 0) break;
+            Assert.All(peeked, m => Assert.Null(m.Body));
+            cursor = peeked[^1].SequenceNumber!.Value + 1;
+            var others = peeked.Where(m => m.DeadLetterReason != "skip").Select(m => m.SequenceNumber!.Value).ToArray();
+            if (others.Length == 0) continue;
+            sent.AddRange(others);
+            foreach (var failure in (await _messaging.ResubmitDeadLetterMessagesAsync(queue, others)).Failures) failures.Add(failure.SequenceNumber, failure.Error);
+        }
+
+        var duplicates = failures.Where(f => f.Value.Contains("may be duplicated")).Select(f => f.Key).ToList();
+        var resubmitted = sent.Where(s => !failures.ContainsKey(s)).ToList();
+        var active = await fixture.DrainAsync(queue);
+        var deadLettered = (await _messaging.PeekMessagesAsync(queue, 800, MessageSubQueue.DeadLetter)).Select(m => m.SequenceNumber!.Value).Order().ToArray();
+        Assert.Equal(500, sent.Count);
+        Assert.True(resubmitted.Count < 500, $"all {resubmitted.Count} were resubmitted: the scan wall is gone; rewrite this test to assert the correct behaviour");
+        Assert.All(failures.Values, error => Assert.True(error == "Not found within scan window" || error.Contains("may be duplicated"), error));
+        Assert.Equal(resubmitted.Concat(duplicates).Select(s => bodyOf[s]).Order(), active.Order());
+        Assert.Equal(bodyOf.Keys.Where(s => int.Parse(bodyOf[s][1..]) < 300).Concat(failures.Keys).Order(), deadLettered);
+    }
+
+    /// <summary>
     /// Sends <paramref name="count"/> messages in batches and dead-letters them a received batch at a time, each batch
     /// through a fresh receiver, so a deep dead-letter queue is arranged in seconds rather than one message at a time.
     /// </summary>
-    private async Task DeadLetterManyAsync(string queue, int count)
+    private async Task DeadLetterManyAsync(string queue, int count, Func<string, string>? reasonOf = null)
     {
         await using (var sender = fixture.Client.CreateSender(queue))
         {
@@ -339,7 +382,7 @@ public sealed class AzureServiceBusProviderDefectTests(AzureServiceBusFixture fi
             }
 
             emptyReceives = 0;
-            await Task.WhenAll(batch.Select(m => receiver.DeadLetterMessageAsync(m, "arranged", "dead-lettered by the test")));
+            await Task.WhenAll(batch.Select(m => receiver.DeadLetterMessageAsync(m, reasonOf?.Invoke(m.Body.ToString()) ?? "arranged", "dead-lettered by the test")));
             remaining -= batch.Count;
         }
     }

@@ -12,6 +12,8 @@ const BEFORE = new Date(START - 3_600_000);
 const AFTER = new Date(START + 1_000);
 const DUPLICATE = 'Message was resubmitted but could not be removed from the dead-letter queue and may be duplicated on retry: lock lost';
 const NOT_FOUND = 'Not found within scan window';
+const REFUSED = 'The entity is disabled for this operation.';
+const SCAN_WALL = 'The server could not find messages of the last batch even after their locks were released: the head of the dead-letter queue holds messages it cannot scan past, so the run stops here. They stay in the queue and are listed as failed.';
 
 function msg(sequenceNumber: number, extra: Partial<MessageInfo> = {}): MessageInfo {
   return {
@@ -97,20 +99,20 @@ describe('ResubmitRunService', () => {
         .mockReturnValueOnce(of(range(1, 3)))
         .mockReturnValueOnce(of(range(4, 2)))
         .mockReturnValue(of([]));
-      queue.resubmitDeadLetterMessages.mockReturnValueOnce(of(result(2, [[2, NOT_FOUND]])));
+      queue.resubmitDeadLetterMessages.mockReturnValueOnce(of(result(2, [[2, REFUSED]])));
 
       const run = service.start(ORDERS, { batchSize: 3, stopAtFirstFailure: false })!;
       await run.done;
 
       expect(peekedFrom()).toEqual([0, 4, 6]);
       expect(resubmitted()).toEqual([[1, 2, 3], [4, 5]]);
-      expect(run.failed).toEqual([{ sequenceNumber: 2, deadLetterReason: 'MaxDeliveryCountExceeded', error: NOT_FOUND }]);
+      expect(run.failed).toEqual([{ sequenceNumber: 2, deadLetterReason: 'MaxDeliveryCountExceeded', error: REFUSED }]);
       expect(run.progress()).toMatchObject({ status: 'completed', read: 5, matched: 5, resubmitted: 4, failed: 1, possibleDuplicates: 0 });
     });
 
     it('with "Stop at the first failure" the run ends failed after that batch and reads nothing more', async () => {
       queue.peekDeadLetterMessages.mockReturnValueOnce(of(range(1, 3))).mockReturnValue(of(range(4, 3)));
-      queue.resubmitDeadLetterMessages.mockReturnValueOnce(of(result(2, [[3, NOT_FOUND]])));
+      queue.resubmitDeadLetterMessages.mockReturnValueOnce(of(result(2, [[3, REFUSED]])));
 
       const run = service.start(ORDERS, { batchSize: 3, stopAtFirstFailure: true })!;
       await run.done;
@@ -403,7 +405,7 @@ describe('ResubmitRunService', () => {
       queue.peekDeadLetterMessages
         .mockReturnValueOnce(of([msg(1), msg(2, { deadLetterReason: 'TTLExpiredException' }), msg(3)]))
         .mockReturnValue(of([]));
-      queue.resubmitDeadLetterMessages.mockReturnValueOnce(of(result(1, [[2, NOT_FOUND], [3, DUPLICATE]])));
+      queue.resubmitDeadLetterMessages.mockReturnValueOnce(of(result(1, [[2, REFUSED], [3, DUPLICATE]])));
       const run = service.start(ORDERS, { batchSize: 3, stopAtFirstFailure: false })!;
       await run.done;
       return run;
@@ -422,7 +424,7 @@ describe('ResubmitRunService', () => {
         { reason: 'MaxDeliveryCountExceeded', read: 2, resubmitted: 1, failed: 0, possibleDuplicates: 1 },
         { reason: 'TTLExpiredException', read: 1, resubmitted: 0, failed: 1, possibleDuplicates: 0 }
       ]);
-      expect(report.failedMessages).toEqual([{ sequenceNumber: 2, deadLetterReason: 'TTLExpiredException', error: NOT_FOUND }]);
+      expect(report.failedMessages).toEqual([{ sequenceNumber: 2, deadLetterReason: 'TTLExpiredException', error: REFUSED }]);
       expect(report.possibleDuplicateMessages.map(entry => entry.sequenceNumber)).toEqual([3]);
       expect(JSON.stringify(report)).not.toContain('sample-1');
     });
@@ -493,7 +495,7 @@ describe('ResubmitRunService', () => {
   describe('a run never acts under another connection', () => {
     it('"Retry the N failed" of a run from before a change of connection resubmits nothing', async () => {
       queue.peekDeadLetterMessages.mockReturnValueOnce(of(range(1, 2))).mockReturnValue(of([]));
-      queue.resubmitDeadLetterMessages.mockReturnValueOnce(of(result(1, [[2, NOT_FOUND]])));
+      queue.resubmitDeadLetterMessages.mockReturnValueOnce(of(result(1, [[2, REFUSED]])));
       const first = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false })!;
       await first.done;
       status.next({ connected: true, namespace: 'other.example.net' });
@@ -590,7 +592,7 @@ describe('ResubmitRunService', () => {
     });
     it('the failed messages of a finished run are not retried after a connect that failed once the server had switched', async () => {
       queue.peekDeadLetterMessages.mockImplementationOnce(() => of(range(1, 2))).mockImplementation(() => of([]));
-      queue.resubmitDeadLetterMessages.mockReturnValueOnce(of(result(1, [[2, NOT_FOUND]])));
+      queue.resubmitDeadLetterMessages.mockReturnValueOnce(of(result(1, [[2, REFUSED]])));
       api.post.mockReturnValue(throwError(() => ({ status: 500 })));
       const run = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false })!;
       await run.done;
@@ -641,25 +643,113 @@ describe('ResubmitRunService', () => {
     });
   });
 
-  describe('a batch whose messages all came back not found ends the run', () => {
-    it('ends failed, saying the head holds the messages the run left behind, and reads nothing more', async () => {
-      queue.peekDeadLetterMessages
-        .mockReturnValueOnce(of(range(1, 2)))
-        .mockReturnValueOnce(of(range(3, 2)))
-        .mockReturnValue(of(range(5, 2)));
-      queue.resubmitDeadLetterMessages
-        .mockReturnValueOnce(of(result(1, [[2, NOT_FOUND]])))
-        .mockReturnValueOnce(of(result(0, [[3, NOT_FOUND], [4, NOT_FOUND]])));
+  describe('a batch whose messages all came back not found is retried once after the lock, then ends the run', () => {
+    let clock: number;
+    let sleeps: number[];
+    let duringWait: string[];
+
+    beforeEach(() => {
+      clock = START;
+      sleeps = [];
+      duringWait = [];
+      service.now = () => clock;
+      service.sleep = (ms: number) => {
+        duringWait.push(service.find(ORDERS)!.progress().message);
+        sleeps.push(ms);
+        clock += ms;
+        return Promise.resolve();
+      };
+      queue.getQueue.mockReturnValue(of({ name: 'orders', deadLetterMessageCount: 1000, lockDuration: '00:00:30' }));
+    });
+
+    it('waits the lock duration of the entity, saying so with the time left, then sends the same batch again', async () => {
+      queue.peekDeadLetterMessages.mockReturnValueOnce(of(range(1, 2))).mockReturnValue(of([]));
+      queue.resubmitDeadLetterMessages.mockReturnValueOnce(of(result(0, [[1, NOT_FOUND], [2, NOT_FOUND]])));
 
       const run = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false })!;
       await run.done;
 
-      expect(queue.peekDeadLetterMessages).toHaveBeenCalledTimes(2);
-      expect(run.progress()).toMatchObject({
-        status: 'failed',
-        failed: 3,
-        message: 'The head of the dead-letter queue holds the messages this run left behind, so the resubmit cannot reach further. Nothing was sent from the last batch.'
-      });
+      expect(resubmitted()).toEqual([[1, 2], [1, 2]]);
+      expect(sleeps.reduce((a, b) => a + b, 0)).toBe(30_000);
+      expect(duringWait[0]).toBe('Waiting for the broker to release the messages of the last batch: 30 s left.');
+      expect(run.progress()).toMatchObject({ status: 'completed', resubmitted: 2, failed: 0 });
+    });
+
+    it('a second batch in a row all not found ends the run as failed and leaves them in the queue, listed as failed', async () => {
+      queue.peekDeadLetterMessages.mockReturnValueOnce(of(range(1, 2))).mockReturnValue(of(range(3, 2)));
+      queue.resubmitDeadLetterMessages.mockReturnValue(of(result(0, [[1, NOT_FOUND], [2, NOT_FOUND]])));
+
+      const run = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false })!;
+      await run.done;
+
+      expect(resubmitted()).toEqual([[1, 2], [1, 2]]);
+      expect(queue.peekDeadLetterMessages).toHaveBeenCalledTimes(1);
+      expect(run.failed.map(entry => entry.sequenceNumber)).toEqual([1, 2]);
+      expect(run.progress()).toMatchObject({ status: 'failed', message: SCAN_WALL });
+    });
+
+    it('never waits longer than 5 minutes, whatever the lock duration', async () => {
+      queue.getQueue.mockReturnValue(of({ name: 'orders', deadLetterMessageCount: 1000, lockDuration: '00:10:00' }));
+      queue.peekDeadLetterMessages.mockReturnValueOnce(of(range(1, 2))).mockReturnValue(of([]));
+      queue.resubmitDeadLetterMessages.mockReturnValueOnce(of(result(0, [[1, NOT_FOUND], [2, NOT_FOUND]])));
+
+      const run = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false })!;
+      await run.done;
+
+      expect(sleeps.reduce((a, b) => a + b, 0)).toBe(300_000);
+    });
+
+    it('Stop during the wait ends the run at once and sends nothing more', async () => {
+      service.sleep = () => new Promise<void>(() => undefined);
+      queue.peekDeadLetterMessages.mockReturnValueOnce(of(range(1, 2))).mockReturnValue(of([]));
+      queue.resubmitDeadLetterMessages.mockReturnValueOnce(of(result(0, [[1, NOT_FOUND], [2, NOT_FOUND]])));
+      const run = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false })!;
+      await flush();
+
+      run.stop();
+      await flush();
+
+      expect(run.progress().status).toBe('stopped');
+      expect(queue.resubmitDeadLetterMessages).toHaveBeenCalledTimes(1);
+    });
+
+    it('Pause during the wait holds the second try until Resume', async () => {
+      service.sleep = (ms: number) => { service.find(ORDERS)!.pause(); clock += ms; return Promise.resolve(); };
+      queue.peekDeadLetterMessages.mockReturnValueOnce(of(range(1, 2))).mockReturnValue(of([]));
+      queue.resubmitDeadLetterMessages.mockReturnValueOnce(of(result(0, [[1, NOT_FOUND], [2, NOT_FOUND]])));
+      const run = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false })!;
+      await flush();
+
+      expect(run.progress().status).toBe('paused');
+      expect(queue.resubmitDeadLetterMessages).toHaveBeenCalledTimes(1);
+
+      run.resume();
+      await run.done;
+      expect(resubmitted()).toEqual([[1, 2], [1, 2]]);
+    });
+
+    it('a batch partly not found sends the rest, retries only the ones not found after the wait, and goes on', async () => {
+      queue.peekDeadLetterMessages.mockReturnValueOnce(of(range(1, 3))).mockReturnValue(of([]));
+      queue.resubmitDeadLetterMessages.mockReturnValueOnce(of(result(2, [[2, NOT_FOUND]])));
+
+      const run = service.start(ORDERS, { batchSize: 3, stopAtFirstFailure: false })!;
+      await run.done;
+
+      expect(resubmitted()).toEqual([[1, 2, 3], [2]]);
+      expect(run.progress()).toMatchObject({ status: 'completed', resubmitted: 3, failed: 0 });
+    });
+
+    it('a message still not found after the wait ends the run, even with "continue past a failure": the run never moves past it', async () => {
+      queue.peekDeadLetterMessages.mockReturnValueOnce(of(range(1, 3))).mockReturnValue(of(range(4, 3)));
+      queue.resubmitDeadLetterMessages.mockReturnValue(of(result(0, [[2, NOT_FOUND]])));
+
+      const run = service.start(ORDERS, { batchSize: 3, stopAtFirstFailure: false })!;
+      await run.done;
+
+      expect(resubmitted()).toEqual([[1, 2, 3], [2]]);
+      expect(queue.peekDeadLetterMessages).toHaveBeenCalledTimes(1);
+      expect(run.failed.map(entry => entry.sequenceNumber)).toEqual([2]);
+      expect(run.progress()).toMatchObject({ status: 'failed', resubmitted: 2, message: SCAN_WALL });
     });
   });
 
@@ -710,6 +800,29 @@ describe('ResubmitRunService', () => {
       expect(run.progress().status).toBe('failed');
       expect(run.possibleDuplicates.map(entry => entry.sequenceNumber)).toEqual([1, 2]);
       expect(run.failed).toEqual([]);
+    });
+  });
+
+  describe('a possible duplicate is never sent again by any path of the run', () => {
+    it('neither the second try after a message not found nor "Retry the N failed" sends a possible duplicate again', async () => {
+      let clock = START;
+      service.now = () => clock;
+      service.sleep = (ms: number) => { clock += ms; return Promise.resolve(); };
+      queue.peekDeadLetterMessages.mockReturnValueOnce(of(range(1, 4))).mockReturnValue(of([]));
+      queue.resubmitDeadLetterMessages
+        .mockReturnValueOnce(of(result(1, [[1, DUPLICATE], [2, REFUSED], [3, NOT_FOUND]])))
+        .mockReturnValueOnce(of(ok(1)))
+        .mockReturnValueOnce(of(ok(1)));
+
+      const run = service.start(ORDERS, { batchSize: 4, stopAtFirstFailure: false })!;
+      await run.done;
+      const retry = service.retry(run);
+      await retry.done;
+
+      expect(resubmitted()).toEqual([[1, 2, 3, 4], [3], [2]]);
+      expect(run.possibleDuplicates.map(entry => entry.sequenceNumber)).toEqual([1]);
+      expect(run.failed.map(entry => entry.sequenceNumber)).toEqual([2]);
+      expect(retry.progress()).toMatchObject({ status: 'completed', total: 1, resubmitted: 1 });
     });
   });
 });

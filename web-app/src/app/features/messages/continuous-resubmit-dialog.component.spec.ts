@@ -191,7 +191,7 @@ describe('ContinuousResubmitDialogComponent', () => {
       queueService.resubmitDeadLetterMessages.mockReturnValueOnce(of({
         success: false, successCount: 1, failureCount: 2,
         failures: [
-          { sequenceNumber: 2, error: 'Not found within scan window' },
+          { sequenceNumber: 2, error: 'The entity is disabled for this operation.' },
           { sequenceNumber: 3, error: 'Message was resubmitted but could not be removed from the dead-letter queue and may be duplicated on retry: lock lost' }
         ]
       }));
@@ -246,7 +246,7 @@ describe('ContinuousResubmitDialogComponent', () => {
       capabilities = { supportsPeekFromSequenceNumber: true };
       queueService.peekDeadLetterMessages = vi.fn().mockReturnValueOnce(of(old(1, 2))).mockReturnValue(of([]));
       queueService.resubmitDeadLetterMessages.mockReturnValue(of({
-        success: false, successCount: 1, failureCount: 1, failures: [{ sequenceNumber: 2, error: 'Not found within scan window' }]
+        success: false, successCount: 1, failureCount: 1, failures: [{ sequenceNumber: 2, error: 'The entity is disabled for this operation.' }]
       }));
       configure();
       const fixture = TestBed.createComponent(ContinuousResubmitDialogComponent);
@@ -257,7 +257,7 @@ describe('ContinuousResubmitDialogComponent', () => {
 
       const text: string = fixture.nativeElement.textContent;
       expect(text).toContain(AT_LEAST_ONCE);
-      expect(text).toContain('Failed, not sent. Not found within scan window');
+      expect(text).toContain('Failed, not sent. The entity is disabled for this operation.');
       expect(text).toContain('Retry the 1 failed');
     });
   });
@@ -285,7 +285,7 @@ describe('ContinuousResubmitDialogComponent', () => {
       const second = new Subject<MessageInfo[]>();
       queueService.peekDeadLetterMessages = vi.fn().mockReturnValueOnce(of(old(1, 2))).mockReturnValueOnce(second).mockReturnValue(of([]));
       queueService.resubmitDeadLetterMessages
-        .mockReturnValueOnce(of({ success: false, successCount: 1, failureCount: 1, failures: [{ sequenceNumber: 2, error: 'Not found within scan window' }] }))
+        .mockReturnValueOnce(of({ success: false, successCount: 1, failureCount: 1, failures: [{ sequenceNumber: 2, error: 'The entity is disabled for this operation.' }] }))
         .mockReturnValue(of(ok(2)));
       configure();
       const fixture = TestBed.createComponent(ContinuousResubmitDialogComponent);
@@ -293,7 +293,7 @@ describe('ContinuousResubmitDialogComponent', () => {
       await fixture.componentInstance.start();
       await flush();
       fixture.detectChanges();
-      const row = () => Array.from<HTMLElement>(fixture.nativeElement.querySelectorAll('tr.mat-mdc-row')).find(tr => tr.textContent?.includes('Not found'));
+      const row = () => Array.from<HTMLElement>(fixture.nativeElement.querySelectorAll('tr.mat-mdc-row')).find(tr => tr.textContent?.includes('The entity is disabled'));
       const before = row();
 
       second.next(old(3, 2));
@@ -321,6 +321,74 @@ describe('ContinuousResubmitDialogComponent', () => {
       expect(fixture.componentInstance.run()).toBeUndefined();
       expect(queueService.getQueue).not.toHaveBeenCalled();
       expect(fixture.nativeElement.textContent).toContain('The connection is changing, so no run was started.');
+    });
+  });
+
+  describe('the configure screen says what a run continues past and what a filter costs', () => {
+    function configureScreen() {
+      capabilities = { supportsPeekFromSequenceNumber: true };
+      configure();
+      const fixture = TestBed.createComponent(ContinuousResubmitDialogComponent);
+      fixture.detectChanges();
+      return fixture;
+    }
+
+    it('"continue past a failure" is said to cover a refused send and a possible duplicate, never a message the server cannot find', () => {
+      const text: string = configureScreen().nativeElement.textContent;
+
+      expect(text).toContain('Continuing applies to a message the broker refused and to a possible duplicate. A message the server cannot find is tried again once its lock is released, and then stops the run.');
+    });
+
+    it('with a filter set, the screen warns that a filtered run may stop early; without one it does not', async () => {
+      const fixture = configureScreen();
+      const warning = 'A filter leaves the messages it skips at the head of the queue; the server can reach only a few hundred messages past them, so a filtered run may stop early.';
+      expect(fixture.nativeElement.textContent).not.toContain(warning);
+
+      fixture.componentInstance.reasonFilter = 'MaxDeliveryCountExceeded';
+      fixture.changeDetectorRef.markForCheck();
+      fixture.detectChanges();
+      expect(fixture.nativeElement.textContent).toContain(warning);
+
+      fixture.componentInstance.reasonFilter = ' ';
+      fixture.componentInstance.textFilter = 'order-7';
+      fixture.changeDetectorRef.markForCheck();
+      fixture.detectChanges();
+      expect(fixture.nativeElement.textContent).toContain(warning);
+    });
+  });
+
+  describe('Pause and Resume through the buttons of the dialog', () => {
+    it('Pause holds the run after the request in flight, with no peek or resubmit, and Resume carries it on', async () => {
+      capabilities = { supportsPeekFromSequenceNumber: true };
+      const answer = new Subject<BatchOperationResult>();
+      queueService.peekDeadLetterMessages = vi.fn().mockReturnValueOnce(of(old(1, 2))).mockReturnValue(of([]));
+      queueService.resubmitDeadLetterMessages.mockReturnValueOnce(answer);
+      configure();
+      const fixture = TestBed.createComponent(ContinuousResubmitDialogComponent);
+      fixture.detectChanges();
+      const button = (label: string) =>
+        Array.from<HTMLButtonElement>(fixture.nativeElement.querySelectorAll('button')).find(b => b.textContent?.trim().endsWith(label))!;
+      const status = () => (fixture.nativeElement.querySelector('.status')?.textContent ?? '').replace(/\s+/g, ' ').trim();
+
+      button('Start').click();
+      await flush();
+      fixture.detectChanges();
+      button('Pause').click();
+      answer.next(ok(2));
+      answer.complete();
+      await flush();
+      fixture.detectChanges();
+
+      expect(status()).toContain('Paused.');
+      expect(queueService.peekDeadLetterMessages).toHaveBeenCalledTimes(1);
+      expect(queueService.resubmitDeadLetterMessages).toHaveBeenCalledTimes(1);
+
+      button('Resume').click();
+      await flush();
+      fixture.detectChanges();
+
+      expect(queueService.peekDeadLetterMessages).toHaveBeenCalledTimes(2);
+      expect(status()).toContain('Finished.');
     });
   });
 });
