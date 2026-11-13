@@ -5,6 +5,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { ConnectionService, LoggerService, TopicService } from '../../core/services';
 import { TopicInfo } from '../../core/models';
 import { TopicsComponent } from './topics.component';
+import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
 
 const topic = (name: string, subscriptionCount: number) =>
   ({ name, subscriptionCount, sizeInBytes: 0, subscriptions: [] }) as unknown as TopicInfo;
@@ -134,5 +135,81 @@ describe('TopicsComponent loads the subscriptions of a topic when it is opened, 
 
     expect(element.textContent).toContain('orders');
     expect(element.textContent).not.toContain('stale');
+  });
+});
+
+describe('TopicsComponent purges a subscription from the More actions menu', () => {
+  const text = (e: Element | null) => (e?.textContent ?? '').replace(/\s+/g, ' ').trim();
+
+  it('each purge is disabled at a count of 0, asks the same confirmation, purges nothing when cancelled and purges the subscription of its topic when confirmed', async () => {
+    const topicService = {
+      getTopics: vi.fn().mockReturnValue(of([topic('orders', 2)])),
+      getSubscriptions: vi.fn().mockReturnValue(of([
+        { name: 'invoice-sub', activeMessageCount: 3, deadLetterMessageCount: 0 },
+        { name: 'audit-sub', activeMessageCount: 0, deadLetterMessageCount: 2 }
+      ])),
+      purgeMessages: vi.fn().mockReturnValue(of(undefined)),
+      purgeDeadLetterMessages: vi.fn().mockReturnValue(of(undefined))
+    };
+    const answers: boolean[] = [];
+    TestBed.configureTestingModule({
+      imports: [TopicsComponent],
+      providers: [
+        { provide: TopicService, useValue: topicService },
+        { provide: ConnectionService, useValue: { isConnected: true, connectionStatus$: NEVER } },
+        { provide: LoggerService, useValue: { log: () => undefined, error: () => undefined } }
+      ]
+    });
+    const fixture = TestBed.createComponent(TopicsComponent);
+    const open = vi.spyOn(fixture.debugElement.injector.get(MatDialog), 'open')
+      .mockImplementation(() => ({ afterClosed: () => of(answers.shift()) }) as never);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    (el.querySelector('.topic-toggle') as HTMLButtonElement).click();
+    await fixture.whenStable();
+    const menu = async (name: string) => {
+      const trigger = el.querySelector(`button[aria-label="More actions for ${name}"]`) as HTMLButtonElement;
+      trigger.click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      const panel = document.getElementById(trigger.getAttribute('aria-controls')!)!;
+      return Array.from(panel.querySelectorAll<HTMLButtonElement>('[mat-menu-item]'));
+    };
+    const close = async () => {
+      document.querySelectorAll<HTMLElement>('.cdk-overlay-backdrop').forEach(backdrop => backdrop.click());
+      await fixture.whenStable();
+    };
+    const pick = async (name: string, item: string, confirmed: boolean) => {
+      answers.push(confirmed);
+      (await menu(name)).find(b => text(b) === item)!.click();
+      await fixture.whenStable();
+    };
+
+    expect((await menu('invoice-sub')).map(b => [text(b), b.disabled])).toStrictEqual([['Purge Messages', false], ['Purge Dead Letter', true]]);
+    await close();
+    expect((await menu('audit-sub')).map(b => [text(b), b.disabled])).toStrictEqual([['Purge Messages', true], ['Purge Dead Letter', false]]);
+    await close();
+
+    await pick('invoice-sub', 'Purge Messages', false);
+    expect(open).toHaveBeenLastCalledWith(ConfirmDialogComponent, { data: expect.objectContaining({
+      title: 'Purge Messages',
+      message: 'Are you sure you want to delete all 3 active messages from subscription "invoice-sub"? This action cannot be undone.',
+      confirmText: 'Purge'
+    }) });
+    expect(topicService.purgeMessages).not.toHaveBeenCalled();
+
+    await pick('invoice-sub', 'Purge Messages', true);
+    expect(topicService.purgeMessages.mock.calls).toStrictEqual([['orders', 'invoice-sub']]);
+
+    await pick('audit-sub', 'Purge Dead Letter', false);
+    expect(open).toHaveBeenLastCalledWith(ConfirmDialogComponent, { data: expect.objectContaining({
+      title: 'Purge Dead Letter Queue',
+      message: 'Are you sure you want to delete all 2 dead letter messages from subscription "audit-sub"? This action cannot be undone.',
+      confirmText: 'Purge'
+    }) });
+    expect(topicService.purgeDeadLetterMessages).not.toHaveBeenCalled();
+
+    await pick('audit-sub', 'Purge Dead Letter', true);
+    expect(topicService.purgeDeadLetterMessages.mock.calls).toStrictEqual([['orders', 'audit-sub']]);
   });
 });
