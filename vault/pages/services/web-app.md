@@ -3,7 +3,7 @@ title: "Web App"
 version: "1.0"
 date: 2026-11-12
 updated: 2026-11-13
-changes: "2026-11-13: Export and Import of entity definitions in the tree header, a dry run before anything is created and the namespace typed to confirm, shown only on supportsDefinitions true. Earlier on 2026-11-13: opening a session is one request and the session list is kept while the entity stays selected, with Refresh; sessions of a queue and a subscription in one component, a passive list, one session opened at a time, a state editor that never overwrites a changed state; a failed tree load says so; topic subscriptions load on open; a send retry carries only the form; CSV cells cannot start a formula; an unexpected continuous-resubmit error is a failure. 2026-11-12: the entity selection is cleared on every connection status; delete drains an entity only when the selection equals its count; Retry Failed and continuous resubmit never resend a possible duplicate; the purge confirmation names entity, topic, connection and count; a shortcut does nothing under another dialog. Earlier on 2026-11-12: every value in an API path goes through apiPath, encoded once; a name of . or .. recorded as a gap. Founded from the code on 2026-11-12"
+changes: "2026-11-13: the navigation is in the toolbar and the developer mode shortcut takes Cmd; Export and Import of entity definitions in the tree header, a dry run before anything is created and the namespace typed to confirm, shown only on supportsDefinitions true. Earlier on 2026-11-13: opening a session is one request and the session list is kept while the entity stays selected, with Refresh; sessions of a queue and a subscription in one component, a passive list, one session opened at a time, a state editor that never overwrites a changed state; a failed tree load says so; topic subscriptions load on open; a send retry carries only the form; CSV cells cannot start a formula; an unexpected continuous-resubmit error is a failure. 2026-11-12: the entity selection is cleared on every connection status; delete drains an entity only when the selection equals its count; Retry Failed and continuous resubmit never resend a possible duplicate; the purge confirmation names entity, topic, connection and count; a shortcut does nothing under another dialog. Earlier on 2026-11-12: every value in an API path goes through apiPath, encoded once; a name of . or .. recorded as a gap. Founded from the code on 2026-11-12"
 page_type: service
 status: active
 description: "Angular 21 single-page UI that talks to the local .NET API through one ApiService, in a plain browser or inside the Electron shell."
@@ -14,6 +14,7 @@ source:
   - web-app/src/app/app.config.ts
   - web-app/src/app/app.routes.ts
   - web-app/src/app/app.ts
+  - web-app/src/app/app.html
   - web-app/src/environments/environment.ts
   - web-app/src/environments/environment.prod.ts
   - web-app/src/app/core/services/api.service.ts
@@ -80,7 +81,9 @@ All components are standalone; there are no NgModules.
 - `web-app/src/main.ts:5` calls `bootstrapApplication(App, appConfig)`.
 - `web-app/src/app/app.config.ts:9` detects Electron by the presence of `window.electronAPI`. Under Electron it uses hash routing so `file://` works (`web-app/src/app/app.config.ts:15`); in a browser it uses path routing. `provideHttpClient()` is registered with no interceptors (`web-app/src/app/app.config.ts:16`).
 - Routes are all lazy `loadComponent` (`web-app/src/app/app.routes.ts:3`): `''` redirects to `connections`, then `connections`, `entities`, `queues`, `topics`, `monitoring`.
-- `web-app/src/app/app.ts:93` registers the Electron listeners (navigate, change-connection, toggle-dev-mode, update status) only when `isElectron`. It keeps the last five window errors for the bug-report dialog (`web-app/src/app/app.ts:115`).
+- `web-app/src/app/app.ts:88` registers the Electron listeners (navigate and change-connection from the tray, update status) only when `isElectron`. It keeps the last five window errors for the bug-report dialog (`web-app/src/app/app.ts:110`).
+- **Navigation is the toolbar** (2026-11-13). The toolbar starts with a `nav` named "Main" holding one Material text button per route, Connections, Entities, Queues, Topics and Monitoring (`web-app/src/app/app.html:2`, `web-app/src/app/app.ts:75`), the same in Electron and in the browser; the active one carries `aria-current="page"` and the secondary-container colour (`web-app/src/app/app.html:4`). Until then the links sat in a side navigation rendered only outside Electron, so Queues, Topics and Monitoring had no way in from the desktop app. The side navigation, its toggle button and the "Messaging Explorer" text of the toolbar were removed, as the prototype draws it; the window title carries the name. A long namespace in the connection badge shortens with an ellipsis (`web-app/src/app/app.html:31`). Pinned by `web-app/src/app/app.spec.ts:78`, `web-app/src/app/app.spec.ts:89` and `web-app/src/app/app.spec.ts:102`, which read the links against `app.routes.ts`, so a route added without a link fails. The prototype's toolbar draws three links (Connections, Entities, Monitoring); the app has five because Queues and Topics are routes of their own.
+- **Developer mode shortcut.** Ctrl+Shift+D, or Cmd+Shift+D on a Mac, toggles developer mode, through a window `HostListener` that goes with the component (`web-app/src/app/app.ts:97`); the letter is matched in either case. Pinned by `web-app/src/app/app.spec.ts:110`.
 
 ## How it works
 
@@ -211,7 +214,7 @@ Components: `advanced-filter-panel`, `bulk-actions-toolbar`, `bulk-operation-pro
 - If `getApiSecret()` fails the app silently sends unauthenticated requests: `web-app/src/app/core/services/api.service.ts:59`.
 - `ProviderShellComponent` silently renders nothing when no component is registered (TODO in code): `web-app/src/app/features/entities/provider-shell.component.ts:176`.
 - A name that is exactly `.` or `..` cannot be sent as a path segment: `encodeURIComponent` leaves dots alone and the browser's URL parser resolves `.`, `..` and their `%2E` forms as dot segments. Azure names cannot take that form; RabbitMQ names can, and deleting a subscription named `..` under topic `t` would become `DELETE /api/topics/t/` and delete the topic (read from the URL standard and the route table, not executed). `apiPath` does not refuse such a value today: `web-app/src/app/core/services/api-path.ts:7`.
-- Preload exposes `onNewConnection` and nothing consumes or sends it: `web-app/electron/preload.js:20`. `clear-all-data` does have a consumer, through the generic `electron.on` bridge (`web-app/src/app/features/connections/connections.component.ts:439`); the founding survey missed it (corrected 2026-11-12). That listener is added on every visit to the page and never removed.
+- The toolbar at the minimum window width was seen once in a headless browser at 1000 px, disconnected, light and dark; with a long namespace connected, with an update button, and in Electron on each system it was not: `web-app/src/app/app.html:2`.
 
 ## Related
 

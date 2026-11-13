@@ -1,9 +1,8 @@
-import { Component, inject, OnInit, signal, NgZone, ErrorHandler } from '@angular/core';
+import { Component, inject, OnInit, signal, NgZone, HostListener } from '@angular/core';
 import { Router, RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { AsyncPipe } from '@angular/common';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatSidenavModule } from '@angular/material/sidenav';
-import { MatListModule } from '@angular/material/list';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatMenuModule } from '@angular/material/menu';
@@ -19,7 +18,6 @@ import { BugReportDialogComponent } from './shared/bug-report-dialog.component';
 
 interface NavItem {
   label: string;
-  icon: string;
   route: string;
 }
 
@@ -34,7 +32,6 @@ type UpdateStatus = 'idle' | 'checking' | 'available' | 'downloading' | 'downloa
     AsyncPipe,
     MatToolbarModule,
     MatSidenavModule,
-    MatListModule,
     MatIconModule,
     MatButtonModule,
     MatMenuModule,
@@ -61,7 +58,6 @@ export class App implements OnInit {
   readonly dlqService = inject(DeadLetterNotificationService);
 
   connectionStatus$ = this.connectionService.connectionStatus$;
-  sidebarOpen = signal(true);
 
   isElectron = typeof window !== 'undefined' && !!(window as any).electronAPI;
 
@@ -77,18 +73,17 @@ export class App implements OnInit {
   updateChannel = signal<'latest' | 'beta'>('latest');
 
   navItems: NavItem[] = [
-    { label: 'Connections', icon: 'link', route: '/connections' },
-    { label: 'Entities', icon: 'account_tree', route: '/entities' },
-    { label: 'Queues', icon: 'list', route: '/queues' },
-    { label: 'Topics', icon: 'forum', route: '/topics' },
-    { label: 'Monitoring', icon: 'monitoring', route: '/monitoring' },
+    { label: 'Connections', route: '/connections' },
+    { label: 'Entities', route: '/entities' },
+    { label: 'Queues', route: '/queues' },
+    { label: 'Topics', route: '/topics' },
+    { label: 'Monitoring', route: '/monitoring' },
   ];
 
   ngOnInit() {
     this.themeService.initialize();
     this.devSettingsService.initialize();
     this.setupErrorCapture();
-    this.setupDevModeShortcut();
 
     if (this.isElectron) {
       this.setupElectronListeners();
@@ -98,15 +93,15 @@ export class App implements OnInit {
     }
   }
 
-  private setupDevModeShortcut(): void {
-    window.addEventListener('keydown', (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.shiftKey && e.key === 'D') {
-        e.preventDefault();
-        this.devSettingsService.toggle();
-        const state = this.devSettingsService.devMode() ? 'enabled' : 'disabled';
-        this.snackBar.open(`Developer mode ${state}`, 'Close', { duration: 2000 });
-      }
-    });
+  /** Ctrl+Shift+D, or Cmd+Shift+D on a Mac, toggles developer mode. */
+  @HostListener('window:keydown', ['$event'])
+  onDevModeShortcut(e: KeyboardEvent): void {
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'd') {
+      e.preventDefault();
+      this.devSettingsService.toggle();
+      const state = this.devSettingsService.devMode() ? 'enabled' : 'disabled';
+      this.snackBar.open(`Developer mode ${state}`, 'Close', { duration: 2000 });
+    }
   }
 
   private setupErrorCapture() {
@@ -138,10 +133,6 @@ export class App implements OnInit {
       try { return JSON.stringify(reason).substring(0, 300); } catch { /* fallthrough */ }
     }
     return String(reason);
-  }
-
-  toggleSidebar() {
-    this.sidebarOpen.update(v => !v);
   }
 
   onNotificationClick(alert: DeadLetterAlert) {
@@ -239,16 +230,6 @@ export class App implements OnInit {
     if (electronAPI.onChangeConnection) {
       electronAPI.onChangeConnection((connectionId: string) => {
         this.ngZone.run(() => this.connectionService.connect(connectionId).subscribe());
-      });
-    }
-
-    if (electronAPI.onToggleDevMode) {
-      electronAPI.onToggleDevMode(() => {
-        this.ngZone.run(() => {
-          this.devSettingsService.toggle();
-          const state = this.devSettingsService.devMode() ? 'enabled' : 'disabled';
-          this.snackBar.open(`Developer mode ${state}`, 'Close', { duration: 2000 });
-        });
       });
     }
   }

@@ -194,7 +194,7 @@ The key middleware (only `OPTIONS` and `/health` bypass it; `/healthz`, `//healt
 ### P3
 
 - Listeners for the menu action and for F9 are added on every visit to the connections page and never removed (`web-app/src/app/features/connections/connections.component.ts:425`); after N visits the action runs N times.
-- After clear-all or after deleting the connected connection, the header still says connected (`web-app/src/app/features/connections/connections.component.ts:625`).
+- After clear-all or after deleting the connected connection, the header still says connected (`web-app/src/app/features/connections/connections.component.ts:616`).
 - The tree loads twice on every visit and can show the previous connection's tree after a switch (`web-app/src/app/features/entities/entities-tree.component.ts:734`). Since 2026-11-13 a new load cancels the one in flight (`web-app/src/app/features/entities/entities-tree.component.ts:770`), so the last load decides what is shown (`web-app/src/app/features/entities/entities-tree.component.spec.ts:197`, `web-app/src/app/features/entities/entities-tree.component.spec.ts:209`); the mount still sends the first request before cancelling it. The topics page does the same (`web-app/src/app/features/topics/topics.component.ts:208`). A failed load no longer reads as "No Entities Found" (fixed 2026-11-13, below).
 - The transfer monitor shows a growing backlog as a processing rate (`web-app/src/app/features/entities/transfer-monitor.component.ts:231`).
 - A regex that matches the empty string can freeze the detail view (`web-app/src/app/shared/pipes/highlight.pipe.ts:58`). The pipe itself is safe against injection.
@@ -210,7 +210,7 @@ The key middleware (only `OPTIONS` and `/health` bypass it; `/healthz`, `//healt
 - One confirmation builder for destructive actions: entity, parent, connection target, live count, and the typed acknowledgement for purges.
 - An environment badge in the header (the group name); today only the namespace string is shown.
 - Delete the dead and mock code: `message-body-editor`, the mock fallback, the `.backup` file. (`metrics-dashboard` and the chart leftovers in `entity-details` went on 2026-11-12.)
-- Preload listeners return a disposer; `electron.on` forwards its arguments, which `navigate` and `change-connection` lose today.
+- Preload listeners return a disposer. The generic `electron.on` this entry also asked for was removed on 2026-11-13 with the menu, so only the named listeners remain.
 - A CSP meta tag in `index.html`; no remote resource exists, so `default-src 'self'` should be feasible.
 - Specs with the shapes the API really emits (date strings, `d.hh:mm:ss`).
 

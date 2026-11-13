@@ -1,11 +1,9 @@
 <mat-toolbar color="primary" class="app-toolbar">
-  @if (!isElectron) {
-    <button mat-icon-button (click)="toggleSidebar()" matTooltip="Toggle sidebar">
-      <mat-icon>menu</mat-icon>
-    </button>
-  }
-
-  <span class="brand">Messaging Explorer</span>
+  <nav aria-label="Main" class="main-nav">
+    @for (item of navItems; track item.route) {
+      <a mat-button class="nav-link" [routerLink]="item.route" routerLinkActive="active-link" ariaCurrentWhenActive="page">{{ item.label }}</a>
+    }
+  </nav>
 
   @if (appVersion()) {
     <span class="version-badge" [matMenuTriggerFor]="channelMenu" matTooltip="Click to change update channel" style="cursor: pointer;">
@@ -28,9 +26,9 @@
 
   @if (connectionStatus$ | async; as status) {
     @if (status.connected) {
-      <span class="connection-badge connected">
+      <span class="connection-badge connected" [title]="status.namespace">
         <mat-icon class="status-icon">check_circle</mat-icon>
-        {{ status.namespace }}
+        <span class="badge-text">{{ status.namespace }}</span>
       </span>
     } @else {
       <span class="connection-badge disconnected">
@@ -117,19 +115,6 @@
 }
 
 <mat-sidenav-container class="app-container" [hasBackdrop]="false">
-  @if (!isElectron) {
-    <mat-sidenav [opened]="sidebarOpen()" mode="side" class="app-sidenav">
-      <mat-nav-list>
-        @for (item of navItems; track item.route) {
-          <a mat-list-item [routerLink]="item.route" routerLinkActive="active-link">
-            <mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
-            <span matListItemTitle>{{ item.label }}</span>
-          </a>
-        }
-      </mat-nav-list>
-    </mat-sidenav>
-  }
-
   <mat-sidenav-content class="app-content">
     <router-outlet></router-outlet>
   </mat-sidenav-content>
