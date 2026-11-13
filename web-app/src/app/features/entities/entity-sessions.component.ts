@@ -10,7 +10,8 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatListModule } from '@angular/material/list';
 import { MatTableModule } from '@angular/material/table';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { Subscription, concatMap, map } from 'rxjs';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { Subscription } from 'rxjs';
 import { MessageInfo, SessionDetail, SessionEntity, SessionList } from '../../core/models';
 import { SessionService } from '../../core/services';
 import { SessionStateDialogComponent, SessionStateDialogData } from './session-state-dialog.component';
@@ -23,18 +24,19 @@ type Opened =
   | { id: string; status: 'failed'; message: string };
 
 const PREVIEW_LENGTH = 100;
+const MESSAGE_COUNT = 100;
 
 /**
  * The sessions of one queue or subscription. The list is read when the component is created, by a
- * passive scan that locks nothing; opening a session reads its state and then its messages, each
- * call accepting the session for a moment. A new entity resets everything and cancels what was
+ * passive scan that locks nothing; opening a session reads its state and its messages in one call
+ * that accepts the session for a moment. A new entity resets everything and cancels what was
  * still in flight for the previous one.
  */
 @Component({
   selector: 'app-entity-sessions',
   standalone: true,
   imports: [
-    DatePipe, ReactiveFormsModule, MatButtonModule, MatFormFieldModule, MatInputModule, MatIconModule, MatListModule, MatTableModule, MatProgressBarModule
+    DatePipe, ReactiveFormsModule, MatButtonModule, MatFormFieldModule, MatInputModule, MatIconModule, MatListModule, MatTableModule, MatProgressBarModule, MatTooltipModule
   ],
   template: `
     <p class="lock-notice" role="note">
@@ -67,7 +69,12 @@ const PREVIEW_LENGTH = 100;
             </div>
           }
           @case ('ready') {
-            <p class="scan-notice">{{ scanNotice() }}</p>
+            <div class="scan-bar">
+              <p class="scan-notice">{{ scanNotice() }}</p>
+              <button mat-icon-button type="button" aria-label="Refresh the sessions" matTooltip="Refresh the sessions" (click)="loadList()">
+                <mat-icon>refresh</mat-icon>
+              </button>
+            </div>
             @if (sessionList()!.sessions.length === 0) {
               <p class="empty">No session holds a message in this {{ kind() }}.</p>
             } @else {
@@ -164,7 +171,8 @@ const PREVIEW_LENGTH = 100;
     .open-by-id { display: flex; align-items: baseline; gap: 8px; }
     .grow { flex: 1; min-width: 0; }
     .scan-notice, .muted, .empty { color: var(--mat-sys-on-surface-variant); }
-    .scan-notice { font: var(--mat-sys-body-small); margin: 8px 0; }
+    .scan-bar { display: flex; align-items: center; gap: 4px; }
+    .scan-notice { flex: 1; min-width: 0; font: var(--mat-sys-body-small); margin: 8px 0; }
     .empty { font: var(--mat-sys-body-medium); margin: 16px 0; }
     .mono { font-family: ui-monospace, monospace; }
     h3 { font: var(--mat-sys-title-medium); margin: 0 0 8px; overflow-wrap: anywhere; }
@@ -248,11 +256,9 @@ export class EntitySessionsComponent {
     const entity = this.entity();
     this.openCall?.unsubscribe();
     this.opened.set({ id, status: 'loading' });
-    this.openCall = this.sessions.get(entity, id).pipe(
-      concatMap(detail => this.sessions.messages(entity, id).pipe(map(messages => ({ detail, messages }))))
-    ).subscribe({
-      next: ({ detail, messages }) => {
-        this.opened.set({ id, status: 'ready', detail, messages });
+    this.openCall = this.sessions.get(entity, id, MESSAGE_COUNT).subscribe({
+      next: detail => {
+        this.opened.set({ id, status: 'ready', detail, messages: detail.messages ?? [] });
         if (focusEdit) afterNextRender(() => this.editButton()?.nativeElement.focus(), { injector: this.injector });
       },
       error: (error: HttpErrorResponse) => this.opened.set({ id, status: 'failed', message: failure(error, 'Could not open the session: the API did not answer.') })

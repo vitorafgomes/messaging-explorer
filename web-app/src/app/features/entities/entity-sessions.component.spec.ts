@@ -19,23 +19,23 @@ const LIST: SessionList = {
   scannedMessages: 1000,
   truncated: true
 };
-const DETAIL: SessionDetail = { sessionId: 'order-1001', state: '{"step":3}', stateIsBinary: false, lockedUntil: '2026-11-12T23:10:00+00:00' };
 const MESSAGE: MessageInfo = {
   messageId: 'm-1', sessionId: 'order-1001', body: '{"total":42}', bodyType: 'String', sequenceNumber: 4411, deliveryCount: 0,
   enqueuedTime: '2026-11-12T22:00:00Z' as never, timeToLive: '14.00:00:00', applicationProperties: {}, state: 'Active'
 };
+const DETAIL: SessionDetail = { sessionId: 'order-1001', state: '{"step":3}', stateIsBinary: false, lockedUntil: '2026-11-12T23:10:00+00:00', messages: [MESSAGE] };
 
 describe('EntitySessionsComponent: the sessions of a queue or a subscription', () => {
   let fixture: ComponentFixture<EntitySessionsComponent>;
   let el: HTMLElement;
-  let api: { list: ReturnType<typeof vi.fn>; get: ReturnType<typeof vi.fn>; messages: ReturnType<typeof vi.fn> };
+  let api: { list: ReturnType<typeof vi.fn>; get: ReturnType<typeof vi.fn> };
   let open: ReturnType<typeof vi.fn>;
   let dialogResult: unknown;
 
   function render(entity: SessionEntity, list: () => Observable<SessionList> = () => of(LIST)) {
     dialogResult = undefined;
     open = vi.fn(() => ({ afterClosed: () => of(dialogResult) }));
-    api = { list: vi.fn(list), get: vi.fn(() => of(DETAIL)), messages: vi.fn(() => of([MESSAGE])) };
+    api = { list: vi.fn(list), get: vi.fn(() => of(DETAIL)) };
     TestBed.configureTestingModule({
       imports: [EntitySessionsComponent],
       providers: [
@@ -83,7 +83,6 @@ describe('EntitySessionsComponent: the sessions of a queue or a subscription', (
       expect(text(el.querySelector('.lock-notice > span'))).toBe(LOCK_NOTICE);
       expect(text(el.querySelector('.scan-notice'))).toBe(`Listed from the first 1000 messages. ${STATE_ONLY_TRUNCATED}`);
       expect(api.get, 'no session is accepted to show the list').not.toHaveBeenCalled();
-      expect(api.messages).not.toHaveBeenCalled();
     });
 
     it('a scan that reached the end of the entity shows only the sentence on sessions holding only a state', () => {
@@ -133,6 +132,18 @@ describe('EntitySessionsComponent: the sessions of a queue or a subscription', (
       expect(alert('.list'), 'a refusal stays shown as worded').toBe('This entity does not use sessions.');
     });
 
+    it('Refresh, named for screen readers, reads the list again once and shows the new answer', () => {
+      render(QUEUE);
+      const refresh = el.querySelector<HTMLButtonElement>('button[aria-label="Refresh the sessions"]');
+      expect(refresh, 'a Refresh button named "Refresh the sessions"').not.toBeNull();
+      api.list.mockImplementation(() => of({ ...LIST, sessions: [{ sessionId: 'order-1003', messageCount: 4, firstSequenceNumber: 4420 }] }));
+
+      click(refresh);
+
+      expect(api.list.mock.calls).toStrictEqual([[QUEUE], [QUEUE]]);
+      expect(rows()).toStrictEqual(['order-1003 4 messages']);
+    });
+
     it('session ids are shown as text: markup is not interpreted', () => {
       render(QUEUE, () => of({ ...LIST, sessions: [{ sessionId: '<img src=x>', messageCount: 1, firstSequenceNumber: 1 }] }));
 
@@ -165,7 +176,7 @@ describe('EntitySessionsComponent: the sessions of a queue or a subscription', (
 
       typeId('order 1003/a');
       click(openButton());
-      expect(api.get.mock.calls).toStrictEqual([[QUEUE, 'order 1003/a']]);
+      expect(api.get.mock.calls).toStrictEqual([[QUEUE, 'order 1003/a', 100]]);
     });
 
     it('an empty id after typing says the rule too and sends nothing', () => {
@@ -181,36 +192,40 @@ describe('EntitySessionsComponent: the sessions of a queue or a subscription', (
   });
 
   describe('opening a session: its state, its lock and its messages', () => {
-    it('opening a session requests and lists its messages, after its state: one session accepted at a time', () => {
+    it('opening a session is one request for its state and its messages, and lists the messages that request returned', () => {
       render(QUEUE);
       const detail = new Subject<SessionDetail>();
       api.get.mockImplementation(() => detail);
 
       click(el.querySelector<HTMLButtonElement>('.session'));
-      expect(api.get.mock.calls).toStrictEqual([[QUEUE, 'order-1001']]);
-      expect(api.messages, 'messages wait until the detail call has released the session').not.toHaveBeenCalled();
+      expect(api.get.mock.calls, 'one request, asking for 100 messages').toStrictEqual([[QUEUE, 'order-1001', 100]]);
       expect(el.querySelector('mat-progress-bar[aria-label="Opening session order-1001"]')).not.toBeNull();
 
-      detail.next(DETAIL);
+      detail.next({ ...DETAIL, messages: [MESSAGE, { ...MESSAGE, messageId: 'm-2', sequenceNumber: 4413, body: 'second', state: 'Deferred' }] });
       detail.complete();
       fixture.detectChanges();
 
-      expect(api.messages.mock.calls).toStrictEqual([[QUEUE, 'order-1001']]);
+      expect(api.get, 'nothing else is requested to show the messages').toHaveBeenCalledTimes(1);
       expect(text(el.querySelector('.detail h3'))).toBe('Session order-1001');
       expect(text(el.querySelector('.state'))).toBe('{"step":3}');
       expect(text(el.querySelector('.locked-until'))).toBe('Nov 12, 2026, 11:10:00 PM UTC');
-      expect(messageRows()).toStrictEqual([['4411', 'm-1', 'Nov 12, 2026, 10:00:00 PM', 'Active', '{"total":42}']]);
+      expect(messageRows()).toStrictEqual([
+        ['4411', 'm-1', 'Nov 12, 2026, 10:00:00 PM', 'Active', '{"total":42}'],
+        ['4413', 'm-2', 'Nov 12, 2026, 10:00:00 PM', 'Deferred', 'second']
+      ]);
     });
 
-    it('a session with no state says so; a session with no message says so', () => {
-      render(QUEUE);
-      api.get.mockImplementation(() => of({ ...DETAIL, state: null }));
-      api.messages.mockImplementation(() => of([]));
-      click(el.querySelector<HTMLButtonElement>('.session'));
+    it('a session with no state says so; a session with no message, empty or null, says so', () => {
+      for (const messages of [[], null]) {
+        render(QUEUE);
+        api.get.mockImplementation(() => of({ ...DETAIL, state: null, messages }));
+        click(el.querySelector<HTMLButtonElement>('.session'));
 
-      expect(text(el.querySelector('.state'))).toBe('No state');
-      expect(text(el.querySelector('.detail .empty'))).toBe('No message in this session.');
-      expect(button('Edit state'), 'a missing state can be written').toBeDefined();
+        expect(text(el.querySelector('.state'))).toBe('No state');
+        expect(text(el.querySelector('.detail .empty')), JSON.stringify(messages)).toBe('No message in this session.');
+        expect(button('Edit state'), 'a missing state can be written').toBeDefined();
+        TestBed.resetTestingModule();
+      }
     });
 
     it('a binary state is shown as its byte count and base64 and offers no editor', () => {
@@ -225,7 +240,7 @@ describe('EntitySessionsComponent: the sessions of a queue or a subscription', (
 
     it('a long body is cut to a preview of 100 characters, and markup in a body is shown as text', () => {
       render(QUEUE);
-      api.messages.mockImplementation(() => of([{ ...MESSAGE, body: '<b>' + 'x'.repeat(200) }]));
+      api.get.mockImplementation(() => of({ ...DETAIL, messages: [{ ...MESSAGE, body: '<b>' + 'x'.repeat(200) }] }));
       click(el.querySelector<HTMLButtonElement>('.session'));
 
       expect(messageRows()[0][4]).toBe('<b>' + 'x'.repeat(94) + '...');
@@ -238,20 +253,12 @@ describe('EntitySessionsComponent: the sessions of a queue or a subscription', (
       click(el.querySelector<HTMLButtonElement>('.session'));
 
       expect(alert('.detail')).toBe('The session is in use by another receiver. Try again in a moment.');
-      expect(api.messages).not.toHaveBeenCalled();
+      expect(el.querySelector('tr.message-row'), 'no message is shown for a session that was not opened').toBeNull();
 
       api.get.mockImplementation(() => of(DETAIL));
       click(button('Retry'));
       expect(api.get).toHaveBeenCalledTimes(2);
       expect(text(el.querySelector('.state'))).toBe('{"step":3}');
-    });
-
-    it('a 409 on the messages after the detail is shown the same way', () => {
-      render(QUEUE);
-      api.messages.mockImplementation(fail(409, 'The session is in use by another receiver. Try again in a moment.', 'SessionInUse'));
-      click(el.querySelector<HTMLButtonElement>('.session'));
-
-      expect(alert('.detail')).toBe('The session is in use by another receiver. Try again in a moment.');
     });
 
     it('a 404 and a 400 are shown as worded; a 500 says the API did not answer', () => {
@@ -282,11 +289,12 @@ describe('EntitySessionsComponent: the sessions of a queue or a subscription', (
     it('after a write the detail shows the state the server returned', () => {
       render(QUEUE);
       click(el.querySelector<HTMLButtonElement>('.session'));
-      dialogResult = { ...DETAIL, state: '{"step":4}' };
+      dialogResult = { ...DETAIL, state: '{"step":4}', messages: null };
       click(button('Edit state'));
 
       expect(text(el.querySelector('.state'))).toBe('{"step":4}');
       expect(api.get, 'the stored state comes from the write, not a second read').toHaveBeenCalledTimes(1);
+      expect(messageRows().map(r => r[1]), 'the write answers no messages; the ones read stay').toStrictEqual(['m-1']);
     });
 
     it('Reload from the editor opens the session again; a cancelled editor reads nothing', () => {

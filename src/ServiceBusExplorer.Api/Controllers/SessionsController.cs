@@ -35,12 +35,12 @@ public class SessionsController : ControllerBase
         List(topicName, subscriptionName, maxMessages);
 
     [HttpGet(QueueBase + "/{sessionId}")]
-    public Task<ActionResult<SessionDetail>> GetQueueSession(string name, string sessionId) =>
-        Run(name, null, sessionId, "read", (p, ct) => p.GetSessionAsync(name, null, sessionId, ct));
+    public Task<ActionResult<SessionDetail>> GetQueueSession(string name, string sessionId, [FromQuery] int messageCount = 0) =>
+        Run(name, null, sessionId, "read", (p, ct) => p.GetSessionAsync(name, null, sessionId, Math.Clamp(messageCount, 0, 1000), ct));
 
     [HttpGet(SubscriptionBase + "/{sessionId}")]
-    public Task<ActionResult<SessionDetail>> GetSubscriptionSession(string topicName, string subscriptionName, string sessionId) =>
-        Run(topicName, subscriptionName, sessionId, "read", (p, ct) => p.GetSessionAsync(topicName, subscriptionName, sessionId, ct));
+    public Task<ActionResult<SessionDetail>> GetSubscriptionSession(string topicName, string subscriptionName, string sessionId, [FromQuery] int messageCount = 0) =>
+        Run(topicName, subscriptionName, sessionId, "read", (p, ct) => p.GetSessionAsync(topicName, subscriptionName, sessionId, Math.Clamp(messageCount, 0, 1000), ct));
 
     [HttpGet(QueueBase + "/{sessionId}/messages")]
     public Task<ActionResult<IEnumerable<IMessage>>> PeekQueueSessionMessages(string name, string sessionId, [FromQuery] int count = 10) =>

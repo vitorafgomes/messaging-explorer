@@ -28,7 +28,7 @@ public class SessionRouteTests
         LockedUntil = new DateTimeOffset(2026, 11, 12, 23, 10, 0, TimeSpan.Zero)
     };
 
-    private const string DetailBody = """{"sessionId":"order-1001","state":"{\"step\":3}","stateIsBinary":false,"lockedUntil":"2026-11-12T23:10:00+00:00"}""";
+    private const string DetailBody = """{"sessionId":"order-1001","state":"{\"step\":3}","stateIsBinary":false,"lockedUntil":"2026-11-12T23:10:00+00:00","messages":null}""";
 
     private static object? ProviderAnswers(MethodInfo m, object?[] _) => m.Name switch
     {
@@ -98,8 +98,41 @@ public class SessionRouteTests
         Assert.Equal((HttpStatusCode.OK, DetailBody), (answered.Status, answered.Body));
         var call = Assert.Single(answered.Calls);
         var (entity, subscription) = Names(path);
-        Assert.Equal((nameof(IMessagingProvider.GetSessionAsync), entity, subscription, "order-1001"), (call.Method, call.Args[0], call.Args[1], call.Args[2]));
-        Assert.True(((CancellationToken)call.Args[3]!).CanBeCanceled);
+        Assert.Equal((nameof(IMessagingProvider.GetSessionAsync), entity, subscription, "order-1001", 0), (call.Method, call.Args[0], call.Args[1], call.Args[2], call.Args[3]));
+        Assert.True(((CancellationToken)call.Args[4]!).CanBeCanceled);
+    }
+
+    [Theory]
+    [InlineData(Queue + "/order-1001?messageCount=100", 100)]
+    [InlineData(Queue + "/order-1001?messageCount=-3", 0)]
+    [InlineData(Subscription + "/order-1001?messageCount=5000", 1000)]
+    public async Task The_detail_hands_the_provider_the_message_count_clamped_to_0_through_1000(string path, int messageCount)
+    {
+        var answered = await SendAsync("GET", path, null, ProviderAnswers);
+
+        Assert.Equal(HttpStatusCode.OK, answered.Status);
+        Assert.Equal(messageCount, Assert.Single(answered.Calls).Args[3]);
+    }
+
+    [Fact]
+    public async Task The_detail_asked_for_messages_answers_them_beside_the_state_in_the_peek_shape()
+    {
+        var answered = await SendAsync("GET", Queue + "/order-1001?messageCount=10", null, (m, _) => m.Name == nameof(IMessagingProvider.GetSessionAsync)
+            ? Task.FromResult(new SessionDetail
+            {
+                SessionId = "order-1001",
+                State = "{\"step\":3}",
+                LockedUntil = Detail.LockedUntil,
+                Messages = [new MessageInfo { SequenceNumber = 4411, SessionId = "order-1001", Body = "b" }]
+            })
+            : null);
+        var peek = await SendAsync("GET", Queue + "/order-1001/messages", null, ProviderAnswers);
+
+        Assert.Equal(HttpStatusCode.OK, answered.Status);
+        using var detail = JsonDocument.Parse(answered.Body);
+        using var peeked = JsonDocument.Parse(peek.Body);
+        Assert.Equal("{\"step\":3}", detail.RootElement.GetProperty("state").GetString());
+        Assert.Equal(peeked.RootElement.GetRawText(), detail.RootElement.GetProperty("messages").GetRawText());
     }
 
     [Theory]
