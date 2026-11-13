@@ -3,6 +3,11 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatButtonModule } from '@angular/material/button';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatIconModule } from '@angular/material/icon';
+import { MatInputModule } from '@angular/material/input';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { finalize } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { QueueService } from '../../core/services';
@@ -20,47 +25,45 @@ export interface MoveMessagesDialogData {
   imports: [
     CommonModule,
     FormsModule,
+    MatButtonModule,
     MatDialogModule,
+    MatFormFieldModule,
+    MatIconModule,
+    MatInputModule,
+    MatProgressSpinnerModule,
     MatSnackBarModule
   ],
-  host: {
-    '[class.dark-mode-dialog]': 'isDarkMode()'
-  },
   template: `
-    <div class="modal-header" [class.bg-dark]="isDarkMode()" [class.text-light]="isDarkMode()">
-      <h5 class="modal-title d-flex align-items-center gap-2" [class.text-light]="isDarkMode()">
-        <i class="fa fa-exchange text-primary"></i>
-        Move {{ data.messageCount }} {{ data.messageCount === 1 ? 'Message' : 'Messages' }}
-      </h5>
-    </div>
+    <h2 mat-dialog-title class="title">
+      <mat-icon fontIcon="swap_horiz" aria-hidden="true"></mat-icon>
+      <span>Move {{ data.messageCount }} {{ data.messageCount === 1 ? 'Message' : 'Messages' }}</span>
+    </h2>
 
-    <div class="modal-body" [class.bg-dark]="isDarkMode()" [class.text-light]="isDarkMode()">
+    <mat-dialog-content class="content">
       @if (loading()) {
-        <div class="text-center py-4">
-          <div class="spinner-border text-primary" role="status">
-            <span class="visually-hidden">Loading queues...</span>
-          </div>
-          <p class="mt-2 mb-0">Loading available queues...</p>
-        </div>
+        <p class="state" role="status">
+          <mat-progress-spinner mode="indeterminate" diameter="24" aria-hidden="true"></mat-progress-spinner>
+          <span>Loading available queues...</span>
+        </p>
       } @else if (error()) {
-        <div class="alert alert-danger mb-0" role="alert">
-          <i class="fa fa-exclamation-triangle me-2"></i>
-          {{ error() }}
-        </div>
+        <p class="note error" role="alert">
+          <mat-icon fontIcon="error" aria-hidden="true"></mat-icon>
+          <span>{{ error() }}</span>
+        </p>
       } @else {
-        <div class="mb-3">
-          <p class="mb-3" [class.text-light]="isDarkMode()">
-            Select the target queue to move
-            <strong>{{ data.messageCount }}</strong>
-            {{ data.messageCount === 1 ? 'message' : 'messages' }}
-            from
-            <strong>{{ data.currentQueueName }}</strong>
-            {{ data.isDeadLetter ? '(Dead Letter)' : '' }}.
-          </p>
+        <p>
+          Select the target queue to move
+          <strong>{{ data.messageCount }}</strong>
+          {{ data.messageCount === 1 ? 'message' : 'messages' }}
+          from
+          <strong>{{ data.currentQueueName }}</strong>
+          {{ data.isDeadLetter ? '(Dead Letter)' : '' }}.
+        </p>
 
-          <label class="form-label">Target Queue</label>
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-label>Target Queue</mat-label>
           <select
-            class="form-select"
+            matNativeControl
             [(ngModel)]="selectedTargetQueue"
             [disabled]="availableQueues().length === 0"
             required>
@@ -69,85 +72,51 @@ export interface MoveMessagesDialogData {
               <option [value]="queue.name">{{ queue.name }}</option>
             }
           </select>
-
           @if (availableQueues().length === 0) {
-            <div class="form-text text-warning">
-              <i class="fa fa-exclamation-triangle me-1"></i>
-              No other queues available
-            </div>
+            <mat-hint class="warn">No other queues available</mat-hint>
           } @else {
-            <div class="form-text">
-              Select the destination queue for the selected messages
-            </div>
+            <mat-hint>Select the destination queue for the selected messages</mat-hint>
           }
-        </div>
+        </mat-form-field>
 
         @if (selectedTargetQueue) {
-          <div class="alert alert-info mb-0" role="alert">
-            <i class="fa fa-info-circle me-2"></i>
-            <strong>Note:</strong> Messages will be moved from
-            <strong>{{ data.currentQueueName }}</strong> to
-            <strong>{{ selectedTargetQueue }}</strong>.
-            The original messages will be removed from the source queue.
-          </div>
+          <p class="note" role="note">
+            <mat-icon fontIcon="info" aria-hidden="true"></mat-icon>
+            <span>
+              <strong>Note:</strong> Messages will be moved from
+              <strong>{{ data.currentQueueName }}</strong> to
+              <strong>{{ selectedTargetQueue }}</strong>.
+              The original messages will be removed from the source queue.
+            </span>
+          </p>
         }
       }
-    </div>
+    </mat-dialog-content>
 
-    <div class="modal-footer" [class.bg-dark]="isDarkMode()">
-      <button class="btn btn-secondary" mat-dialog-close [disabled]="loading()">
+    <mat-dialog-actions align="end">
+      <button mat-button type="button" mat-dialog-close [disabled]="loading()">
         Cancel
       </button>
       <button
-        class="btn btn-primary"
+        mat-flat-button
+        type="button"
         [mat-dialog-close]="selectedTargetQueue"
         [disabled]="!selectedTargetQueue || loading() || error()">
-        <i class="fa fa-exchange me-2"></i>
+        <mat-icon fontIcon="swap_horiz" aria-hidden="true"></mat-icon>
         Move Messages
       </button>
-    </div>
+    </mat-dialog-actions>
   `,
   styles: [`
-    .modal-header {
-      border-bottom: 1px solid var(--bs-border-color);
-      padding: 16px 24px;
-    }
-
-    .modal-title {
-      margin: 0;
-      font-size: 18px;
-      font-weight: 500;
-      color: var(--bs-body-color);
-
-      i {
-        font-size: 20px;
-      }
-    }
-
-    .modal-body {
-      padding: 24px;
-      min-width: 500px;
-
-      p {
-        color: var(--bs-secondary-color);
-      }
-    }
-
-    .modal-footer {
-      border-top: 1px solid var(--bs-border-color);
-      padding: 16px 24px;
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
-    }
-
-    .form-select {
-      min-height: 38px;
-    }
-
-    .alert {
-      border-radius: 6px;
-    }
+    .title { display: flex; align-items: center; gap: 8px; }
+    .title mat-icon { flex: none; color: var(--mat-sys-primary); }
+    .content { display: flex; flex-direction: column; gap: 16px; min-width: 0; overflow-wrap: anywhere; }
+    p { margin: 0; }
+    .state { display: flex; align-items: center; gap: 12px; color: var(--mat-sys-on-surface-variant); }
+    .note { display: flex; align-items: flex-start; gap: 8px; padding: 8px 12px; border-radius: 8px; background: var(--mat-sys-secondary-container); color: var(--mat-sys-on-secondary-container); }
+    .note mat-icon { flex: none; }
+    .note.error { background: var(--mat-sys-error-container); color: var(--mat-sys-on-error-container); }
+    .warn { color: var(--mat-sys-error); }
   `]
 })
 export class MoveMessagesDialogComponent implements OnInit {
@@ -165,13 +134,6 @@ export class MoveMessagesDialogComponent implements OnInit {
 
   ngOnInit() {
     this.loadQueues();
-  }
-
-  isDarkMode(): boolean {
-    if (typeof document === 'undefined') return false;
-    const bsTheme = document.documentElement.getAttribute('data-bs-theme');
-    const hasThemeDark = document.body.classList.contains('theme-dark');
-    return bsTheme === 'dark' || hasThemeDark;
   }
 
   loadQueues() {

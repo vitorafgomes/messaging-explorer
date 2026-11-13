@@ -6,7 +6,7 @@ changes: "Initial initiative page"
 page_type: roadmap
 status: active
 description: "The web app ends on one design system: every screen built from Angular Material and coloured by its theme, with end-to-end tests that drive the real app and capture each screen."
-updated: 2026-11-12
+updated: 2026-11-13
 source:
   - chat
   - "context/pages/conventions/ui.md"
@@ -34,6 +34,7 @@ No dates are set; the owner sets them.
 
 - **As of 2026-11-12:** the convention is written and the target layout is drawn in `context/prototypes/web-app/` (38 artboards since the review of [[pages/roadmap/ui-review-2026-11]], light and dark, with screenshots); nothing is built in the application. Phase 0 waits for the Azure emulator fixture of [[pages/roadmap/tests-of-everything]] Phase 1, which gives a broker with data to point the app at.
 - **As of 2026-11-13:** Phase 0 is in progress. The end-to-end tests and their screenshots exist and pass locally; CI, three of the planned flows and the owner's review remain.
+- **As of 2026-11-13, later:** Phase 3 has started with the messages dialog and the message tools.
 
 ## Phases
 
@@ -59,7 +60,7 @@ No dates are set; the owner sets them.
 - **Success criteria:** no purge or delete can be confirmed without the entity and the connection on screen.
 
 ### Phase 3 - Material, screen by screen
-- **Status:** not started
+- **Status:** in progress (2026-11-13). **Messages dialog and message tools:** the messages, send, move, import, export, compare and automatic resubmit dialogs reach zero Bootstrap classes, Font Awesome icons, `--bs-*` variables and literal colours (from 179, 109, 43, 106, 59, 52 and 2 Bootstrap classes, and 26, 10, 5, 10, 6, 8 and 0 icons); the end-to-end flows pass and both themes are captured. The list and the detail sit side by side as the artboard draws them, and the send, import, move, export and auto resubmit dialogs no longer cut off their right edge. Left for later: the shared selection bar, advanced filters and bulk progress and results dialogs the messages dialog hosts, and what the `Messages` and `Send` strips list as not built ([[pages/services/web-app]]).
 - **Scope:** in this order: entity details, entities tree, connections, messages dialog, monitoring, queues and topics pages. Per screen: buttons and form controls to Material, Font Awesome to `mat-icon`, `--bs-*` and hex colours to theme tokens, styles into their own file, the three states of rule 9, names on icon controls.
 - **Success criteria:** per screen, the counts on [[pages/conventions/ui]] reach zero for that screen and its end-to-end flow still passes; the light and dark screenshots are reviewed.
 

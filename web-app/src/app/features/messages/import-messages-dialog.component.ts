@@ -3,9 +3,14 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatButtonModule } from '@angular/material/button';
+import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatIconModule } from '@angular/material/icon';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { finalize } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { QueueService, TopicService, ThemeService, MessageImportService } from '../../core/services';
+import { QueueService, TopicService, MessageImportService } from '../../core/services';
 import { SendMessageRequest } from '../../core/models';
 
 export interface ImportMessagesDialogData {
@@ -19,250 +24,161 @@ export interface ImportMessagesDialogData {
   imports: [
     CommonModule,
     FormsModule,
+    MatButtonModule,
+    MatCheckboxModule,
     MatDialogModule,
+    MatIconModule,
+    MatProgressBarModule,
+    MatProgressSpinnerModule,
     MatSnackBarModule
   ],
-  host: {
-    '[class.dark-mode-dialog]': 'themeService.isDark()'
-  },
   template: `
-    <div class="modal-header" [class.bg-dark]="themeService.isDark()" [class.text-light]="themeService.isDark()">
-      <h5 class="modal-title d-flex align-items-center gap-2" [class.text-light]="themeService.isDark()">
-        <i class="fa fa-upload text-primary"></i>
-        Import Messages to {{ data.entityType === 'queue' ? 'Queue' : 'Topic' }}: {{ data.entityName }}
-      </h5>
-    </div>
+    <h2 mat-dialog-title class="title">
+      <mat-icon fontIcon="upload" aria-hidden="true"></mat-icon>
+      <span>Import Messages to {{ data.entityType === 'queue' ? 'Queue' : 'Topic' }}: {{ data.entityName }}</span>
+    </h2>
 
-    <div class="modal-body" [class.bg-dark]="themeService.isDark()" [class.text-light]="themeService.isDark()">
-      <!-- File Picker -->
-      <div class="file-picker-area mb-3">
-        <label class="form-label d-flex align-items-center gap-2">
-          <i class="fa fa-file text-muted"></i>
-          Select File
-        </label>
-        <div class="input-group">
-          <input
-            type="file"
-            class="form-control"
-            accept=".json,.csv"
-            (change)="onFileSelected($event)"
-            #fileInput>
-        </div>
-        <small class="form-text text-muted">Supported formats: JSON, CSV (exported from this application)</small>
+    <mat-dialog-content class="content">
+      <div class="file-picker">
+        <label for="import-file" class="field-label">Select File</label>
+        <input
+          id="import-file"
+          type="file"
+          class="file-input"
+          accept=".json,.csv"
+          aria-describedby="import-file-hint"
+          (change)="onFileSelected($event)">
+        <span id="import-file-hint" class="hint">Supported formats: JSON, CSV (exported from this application)</span>
       </div>
 
-      <!-- File Info -->
       @if (fileName()) {
-        <div class="file-info mb-3">
-          <div class="d-flex align-items-center gap-2 text-muted">
-            <i class="fa fa-file-text"></i>
-            <span>{{ fileName() }}</span>
-            <span class="badge bg-secondary">{{ formatFileSize(fileSize()) }}</span>
-          </div>
-        </div>
+        <p class="file-info">
+          <mat-icon fontIcon="description" aria-hidden="true"></mat-icon>
+          <span class="file-name">{{ fileName() }}</span>
+          <span class="size">{{ formatFileSize(fileSize()) }}</span>
+        </p>
       }
 
-      <!-- Parse Error -->
       @if (parseError()) {
-        <div class="alert alert-danger d-flex align-items-center gap-2 mb-3" role="alert">
-          <i class="fa fa-exclamation-triangle"></i>
-          <div>{{ parseError() }}</div>
-        </div>
+        <p class="note error" role="alert">
+          <mat-icon fontIcon="error" aria-hidden="true"></mat-icon>
+          <span>{{ parseError() }}</span>
+        </p>
       }
 
-      <!-- Parsed Messages Preview -->
       @if (parsedMessages().length > 0) {
-        <div class="parse-summary mb-3">
-          <div class="alert alert-success d-flex align-items-center gap-2" role="alert">
-            <i class="fa fa-check-circle"></i>
-            <div>Parsed <strong>{{ parsedMessages().length }}</strong> message{{ parsedMessages().length > 1 ? 's' : '' }} from file</div>
-          </div>
-        </div>
+        <p class="note" role="status">
+          <mat-icon fontIcon="check_circle" aria-hidden="true"></mat-icon>
+          <span>Parsed <strong>{{ parsedMessages().length }}</strong> message{{ parsedMessages().length > 1 ? 's' : '' }} from file</span>
+        </p>
 
-        <!-- Preview Table -->
-        <div class="preview-section mb-3">
-          <label class="form-label d-flex align-items-center gap-2">
-            <i class="fa fa-table text-muted"></i>
-            Preview (first {{ previewMessages().length }} of {{ parsedMessages().length }})
-          </label>
-          <div class="table-responsive">
-            <table class="table table-sm table-bordered preview-table" [class.table-dark]="themeService.isDark()">
-              <thead>
+        <div class="preview">
+          <table class="preview-table">
+            <caption>Preview (first {{ previewMessages().length }} of {{ parsedMessages().length }})</caption>
+            <thead>
+              <tr>
+                <th scope="col" class="num">#</th>
+                <th scope="col">Message ID</th>
+                <th scope="col">Subject</th>
+                <th scope="col">Content Type</th>
+                <th scope="col">Body</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (msg of previewMessages(); track $index) {
                 <tr>
-                  <th style="width: 40px">#</th>
-                  <th style="width: 180px">Message ID</th>
-                  <th style="width: 140px">Subject</th>
-                  <th style="width: 120px">Content Type</th>
-                  <th>Body</th>
+                  <td class="num">{{ $index + 1 }}</td>
+                  <td class="truncate mono" [title]="msg.messageId || ''">{{ msg.messageId || '(auto)' }}</td>
+                  <td class="truncate" [title]="msg.subject || ''">{{ msg.subject || '-' }}</td>
+                  <td>{{ msg.contentType || '-' }}</td>
+                  <td class="truncate mono body" [title]="msg.body">{{ msg.body | slice:0:80 }}{{ msg.body.length > 80 ? '...' : '' }}</td>
                 </tr>
-              </thead>
-              <tbody>
-                @for (msg of previewMessages(); track $index) {
-                  <tr>
-                    <td class="text-muted">{{ $index + 1 }}</td>
-                    <td class="text-truncate" style="max-width: 180px" [title]="msg.messageId || ''">
-                      {{ msg.messageId || '(auto)' }}
-                    </td>
-                    <td class="text-truncate" style="max-width: 140px" [title]="msg.subject || ''">
-                      {{ msg.subject || '-' }}
-                    </td>
-                    <td>{{ msg.contentType || '-' }}</td>
-                    <td class="text-truncate font-monospace" style="max-width: 300px" [title]="msg.body">
-                      {{ msg.body | slice:0:80 }}{{ msg.body.length > 80 ? '...' : '' }}
-                    </td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
+              }
+            </tbody>
+          </table>
           @if (parsedMessages().length > 5) {
-            <small class="text-muted">... and {{ parsedMessages().length - 5 }} more messages</small>
+            <span class="hint">... and {{ parsedMessages().length - 5 }} more messages</span>
           }
         </div>
 
-        <!-- Import Options -->
-        <div class="import-options mb-3">
-          <label class="form-label d-flex align-items-center gap-2">
-            <i class="fa fa-cog text-muted"></i>
-            Import Options
-          </label>
-          <div class="d-flex flex-column gap-2">
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" id="generateNewIds" [(ngModel)]="generateNewIds">
-              <label class="form-check-label" for="generateNewIds">
-                Generate new Message IDs
-                <small class="d-block text-muted">Replace existing message IDs with new UUIDs</small>
-              </label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" id="skipEmpty" [(ngModel)]="skipEmpty">
-              <label class="form-check-label" for="skipEmpty">
-                Skip messages with empty body
-                <small class="d-block text-muted">Exclude messages that have no body content</small>
-              </label>
-            </div>
-          </div>
-        </div>
+        <fieldset class="group">
+          <legend>Import Options</legend>
+          <mat-checkbox name="generateNewIds" [(ngModel)]="generateNewIds">
+            Generate new Message IDs
+            <span class="hint block">Replace existing message IDs with new UUIDs</span>
+          </mat-checkbox>
+          <mat-checkbox name="skipEmpty" [(ngModel)]="skipEmpty">
+            Skip messages with empty body
+            <span class="hint block">Exclude messages that have no body content</span>
+          </mat-checkbox>
+        </fieldset>
       }
 
-      <!-- Import Progress -->
       @if (importing()) {
-        <div class="import-progress mb-3">
-          <div class="d-flex align-items-center gap-2 mb-2">
-            <span class="spinner-border spinner-border-sm text-primary"></span>
-            <span>Sending messages...</span>
-          </div>
-          <div class="progress" style="height: 6px;">
-            <div class="progress-bar progress-bar-striped progress-bar-animated"
-              [style.width.%]="importProgress()">
-            </div>
-          </div>
-          <small class="text-muted">{{ importedCount() }} of {{ getImportCount() }} sent</small>
+        <div class="send-progress" role="status">
+          <span>Sending messages...</span>
+          <mat-progress-bar mode="determinate" [value]="importProgress()" aria-label="Messages sent"></mat-progress-bar>
+          <span class="hint">{{ importedCount() }} of {{ getImportCount() }} sent</span>
         </div>
       }
 
-      <!-- Import Result -->
       @if (importResult()) {
-        <div class="alert" [class.alert-success]="importResult()!.failures === 0" [class.alert-warning]="importResult()!.failures > 0" role="alert">
-          <div class="d-flex align-items-center gap-2">
-            <i class="fa" [class.fa-check-circle]="importResult()!.failures === 0" [class.fa-exclamation-triangle]="importResult()!.failures > 0"></i>
-            <div>
-              <strong>Import complete:</strong>
-              {{ importResult()!.successes }} sent successfully
-              @if (importResult()!.failures > 0) {
-                , {{ importResult()!.failures }} failed
-              }
-            </div>
-          </div>
-        </div>
+        <p class="note" [class.error]="importResult()!.failures > 0" role="status">
+          <mat-icon [fontIcon]="importResult()!.failures === 0 ? 'check_circle' : 'warning'" aria-hidden="true"></mat-icon>
+          <span>
+            <strong>Import complete:</strong>
+            {{ importResult()!.successes }} sent successfully
+            @if (importResult()!.failures > 0) {
+              , {{ importResult()!.failures }} failed
+            }
+          </span>
+        </p>
       }
-    </div>
+    </mat-dialog-content>
 
-    <div class="modal-footer" [class.bg-dark]="themeService.isDark()">
-      <button class="btn btn-secondary" mat-dialog-close>
+    <mat-dialog-actions align="end">
+      <button mat-button type="button" mat-dialog-close>
         {{ importResult() ? 'Close' : 'Cancel' }}
       </button>
-      <button class="btn btn-primary" (click)="importMessages()"
+      <button mat-flat-button type="button" (click)="importMessages()"
         [disabled]="parsedMessages().length === 0 || importing() || getImportCount() === 0 || !!importResult()">
         @if (importing()) {
-          <span class="spinner-border spinner-border-sm me-2"></span>
+          <mat-progress-spinner mode="indeterminate" diameter="18" aria-hidden="true"></mat-progress-spinner>
         } @else {
-          <i class="fa fa-upload me-2"></i>
+          <mat-icon fontIcon="upload" aria-hidden="true"></mat-icon>
         }
         Import {{ getImportCount() }} message{{ getImportCount() !== 1 ? 's' : '' }}
       </button>
-    </div>
+    </mat-dialog-actions>
   `,
   styles: [`
-    .modal-header {
-      border-bottom: 1px solid var(--bs-border-color);
-      padding: 16px 24px;
-    }
-
-    .modal-title {
-      margin: 0;
-      font-size: 18px;
-      font-weight: 500;
-      color: var(--bs-body-color);
-
-      i {
-        font-size: 20px;
-      }
-    }
-
-    .modal-body {
-      padding: 24px;
-      min-width: 600px;
-      max-height: 70vh;
-      overflow-y: auto;
-    }
-
-    .modal-footer {
-      border-top: 1px solid var(--bs-border-color);
-      padding: 16px 24px;
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
-    }
-
-    .preview-table {
-      font-size: 13px;
-      margin-bottom: 4px;
-
-      th {
-        font-weight: 600;
-        font-size: 12px;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        color: var(--bs-secondary-color);
-      }
-
-      td {
-        vertical-align: middle;
-      }
-
-      .font-monospace {
-        font-size: 12px;
-      }
-    }
-
-    .file-info {
-      padding: 8px 12px;
-      border-radius: 6px;
-      background-color: var(--bs-tertiary-bg);
-    }
-
-    .import-options {
-      padding: 12px;
-      border-radius: 6px;
-      background-color: var(--bs-tertiary-bg);
-    }
-
-    .import-progress {
-      padding: 12px;
-      border-radius: 6px;
-      background-color: var(--bs-tertiary-bg);
-    }
+    .title { display: flex; align-items: center; gap: 8px; overflow-wrap: anywhere; }
+    .title mat-icon { flex: none; color: var(--mat-sys-primary); }
+    .content { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+    p { margin: 0; }
+    .file-picker { display: flex; flex-direction: column; gap: 4px; }
+    .field-label { font: var(--mat-sys-label-medium); color: var(--mat-sys-on-surface-variant); }
+    .file-input { box-sizing: border-box; max-width: 100%; padding: 8px 12px; border: 1px solid var(--mat-sys-outline); border-radius: 8px; background: var(--mat-sys-surface); color: var(--mat-sys-on-surface); font: var(--mat-sys-body-medium); }
+    .hint { font: var(--mat-sys-body-small); color: var(--mat-sys-on-surface-variant); }
+    .block { display: block; }
+    .file-info { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--mat-sys-on-surface-variant); }
+    .file-name { min-width: 0; overflow-wrap: anywhere; }
+    .size { flex: none; padding: 0 8px; border-radius: 999px; background: var(--mat-sys-surface-container-highest); font: var(--mat-sys-label-medium); font-variant-numeric: tabular-nums; }
+    .note { display: flex; align-items: flex-start; gap: 8px; padding: 8px 12px; border-radius: 8px; background: var(--mat-sys-secondary-container); color: var(--mat-sys-on-secondary-container); }
+    .note mat-icon { flex: none; }
+    .note.error { background: var(--mat-sys-error-container); color: var(--mat-sys-on-error-container); }
+    .preview { display: flex; flex-direction: column; gap: 4px; min-width: 0; overflow-x: auto; }
+    .preview-table { width: 100%; table-layout: fixed; border-collapse: collapse; font: var(--mat-sys-body-small); font-variant-numeric: tabular-nums; }
+    caption { padding: 0 0 4px; text-align: start; font: var(--mat-sys-label-medium); color: var(--mat-sys-on-surface-variant); }
+    th { padding: 8px; border-bottom: 1px solid var(--mat-sys-outline); text-align: start; font: var(--mat-sys-label-medium); color: var(--mat-sys-on-surface-variant); }
+    td { padding: 8px; border-bottom: 1px solid var(--mat-sys-outline-variant); vertical-align: top; }
+    .num { width: 32px; text-align: end; color: var(--mat-sys-on-surface-variant); }
+    .body { width: 40%; }
+    .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mono { font-family: ui-monospace, monospace; }
+    .group { display: flex; flex-direction: column; gap: 4px; min-width: 0; margin: 0; padding: 0; border: 0; }
+    legend { padding: 0 0 4px; font: var(--mat-sys-title-small); }
+    .send-progress { display: flex; flex-direction: column; gap: 8px; }
   `]
 })
 export class ImportMessagesDialogComponent {
@@ -273,7 +189,6 @@ export class ImportMessagesDialogComponent {
   private importService = inject(MessageImportService);
   private snackBar = inject(MatSnackBar);
   private readonly destroyRef = inject(DestroyRef);
-  protected themeService = inject(ThemeService);
 
   // State signals
   parsedMessages = signal<SendMessageRequest[]>([]);
