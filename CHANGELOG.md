@@ -2,6 +2,58 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.4.1] - 2026-11-13
+
+### Added
+- Azure Service Bus: create, edit and enable or disable queues, topics and
+  subscriptions, with a review of what will change before it is saved.
+- Azure Service Bus: list, add, replace and delete the rules of a
+  subscription (SQL, correlation, true and false filters, with an action).
+- Azure Service Bus: the transfer dead-letter queue of a queue and of a
+  subscription can be read, searched, resubmitted and cleaned.
+- Azure Service Bus: scheduled messages show their state and can be cancelled
+  on a queue.
+- Azure Service Bus: sessions on queues and subscriptions. The list locks
+  nothing; one session opens with its state and its messages; the state editor
+  shows the old state beside the new and refuses to overwrite a state that
+  changed meanwhile.
+- A local RabbitMQ and an Azure Service Bus emulator in Docker (`dev/brokers/`)
+  for trying the app by hand.
+
+### Fixed
+- Listing sessions no longer accepts and locks each session, which took them
+  away from the applications consuming them.
+- The queue details show the real configuration (lock duration, delivery
+  count, size, time to live, status) instead of zeros.
+- Panels show only what the broker supports and what is real; the sample
+  metrics tab and a topic form that saved nothing are gone.
+- An operation on a disabled entity answers that it is disabled, instead of a
+  generic error.
+- Loading messages and searching stop when the request is cancelled.
+- A queue or topic list that fails to load says so, instead of showing an
+  empty namespace.
+- An unexpected error during the automatic dead-letter resubmit ends as a
+  failure, never as completed.
+- A send retried after a failure carries only what the form holds now.
+- An exported CSV cell cannot start a spreadsheet formula.
+- A legacy connections file that cannot be read is kept, not deleted.
+- The topics page loads the subscriptions of a topic when it is opened, not
+  one request per topic on load.
+- The project site always shows working download links.
+
+### Changed
+- RabbitMQ refuses session operations instead of answering an empty list.
+
+### Known issues
+- RabbitMQ bulk delete, resubmit and move can lose messages on a failure. Use
+  them with care on RabbitMQ until the rework lands.
+- The automatic dead-letter resubmit stops at the first failure and runs only
+  while its dialog is open.
+- Deferred messages are shown with their state but cannot be deferred or
+  received from the app.
+- macOS builds are unsigned, so macOS cannot install an update by itself;
+  download the new version from the releases page.
+
 ## [2.4.0] - 2026-11-12
 
 ### Fixed
