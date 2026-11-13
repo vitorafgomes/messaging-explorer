@@ -205,3 +205,27 @@ describe('TransferMonitorComponent', () => {
     expect(component.sparklinePath()).toBe('');
   });
 });
+
+describe('TransferMonitorComponent as the live Active card', () => {
+  it('is a button named with the live count that opens the messages, by click or by Enter', () => {
+    TestBed.configureTestingModule({
+      imports: [TransferMonitorComponent],
+      providers: [{ provide: TopicService, useValue: { getSubscription: () => of(createMockSubscription(12)) } }],
+    });
+    const fixture = TestBed.createComponent(TransferMonitorComponent);
+    fixture.componentRef.setInput('topicName', 'test-topic');
+    fixture.componentRef.setInput('subscriptionName', 'test-sub');
+    const clicked = vi.fn();
+    fixture.componentInstance.clicked.subscribe(clicked);
+    fixture.detectChanges();
+    fixture.detectChanges();
+    const card = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('.transfer-monitor')!;
+
+    expect(card.getAttribute('role')).toBe('button');
+    expect(card.getAttribute('aria-label')).toBe('View the 12 active messages');
+    card.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    card.click();
+
+    expect(clicked).toHaveBeenCalledTimes(2);
+  });
+});

@@ -11,171 +11,49 @@ import { SubscriptionInfo } from '../../core/models';
   standalone: true,
   imports: [DecimalPipe],
   template: `
-    <div class="transfer-monitor" (click)="clicked.emit()" style="cursor: pointer;">
+    <div class="transfer-monitor" role="button" tabindex="0"
+      [attr.aria-label]="'View the ' + currentCount() + ' active messages'"
+      (click)="clicked.emit()"
+      (keydown.enter)="clicked.emit()"
+      (keydown.space)="$event.preventDefault(); clicked.emit()">
       <div class="monitor-header">
-        <i class="fa-solid fa-envelope"></i>
         <span class="monitor-title">Active Messages</span>
         <span class="live-badge">
           <span class="live-dot"></span>
-          LIVE
+          Live
         </span>
       </div>
-      <div class="monitor-body">
-        <div class="current-value" [class.pulse]="justChanged()">
-          {{ currentCount() | number }}
-          @if (delta() !== 0) {
-            <span class="delta" [class.positive]="delta() > 0" [class.negative]="delta() < 0">
-              {{ delta() > 0 ? '+' : '' }}{{ delta() | number }}
-            </span>
-          }
-        </div>
-        <svg class="sparkline" [attr.viewBox]="'0 0 ' + sparklineWidth + ' ' + sparklineHeight" preserveAspectRatio="none">
-          @if (sparklinePath()) {
-            <path [attr.d]="sparklinePath()" fill="none" stroke="var(--bs-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            <path [attr.d]="sparklineAreaPath()" fill="var(--bs-primary)" opacity="0.1"/>
-          }
-        </svg>
-        <div class="monitor-stats">
-          <span class="stat">
-            <span class="stat-label">Peak</span>
-            <span class="stat-value">{{ peak() | number }}</span>
+      <div class="current-value" [class.pulse]="justChanged()">
+        {{ currentCount() | number }}
+        @if (delta() !== 0) {
+          <span class="delta" [class.positive]="delta() > 0" [class.negative]="delta() < 0">
+            {{ delta() > 0 ? '+' : '' }}{{ delta() | number }}
           </span>
-          <span class="stat">
-            <span class="stat-label">Processed</span>
-            <span class="stat-value">{{ totalProcessed() | number }}</span>
-          </span>
-          <span class="stat">
-            <span class="stat-label">Rate</span>
-            <span class="stat-value">{{ processingRate() }}/s</span>
-          </span>
-        </div>
+        }
+      </div>
+      <svg class="sparkline" aria-hidden="true" [attr.viewBox]="'0 0 ' + sparklineWidth + ' ' + sparklineHeight" preserveAspectRatio="none">
+        @if (sparklinePath()) {
+          <path class="line" [attr.d]="sparklinePath()" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path class="area" [attr.d]="sparklineAreaPath()"/>
+        }
+      </svg>
+      <div class="monitor-stats">
+        <span class="stat">
+          <span class="stat-label">Peak</span>
+          <span class="stat-value">{{ peak() | number }}</span>
+        </span>
+        <span class="stat">
+          <span class="stat-label">Processed</span>
+          <span class="stat-value">{{ totalProcessed() | number }}</span>
+        </span>
+        <span class="stat">
+          <span class="stat-label">Rate</span>
+          <span class="stat-value">{{ processingRate() }}/s</span>
+        </span>
       </div>
     </div>
   `,
-  styles: [`
-    .transfer-monitor {
-      background: var(--bs-body-bg);
-      border: 1px solid var(--bs-border-color);
-      border-radius: 8px;
-      overflow: hidden;
-      grid-column: span 2;
-    }
-
-    .monitor-header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 14px;
-      background: linear-gradient(135deg, #2196F3 0%, #1565c0 100%);
-      color: white;
-      font-size: 13px;
-      font-weight: 500;
-
-      i {
-        font-size: 16px;
-      }
-    }
-
-    .monitor-title {
-      flex: 1;
-    }
-
-    .live-badge {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-    }
-
-    .live-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: #4caf50;
-      box-shadow: 0 0 4px #4caf50;
-      animation: blink 1.5s ease-in-out infinite;
-    }
-
-    @keyframes blink {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.3; }
-    }
-
-    .monitor-body {
-      padding: 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .current-value {
-      font-size: 32px;
-      font-weight: 700;
-      color: var(--bs-body-color);
-      line-height: 1;
-      transition: transform 0.3s ease;
-    }
-
-    .current-value.pulse {
-      animation: pulse-value 0.6s ease;
-    }
-
-    @keyframes pulse-value {
-      0% { transform: scale(1); }
-      50% { transform: scale(1.08); }
-      100% { transform: scale(1); }
-    }
-
-    .delta {
-      font-size: 14px;
-      font-weight: 600;
-      margin-left: 8px;
-      padding: 2px 6px;
-      border-radius: 8px;
-
-      &.positive {
-        background: rgba(76, 175, 80, 0.15);
-        color: #4caf50;
-      }
-
-      &.negative {
-        background: rgba(244, 67, 54, 0.15);
-        color: #f44336;
-      }
-    }
-
-    .sparkline {
-      width: 100%;
-      height: 40px;
-    }
-
-    .monitor-stats {
-      display: flex;
-      gap: 16px;
-    }
-
-    .stat {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-
-    .stat-label {
-      font-size: 11px;
-      color: var(--bs-secondary-color);
-      text-transform: uppercase;
-      font-weight: 500;
-    }
-
-    .stat-value {
-      font-size: 16px;
-      font-weight: 600;
-      color: var(--bs-body-color);
-    }
-  `]
+  styleUrl: './transfer-monitor.component.scss'
 })
 export class TransferMonitorComponent implements OnInit, OnDestroy {
   private topicService = inject(TopicService);
