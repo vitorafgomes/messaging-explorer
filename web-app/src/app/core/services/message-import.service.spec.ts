@@ -1,5 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { MessageImportService } from './message-import.service';
+import { MessageExportService } from './message-export.service';
+import { MessageInfo } from '../models';
 import { SendMessageRequest } from '../models';
 
 describe('MessageImportService', () => {
@@ -295,6 +297,18 @@ describe('MessageImportService', () => {
       expect(result).toHaveLength(2);
       expect(result[0].body).toBe('Hello');
       expect(result[1].body).toBe('World');
+    });
+
+    it('a CSV the app exported imports with the same bodies and subjects, including values that start like a formula', () => {
+      const values = ['-1', '+OK', '@user', '=SUM(A1)', "'=already quoted", "'plain", 'plain'];
+      const messages = values.map((value, i) =>
+        ({ sequenceNumber: i + 1, messageId: `m-${i}`, body: value, subject: value, deliveryCount: 0, enqueuedTime: new Date('2026-01-01T00:00:00Z') }) as MessageInfo);
+      const csv = TestBed.inject(MessageExportService).exportToCsv(messages, { format: 'csv', includeApplicationProperties: false, prettyPrint: false });
+
+      const imported = service.parseCsvFile(csv);
+
+      expect(imported.map(m => m.body)).toStrictEqual(values);
+      expect(imported.map(m => m.subject)).toStrictEqual(values);
     });
   });
 

@@ -303,13 +303,19 @@ export class MessageExportService {
 
   /**
    * Escapes a value for safe CSV output
-   * Handles quotes, commas, and newlines according to CSV RFC 4180
+   * Handles quotes, commas, and newlines according to CSV RFC 4180, and prefixes a value that a
+   * spreadsheet would read as a formula (leading =, +, -, @, tab or carriage return, after any
+   * apostrophes) with one more apostrophe, which the CSV import removes
    * @param value - The value to escape
    * @returns Escaped CSV value
    */
   private escapeCsvValue(value: string): string {
     if (!value) {
       return '""';
+    }
+
+    if (/^'*[=+\-@\t\r]/.test(value)) {
+      value = `'${value}`;
     }
 
     // Check if value contains special characters that require quoting

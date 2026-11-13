@@ -81,4 +81,20 @@ describe('ContinuousResubmitDialogComponent', () => {
       expect(component.totalSuccess()).toBe(4);
     });
   });
+
+  describe('an unexpected error ends the run as a failure, never as completed', () => {
+    it('a resubmit answer the dialog cannot read stops the loop, shows the error and closes with completed false', async () => {
+      queueService.resubmitDeadLetterMessages.mockReturnValue(of(null));
+      const component = create();
+
+      await component.start();
+      component.close();
+
+      expect(queueService.resubmitDeadLetterMessages).toHaveBeenCalledTimes(1);
+      expect(component.stoppedByError()).toBe(true);
+      expect(component.statusMessage()).toBe('Unexpected error occurred');
+      const dialogRef = TestBed.inject(MatDialogRef);
+      expect(dialogRef.close).toHaveBeenCalledWith(expect.objectContaining({ completed: false, stopped: false }));
+    });
+  });
 });

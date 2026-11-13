@@ -311,4 +311,42 @@ public sealed class FileWorkspaceManagerTests : IDisposable
 
         Assert.Equal(before, File.ReadAllBytes(_workspaceFile));
     }
+
+    [Theory]
+    [InlineData("connections.json")]
+    [InlineData("connection-groups.json")]
+    public void A_legacy_file_that_cannot_be_parsed_is_kept_and_nothing_is_consolidated(string unreadableFile)
+    {
+        var connectionsFile = Path.Combine(_dir, "connections.json");
+        var groupsFile = Path.Combine(_dir, "connection-groups.json");
+        File.WriteAllText(connectionsFile, JsonSerializer.Serialize(new[] { new ServiceBusConnection { Id = "c1", Name = "orders" } }));
+        File.WriteAllText(groupsFile, JsonSerializer.Serialize(new[] { new ConnectionGroup { Id = "g1", Name = "production" } }));
+        File.WriteAllText(Path.Combine(_dir, unreadableFile), "[{\"Id\": \"x1\", \"Name\": ");
+        var connectionsBefore = File.ReadAllBytes(connectionsFile);
+        var groupsBefore = File.ReadAllBytes(groupsFile);
+
+        NewManager();
+
+        Assert.True(File.Exists(connectionsFile), "the legacy connections file was deleted although consolidation could not read every file");
+        Assert.True(File.Exists(groupsFile), "the legacy groups file was deleted although consolidation could not read every file");
+        Assert.Equal(connectionsBefore, File.ReadAllBytes(connectionsFile));
+        Assert.Equal(groupsBefore, File.ReadAllBytes(groupsFile));
+        Assert.False(File.Exists(_workspaceFile), "a workspace was written although a legacy file could not be read");
+    }
+
+    [Fact]
+    public async Task Readable_legacy_files_are_consolidated_into_the_workspace_and_removed()
+    {
+        var connectionsFile = Path.Combine(_dir, "connections.json");
+        var groupsFile = Path.Combine(_dir, "connection-groups.json");
+        File.WriteAllText(connectionsFile, JsonSerializer.Serialize(new[] { new ServiceBusConnection { Id = "c1", Name = "orders" } }));
+        File.WriteAllText(groupsFile, JsonSerializer.Serialize(new[] { new ConnectionGroup { Id = "g1", Name = "production" } }));
+
+        var manager = NewManager();
+
+        Assert.False(File.Exists(connectionsFile));
+        Assert.False(File.Exists(groupsFile));
+        Assert.Equal("orders", Assert.Single(await manager.GetConnectionsAsync()).Name);
+        Assert.Equal("production", Assert.Single(await manager.GetGroupsAsync()).Name);
+    }
 }

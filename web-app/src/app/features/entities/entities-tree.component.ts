@@ -5,7 +5,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import {finalize, Subject} from 'rxjs';
+import {finalize, Subject, Subscription} from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { TreeNode } from '../../core/models';
 import { TreeDataBuilderService, EntitySelectionService, ConnectionService, LoggerService, DeadLetterNotificationService } from '../../core/services';
@@ -56,6 +56,12 @@ import { EntityFormDialogComponent, EntityFormDialogData } from './entity-form-d
             <span class="visually-hidden">Loading...</span>
           </div>
           <span class="loading-text">Loading entities...</span>
+        </div>
+      } @else if (loadError()) {
+        <div class="tree-empty" role="alert">
+          <i class="fa fa-exclamation-triangle fa-4x empty-icon"></i>
+          <span class="empty-title">Could not load entities</span>
+          <span class="empty-subtitle">The broker did not answer the list of queues and topics. Refresh to try again.</span>
         </div>
       } @else if (treeData.length === 0) {
         <div class="tree-empty">
@@ -701,6 +707,8 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
   treeData: TreeNode[] = [];
   expandedNodes = new Set<string>();
   loading: WritableSignal<boolean> = signal<boolean>(false);
+  loadError = signal(false);
+  private treeLoad?: Subscription;
   selectedNode: TreeNode | null = null;
 
   get isConnected(): boolean {
@@ -716,6 +724,7 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe(status => {
         if (status.connected) {
+          this.notificationService.clear();
           this.loadTree();
         } else {
           this.treeData = [];
@@ -743,8 +752,10 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
 
   loadTree() {
     this.logger.log('[EntitiesTree] loadTree() called');
+    this.treeLoad?.unsubscribe();
     this.loading.set(true);
-    this.treeDataBuilder.buildTree()
+    this.loadError.set(false);
+    this.treeLoad = this.treeDataBuilder.buildTree()
       .pipe(
         finalize(() => {
           this.loading.set(false);
@@ -776,8 +787,10 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
             }
           });
         },
-        error: () => {
+        error: (err) => {
+          this.logger.error('[EntitiesTree] Failed to load entities:', err);
           this.treeData = [];
+          this.loadError.set(true);
         }
       });
   }

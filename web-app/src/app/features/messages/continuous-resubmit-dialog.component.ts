@@ -344,6 +344,7 @@ export class ContinuousResubmitDialogComponent implements OnDestroy {
     } catch (err) {
       console.error('Continuous resubmit error:', err);
       this.statusMessage.set('Unexpected error occurred');
+      this.stoppedByError.set(true);
     }
 
     this.state.set('finished');

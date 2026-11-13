@@ -215,6 +215,29 @@ describe('SendMessageDialogComponent', () => {
       expect(azure.querySelector('[data-testid="scheduled-enqueue-time"]')).not.toBeNull();
     });
   });
+  describe('a retry after a failed send sends only what the form holds now', () => {
+    it('properties and a schedule the user cleared after a failed send are not sent again', () => {
+      queueServiceMock.sendMessage
+        .mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 500, error: { message: 'An internal error occurred.' } })))
+        .mockReturnValueOnce(of({ success: true }));
+      const { component } = createComponent();
+      component.message.body = '{"id":1}';
+      component.customProperties = [{ key: 'env', value: 'prod' }];
+      component.scheduledEnqueueTimeLocal = '2026-12-25T10:00';
+      component.send();
+
+      component.customProperties = [];
+      component.scheduledEnqueueTimeLocal = '';
+      component.send();
+
+      const retried = { ...queueServiceMock.sendMessage.mock.calls[1][1] };
+      expect(queueServiceMock.sendMessage).toHaveBeenCalledTimes(2);
+      expect(retried.applicationProperties).toBeUndefined();
+      expect(retried.scheduledEnqueueTime).toBeUndefined();
+      expect(retried.body).toBe('{"id":1}');
+    });
+  });
+
   describe('a send refused because the entity is disabled', () => {
     it('a 409 shows the API message, the dialog stays open with its message, and nothing is resent', () => {
       queueServiceMock.sendMessage.mockReturnValue(throwError(() =>

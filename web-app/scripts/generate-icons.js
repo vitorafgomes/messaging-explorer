@@ -40,4 +40,7 @@ async function generateIcons() {
   console.log('- https://iconverticons.com/ (for .icns)');
 }
 
-generateIcons().catch(console.error);
+generateIcons().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

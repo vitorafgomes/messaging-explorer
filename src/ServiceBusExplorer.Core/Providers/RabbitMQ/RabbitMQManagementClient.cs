@@ -84,7 +84,7 @@ public class RabbitMQManagementClient : IDisposable
     {
         try
         {
-            var response = await _httpClient.GetAsync($"{_baseUrl}/overview");
+            using var response = await _httpClient.GetAsync($"{_baseUrl}/overview");
 
             if (!response.IsSuccessStatusCode)
             {
@@ -106,7 +106,7 @@ public class RabbitMQManagementClient : IDisposable
     /// <returns>The overview information as a dictionary.</returns>
     public async Task<ManagementOverview?> GetOverviewAsync()
     {
-        var response = await _httpClient.GetAsync($"{_baseUrl}/overview");
+        using var response = await _httpClient.GetAsync($"{_baseUrl}/overview");
         response.EnsureSuccessStatusCode();
 
         return await response.Content.ReadFromJsonAsync<ManagementOverview>(_jsonOptions);
@@ -123,7 +123,7 @@ public class RabbitMQManagementClient : IDisposable
     public async Task<IEnumerable<RabbitMQQueueInfo>> GetQueuesAsync()
     {
         var encodedVHost = EncodeVirtualHost(_virtualHost);
-        var response = await _httpClient.GetAsync($"{_baseUrl}/queues/{encodedVHost}");
+        using var response = await _httpClient.GetAsync($"{_baseUrl}/queues/{encodedVHost}");
         response.EnsureSuccessStatusCode();
 
         var apiQueues = await response.Content.ReadFromJsonAsync<List<ManagementQueueResponse>>(_jsonOptions);
@@ -140,7 +140,7 @@ public class RabbitMQManagementClient : IDisposable
         var encodedVHost = EncodeVirtualHost(_virtualHost);
         var encodedName = Uri.EscapeDataString(queueName);
 
-        var response = await _httpClient.GetAsync($"{_baseUrl}/queues/{encodedVHost}/{encodedName}");
+        using var response = await _httpClient.GetAsync($"{_baseUrl}/queues/{encodedVHost}/{encodedName}");
 
         if (response.StatusCode == HttpStatusCode.NotFound)
         {
@@ -172,7 +172,7 @@ public class RabbitMQManagementClient : IDisposable
             Arguments = arguments ?? new Dictionary<string, object>()
         };
 
-        var response = await _httpClient.PutAsJsonAsync(
+        using var response = await _httpClient.PutAsJsonAsync(
             $"{_baseUrl}/queues/{encodedVHost}/{encodedName}",
             body,
             _jsonOptions);
@@ -197,7 +197,7 @@ public class RabbitMQManagementClient : IDisposable
 
         var queryString = queryParams.Count > 0 ? "?" + string.Join("&", queryParams) : "";
 
-        var response = await _httpClient.DeleteAsync($"{_baseUrl}/queues/{encodedVHost}/{encodedName}{queryString}");
+        using var response = await _httpClient.DeleteAsync($"{_baseUrl}/queues/{encodedVHost}/{encodedName}{queryString}");
         response.EnsureSuccessStatusCode();
     }
 
@@ -210,7 +210,7 @@ public class RabbitMQManagementClient : IDisposable
         var encodedVHost = EncodeVirtualHost(_virtualHost);
         var encodedName = Uri.EscapeDataString(queueName);
 
-        var response = await _httpClient.DeleteAsync($"{_baseUrl}/queues/{encodedVHost}/{encodedName}/contents");
+        using var response = await _httpClient.DeleteAsync($"{_baseUrl}/queues/{encodedVHost}/{encodedName}/contents");
         if (!response.IsSuccessStatusCode)
         {
             var body = await response.Content.ReadAsStringAsync();
@@ -238,7 +238,7 @@ public class RabbitMQManagementClient : IDisposable
             Encoding = encoding
         };
 
-        var response = await _httpClient.PostAsJsonAsync(
+        using var response = await _httpClient.PostAsJsonAsync(
             $"{_baseUrl}/queues/{encodedVHost}/{encodedName}/get",
             request,
             _jsonOptions);
@@ -260,7 +260,7 @@ public class RabbitMQManagementClient : IDisposable
     public async Task<IEnumerable<RabbitMQExchangeInfo>> GetExchangesAsync()
     {
         var encodedVHost = EncodeVirtualHost(_virtualHost);
-        var response = await _httpClient.GetAsync($"{_baseUrl}/exchanges/{encodedVHost}");
+        using var response = await _httpClient.GetAsync($"{_baseUrl}/exchanges/{encodedVHost}");
         response.EnsureSuccessStatusCode();
 
         var apiExchanges = await response.Content.ReadFromJsonAsync<List<ManagementExchangeResponse>>(_jsonOptions);
@@ -277,7 +277,7 @@ public class RabbitMQManagementClient : IDisposable
         var encodedVHost = EncodeVirtualHost(_virtualHost);
         var encodedName = Uri.EscapeDataString(exchangeName);
 
-        var response = await _httpClient.GetAsync($"{_baseUrl}/exchanges/{encodedVHost}/{encodedName}");
+        using var response = await _httpClient.GetAsync($"{_baseUrl}/exchanges/{encodedVHost}/{encodedName}");
 
         if (response.StatusCode == HttpStatusCode.NotFound)
         {
@@ -313,7 +313,7 @@ public class RabbitMQManagementClient : IDisposable
             Arguments = arguments ?? new Dictionary<string, object>()
         };
 
-        var response = await _httpClient.PutAsJsonAsync(
+        using var response = await _httpClient.PutAsJsonAsync(
             $"{_baseUrl}/exchanges/{encodedVHost}/{encodedName}",
             body,
             _jsonOptions);
@@ -333,7 +333,7 @@ public class RabbitMQManagementClient : IDisposable
 
         var queryString = ifUnused ? "?if-unused=true" : "";
 
-        var response = await _httpClient.DeleteAsync($"{_baseUrl}/exchanges/{encodedVHost}/{encodedName}{queryString}");
+        using var response = await _httpClient.DeleteAsync($"{_baseUrl}/exchanges/{encodedVHost}/{encodedName}{queryString}");
         response.EnsureSuccessStatusCode();
     }
 
@@ -358,7 +358,7 @@ public class RabbitMQManagementClient : IDisposable
             Properties = properties ?? new Dictionary<string, object>()
         };
 
-        var response = await _httpClient.PostAsJsonAsync(
+        using var response = await _httpClient.PostAsJsonAsync(
             $"{_baseUrl}/exchanges/{encodedVHost}/{encodedName}/publish",
             request,
             _jsonOptions);
@@ -396,7 +396,7 @@ public class RabbitMQManagementClient : IDisposable
         var encodedVHost = EncodeVirtualHost(_virtualHost);
         var encodedName = Uri.EscapeDataString(queueName);
 
-        var response = await _httpClient.GetAsync($"{_baseUrl}/queues/{encodedVHost}/{encodedName}/bindings");
+        using var response = await _httpClient.GetAsync($"{_baseUrl}/queues/{encodedVHost}/{encodedName}/bindings");
         response.EnsureSuccessStatusCode();
 
         var apiBindings = await response.Content.ReadFromJsonAsync<List<ManagementBindingResponse>>(_jsonOptions);
@@ -413,7 +413,7 @@ public class RabbitMQManagementClient : IDisposable
         var encodedVHost = EncodeVirtualHost(_virtualHost);
         var encodedName = Uri.EscapeDataString(exchangeName);
 
-        var response = await _httpClient.GetAsync($"{_baseUrl}/exchanges/{encodedVHost}/{encodedName}/bindings/source");
+        using var response = await _httpClient.GetAsync($"{_baseUrl}/exchanges/{encodedVHost}/{encodedName}/bindings/source");
         response.EnsureSuccessStatusCode();
 
         var apiBindings = await response.Content.ReadFromJsonAsync<List<ManagementBindingResponse>>(_jsonOptions);
@@ -439,7 +439,7 @@ public class RabbitMQManagementClient : IDisposable
             Arguments = arguments ?? new Dictionary<string, object>()
         };
 
-        var response = await _httpClient.PostAsJsonAsync(
+        using var response = await _httpClient.PostAsJsonAsync(
             $"{_baseUrl}/bindings/{encodedVHost}/e/{encodedExchange}/q/{encodedQueue}",
             body,
             _jsonOptions);
@@ -466,7 +466,7 @@ public class RabbitMQManagementClient : IDisposable
             Arguments = arguments ?? new Dictionary<string, object>()
         };
 
-        var response = await _httpClient.PostAsJsonAsync(
+        using var response = await _httpClient.PostAsJsonAsync(
             $"{_baseUrl}/bindings/{encodedVHost}/e/{encodedSource}/e/{encodedDest}",
             body,
             _jsonOptions);
@@ -487,7 +487,7 @@ public class RabbitMQManagementClient : IDisposable
         var encodedQueue = Uri.EscapeDataString(queueName);
         var encodedProps = Uri.EscapeDataString(propertiesKey);
 
-        var response = await _httpClient.DeleteAsync(
+        using var response = await _httpClient.DeleteAsync(
             $"{_baseUrl}/bindings/{encodedVHost}/e/{encodedExchange}/q/{encodedQueue}/{encodedProps}");
 
         response.EnsureSuccessStatusCode();
@@ -506,7 +506,7 @@ public class RabbitMQManagementClient : IDisposable
         var encodedDest = Uri.EscapeDataString(destinationExchange);
         var encodedProps = Uri.EscapeDataString(propertiesKey);
 
-        var response = await _httpClient.DeleteAsync(
+        using var response = await _httpClient.DeleteAsync(
             $"{_baseUrl}/bindings/{encodedVHost}/e/{encodedSource}/e/{encodedDest}/{encodedProps}");
 
         response.EnsureSuccessStatusCode();

@@ -2,11 +2,11 @@
 title: "Tooling"
 version: "1.0"
 date: 2026-11-12
-changes: "Founded with the harness on 2026-11-12"
+changes: "2026-11-13: removed the stale line that CI runs no web test; CI runs them since 2026-11-12. Founded with the harness on 2026-11-12"
 page_type: convention
 status: active
 description: "Who runs on which model and writes what, what lives in .claude/ and scripts/, what each hook does, and how the review workflow fits the gates."
-updated: 2026-11-12
+updated: 2026-11-13
 source:
   - ".claude/"
   - "scripts/"
@@ -75,7 +75,6 @@ Stated so no gate claims more than runs:
 
 - No `Directory.Build.props`, no `TreatWarningsAsErrors`, no analyzers beyond the SDK defaults, no `.editorconfig`, no `dotnet format` gate, no `global.json`. The solution builds at 0 warnings on 2026-11-12 and the pipeline holds that line by reading the summary.
 - No lint or format script in `web-app/package.json`.
-- CI builds the web app and runs none of its tests.
 
 Each is an entry in [[pages/roadmap/followups]].
 

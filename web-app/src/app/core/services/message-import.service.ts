@@ -292,7 +292,8 @@ export class MessageImportService {
     for (const [colIndex, fieldName] of fieldMapping) {
       if (colIndex >= row.length) continue;
 
-      const value = row[colIndex].trim();
+      const cell = row[colIndex].trim();
+      const value = /^'+[=+\-@\t\r]/.test(cell) ? cell.slice(1) : cell;
       if (!value) continue;
 
       hasData = true;
