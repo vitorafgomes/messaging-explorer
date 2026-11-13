@@ -82,6 +82,9 @@ const refute = prompts['refute:upheld.cs:3'] || ''
 expect('the refute prompt names the tree the reviewer reviewed', refute.includes(location), true)
 expect('the refute prompt says to read the cited file in that tree, not the session directory', refute.includes("never in the session's working directory"), true)
 expect('the refute prompt does not carry the rest of the dispatch', refute.includes("the reviewer's framing"), false)
+expect('the refute prompt opens in the refute mode the reviewer agent defines', refute.startsWith('Refute one finding.'), true)
+expect('the refute prompt checks the page of decisions that look like defects', refute.includes('decisions-that-look-like-defects'), true)
+expect('the review prompt leaves the lens procedure to the reviewer agent', (prompts['review:invariants'] || '').includes('general correctness'), false)
 expect('the review prompt asks for paths relative to the reviewed tree root', (prompts['review:invariants'] || '').includes("relative to the reviewed tree's root"), true)
 expect('an unresolved finding keeps the reason its refuter gave', (out.unresolved || []).find(f => f.file === 'elsewhere.cs')?.reason, 'the cited line does not hold what the finding quotes')
 const refuteFor = async runArgs => {
