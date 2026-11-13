@@ -2,11 +2,11 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
 import { apiPath } from './api-path';
-import { MessageInfo, SessionDetail, SessionEntity, SessionList, SessionStateWrite } from '../models';
+import { SessionDetail, SessionEntity, SessionList, SessionStateWrite } from '../models';
 
 /**
- * The sessions of a queue or a subscription. Listing peeks and locks nothing; reading one session,
- * its messages or writing its state accepts that session for the length of the call.
+ * The sessions of a queue or a subscription. Listing peeks and locks nothing; reading one session
+ * with its messages, or writing its state, accepts that session for the length of the call.
  */
 @Injectable({
   providedIn: 'root'
@@ -18,12 +18,8 @@ export class SessionService {
     return this.api.get<SessionList>(`${sessions(entity)}${apiPath`?maxMessages=${maxMessages}`}`);
   }
 
-  get(entity: SessionEntity, sessionId: string): Observable<SessionDetail> {
-    return this.api.get<SessionDetail>(`${sessions(entity)}${apiPath`/${sessionId}`}`);
-  }
-
-  messages(entity: SessionEntity, sessionId: string, count = 100): Observable<MessageInfo[]> {
-    return this.api.get<MessageInfo[]>(`${sessions(entity)}${apiPath`/${sessionId}/messages?count=${count}`}`);
+  get(entity: SessionEntity, sessionId: string, messageCount = 100): Observable<SessionDetail> {
+    return this.api.get<SessionDetail>(`${sessions(entity)}${apiPath`/${sessionId}?messageCount=${messageCount}`}`);
   }
 
   setState(entity: SessionEntity, sessionId: string, write: SessionStateWrite): Observable<SessionDetail> {

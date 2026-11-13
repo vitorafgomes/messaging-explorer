@@ -37,4 +37,7 @@ public class SessionDetail
 
     /// <summary>The lock this read held; informational, it was released before the answer.</summary>
     public DateTimeOffset LockedUntil { get; set; }
+
+    /// <summary>Up to the requested number of the session's messages, peeked under the same accept; null when none were asked for.</summary>
+    public IReadOnlyList<MessageInfo>? Messages { get; set; }
 }
