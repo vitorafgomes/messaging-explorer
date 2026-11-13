@@ -5,10 +5,11 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatTabsModule } from '@angular/material/tabs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { delay } from 'rxjs/operators';
-import { EntitySelection, QueueInfo, TopicInfo, SubscriptionInfo, TreeNode, SubscriptionNodeData, SessionInfo } from '../../core/models';
-import { EntitySelectionService, QueueService, TopicService, SessionService, ConnectionService } from '../../core/services';
+import { EntitySelection, QueueInfo, TopicInfo, SubscriptionInfo, TreeNode, SubscriptionNodeData } from '../../core/models';
+import { EntitySelectionService, QueueService, TopicService, ConnectionService } from '../../core/services';
 import { SendMessageDialogComponent } from '../messages/send-message-dialog.component';
 import { ImportMessagesDialogComponent } from '../messages/import-messages-dialog.component';
 import { ViewMessagesDialogComponent } from '../messages/view-messages-dialog.component';
@@ -20,6 +21,7 @@ import { ProviderCapabilities } from '../../core/models/provider.model';
 import { MAX_TIMESPAN_DAYS, parseDuration } from './duration';
 import { EntityAdminActionsComponent } from './entity-admin-actions.component';
 import { SubscriptionRulesComponent } from './subscription-rules.component';
+import { EntitySessionsComponent } from './entity-sessions.component';
 
 const NOT_SET = 'Not set';
 
@@ -33,9 +35,11 @@ const NOT_SET = 'Not set';
     MatMenuModule,
     MatIconModule,
     MatTooltipModule,
+    MatTabsModule,
     TransferMonitorComponent,
     EntityAdminActionsComponent,
-    SubscriptionRulesComponent
+    SubscriptionRulesComponent,
+    EntitySessionsComponent
   ],
   template: `
     <div class="details-container">
@@ -135,8 +139,9 @@ const NOT_SET = 'Not set';
 
         <hr class="my-3">
 
+        <mat-tab-group [selectedIndex]="queueTab()" (selectedIndexChange)="queueTab.set($event)" animationDuration="0ms">
+        <mat-tab label="Properties">
         <div class="entity-properties">
-          <h3>Properties</h3>
           <div class="property-grid">
             <div class="property">
               <span class="property-label">Max Delivery Count</span>
@@ -204,6 +209,15 @@ const NOT_SET = 'Not set';
             </div>
           </div>
         </div>
+        </mat-tab>
+        @if (queueEntity.requiresSession && supports('supportsSessions')) {
+          <mat-tab label="Sessions">
+            <ng-template matTabContent>
+              <app-entity-sessions [entity]="{ queueName: queueEntity.name }" />
+            </ng-template>
+          </mat-tab>
+        }
+        </mat-tab-group>
       } @else if (state.selection.type === 'topic' && state.selection.entity) {
         @let topicEntity = $any(state.selection.entity);
         <div class="topic-container">
@@ -533,97 +547,10 @@ const NOT_SET = 'Not set';
               <app-subscription-rules [subscription]="subscriptionEntity" />
             </div>
 
-            <!-- Sessions Tab (only visible when requiresSession is true and the broker supports sessions) -->
-            @if (subscriptionEntity.requiresSession && supports('supportsSessions')) {
-              <div class="sessions-tab" [hidden]="activeSubscriptionTab() !== 'sessions'" id="subscription-sessions-tab">
-                  <div class="sessions-layout">
-                    <!-- Sessions List (Left Panel) -->
-                    <div class="sessions-panel">
-                      <div class="groupbox full-height">
-                        <div class="groupbox-header">
-                          Sessions
-                        </div>
-                        <div class="groupbox-content">
-                          @if (loadingSessions()) {
-                            <div class="loading-sessions">
-                              <div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
-                              <span>Loading sessions...</span>
-                            </div>
-                          } @else if (sessions.length === 0) {
-                            <div class="empty-sessions">
-                              <i class="fa-solid fa-layer-group"></i>
-                              <p>No active sessions</p>
-                              <span class="hint">Sessions will appear when messages with session IDs are received</span>
-                            </div>
-                          } @else {
-                            <div class="sessions-list">
-                              @for (session of sessions; track session.sessionId) {
-                                <div class="session-item" [class.selected]="selectedSession?.sessionId === session.sessionId" (click)="selectSession(session)">
-                                  <i class="fa-solid fa-hashtag"></i>
-                                  <div class="session-info">
-                                    <span class="session-id">{{ session.sessionId }}</span>
-                                    <span class="session-state">
-                                      @if (session.lockedUntil) {
-                                        <i class="fa-solid fa-lock" style="color: var(--bs-warning);"></i>
-                                        Locked
-                                      } @else {
-                                        {{ session.state ? 'Has state' : 'No state' }}
-                                      }
-                                    </span>
-                                  </div>
-                                  <i class="fa fa-chevron-right arrow-icon"></i>
-                                </div>
-                              }
-                            </div>
-                          }
-                        </div>
-                      </div>
-                    </div>
-
-                    <!-- Session Details (Right Panel) -->
-                    <div class="session-details-panel">
-                      <div class="groupbox full-height">
-                        <div class="groupbox-header">Session State</div>
-                        <div class="groupbox-content">
-                          @if (selectedSession) {
-                            <div class="session-details">
-                              <div class="field-row">
-                                <span class="field-label">Session ID</span>
-                                <span class="field-value code-value">{{ selectedSession.sessionId }}</span>
-                              </div>
-                              <div class="field-row">
-                                <span class="field-label">Lock Status</span>
-                                <span class="field-value">
-                                  @if (selectedSession.lockedUntil) {
-                                    <i class="fa-solid fa-lock" style="color: var(--bs-warning); margin-right: 4px;"></i>
-                                    Locked until {{ selectedSession.lockedUntil | date:'medium' }}
-                                  } @else {
-                                    <i class="fa-solid fa-lock-open" style="color: var(--bs-success); margin-right: 4px;"></i>
-                                    Unlocked
-                                  }
-                                </span>
-                              </div>
-                              <div class="field-row">
-                                <span class="field-label">State</span>
-                                @if (selectedSession.state) {
-                                  <pre class="session-state-content">{{ selectedSession.state }}</pre>
-                                } @else {
-                                  <span class="field-value">No state data</span>
-                                }
-                              </div>
-                            </div>
-                          } @else {
-                            <div class="empty-details">
-                              <i class="fa fa-hand-pointer-o"></i>
-                              <p>Select a session to view its state</p>
-                            </div>
-                          }
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+            @if (subscriptionEntity.requiresSession && supports('supportsSessions') && activeSubscriptionTab() === 'sessions') {
+              <app-entity-sessions [entity]="{ topicName: subscriptionEntity.topicName, subscriptionName: subscriptionEntity.name }" />
             }
+
         } @else {
           <div class="details-loading" style="padding: 24px;">
             <p>Loading subscription details...</p>
@@ -985,71 +912,6 @@ const NOT_SET = 'Not set';
     .info-column {
       .groupbox {
         height: 100%;
-      }
-    }
-
-    .groupbox {
-      border: 1px solid var(--bs-border-color);
-      border-radius: 4px;
-      background: var(--bs-body-bg);
-
-      &.full-height {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-      }
-    }
-
-    .groupbox-header {
-      background: var(--bs-secondary-bg);
-      border-bottom: 1px solid var(--bs-border-color);
-      padding: 6px 10px;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--bs-body-color);
-    }
-
-    .groupbox-content {
-      padding: 10px;
-      flex: 1;
-      overflow: auto;
-    }
-
-    .field-row {
-      display: flex;
-      flex-direction: column;
-      margin-bottom: 10px;
-
-      &:last-child {
-        margin-bottom: 0;
-      }
-    }
-
-    .field-label {
-      font-size: 11px;
-      color: var(--bs-secondary-color);
-      margin-bottom: 2px;
-    }
-
-    .field-value {
-      font-size: 13px;
-      color: var(--bs-body-color);
-      padding: 4px 6px;
-      background: var(--bs-body-bg);
-      border: 1px solid var(--bs-border-color);
-      border-radius: 2px;
-      min-height: 20px;
-
-      &.path-value {
-        font-family: 'Consolas', 'Courier New', monospace;
-        font-size: 12px;
-        word-break: break-all;
-      }
-
-      &.code-value {
-        font-family: 'Consolas', 'Courier New', monospace;
-        font-size: 12px;
-        background: var(--bs-secondary-bg);
       }
     }
 
@@ -1708,211 +1570,6 @@ const NOT_SET = 'Not set';
       }
     }
 
-    /* Sessions Tab Styles */
-    .sessions-tab {
-      padding: 8px !important;
-    }
-
-    .sessions-layout {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      height: 400px;
-      max-height: 400px;
-    }
-
-    .sessions-panel, .session-details-panel {
-      display: flex;
-      flex-direction: column;
-      min-height: 0;
-      overflow: hidden;
-
-      .groupbox {
-        display: flex;
-        flex-direction: column;
-        height: 100%;
-        min-height: 0;
-      }
-    }
-
-    .sessions-panel .groupbox-content {
-      flex: 1;
-      overflow-y: scroll;
-      min-height: 0;
-    }
-
-    .session-details-panel .groupbox-content {
-      flex: 1;
-      overflow: hidden;
-      min-height: 0;
-    }
-
-    .groupbox-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-
-      .header-btn {
-        width: 24px;
-        height: 24px;
-        padding: 0;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 12px;
-      }
-    }
-
-    .loading-sessions {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 32px;
-      gap: 12px;
-      color: var(--bs-secondary-color);
-    }
-
-    .empty-sessions {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 32px;
-      text-align: center;
-      color: var(--bs-secondary-color);
-
-      mat-icon {
-        font-size: 48px;
-        width: 48px;
-        height: 48px;
-        color: var(--bs-tertiary-color);
-        margin-bottom: 12px;
-      }
-
-      p {
-        margin: 0 0 8px;
-        font-size: 14px;
-        color: var(--bs-secondary-color);
-      }
-
-      .hint {
-        font-size: 12px;
-        color: var(--bs-tertiary-color);
-      }
-    }
-
-    .sessions-list {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      padding: 0 16px;
-      overflow-y: auto;
-      flex: 1;
-    }
-
-    .session-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 12px;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: background-color 0.2s ease;
-      border: 1px solid var(--bs-border-color);
-
-      &:hover {
-        background: var(--bs-secondary-bg);
-      }
-
-      &.selected {
-        background: rgba(var(--bs-primary-rgb), 0.15);
-        border-color: var(--bs-primary);
-      }
-
-      mat-icon {
-        color: #1976d2;
-        font-size: 20px;
-        width: 20px;
-        height: 20px;
-      }
-
-      .session-info {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-
-        .session-id {
-          font-weight: 500;
-          font-size: 13px;
-          color: var(--bs-body-color);
-        }
-
-        .session-state {
-          font-size: 11px;
-          color: var(--bs-secondary-color);
-        }
-      }
-
-      .arrow-icon {
-        color: var(--bs-tertiary-color);
-      }
-    }
-
-    .session-details {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .session-state-content {
-      margin: 0;
-      padding: 10px;
-      background: var(--bs-secondary-bg);
-      border: 1px solid var(--bs-border-color);
-      border-radius: 4px;
-      font-family: 'Consolas', 'Courier New', monospace;
-      font-size: 12px;
-      white-space: pre-wrap;
-      word-break: break-all;
-      max-height: 200px;
-      overflow: auto;
-    }
-
-    .empty-details {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100%;
-      color: var(--bs-tertiary-color);
-      text-align: center;
-
-      mat-icon {
-        font-size: 48px;
-        width: 48px;
-        height: 48px;
-        margin-bottom: 12px;
-      }
-
-      p {
-        margin: 0;
-        font-size: 14px;
-      }
-    }
-
-    @media (max-width: 900px) {
-      .sessions-layout {
-        grid-template-columns: 1fr;
-        height: auto;
-      }
-
-      .sessions-panel .groupbox,
-      .session-details-panel .groupbox {
-        min-height: 200px;
-      }
-    }
-
     /* Topic Layout Styles - CSS Grid 2x3 with Left/Right Columns */
     .topic-container {
       padding: 16px;
@@ -2178,7 +1835,6 @@ export class EntityDetailsComponent {
   private connectionService = inject(ConnectionService);
   private queueService = inject(QueueService);
   private topicService = inject(TopicService);
-  private sessionService = inject(SessionService);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
   private readonly destroyRef = inject(DestroyRef);
@@ -2190,13 +1846,9 @@ export class EntityDetailsComponent {
   liveActiveCount = signal<number | null>(null);
   liveDeadLetterCount = signal<number | null>(null);
 
-  // Sessions state
-  sessions: SessionInfo[] = [];
-  selectedSession: SessionInfo | null = null;
-  loadingSessions = signal(false);
-
   // Tab navigation state
   activeSubscriptionTab = signal<'description' | 'rules' | 'sessions'>('description');
+  queueTab = signal(0);
 
   // Description tab style selector
   descriptionStyle: 'cards' | 'infobox' | 'list' | 'hybrid' = 'cards';
@@ -2210,6 +1862,7 @@ export class EntityDetailsComponent {
     ).subscribe(() => {
       // Reset tabs and live counts when entity changes
       this.activeSubscriptionTab.set('description');
+      this.queueTab.set(0);
       this.liveActiveCount.set(null);
       this.liveDeadLetterCount.set(null);
     });
@@ -2489,37 +2142,6 @@ export class EntityDetailsComponent {
     }
   }
 
-  // Sessions methods
-  refreshSessions() {
-    const sub = this.subscription;
-    if (!sub?.requiresSession) return;
-
-    this.loadingSessions.set(true);
-    this.sessions = [];
-    this.selectedSession = null;
-
-    this.sessionService.getSubscriptionSessions(sub.topicName, sub.name).pipe(
-      takeUntilDestroyed(this.destroyRef)
-    ).subscribe({
-      next: (sessions) => {
-        this.sessions = sessions;
-        this.loadingSessions.set(false);
-      },
-      error: (err) => {
-        this.loadingSessions.set(false);
-        this.snackBar.open(
-          err?.error?.message || 'Failed to load sessions',
-          'Close',
-          { duration: 5000 }
-        );
-      }
-    });
-  }
-
-  selectSession(session: SessionInfo) {
-    this.selectedSession = session;
-  }
-
   onSubscriptionUpdated(sub: SubscriptionInfo) {
     this.liveActiveCount.set(sub.activeMessageCount);
     this.liveDeadLetterCount.set(sub.deadLetterMessageCount);
@@ -2536,8 +2158,5 @@ export class EntityDetailsComponent {
   // Tab navigation methods
   setSubscriptionTab(tab: 'description' | 'rules' | 'sessions') {
     this.activeSubscriptionTab.set(tab);
-    if (tab === 'sessions' && this.sessions.length === 0 && !this.loadingSessions()) {
-      this.refreshSessions();
-    }
   }
 }

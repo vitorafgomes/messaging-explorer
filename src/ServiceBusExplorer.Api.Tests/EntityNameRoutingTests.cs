@@ -92,7 +92,7 @@ public class EntityNameRoutingTests
             {
                 using var request = new HttpRequestMessage(new HttpMethod(method), path);
                 if (method is "POST" or "PUT" or "PATCH")
-                    request.Content = JsonContent.Create(new { sequenceNumbers = new long[] { 1 }, state = "s" });
+                    request.Content = JsonContent.Create(new { sequenceNumbers = new long[] { 1 }, state = "s", expectedState = (string?)null });
                 using var _ = await client.SendAsync(request);
             }
             return calls.Concat(metricsCalls).ToList();
@@ -248,12 +248,24 @@ public class EntityNameRoutingTests
     public async Task A_session_id_with_a_slash_and_a_space_reaches_the_provider_unchanged()
     {
         var calls = await SendAsync(
-            ("PUT", "/api/sessions/q%2F1/state/id%2Fwith%20space"),
-            ("PUT", "/api/sessions/t%2F1/subscriptions/s%2F2/id%2Fwith%20space/state"));
+            ("GET", "/api/queues/q%2F1/sessions"),
+            ("GET", "/api/queues/q%2F1/sessions/id%2Fwith%20space"),
+            ("GET", "/api/queues/q%2F1/sessions/id%2Fwith%20space/messages"),
+            ("PUT", "/api/queues/q%2F1/sessions/id%2Fwith%20space/state"),
+            ("GET", "/api/topics/t%2F1/subscriptions/s%2F2/sessions"),
+            ("GET", "/api/topics/t%2F1/subscriptions/s%2F2/sessions/id%2Fwith%20space"),
+            ("GET", "/api/topics/t%2F1/subscriptions/s%2F2/sessions/id%2Fwith%20space/messages"),
+            ("PUT", "/api/topics/t%2F1/subscriptions/s%2F2/sessions/id%2Fwith%20space/state"));
 
         Assert.Equal(new[]
         {
+            "GetSessionsAsync(q/1)",
+            "GetSessionAsync(q/1, session=id/with space)",
+            "PeekSessionMessagesAsync(q/1, session=id/with space)",
             "SetSessionStateAsync(q/1, session=id/with space)",
+            "GetSessionsAsync(t/1, sub=s/2)",
+            "GetSessionAsync(t/1, sub=s/2, session=id/with space)",
+            "PeekSessionMessagesAsync(t/1, sub=s/2, session=id/with space)",
             "SetSessionStateAsync(t/1, sub=s/2, session=id/with space)",
         }, calls);
     }

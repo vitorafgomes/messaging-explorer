@@ -2,37 +2,37 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
 import { apiPath } from './api-path';
-import { SessionInfo } from '../models';
+import { MessageInfo, SessionDetail, SessionEntity, SessionList, SessionStateWrite } from '../models';
 
+/**
+ * The sessions of a queue or a subscription. Listing peeks and locks nothing; reading one session,
+ * its messages or writing its state accepts that session for the length of the call.
+ */
 @Injectable({
   providedIn: 'root'
 })
 export class SessionService {
   private api = inject(ApiService);
 
-  getSubscriptionSessions(topicName: string, subscriptionName: string, maxSessions = 50): Observable<SessionInfo[]> {
-    return this.api.get<SessionInfo[]>(
-      apiPath`sessions/${topicName}/subscriptions/${subscriptionName}?maxSessions=${maxSessions}`
-    );
+  list(entity: SessionEntity, maxMessages = 1000): Observable<SessionList> {
+    return this.api.get<SessionList>(`${sessions(entity)}${apiPath`?maxMessages=${maxMessages}`}`);
   }
 
-  getQueueSessions(queueName: string, maxSessions = 50): Observable<SessionInfo[]> {
-    return this.api.get<SessionInfo[]>(
-      apiPath`sessions/${queueName}?maxSessions=${maxSessions}`
-    );
+  get(entity: SessionEntity, sessionId: string): Observable<SessionDetail> {
+    return this.api.get<SessionDetail>(`${sessions(entity)}${apiPath`/${sessionId}`}`);
   }
 
-  setSubscriptionSessionState(topicName: string, subscriptionName: string, sessionId: string, state: string | null): Observable<{ success: boolean }> {
-    return this.api.put<{ success: boolean }>(
-      apiPath`sessions/${topicName}/subscriptions/${subscriptionName}/${sessionId}/state`,
-      { state }
-    );
+  messages(entity: SessionEntity, sessionId: string, count = 100): Observable<MessageInfo[]> {
+    return this.api.get<MessageInfo[]>(`${sessions(entity)}${apiPath`/${sessionId}/messages?count=${count}`}`);
   }
 
-  setQueueSessionState(queueName: string, sessionId: string, state: string | null): Observable<{ success: boolean }> {
-    return this.api.put<{ success: boolean }>(
-      apiPath`sessions/${queueName}/state/${sessionId}`,
-      { state }
-    );
+  setState(entity: SessionEntity, sessionId: string, write: SessionStateWrite): Observable<SessionDetail> {
+    return this.api.put<SessionDetail>(`${sessions(entity)}${apiPath`/${sessionId}/state`}`, write);
   }
+}
+
+function sessions(entity: SessionEntity): string {
+  return 'queueName' in entity
+    ? apiPath`queues/${entity.queueName}/sessions`
+    : apiPath`topics/${entity.topicName}/subscriptions/${entity.subscriptionName}/sessions`;
 }
