@@ -522,14 +522,14 @@ public class RabbitMQProvider : IMessagingProvider
     #region Message Operations
 
     /// <inheritdoc />
-    public Task<IEnumerable<IMessage>> PeekMessagesAsync(string entityName, int count = 10, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, CancellationToken cancellationToken = default)
+    public Task<IEnumerable<IMessage>> PeekMessagesAsync(string entityName, int count = 10, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, long? fromSequenceNumber = null, CancellationToken cancellationToken = default)
     {
         if (subQueue == MessageSubQueue.TransferDeadLetter)
             return Task.FromException<IEnumerable<IMessage>>(TransferDeadLetterNotSupported());
-
+        if (fromSequenceNumber is not null)
+            return Task.FromException<IEnumerable<IMessage>>(new NotSupportedException("RabbitMQ cannot peek from a sequence number."));
         EnsureConnected();
 
-        // Determine the queue to peek from
         var queueName = QueueOf(subscriptionName ?? entityName, subQueue);
         var isDeadLetter = subQueue == MessageSubQueue.DeadLetter;
 

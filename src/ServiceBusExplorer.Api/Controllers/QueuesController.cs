@@ -150,29 +150,29 @@ public class QueuesController : ControllerBase
 
     [HttpGet("{name}/messages")]
     public Task<ActionResult<IEnumerable<IMessage>>> PeekMessages(string name, [FromQuery] int count = 10) =>
-        Peek(name, count, MessageSubQueue.Active);
+        Peek(name, count, MessageSubQueue.Active, null);
 
     [HttpGet("{name}/deadletter")]
-    public Task<ActionResult<IEnumerable<IMessage>>> PeekDeadLetterMessages(string name, [FromQuery] int count = 10) =>
-        Peek(name, count, MessageSubQueue.DeadLetter);
+    public Task<ActionResult<IEnumerable<IMessage>>> PeekDeadLetterMessages(string name, [FromQuery] int count = 10, [FromQuery] string? fromSequenceNumber = null) =>
+        Peek(name, count, MessageSubQueue.DeadLetter, fromSequenceNumber);
 
     [HttpGet("{name}/transferdeadletter")]
-    public Task<ActionResult<IEnumerable<IMessage>>> PeekTransferDeadLetterMessages(string name, [FromQuery] int count = 10) =>
-        Peek(name, count, MessageSubQueue.TransferDeadLetter);
+    public Task<ActionResult<IEnumerable<IMessage>>> PeekTransferDeadLetterMessages(string name, [FromQuery] int count = 10, [FromQuery] string? fromSequenceNumber = null) =>
+        Peek(name, count, MessageSubQueue.TransferDeadLetter, fromSequenceNumber);
 
-    private async Task<ActionResult<IEnumerable<IMessage>>> Peek(string name, int count, MessageSubQueue subQueue)
+    private async Task<ActionResult<IEnumerable<IMessage>>> Peek(string name, int count, MessageSubQueue subQueue, string? fromSequenceNumber)
     {
         if (count < 1) count = 1;
         if (count > 1000) count = 1000;
 
         var provider = GetProvider();
-        if (provider == null)
-            return NoProviderConnected();
+        if (provider == null) return NoProviderConnected();
+        if (EntityAdministrationResults.PeekPosition(provider, fromSequenceNumber, out var from) is { } refused) return refused;
         if (EntityAdministrationResults.SubQueueNotSupported(provider, subQueue) is { } notSupported) return notSupported;
 
         try
         {
-            var messages = await provider.PeekMessagesAsync(name, count, subQueue, cancellationToken: HttpContext.RequestAborted);
+            var messages = await provider.PeekMessagesAsync(name, count, subQueue, fromSequenceNumber: from, cancellationToken: HttpContext.RequestAborted);
             return Ok(messages);
         }
         catch (EntityDisabledException)

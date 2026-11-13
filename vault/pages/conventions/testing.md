@@ -2,11 +2,11 @@
 title: "Testing"
 version: "1.0"
 date: 2026-11-12
-changes: "Integration project against the Azure Service Bus emulator: the Running row, the emulator fixture, what the emulator cannot do"
+changes: "2026-11-13: counts after the peek from a position (Core 380, Api 346, Integration 92). Before: integration project against the Azure Service Bus emulator: the Running row, the emulator fixture, what the emulator cannot do"
 page_type: convention
 status: active
 description: "How Messaging Explorer is tested: xUnit with Moq for the two .NET projects, vitest for the Angular app, what runs in CI, the state at the founding, and what has no test."
-updated: 2026-11-12
+updated: 2026-11-13
 source:
   - "src/ServiceBusExplorer.Core.Tests/"
   - "src/ServiceBusExplorer.Api.Tests/"
@@ -30,9 +30,9 @@ reliability: high
 
 | What | Command | State on 2026-11-12 |
 |---|---|---|
-| Core | `dotnet test src/ServiceBusExplorer.Core.Tests` | 373 passed, 0 skipped (2026-11-13) |
-| Api | `dotnet test src/ServiceBusExplorer.Api.Tests` | 307 passed, 0 skipped (2026-11-13) |
-| Integration (Docker) | `dotnet test src/ServiceBusExplorer.IntegrationTests` | 91 passed, 0 skipped (29 RabbitMQ, 62 Azure Service Bus) on 2026-11-13, 165 s wall for the whole project run on that day; earlier, 93 to 102 s wall with the images cached, as measured when the project had 74 tests. The two collections run in parallel and the Azure one dominates: about 20 s to start SQL Server and the emulator, about 68 s of tests, of which 20 s is the deep dead-letter resubmit (350 messages arranged one by one) and 15 s three calls to a closed port that wait out the SDK retries |
+| Core | `dotnet test src/ServiceBusExplorer.Core.Tests` | 380 passed, 0 skipped (2026-11-13) |
+| Api | `dotnet test src/ServiceBusExplorer.Api.Tests` | 346 passed, 0 skipped (2026-11-13) |
+| Integration (Docker) | `dotnet test src/ServiceBusExplorer.IntegrationTests` | 92 passed, 0 skipped (29 RabbitMQ, 63 Azure Service Bus) on 2026-11-13, 177 s wall for the whole project run on that day (165 s earlier the same day with 91); earlier, 93 to 102 s wall with the images cached, as measured when the project had 74 tests. The two collections run in parallel and the Azure one dominates: about 20 s to start SQL Server and the emulator, about 68 s of tests, of which 20 s is the deep dead-letter resubmit (350 messages arranged one by one) and 15 s three calls to a closed port that wait out the SDK retries |
 | Web | `npm test -- --watch=false` in `web-app/` | 47 files: 872 passed, 8 skipped (2026-11-13) |
 | Electron shell helpers | `npm run test:electron` in `web-app/` (`node --test`) | 17 passed, 0 skipped |
 | Build | `dotnet build ServiceBusExplorer.slnx` | 0 warnings, 0 errors |
@@ -60,7 +60,7 @@ Testcontainers.ServiceBus 4.16.0 starts `mcr.microsoft.com/azure-messaging/servi
 - **A start deadline.** The readiness checks of the SQL and emulator containers have no deadline of their own; on 2026-11-12, with the host short of memory, SQL Server never became ready and the first run hung for ten minutes. The fixture gives the start five minutes (`src/ServiceBusExplorer.IntegrationTests/AzureServiceBusFixture.cs:35`), image pulls on a cold runner included, and the collection then fails: with the deadline set to 3 s the readiness wait threw `TimeoutException` and the run failed in under 5 s (2026-11-12, restored afterwards).
 - **Arrange and observe beside the provider.** A second `ServiceBusClient` and a `ServiceBusAdministrationClient` in the fixture; counts are read by draining or peeking, never from runtime properties, which the emulator reports as zero. The first receive on an idle client can time out while messages are there, so the drain asks a peek first whether the entity is empty (`src/ServiceBusExplorer.IntegrationTests/AzureServiceBusFixture.cs:118`).
 - **Isolation.** Unique entity names per test, deleted afterwards through the administration client. The emulator allows 50 queues and 50 topics per namespace, so a test that does not clean up will eventually break the others.
-- **Four classes.** `AzureServiceBusProviderTests` (39, what works today), `AzureServiceBusProviderDefectTests` (13 `Defect_` tests, [[pages/roadmap/code-audit-2026-11]]), `AzureServiceBusSessionTests` (9, since 2026-11-13: the passive list, one session opened at a time, the regression test of the listing that locked sessions) and the guard test. A topic forwards to its subscriptions late, so a test that sends to a topic polls the subscription with a deadline before it asserts, never a fixed sleep.
+- **Four classes.** `AzureServiceBusProviderTests` (40, what works today), `AzureServiceBusProviderDefectTests` (13 `Defect_` tests, [[pages/roadmap/code-audit-2026-11]]), `AzureServiceBusSessionTests` (9, since 2026-11-13: the passive list, one session opened at a time, the regression test of the listing that locked sessions) and the guard test. A topic forwards to its subscriptions late, so a test that sends to a topic polls the subscription with a deadline before it asserts, never a fixed sleep.
 
 #### What the emulator can do
 

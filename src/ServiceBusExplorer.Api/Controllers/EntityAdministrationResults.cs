@@ -57,4 +57,21 @@ internal static class EntityAdministrationResults
                 return new ObjectResult(new { message = InternalError }) { StatusCode = StatusCodes.Status500InternalServerError };
         }
     }
+
+    /// <summary>
+    /// 400 when <paramref name="value"/> is given and is not a whole number of 0 or more, or when it is given and the
+    /// provider cannot peek from a position; null otherwise, with <paramref name="fromSequenceNumber"/> null when the
+    /// value was absent.
+    /// </summary>
+    public static BadRequestObjectResult? PeekPosition(IMessagingProvider provider, string? value, out long? fromSequenceNumber)
+    {
+        fromSequenceNumber = null;
+        if (value is null) return null;
+        if (!long.TryParse(value, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var position))
+            return new(new { message = "fromSequenceNumber must be a whole number of 0 or more." });
+        if (!provider.Capabilities.SupportsPeekFromSequenceNumber)
+            return new(new { message = "This provider cannot read the dead-letter queue from a position." });
+        fromSequenceNumber = position;
+        return null;
+    }
 }

@@ -165,7 +165,7 @@ public class AzureServiceBusProviderSubQueueTests
         receiver.Setup(r => r.PeekMessagesAsync(5, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(Batch(Msg(1), Msg(2), Msg(3), Msg(4), Msg(5)));
 
-        var peeked = await AzureServiceBusProvider.PeekCoreAsync(receiver.Object, 5, CancellationToken.None);
+        var peeked = await AzureServiceBusProvider.PeekCoreAsync(receiver.Object, 5, null, CancellationToken.None);
 
         Assert.Equal(new long[] { 1, 2, 3, 4, 5 }, peeked.Select(m => m.SequenceNumber).ToArray());
         receiver.Verify(r => r.PeekMessagesAsync(It.IsAny<int>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()), Times.Once);
@@ -181,7 +181,7 @@ public class AzureServiceBusProviderSubQueueTests
             .ReturnsAsync((int max, long? from, CancellationToken _) =>
                 Enumerable.Range(0, max).Select(i => Msg((from ?? 1) + i)).ToList());
 
-        var peeked = await AzureServiceBusProvider.PeekCoreAsync(receiver.Object, 300, CancellationToken.None);
+        var peeked = await AzureServiceBusProvider.PeekCoreAsync(receiver.Object, 300, null, CancellationToken.None);
 
         Assert.Equal(300, peeked.Count);
         Assert.Equal(new[] { 250, 50 }, asked.ToArray());
@@ -201,7 +201,7 @@ public class AzureServiceBusProviderSubQueueTests
             })
             .ReturnsAsync(Batch(Msg(1)));
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => AzureServiceBusProvider.PeekCoreAsync(receiver.Object, 1000, cts.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => AzureServiceBusProvider.PeekCoreAsync(receiver.Object, 1000, null, cts.Token));
 
         Assert.Equal(new[] { true }, tokens.Select(t => t.IsCancellationRequested).ToArray());
     }
@@ -214,7 +214,7 @@ public class AzureServiceBusProviderSubQueueTests
         var receiver = new Mock<ServiceBusReceiver>();
         receiver.Setup(r => r.PeekMessagesAsync(It.IsAny<int>(), It.IsAny<long?>(), It.IsAny<CancellationToken>())).ReturnsAsync(Batch());
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => AzureServiceBusProvider.PeekCoreAsync(receiver.Object, 10, cts.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => AzureServiceBusProvider.PeekCoreAsync(receiver.Object, 10, null, cts.Token));
 
         receiver.Verify(r => r.PeekMessagesAsync(It.IsAny<int>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()), Times.Never);
     }
@@ -231,7 +231,7 @@ public class AzureServiceBusProviderSubQueueTests
             .Callback(() => calls++)
             .ReturnsAsync((int _, long? from, CancellationToken _) => Batch(Msg(from ?? 1)));
 
-        var peeked = await AzureServiceBusProvider.PeekCoreAsync(receiver.Object, count, CancellationToken.None);
+        var peeked = await AzureServiceBusProvider.PeekCoreAsync(receiver.Object, count, null, CancellationToken.None);
 
         Assert.Equal(Enumerable.Range(1, count).Select(i => (long)i), peeked.Select(m => m.SequenceNumber));
         Assert.InRange(calls, count, count + 1);
@@ -569,5 +569,44 @@ public class AzureServiceBusProviderSubQueueTests
 
         Assert.Equal(500, result.SuccessCount);
         broker.Sender.Verify(s => s.CancelScheduledMessagesAsync(numbers, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Theory]
+    [InlineData(MessageSubQueue.Active)]
+    [InlineData(MessageSubQueue.DeadLetter)]
+    [InlineData(MessageSubQueue.TransferDeadLetter)]
+    public async Task A_peek_from_a_sequence_number_starts_there_returns_nothing_before_it_and_reads_on_past_a_short_batch(MessageSubQueue subQueue)
+    {
+        var broker = new FakeBroker();
+        var asked = new List<long?>();
+        broker.Receiver.Setup(r => r.PeekMessagesAsync(It.IsAny<int>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()))
+            .Callback((int _, long? from, CancellationToken _) => asked.Add(from))
+            .ReturnsAsync((int _, long? from, CancellationToken _) => (from ?? 1) <= 5 ? Batch(Msg(from ?? 1)) : Batch());
+
+        var peeked = await broker.Provider().PeekMessagesAsync("orders", 10, subQueue, fromSequenceNumber: 3);
+
+        Assert.Equal(new long?[] { 3, 4, 5 }, peeked.Select(m => m.SequenceNumber).ToArray());
+        Assert.Equal(new long?[] { 3, 4, 5, 6 }, asked.ToArray());
+    }
+
+    [Fact]
+    public async Task A_peek_from_a_sequence_number_whose_sdk_call_fails_gives_the_caller_the_same_broker_error_as_a_peek_from_the_head()
+    {
+        var broker = new FakeBroker();
+        broker.Receiver.Setup(r => r.PeekMessagesAsync(It.IsAny<int>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(Broker(ServiceBusFailureReason.ServiceTimeout));
+
+        var fromHead = await Assert.ThrowsAsync<ServiceBusException>(() =>
+            broker.Provider().PeekMessagesAsync("orders", 10, MessageSubQueue.DeadLetter));
+        var fromPosition = await Assert.ThrowsAsync<ServiceBusException>(() =>
+            broker.Provider().PeekMessagesAsync("orders", 10, MessageSubQueue.DeadLetter, fromSequenceNumber: 3));
+
+        Assert.Equal((ServiceBusFailureReason.ServiceTimeout, fromHead.Message), (fromPosition.Reason, fromPosition.Message));
+    }
+
+    [Fact]
+    public void Azure_declares_that_a_peek_can_start_at_a_sequence_number()
+    {
+        Assert.True(new AzureServiceBusProvider().Capabilities.SupportsPeekFromSequenceNumber);
     }
 }

@@ -263,9 +263,10 @@ public interface IMessagingProvider : IAsyncDisposable
     /// <param name="count">The maximum number of messages to peek.</param>
     /// <param name="subQueue">The queue of the entity to peek.</param>
     /// <param name="subscriptionName">The subscription name if peeking from a topic subscription.</param>
+    /// <param name="fromSequenceNumber">The first sequence number to read, null for the head; a provider without <see cref="IProviderCapabilities.SupportsPeekFromSequenceNumber"/> throws <see cref="NotSupportedException"/> when it is given.</param>
     /// <param name="cancellationToken">Token that stops the peek between two broker calls.</param>
     /// <returns>A collection of messages.</returns>
-    Task<IEnumerable<IMessage>> PeekMessagesAsync(string entityName, int count = 10, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, CancellationToken cancellationToken = default);
+    Task<IEnumerable<IMessage>> PeekMessagesAsync(string entityName, int count = 10, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, long? fromSequenceNumber = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Sends a message to a queue or topic.
