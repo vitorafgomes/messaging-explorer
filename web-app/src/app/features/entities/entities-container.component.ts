@@ -12,31 +12,32 @@ import { EntityDetailsComponent } from './entity-details.component';
     EntityDetailsComponent
   ],
   template: `
-    <div class="entities-container d-flex">
+    <div class="entities-container">
       <div class="entities-sidenav">
         <app-entities-tree></app-entities-tree>
       </div>
-      <div class="entities-content flex-fill">
+      <div class="entities-content">
         <app-entity-details></app-entity-details>
       </div>
     </div>
   `,
   styles: [`
     .entities-container {
+      display: flex;
       width: 100%;
       height: 100%;
     }
 
     .entities-sidenav {
-      width: 320px;
-      border-right: 1px solid var(--bs-border-color);
-      padding: 0;
-      flex-shrink: 0;
+      flex: 0 0 26%;
+      min-width: 264px;
+      max-width: 340px;
+      border-right: 1px solid var(--mat-sys-outline-variant);
     }
 
     .entities-content {
-      background: var(--bs-secondary-bg);
-      padding: 0;
+      flex: 1;
+      min-width: 0;
     }
   `]
 })

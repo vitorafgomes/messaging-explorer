@@ -219,3 +219,60 @@ describe('EntitiesTreeComponent runs one tree load at a time', () => {
   });
 
 });
+
+describe('EntitiesTreeComponent: the tree on Material', () => {
+  function render(buildTree: () => ReturnType<TreeDataBuilderService['buildTree']>) {
+    TestBed.configureTestingModule({
+      imports: [EntitiesTreeComponent],
+      providers: [
+        { provide: TreeDataBuilderService, useValue: { buildTree: vi.fn(buildTree) } },
+        { provide: EntitySelectionService, useValue: { selection$: of(null), treeRefresh$: NEVER, select: vi.fn() } },
+        { provide: ConnectionService, useValue: { isConnected: true, connectionStatus$: NEVER } },
+        { provide: LoggerService, useValue: { log: () => undefined, error: () => undefined } },
+        { provide: DeadLetterNotificationService, useValue: { clear: () => undefined } },
+        { provide: ProviderService, useValue: { capabilities: signal(DEFAULT_AZURE_CAPABILITIES) } },
+        { provide: MatDialog, useValue: { open: vi.fn() } }
+      ]
+    });
+    const fixture = TestBed.createComponent(EntitiesTreeComponent);
+    fixture.detectChanges();
+    return fixture;
+  }
+  const topics: TreeNode[] = [{
+    id: 'category-topics', name: 'Topics', type: 'category', icon: 'folder', expandable: true, level: 0,
+    children: [{
+      id: 'topic-events', name: 'events', type: 'topic', icon: 'topic', expandable: true, level: 1, data: { subscriptionCount: 1 } as never,
+      children: [{ id: 'subscription-events-audit', name: 'audit', type: 'subscription', icon: 'mail', expandable: false, level: 2 }]
+    }]
+  }];
+  const text = (fixture: { nativeElement: HTMLElement }) => (fixture.nativeElement.textContent ?? '').replace(/\s+/g, ' ');
+
+  it('a failed load offers Retry, which asks for the entities again and shows them', () => {
+    let fail = true;
+    const fixture = render(() => (fail ? throwError(() => new Error('503 Service Unavailable')) : of(topics)));
+    const retry = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button')).find(b => b.textContent?.trim() === 'Retry')!;
+
+    fail = false;
+    retry.click();
+    fixture.detectChanges();
+
+    expect(TestBed.inject(TreeDataBuilderService).buildTree).toHaveBeenCalledTimes(2);
+    expect(text(fixture)).toContain('events');
+    expect(text(fixture)).not.toContain('Could not load entities');
+  });
+
+  it('the toggle of a topic is a button named for its topic that says whether the topic is open', () => {
+    const fixture = render(() => of(topics));
+    const toggle = () => (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('button.node-icon-expandable[aria-label$="events"]')!;
+    expect(toggle().getAttribute('aria-label')).toBe('Expand events');
+    expect(toggle().getAttribute('aria-expanded')).toBe('false');
+    expect(text(fixture)).not.toContain('audit');
+
+    toggle().click();
+    fixture.detectChanges();
+
+    expect(toggle().getAttribute('aria-label')).toBe('Collapse events');
+    expect(toggle().getAttribute('aria-expanded')).toBe('true');
+    expect(text(fixture)).toContain('audit');
+  });
+});
