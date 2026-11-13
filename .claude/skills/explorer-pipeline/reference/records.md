@@ -24,14 +24,14 @@ in the history page.
 
 Code is cited by name, `path#Member` (a member, a type, a test title or a key that occurs in the
 file), never by line number (`context/pages/decisions/0005-cite-code-by-name-and-prove-in-proportion-to-risk.md`).
-`scripts/check-context-refs.sh` refuses a line number. A citation that resolves proves the anchor
+`tools/checks/check-context-refs.sh` refuses a line number. A citation that resolves proves the anchor
 is in the file, not that the page still says what the code does: read each one you rewrite.
 
 No test counts go into the context; CI shows them.
 
 ## Before the commit message
 
-- After a change to `src/`, `web-app/` or `context/`, run `scripts/check-context-refs.sh` and fix
+- After a change to `src/`, `web-app/` or `context/`, run `tools/checks/check-context-refs.sh` and fix
   every citation it reports.
 - The pull request body uses `.github/PULL_REQUEST_TEMPLATE.md` and carries the line
   `Review: applied N, rejected M`. Its three safety boxes (API surface, secrets, message

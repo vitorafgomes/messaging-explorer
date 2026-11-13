@@ -113,7 +113,7 @@ Claude checks:
 - **Stale claims** — pages last `updated:` >90 days ago that reference files/lines; verify paths still exist.
 - **Missing cross-references** — a service page mentions a concept that has its own domain page but doesn't link it.
 - **Frontmatter violations** — missing mandatory fields, invalid enum values.
-- **Drift** — `path#Member` code citations whose file or name no longer exists (`scripts/check-context-refs.sh`).
+- **Drift** — `path#Member` code citations whose file or name no longer exists (`tools/checks/check-context-refs.sh`).
 
 Report findings; don't auto-fix without confirmation.
 

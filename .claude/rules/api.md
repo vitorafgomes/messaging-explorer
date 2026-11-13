@@ -42,7 +42,7 @@ A change never adds a gap and never widens one.
 
 | When | Run |
 |---|---|
-| Test | `scripts/in-docker.sh dotnet test src/ServiceBusExplorer.Api.Tests` |
-| A JSON contract the web app reads changed | also the web tests, `../scripts/in-docker.sh npm test -- --watch=false` in `web-app/` |
+| Test | `tools/checks/in-docker.sh dotnet test src/ServiceBusExplorer.Api.Tests` |
+| A JSON contract the web app reads changed | also the web tests, `../tools/checks/in-docker.sh npm test -- --watch=false` in `web-app/` |
 
 How the project works, its tests and its known gaps: `context/pages/services/api.md`.

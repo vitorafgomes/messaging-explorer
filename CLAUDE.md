@@ -47,7 +47,7 @@ You do not need to remember these; a hook stops or flags them.
 
 ## Working with other sessions
 
-- Start a session with `scripts/claude-session.sh` (`worker`, or `ui` for the web app): it leaves
+- Start a session with `tools/dev/claude-session.sh` (`worker`, or `ui` for the web app): it leaves
   out the servers and plugins this repo does not use.
 - Ask the `explorer-meter` agent where a session spent its tokens.
 

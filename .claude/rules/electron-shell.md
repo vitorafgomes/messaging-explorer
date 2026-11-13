@@ -22,7 +22,7 @@ A change never adds a gap and never widens one.
 
 | When | Run |
 |---|---|
-| Test the shell | `../scripts/in-docker.sh npm run test:electron` in `web-app/` |
+| Test the shell | `../tools/checks/in-docker.sh npm run test:electron` in `web-app/` |
 | An IPC channel, or how the API process starts, changed | a sensitive change with the `api-surface` lens |
 
 How the project works, its tests and its known gaps: `context/pages/services/electron-shell.md`.

@@ -5,11 +5,11 @@ date: 2026-11-12
 changes: "v1.1 (2026-11-13): the pipeline sized by risk, rules files per part of the project, two new hooks and two renamed, unit and web tests in a container, check-hidden-text and token-usage. Earlier on 2026-11-13: the private-names check. Earlier on 2026-11-13: removed the stale line that CI runs no web test; CI runs them since 2026-11-12. Founded with the harness on 2026-11-12"
 page_type: convention
 status: active
-description: "Who runs on which model and writes what, what lives in .claude/ and scripts/, what each hook does, and how the review workflow fits the gates."
+description: "Who runs on which model and writes what, what lives in .claude/ and tools/, what each hook does, and how the review workflow fits the gates."
 updated: 2026-11-13
 source:
   - ".claude/"
-  - "scripts/"
+  - "tools/"
   - ".github/workflows/ci.yml"
 reliability: high
 ---
@@ -71,29 +71,29 @@ All seven fail open: a missing `jq`, malformed JSON, or any error exits 0 having
 | `session-start.sh` | SessionStart | Proves the hook runtime works: checks `jq` is on PATH and pipes `git commit -m x` through `pre-git-guard.sh`; when either fails it emits a `systemMessage` saying the hooks are dead and which gates are silent. |
 | `prompt-router.sh` | UserPromptSubmit | One line, under 320 characters: a code task routes through `explorer-pipeline` first, and a change to the API surface, a secret or a message operation is never a fast path. |
 | `pre-git-guard.sh` | PreToolUse (Bash) | A permission **ask** for git that writes history, discards work (`git clean -f`, `git restore`, `git checkout --`, `rm -rf .git`) or changes where a push goes, every `gh` command that writes to GitHub, a publish and `docker push`. Read-only git passes. |
-| `pre-test-in-docker.sh` | PreToolUse (Bash) | **Denies** a unit or web test run (`dotnet test`, `npm test`, `ng test`, `vitest`) that does not go through `scripts/in-docker.sh`, and names the command to use. `dotnet test src/ServiceBusExplorer.IntegrationTests` passes: it starts brokers in Docker, which the container has no access to. |
+| `pre-test-in-docker.sh` | PreToolUse (Bash) | **Denies** a unit or web test run (`dotnet test`, `npm test`, `ng test`, `vitest`) that does not go through `tools/checks/in-docker.sh`, and names the command to use. `dotnet test src/ServiceBusExplorer.IntegrationTests` passes: it starts brokers in Docker, which the container has no access to. |
 | `agent-read-only-bash.sh` | PreToolUse (Bash) | **Denies** `explorer-reviewer` and `explorer-optimizer` any shell command other than read-only git, and any redirect into a file. The session and the implementer are not bound by it. |
 | `post-edit-test-reminder.sh` | PostToolUse (Edit\|Write) | Two sentences, under 340 characters, after an edit to `src/**/*.cs` outside the test projects, to `web-app/src/**` or to `web-app/electron/**`: the test now, through the container, and the checks before a report. |
 | `post-edit-build-rules-note.sh` | PostToolUse (Edit\|Write) | On a `.csproj`, `ServiceBusExplorer.slnx`, `Directory.Build.props`, `Directory.Packages.props`, `.editorconfig`, `global.json`, `web-app/angular.json`, `web-app/tsconfig*.json` and `.github/workflows/**`: these judge a change and are not part of it; the reply must say why the task needed the edit. |
 | `stop-review-gate.sh` | Stop | **Blocks** the turn once when the session edited production code (`src/**/*.cs` outside `*.Tests`, `web-app/src/**/*.ts` that is not a spec, `web-app/electron/*.js`) without dispatching `explorer-reviewer` (an `Agent` call or a `Workflow` run of `explorer-review`). `stop_hook_active` passes on the continuation, so no loop. Keyed on what *this* session edited, in `<session>.jsonl` and every `<session>/subagents/*.jsonl`. |
 | `session-end-metrics.sh` | SessionEnd | Appends one JSON line per session to `.claude/metrics/sessions.jsonl` (gitignored): production and test edits, reviewer dispatches, review workflow runs, pipeline invocations, agents, tool calls, `endedUnreviewed`. It parses only the lines that hold a tool call. |
 
-Every hook carries a case-matrix self-test (`<hook>.test.sh`, prints `ALL CASES PASS`). The `harness` job of `.github/workflows/ci.yml` runs all seven plus `.claude/workflows/explorer-review.test.sh`, `scripts/check-context-refs.test.sh` and a real `scripts/check-context-refs.sh` run.
+Every hook carries a case-matrix self-test (`<hook>.test.sh`, prints `ALL CASES PASS`). The `harness` job of `.github/workflows/ci.yml` runs all seven plus `.claude/workflows/explorer-review.test.sh`, `tools/checks/check-context-refs.test.sh` and a real `tools/checks/check-context-refs.sh` run.
 
-## `scripts/check-context-refs.sh`
+## `tools/checks/check-context-refs.sh`
 
 Resolves every code citation in `context/pages` against the working tree. A citation is `path#anchor` (paths under `src`, `web-app`, `scripts`, `docs`, `.claude`, `.github`, written in full): the anchor is a member, a type, a test title or a key that occurs in the file, so an edit elsewhere in the file never breaks it. It fails on a missing file, an anchor the file does not contain, a citation by line number (`path:12`, refused since 2026-11-13, [[pages/decisions/0005-cite-code-by-name-and-prove-in-proportion-to-risk]]) and a missing `context/pages`. It proves the anchor exists, never that the page still describes it truly; that part is read. Pages whose `status` marks them as a record are skipped. Runs in gate 7b and in CI.
 
-## `scripts/in-docker.sh`
+## `tools/checks/in-docker.sh`
 
-Runs a command in the image `scripts/docker/Dockerfile` builds (the .NET 10 SDK, Node 22, git, jq,
+Runs a command in the image `tools/docker/Dockerfile` builds (the .NET 10 SDK, Node 22, git, jq,
 perl). The container sees the repository at its own path and a volume for its caches, runs as the
 calling user with every capability dropped, sees 8 processors (`EXPLORER_CPUS`), and has no Docker
 socket; `EXPLORER_OFFLINE=1` takes its network away. When Docker does not answer it runs nothing
 and exits 2. The unit projects and the web tests run through it; the integration suite and the
 end-to-end suite run on the machine.
 
-## `scripts/check-hidden-text.sh`, `scripts/token-usage.sh`
+## `tools/checks/check-hidden-text.sh`, `tools/dev/token-usage.sh`
 
 `check-hidden-text.sh [paths]` finds text a person does not see but a model reads: zero-width and
 direction characters, control characters, HTML comments and hidden HTML in Markdown, words mixing
@@ -101,12 +101,12 @@ Latin with Cyrillic or Greek letters. CI runs it on the repository. `token-usage
 and `token-usage.sh docs` report the tokens a session used per agent type, and the size of every
 document a model reads here.
 
-## `scripts/check-doc-sizes.sh`, `scripts/claude-session.sh`, `scripts/try-harness.sh`
+## `tools/checks/check-doc-sizes.sh`, `tools/dev/claude-session.sh`, `tools/dev/try-harness.sh`
 
 `check-doc-sizes.sh` keeps the documents a model reads from growing back: each kind has a ceiling
 in characters (6,000 for `CLAUDE.md`, `AGENTS.md`, a rules file or an agent file; 12,000 for a
 context page outside the roadmap and the history), and a file over it fails unless
-`scripts/doc-size-baseline.txt` lists it with the size it had, in which case it fails only if it
+`tools/checks/doc-size-baseline.txt` lists it with the size it had, in which case it fails only if it
 grew. CI reports it as a warning while the service pages are still over their ceiling.
 
 `claude-session.sh [worker|ui]` opens Claude Code with only the servers this work needs (Rider;
@@ -121,13 +121,13 @@ and that a reviewing agent's shell reads git only. It spends about one US dollar
 The `explorer-meter` agent answers where a session spent its tokens and what would lower that,
 from `token-usage.sh` and from reading the documents themselves.
 
-## `scripts/check-private-names.sh`
+## `tools/checks/check-private-names.sh`
 
-Fails when a private name appears in the tracked files (`--tree`) or in text on stdin (`--stdin`): names the owner keeps out of this public repository, such as other projects and employers. The names are never written in the repository; the script reads them from the `PRIVATE_NAMES` secret in CI and from `~/.config/messaging-explorer/private-names` on a workstation. A name matches in any case and with one separator between its letters, and the report gives the file and line or the text line, never the matched text, because CI logs are public. `.github/workflows/private-names.yml` runs it on every push to `main` and on every pull request, opened, edited or pushed, over the tree, the title and body, and every commit message of the range, and is a required check of `main`; `--require` there turns a missing secret into a failure. A pull request from a fork has no secret and is checked again by the push that merges it. Before a commit, a pull request or a release note, the manager runs it locally. Its case matrix is `scripts/check-private-names.test.sh`, run by the `harness` job with made-up names.
+Fails when a private name appears in the tracked files (`--tree`) or in text on stdin (`--stdin`): names the owner keeps out of this public repository, such as other projects and employers. The names are never written in the repository; the script reads them from the `PRIVATE_NAMES` secret in CI and from `~/.config/messaging-explorer/private-names` on a workstation. A name matches in any case and with one separator between its letters, and the report gives the file and line or the text line, never the matched text, because CI logs are public. `.github/workflows/private-names.yml` runs it on every push to `main` and on every pull request, opened, edited or pushed, over the tree, the title and body, and every commit message of the range, and is a required check of `main`; `--require` there turns a missing secret into a failure. A pull request from a fork has no secret and is checked again by the push that merges it. Before a commit, a pull request or a release note, the manager runs it locally. Its case matrix is `tools/checks/check-private-names.test.sh`, run by the `harness` job with made-up names.
 
 ## Permissions
 
-`.claude/settings.json` allows without a prompt the read-only commands the gates need: `dotnet build|test`, `npm test -- --watch=false`, read-only git, `scripts/check-context-refs.sh` and every self-test. Everything Rule E covers is a permission ask whatever the allow list says.
+`.claude/settings.json` allows without a prompt the read-only commands the gates need: `dotnet build|test`, `npm test -- --watch=false`, read-only git, `tools/checks/check-context-refs.sh` and every self-test. Everything Rule E covers is a permission ask whatever the allow list says.
 
 ## What the build does not enforce
 

@@ -1,9 +1,9 @@
 #!/bin/sh
 # Runs a command inside the project's container instead of on this machine.
 #
-#   scripts/in-docker.sh <command> [arguments...]
-#   scripts/in-docker.sh dotnet test src/ServiceBusExplorer.Core.Tests
-#   EXPLORER_OFFLINE=1 scripts/in-docker.sh dotnet test --no-restore src/ServiceBusExplorer.Core.Tests
+#   tools/checks/in-docker.sh <command> [arguments...]
+#   tools/checks/in-docker.sh dotnet test src/ServiceBusExplorer.Core.Tests
+#   EXPLORER_OFFLINE=1 tools/checks/in-docker.sh dotnet test --no-restore src/ServiceBusExplorer.Core.Tests
 #
 # The container sees one folder of this machine, the repository, at the same path it has here, so
 # a path in an error message is the path on disk. Everything else it writes (the package caches,
@@ -14,12 +14,12 @@
 # There is no fallback: when Docker does not answer, the command does not run and the exit code
 # is 2. The exit code of the command is passed through otherwise.
 
-ROOT=$(cd "$(dirname "$0")/.." && pwd)
+ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 [ $# -gt 0 ] || { echo "in-docker: give the command to run, for example: dotnet test src/ServiceBusExplorer.Api.Tests" >&2; exit 2; }
 docker version --format '{{.Server.Version}}' >/dev/null 2>&1 \
   || { echo "in-docker: Docker does not answer, so nothing was run. Start Docker and try again." >&2; exit 2; }
 
-DOCKERFILE="$ROOT/scripts/docker/Dockerfile"
+DOCKERFILE="$ROOT/tools/docker/Dockerfile"
 IMAGE="explorer-dev:$(cksum < "$DOCKERFILE" | cut -d' ' -f1)"
 if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
   echo "in-docker: building $IMAGE (first run, or the Dockerfile changed)" >&2

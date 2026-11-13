@@ -20,7 +20,7 @@ jq -c '
       hookSpecificOutput: {
         hookEventName: "PreToolUse",
         permissionDecision: "deny",
-        permissionDecisionReason: ("Tests run in the container, not on this machine. Run it as: scripts/in-docker.sh " + (.[0] | sub("^\\s+"; "") | sub("\\s+$"; "")))
+        permissionDecisionReason: ("Tests run in the container, not on this machine. Run it as: tools/checks/in-docker.sh " + (.[0] | sub("^\\s+"; "") | sub("\\s+$"; "")))
       }
     } else empty end
 ' 2>/dev/null

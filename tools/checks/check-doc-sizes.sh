@@ -1,7 +1,7 @@
 #!/bin/sh
 # Keeps the documents a model reads from growing back.
 #
-#   scripts/check-doc-sizes.sh [repo root]
+#   tools/checks/check-doc-sizes.sh [repo root]
 #
 # Each kind of document has a ceiling in characters. A file over its ceiling fails the check,
 # unless it is listed in doc-size-baseline.txt beside this script with the size it had when it
@@ -11,7 +11,7 @@
 # Prints one line per failure and exits 1 on any, 0 on none, 2 when it finds nothing to check.
 
 HERE=$(cd "$(dirname "$0")" && pwd)
-ROOT=${1:-$(cd "$HERE/.." && pwd)}
+ROOT=${1:-$(cd "$HERE/../.." && pwd)}
 BASELINE="$HERE/doc-size-baseline.txt"
 cd "$ROOT" || exit 2
 

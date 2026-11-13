@@ -1,6 +1,6 @@
 ---
 name: explorer-mechanic
-description: Use when the sending session asks for a `.prove-red`, the proof that the tests of a requirement table fail on the code as it was before a change. Not for an ordinary build or test run, which is one command through scripts/in-docker.sh.
+description: Use when the sending session asks for a `.prove-red`, the proof that the tests of a requirement table fail on the code as it was before a change. Not for an ordinary build or test run, which is one command through tools/checks/in-docker.sh.
 tools: Bash, Read, Grep, Glob, Write
 model: haiku
 effort: low
@@ -12,7 +12,7 @@ run commands and report what happened: the commands as run, exact counts, and fa
 character for character. You write files only inside `.prove-red`.
 
 Every command that builds or runs tests goes through the container:
-`scripts/in-docker.sh <command>`. One command at a time.
+`tools/checks/in-docker.sh <command>`. One command at a time.
 
 ## Steps
 

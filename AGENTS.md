@@ -16,11 +16,11 @@ Unit and web tests run in the project's container, never directly on the machine
 | To | Run |
 |---|---|
 | Build | `dotnet build ServiceBusExplorer.slnx` and read the summary line: nothing fails the build on a warning, and the count must be 0 |
-| Test the core | `scripts/in-docker.sh dotnet test src/ServiceBusExplorer.Core.Tests` |
-| Test the API | `scripts/in-docker.sh dotnet test src/ServiceBusExplorer.Api.Tests` |
+| Test the core | `tools/checks/in-docker.sh dotnet test src/ServiceBusExplorer.Core.Tests` |
+| Test the API | `tools/checks/in-docker.sh dotnet test src/ServiceBusExplorer.Api.Tests` |
 | Test one test | add `--filter "FullyQualifiedName~<Name>"` |
 | Integration tests | `dotnet test src/ServiceBusExplorer.IntegrationTests`, on the machine: they start brokers in Docker |
-| Web tests, in `web-app/` | `../scripts/in-docker.sh npm test -- --watch=false`. Never plain `npx vitest`: it has no Angular compiler |
+| Web tests, in `web-app/` | `../tools/checks/in-docker.sh npm test -- --watch=false`. Never plain `npx vitest`: it has no Angular compiler |
 | Web build, in `web-app/` | `npm run build` |
 
 A change to `ServiceBusExplorer.Core` runs both unit projects: the API references the core. The

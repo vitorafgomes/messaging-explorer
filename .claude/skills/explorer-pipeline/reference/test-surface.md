@@ -1,6 +1,6 @@
 # Which tests a change must run
 
-Find the first row the diff matches. Unit and web tests go through `scripts/in-docker.sh`.
+Find the first row the diff matches. Unit and web tests go through `tools/checks/in-docker.sh`.
 Each project reports its own count.
 
 | The diff touches | Run |
@@ -13,7 +13,7 @@ Each project reports its own count.
 | `web-app/**` with a visible change | Add `npx playwright test -c e2e` in `web-app/`, on the machine, once, at the end |
 | `.claude/hooks/**` | Every `.claude/hooks/*.test.sh`; each prints `ALL CASES PASS` |
 | `.claude/workflows/explorer-review.js` | `.claude/workflows/explorer-review.test.sh` |
-| `scripts/**` | The script's own `.test.sh`, and one run of the script on the real tree |
+| `tools/**` | The script's own `.test.sh`, and one run of the script on the real tree |
 | Only text: `context/**`, `*.md`, and `.claude/**` paths no row above matches | Nothing executable. Say so, and why |
 
 The surface runs once, at the end of the lane, and again only after a fix that touched code.

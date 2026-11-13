@@ -41,7 +41,7 @@ A change never adds a gap and never widens one.
 
 | When | Run |
 |---|---|
-| Test | `scripts/in-docker.sh dotnet test src/ServiceBusExplorer.Core.Tests`, and the Api tests too: the Api references Core |
+| Test | `tools/checks/in-docker.sh dotnet test src/ServiceBusExplorer.Core.Tests`, and the Api tests too: the Api references Core |
 | A provider or a broker call changed | also `dotnet test src/ServiceBusExplorer.IntegrationTests`, on the machine, with Docker |
 
 How the project works, its tests and its known gaps: `context/pages/services/core.md`.

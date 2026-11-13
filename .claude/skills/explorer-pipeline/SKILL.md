@@ -71,7 +71,7 @@ the xUnit test, nor a documented abstraction (the provider interface, capabiliti
 Edit, then the test for that edit, step by step. When the
 result departs from the plan, tell the owner; do not patch it over.
 
-Unit and web tests run in the container: `scripts/in-docker.sh <command>`. Dispatch forms for
+Unit and web tests run in the container: `tools/checks/in-docker.sh <command>`. Dispatch forms for
 the implementer and the reviewer are in `reference/dispatch.md`. At most two heavy lanes run at
 once on the owner's machine: a lane that starts brokers in Docker, or the end-to-end suite.
 
@@ -122,7 +122,7 @@ understood: stop and hand the rest to the owner.
   |---|---|
   | The session found something no page says | `wiki-crystallize` |
   | A page was created | `wiki-integrate`, for the index and the links back |
-  | Pages changed | `wiki-lint`, then `scripts/check-context-refs.sh`; read every citation you rewrote |
+  | Pages changed | `wiki-lint`, then `tools/checks/check-context-refs.sh`; read every citation you rewrote |
 - The size check and the pull request body: `reference/records.md`.
 - Propose one conventional commit message in a code block, and stop. The owner decides about git;
   a commit the owner asks for goes on a `feat/`, `fix/`, `chore/` or `docs/` branch.

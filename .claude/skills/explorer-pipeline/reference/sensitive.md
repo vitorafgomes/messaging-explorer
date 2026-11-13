@@ -29,7 +29,7 @@ when the diff touches `Program.cs`, `IMessagingProvider` or the owner asks.
 ## Never fast path, whatever the extension
 
 `ServiceBusExplorer.slnx`, `*.csproj`, `.github/workflows/**`, `appsettings*.json`, `config.json`,
-`.claude/**`, `scripts/**`, `web-app/package.json`, `web-app/package-lock.json`,
+`.claude/**`, `tools/**`, `web-app/package.json`, `web-app/package-lock.json`,
 `web-app/angular.json`, `web-app/tsconfig*.json`, `web-app/electron/**`.
 
 ## A broker is someone's production

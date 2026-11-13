@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Opens Claude Code for this repo with only what the work needs switched on.
 #
-#   scripts/claude-session.sh [worker|ui] [arguments for claude...]
+#   tools/dev/claude-session.sh [worker|ui] [arguments for claude...]
 #
 #   worker (default)   the .NET worker: the Rider server
 #   ui                 the web app as well: Rider, WebStorm and the Angular CLI's server
@@ -44,7 +44,7 @@ if [ -n "$MEM" ] && [ -f "$MEM/.mcp.json" ]; then
 fi
 
 # The ui profile adds the servers the repository itself declares, such as the Angular CLI's.
-ROOT=$(cd "$(dirname "$0")/.." && pwd)
+ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 PROJECT_SERVERS="$ROOT/.mcp.json"
 if [ "$PROFILE" = ui ] && [ -f "$PROJECT_SERVERS" ]; then
   jq --slurpfile project "$PROJECT_SERVERS" '.mcpServers += ($project[0].mcpServers // {})' "$CONFIG" > "$CONFIG.new" && mv "$CONFIG.new" "$CONFIG"

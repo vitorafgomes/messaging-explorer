@@ -41,8 +41,8 @@ Owns all presentation and client-side state: connection management, the entity t
 
 | To | Run |
 |---|---|
-| Test | `../scripts/in-docker.sh npm test -- --watch=false`. It runs vitest through the Angular builder; plain `npx vitest` has no Angular compiler and fails sound tests |
-| Test the shell | `../scripts/in-docker.sh npm run test:electron` |
+| Test | `../tools/checks/in-docker.sh npm test -- --watch=false`. It runs vitest through the Angular builder; plain `npx vitest` has no Angular compiler and fails sound tests |
+| Test the shell | `../tools/checks/in-docker.sh npm run test:electron` |
 | Build | `npm run build` |
 | End-to-end, once at the end of a lane with a visible change | `npx playwright test -c e2e`, on the machine: it starts the API and brokers |
 

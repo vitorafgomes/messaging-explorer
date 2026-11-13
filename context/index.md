@@ -25,7 +25,7 @@ The content catalogue for this context. Start here, follow wikilinks. If the con
 
 > **Coverage note (2026-11-12):** founded in one day, from the code only, in the working tree of
 > branch `fix/dlq-bulk-operations` with the owner's uncommitted changes. Every `path:line` citation
-> resolves (`scripts/check-context-refs.sh`); the service pages and the project map were written by
+> resolves (`tools/checks/check-context-refs.sh`); the service pages and the project map were written by
 > three survey agents and their citations were spot-checked, not all re-read, so a line that exists
 > may still describe its claim loosely. On 2026-11-12 the owner allowed his private notes to be
 > migrated: the product history, the Azure authentication decision and the feature backlog came
