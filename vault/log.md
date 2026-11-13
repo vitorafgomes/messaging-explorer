@@ -4,6 +4,9 @@ The owner decided the next version adds Event Hubs and Event Grid, presented wit
 ## [2026-11-13] feat | Sessions: a list that locks nothing, one session opened, a guarded state write
 Listing sessions used to accept and lock each one in turn, taking them from the real consumers. It is now a bounded peek grouped by session id; a test on the emulator showed that a plain receiver peeks a session entity and locks none. Only opening one session accepts it, for at most five seconds. The state editor shows the old state beside the new, and the write carries the state as read, so a state changed meanwhile is refused. Queues gained the Sessions tab. [[pages/roadmap/azure-service-bus-administration]] item 6, [[pages/services/api]].
 
+## [2026-11-13] test | No secret reaches a log on a failed connection test or connect
+A log line on the failed connection test passes the exception to the logger, and its own comment warned that SDK exceptions can carry a connection string. Tests now drive every failing test and connect path with sentinel secrets (a shared access key, a client secret, a RabbitMQ password) and search everything the logger and the console received: nothing leaked, so no code changed and the tests stay as a lock. The service principal's token request is checked by hand only. [[pages/invariants/secrets-masked-at-the-api-boundary]].
+
 ## [2026-11-13] fix | The open audit issues, triaged against the code and fixed where real
 Twenty-four issues from an automated audit were read against the code as it is now. Twelve were real and are fixed, each with a test that failed first: an unreadable legacy file no longer leads to deleting it, a failed tree load says so instead of showing an empty namespace, an exported CSV cell cannot start a formula, a send retry carries only what the form holds, an unexpected resubmit error ends as a failure. Four were already fixed, three were not defects, and five wait for the owner in [[pages/roadmap/followups]].
 

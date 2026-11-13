@@ -1,12 +1,12 @@
 ---
 title: "Secrets are masked at the API boundary"
-version: "1.1"
+version: "1.2"
 date: 2026-11-12
-changes: "v1.1 (2026-11-12): the save response is masked, an import never stores the mask, Password is pinned by tests; three known exceptions closed. v1.0 founded from the code"
+changes: "v1.2 (2026-11-13): a failed connection test or connect logs no secret, checked with sentinel secrets in every log entry and on the console. v1.1 (2026-11-12): the save response is masked, an import never stores the mask, Password is pinned by tests; three known exceptions closed. v1.0 founded from the code"
 page_type: invariant
 status: active
 description: "A connection string, a password, a client secret and the API secret leave the backend only as the mask, except on an export the user asked for with secrets; the mask never overwrites a stored secret; nothing logs one."
-updated: 2026-11-12
+updated: 2026-11-13
 enforced_by:
   - "src/ServiceBusExplorer.Core/Services/FileWorkspaceManager.cs:274"
   - "src/ServiceBusExplorer.Core/Services/FileWorkspaceManager.cs:342"
@@ -20,6 +20,7 @@ verified_by:
   - "src/ServiceBusExplorer.Core.Tests/Services/FileWorkspaceManagerTests.cs:108"
   - "src/ServiceBusExplorer.Core.Tests/Services/FileWorkspaceManagerTests.cs:155"
   - "src/ServiceBusExplorer.Api.Tests/MetricsControllerTests.cs:109"
+  - "src/ServiceBusExplorer.Api.Tests/ConnectionFailureLogTests.cs:20"
 source:
   - "src/ServiceBusExplorer.Core/Services/FileWorkspaceManager.cs"
   - "src/ServiceBusExplorer.Core/Services/IConnectionManager.cs"
@@ -62,13 +63,15 @@ Connection strings and passwords for production brokers pass through this tool. 
 - `src/ServiceBusExplorer.Api.Tests/MetricsControllerTests.cs:109` - a 500 from the metrics endpoint does not carry the exception message.
 - `src/ServiceBusExplorer.Api.Tests/ErrorBodyTests.cs:51` - an unhandled exception answers a constant body in every environment. Before 2026-11-12 the Development exception page showed the parse error of an unreadable `workspace.json` and echoed the request headers, the API key among them.
 - `src/ServiceBusExplorer.Api.Tests/ErrorBodyTests.cs:69` - the import action answers a constant message, never the exception's.
+- `src/ServiceBusExplorer.Api.Tests/ConnectionFailureLogTests.cs:20` - a failed connection test or connect logs no secret. Each test drives the API with a sentinel secret and a capturing logger provider at Trace. For every log entry it records the formatted message, every state value and the `ToString()` and `Data` of the exception and of each inner exception, and it captures the console as well. It asserts the expected failure entry is there, then that the sentinel appears nowhere (for RabbitMQ also the base64 of `user:password`, the Basic header). The paths covered: three malformed Azure connection strings on `POST test` (`UriFormatException`, `FormatException`, `ArgumentException`, `:149`); a well-formed string on a closed loopback port (`AggregateException` after four retries, `:164`); a malformed string on `POST {id}/connect`, logged by `ProviderFactory` and `ConnectionsController` (`:183`); a service principal whose credential is refused while it is built (`:203`); a closed RabbitMQ management port on `POST test`, the `Console.WriteLine` lines (`:223`); a closed AMQP port on connect (`BrokerUnreachableException`, `:241`). Checked on 2026-11-13 with Azure.Messaging.ServiceBus 7.21.0, Azure.Identity 1.21.0 and RabbitMQ.Client 6.8.1: no sentinel appeared on any path, and no code changed. Putting the secret into the log line of `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs:90`, `src/ServiceBusExplorer.Core/Providers/ProviderFactory.cs:138` or the management client's console line turns the tests red.
 
 ## Known exceptions
 
 None is intended; each is tracked in [[pages/roadmap/followups]].
 
 - **The list endpoint, `export-full` and the two import endpoints are not pinned by a masking test** at the API level.
-- **The API's stdout is echoed by the Electron shell**; whether any API log line carries a connection string was not verified.
+- **The API's stdout is echoed by the Electron shell.** The failed connection test and connect paths are verified to carry no secret (`src/ServiceBusExplorer.Api.Tests/ConnectionFailureLogTests.cs:20`); the other log lines are not.
+- **A service principal's token request is not covered by a test.** `AzureCredentialFactory.Create` passes no options. With `AZURE_AUTHORITY_HOST` naming a closed loopback port, the run still opened connections to public Microsoft addresses (`strace`, 40.126.31.x and 20.190.159.x), most likely MSAL's instance discovery, and took five minutes; a test of that path leaves the machine. It was checked once by hand, on 2026-11-13, in a network namespace with only loopback. The authority was a closed loopback port, and the logged `AuthenticationFailedException` carried connection-refused errors and no sentinel. A failure answered by the real authority, such as a wrong secret, was not seen.
 
 ## Change protocol
 
