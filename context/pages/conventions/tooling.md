@@ -1,8 +1,8 @@
 ---
 title: "Tooling"
-version: "2.0"
+version: "2.1"
 date: 2026-11-12
-changes: "v2.0: the pipeline by size and step; hooks and checks on their own page"
+changes: "2026-11-13: the release workflow computes the version. v2.0: the pipeline by size and step; hooks and checks on their own page"
 page_type: convention
 status: active
 description: "Who runs on which model and writes what, the pipeline skill, the rules files, the review workflow and what the build does not enforce; hooks and scripts are on their own page."
@@ -92,7 +92,7 @@ Each is an entry in [[pages/roadmap/followups]].
 ## Not part of the harness yet
 
 - An architecture-test project: it rests on build strictness this repo does not have yet.
-- Release-version scripts and knowledge-graph git hooks: this repo tags by hand and has no knowledge graph.
+- Knowledge-graph git hooks: this repo has no knowledge graph.
 - Whole-project mutation testing as a required step: the Prove step's targeted mutation is the proof, and `stryker-project` runs only on request.
 - `evals/` for the pipeline skill, and project slash commands.
 

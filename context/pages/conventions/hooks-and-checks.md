@@ -1,9 +1,9 @@
 ---
 title: "Hooks and checks"
-version: "1.0"
+version: "1.1"
 date: 2026-11-13
 updated: 2026-11-13
-changes: "v1.0: split out of the tooling page"
+changes: "2026-11-13: tools/release/next-version.sh. v1.0: split out of the tooling page"
 page_type: convention
 status: active
 description: "Read when a change touches a hook under .claude/hooks/, a script under tools/, or what the harness job of CI runs."
@@ -89,6 +89,10 @@ from `token-usage.sh` and from reading the documents themselves.
 ## `tools/checks/check-private-names.sh`
 
 Fails when a private name appears in the tracked files (`--tree`) or in text on stdin (`--stdin`): names the owner keeps out of this public repository, such as other projects and employers. The names are never written in the repository; the script reads them from the `PRIVATE_NAMES` secret in CI and from `~/.config/messaging-explorer/private-names` on a workstation. A name matches in any case and with one separator between its letters, and the report gives the file and line or the text line, never the matched text, because CI logs are public. `.github/workflows/private-names.yml` runs it on every push to `main` and on every pull request, opened, edited or pushed, over the tree, the title and body, and every commit message of the range, and is a required check of `main`; `--require` there turns a missing secret into a failure. A pull request from a fork has no secret and is checked again by the push that merges it. Before a commit, a pull request or a release note, the session runs it locally. Its case matrix is `tools/checks/check-private-names.test.sh`, run by the `harness` job with made-up names.
+
+## `tools/release/next-version.sh`
+
+Prints the next version from the last `vX.Y.Z` tag and the conventional commits since it (a breaking change bumps the major, `feat` the minor, anything else the patch), `X.Y.Z-beta.N` for a prerelease, or with `--notes` the release notes. The release workflow runs it (`.github/workflows/release.yml#bash tools/release/next-version.sh "${args[@]}"`); its case matrix, `next-version.test.sh`, runs in the harness job with the other `tools/*/*.test.sh`.
 
 ## Related
 

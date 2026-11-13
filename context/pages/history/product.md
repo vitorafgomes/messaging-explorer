@@ -1,12 +1,12 @@
 ---
 title: "Product history"
-version: "1.0"
+version: "1.1"
 date: 2026-11-12
-changes: "Initial history page, migrated from the owner's notes"
+changes: "2026-11-13: the release from main. Initial history page, migrated from the owner's notes"
 page_type: reference
 status: active
 description: "How Messaging Explorer got here: the private version line up to 3.0.0, the public relaunch as 1.0.0, why 2.3.0 followed, and the decisions taken on the way that still shape the code."
-updated: 2026-11-12
+updated: 2026-11-13
 source:
   - "owner's private notes, April to July 2026 (migrated with the owner's word on 2026-11-12; rewritten in English, checked against the code)"
   - "CHANGELOG.md"
@@ -32,6 +32,7 @@ Everything before 2026-04-30 comes from the owner's notes and predates the publi
 | 2026-07-20 | 2.3.0 | Dead-letter bulk delete and resubmit reworked into per-batch cycles with cancellation. The version jumped from 1.0.2 to 2.3.0 so that users of the private 2.x line would not see the relaunch as a downgrade (`CHANGELOG.md`). |
 | 2026-11-12 | - | The agent harness, this context, the code audit and the integration tests ([[pages/decisions/0001-in-repo-vault-and-agent-harness]], [[pages/roadmap/code-audit-2026-11]]). |
 | 2026-11-12 | 2.4.0 | The fixes of the audit (connection fields kept on save, entity names with reserved characters, bulk actions bound to the selection, a start that waits for the API), the Beta update channel, block maps in the release, dependencies moved inside their majors (`CHANGELOG.md`). First release built by the gated workflow: CI on the tagged commit, tag checked against the package version, then the three builds. |
+| 2026-11-13 | - | The release runs from `main`: Run workflow computes the version from the commits since the last tag, stamps it into the build, and creates the tag and the GitHub Release once every build passes, so no commit bumps the version any more. Until then a version needed a `chore(release)` pull request that edited `web-app/package.json` and `CHANGELOG.md`, then a pushed tag that `verify-version` checked against the package. The notes of each release on GitHub replace `CHANGELOG.md`, which stops at 2.4.4. Tests: three new cases in `web-app/electron/release-workflow.test.js`, and `tools/release/next-version.test.sh`. |
 
 ## Decisions taken on the way that still hold
 
