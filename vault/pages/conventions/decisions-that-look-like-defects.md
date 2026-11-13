@@ -2,11 +2,11 @@
 title: "Decisions that look like defects"
 version: "1.0"
 date: 2026-11-12
-changes: "Founded on 2026-11-12 with the entries the founding survey could back with a test"
+changes: "2026-11-13: the monitoring history count. Founded on 2026-11-12 with the entries the founding survey could back with a test"
 page_type: established-patterns
 status: active
 description: "Behaviour in Messaging Explorer that reads as a bug and is intended: what it is, why it is right, where it lives and the test that locks it. A reviewer checks this page before reporting."
-updated: 2026-11-12
+updated: 2026-11-13
 source:
   - "src/ServiceBusExplorer.Api/Program.cs"
   - "src/ServiceBusExplorer.Api.Tests/"
@@ -25,6 +25,7 @@ An entry is a claim about the code today: when the code under it changes, the en
 - **`/health` answers without the API key.** The Electron shell and a developer need to know the process is up before a key exchange is possible; the route returns a constant. `src/ServiceBusExplorer.Api/Program.cs:186`, locked by `src/ServiceBusExplorer.Api.Tests/AuthMiddlewareTests.cs:38`.
 - **`OPTIONS` passes the key middleware.** A CORS preflight never carries custom headers; the CORS middleware before it decides, and the real request still needs the key. `src/ServiceBusExplorer.Api/Program.cs:192`, locked by `src/ServiceBusExplorer.Api.Tests/CorsTests.cs:26`.
 - **An export with `includeSecrets=true` returns raw secrets.** It is the user's backup of their own connections, asked for explicitly, and it logs a warning. `src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs:425`, locked by `src/ServiceBusExplorer.Api.Tests/ConnectionMaskingTests.cs:61`.
+- **`MonitoringStore.GetHistory` throws on a negative count.** Its one caller clamps the query to 1 to 120 before the call (`src/ServiceBusExplorer.Api/Controllers/MonitoringController.cs:35`, `src/ServiceBusExplorer.Api/Controllers/MonitoringController.cs:36`), so `GET /api/monitoring/history?count=-5` answers the history; the store is not guarded twice. Locked by `src/ServiceBusExplorer.Api.Tests/MonitoringControllerTests.cs:15` (2026-11-13). A second caller of the store needs its own clamp.
 - **Enums travel as strings.** The Angular client sends `"AzureServiceBus"`, not `0`. `src/ServiceBusExplorer.Api/Program.cs:59`.
 
 ## Bulk operations

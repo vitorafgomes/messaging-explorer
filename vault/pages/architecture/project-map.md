@@ -2,8 +2,8 @@
 title: "Project map"
 version: "1.0"
 date: 2026-11-12
-updated: 2026-11-12
-changes: "The integration project also runs the Azure Service Bus emulator"
+updated: 2026-11-13
+changes: "2026-11-13: CI runs the web and Electron helper tests, corrected in the CI section and the change table. Before: the integration project also runs the Azure Service Bus emulator"
 page_type: longform
 status: active
 description: "Every project in ServiceBusExplorer.slnx plus the Angular app, the Electron shell and the docs site: kind, references, packages, covering tests and which tests to run when a project changes."
@@ -97,7 +97,7 @@ The vendor SDKs (`Azure.*`, `RabbitMQ.Client`) are referenced by Core only; Api 
 
 ## CI
 
-`.github/workflows/ci.yml` runs on pushes and pull requests to `main`. Job `dotnet` restores and builds the whole solution in Release (`.github/workflows/ci.yml:59`, `.github/workflows/ci.yml:62`), so all five projects always build together, and tests Core.Tests and Api.Tests by path (`.github/workflows/ci.yml:66`, `.github/workflows/ci.yml:67`), so it starts no container. Job `integration` builds and runs the integration project on its own runner (`.github/workflows/ci.yml:72`, `.github/workflows/ci.yml:89`); the release workflow calls this workflow, so a tag waits for it too. Job `web` runs `npm ci` and `npm run build` in `web-app` (`.github/workflows/ci.yml:111`, `.github/workflows/ci.yml:123`) and, since 2026-11-12, `npm test -- --watch=false` between them (`.github/workflows/ci.yml:115`), so the 21 spec files are part of CI. `.github/workflows/release.yml` triggers on `v*` tags (`.github/workflows/release.yml:13`) and builds Electron installers for Linux, Windows and macOS (`.github/workflows/release.yml:83`, `.github/workflows/release.yml:125`, `.github/workflows/release.yml:168`).
+`.github/workflows/ci.yml` runs on pushes and pull requests to `main`. Job `dotnet` restores and builds the whole solution in Release (`.github/workflows/ci.yml:59`, `.github/workflows/ci.yml:62`), so all five projects always build together, and tests Core.Tests and Api.Tests by path (`.github/workflows/ci.yml:66`, `.github/workflows/ci.yml:67`), so it starts no container. Job `integration` builds and runs the integration project on its own runner (`.github/workflows/ci.yml:72`, `.github/workflows/ci.yml:89`); the release workflow calls this workflow, so a tag waits for it too. Job `web` runs `npm ci` and `npm run build` in `web-app` (`.github/workflows/ci.yml:111`, `.github/workflows/ci.yml:123`) and, since 2026-11-12, `npm test -- --watch=false` between them (`.github/workflows/ci.yml:115`), so every spec file is part of CI (45 on 2026-11-12), and the Electron helper tests run after them with `npm run test:electron` (`.github/workflows/ci.yml:119`). `.github/workflows/release.yml` triggers on `v*` tags (`.github/workflows/release.yml:13`) and builds Electron installers for Linux, Windows and macOS (`.github/workflows/release.yml:83`, `.github/workflows/release.yml:125`, `.github/workflows/release.yml:168`).
 
 ## Who references whom: what to run when X changes
 
@@ -111,8 +111,8 @@ The vendor SDKs (`Azure.*`, `RabbitMQ.Client`) are referenced by Core only; Api 
 | Core, `Providers/ProviderFactory.cs` or `ProviderType.cs` | Api | Full solution; also `web-app` provider registry if a value is added | No direct test; `ConnectionMaskingTests` touches `ProviderType` |
 | Api (controllers, `Program.cs`, middleware) | Api.Tests | Api.Tests; the SPA calls these routes, so check `web-app/src/app/core/services/api.service.ts` | Route and JSON changes cross the HTTP boundary with no generated client |
 | Core.Tests, Api.Tests or IntegrationTests only | that project | that project | Nothing references a test project |
-| `web-app/src` | nothing in .NET | `npm test` and `npm run build` in `web-app` | CI runs only the build |
-| `web-app/electron`, `web-app/package.json` `build` | nothing in .NET | `npm run electron:dev` by hand; no automated test | Process spawn and port logic is untested |
+| `web-app/src` | nothing in .NET | `npm test -- --watch=false` and `npm run build` in `web-app` | CI runs both |
+| `web-app/electron`, `web-app/package.json` `build` | nothing in .NET | `npm run test:electron` in `web-app` for the helpers in `shell-helpers.js`, then `npm run electron:dev` by hand | CI runs the helper tests; the wiring in `main.js` and `preload.js` (process spawn, IPC, dialogs) has no automated test |
 | `docs/` | nothing | none | Static files |
 
 ## To change here, read

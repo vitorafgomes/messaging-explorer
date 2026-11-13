@@ -306,6 +306,30 @@ describe('MessageExportService', () => {
       expect(result).toContain('"Text with\nnewline"');
     });
 
+    it('a cell from a message that starts like a spreadsheet formula is exported as text, not as a formula', () => {
+      const messages = [createMockMessage({
+        body: '=HYPERLINK("http://example.invalid","open")',
+        subject: '+1+2',
+        correlationId: '-2+3',
+        messageId: '@SUM(A1)',
+        sessionId: '\t=1',
+        partitionKey: '\r=1',
+        replyTo: 'orders-reply'
+      })];
+      const options: MessageExportOptions = { format: 'csv', includeApplicationProperties: false, prettyPrint: false };
+
+      const row = service.exportToCsv(messages, options).split('\n').slice(1).join('\n');
+
+      expect(row).toContain(`"'=HYPERLINK(""http://example.invalid"",""open"")"`);
+      expect(row).toContain(`"'+1+2"`);
+      expect(row).toContain(`"'-2+3"`);
+      expect(row).toContain(`"'@SUM(A1)"`);
+      expect(row).toContain(`"'\t=1"`);
+      expect(row).toContain(`"'\r=1"`);
+      expect(row).toContain(`"orders-reply"`);
+      expect(row).not.toContain(`"=HYPERLINK`);
+    });
+
     it('should format dates as ISO strings in CSV', () => {
       const testDate = new Date('2024-01-15T10:30:00Z');
       const messages = [createMockMessage({ enqueuedTime: testDate })];

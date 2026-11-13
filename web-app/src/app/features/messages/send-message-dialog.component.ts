@@ -426,20 +426,14 @@ export class SendMessageDialogComponent {
   }
 
   send() {
-    // Build application properties
-    if (this.customProperties.length > 0) {
-      this.message.applicationProperties = {};
-      for (const prop of this.customProperties) {
-        if (prop.key) {
-          this.message.applicationProperties[prop.key] = prop.value;
-        }
+    const applicationProperties: Record<string, any> = {};
+    for (const prop of this.customProperties) {
+      if (prop.key) {
+        applicationProperties[prop.key] = prop.value;
       }
     }
-
-    // Convert datetime-local string to Date for the API
-    if (this.scheduledEnqueueTimeLocal) {
-      this.message.scheduledEnqueueTime = new Date(this.scheduledEnqueueTimeLocal);
-    }
+    this.message.applicationProperties = Object.keys(applicationProperties).length > 0 ? applicationProperties : undefined;
+    this.message.scheduledEnqueueTime = this.scheduledEnqueueTimeLocal ? new Date(this.scheduledEnqueueTimeLocal) : undefined;
 
     this.sending.set(true);
 

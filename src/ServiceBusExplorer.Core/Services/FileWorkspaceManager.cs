@@ -124,7 +124,8 @@ public class FileWorkspaceManager : IConnectionManager, IConnectionGroupManager
     /// <summary>
     /// Consolidates separate connections.json and connection-groups.json into a single workspace.json.
     /// Runs on every startup. If workspace.json already exists, this is a no-op.
-    /// After successful consolidation, deletes the old separate files.
+    /// After successful consolidation, deletes the old separate files. If either file cannot be read
+    /// or parsed, nothing is written and both files are kept.
     /// </summary>
     private void MigrateFromSeparateFiles()
     {
@@ -165,7 +166,8 @@ public class FileWorkspaceManager : IConnectionManager, IConnectionGroupManager
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error reading legacy connections.json ({ExceptionType})", ex.GetType().Name);
+                _logger.LogError(ex, "Error reading legacy connections.json ({ExceptionType}); consolidation skipped and the legacy files kept", ex.GetType().Name);
+                return;
             }
         }
 
@@ -183,7 +185,8 @@ public class FileWorkspaceManager : IConnectionManager, IConnectionGroupManager
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error reading legacy connection-groups.json ({ExceptionType})", ex.GetType().Name);
+                _logger.LogError(ex, "Error reading legacy connection-groups.json ({ExceptionType}); consolidation skipped and the legacy files kept", ex.GetType().Name);
+                return;
             }
         }
 

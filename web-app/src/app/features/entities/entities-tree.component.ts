@@ -57,6 +57,12 @@ import { EntityFormDialogComponent, EntityFormDialogData } from './entity-form-d
           </div>
           <span class="loading-text">Loading entities...</span>
         </div>
+      } @else if (loadError()) {
+        <div class="tree-empty" role="alert">
+          <i class="fa fa-exclamation-triangle fa-4x empty-icon"></i>
+          <span class="empty-title">Could not load entities</span>
+          <span class="empty-subtitle">The broker did not answer the list of queues and topics. Refresh to try again.</span>
+        </div>
       } @else if (treeData.length === 0) {
         <div class="tree-empty">
           <i class="fa fa-inbox fa-4x empty-icon"></i>
@@ -701,6 +707,7 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
   treeData: TreeNode[] = [];
   expandedNodes = new Set<string>();
   loading: WritableSignal<boolean> = signal<boolean>(false);
+  loadError = signal(false);
   selectedNode: TreeNode | null = null;
 
   get isConnected(): boolean {
@@ -716,6 +723,7 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe(status => {
         if (status.connected) {
+          this.notificationService.clear();
           this.loadTree();
         } else {
           this.treeData = [];
@@ -744,6 +752,7 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
   loadTree() {
     this.logger.log('[EntitiesTree] loadTree() called');
     this.loading.set(true);
+    this.loadError.set(false);
     this.treeDataBuilder.buildTree()
       .pipe(
         finalize(() => {
@@ -776,8 +785,10 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
             }
           });
         },
-        error: () => {
+        error: (err) => {
+          this.logger.error('[EntitiesTree] Failed to load entities:', err);
           this.treeData = [];
+          this.loadError.set(true);
         }
       });
   }

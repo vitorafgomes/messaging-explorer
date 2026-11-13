@@ -36,7 +36,7 @@ It does not include Event Hubs, Relay, Notification Hubs or Event Grid: a differ
 
 Four things the vault or the conversation had wrong, found while surveying:
 
-- **No screen created or deleted an entity.** Create arrived on 2026-11-12 with edit and status (items 1 and 3 below): a create action on the tree (`web-app/src/app/features/entities/entities-tree.component.ts:824`). No screen deletes one yet; the API can and nothing calls it.
+- **No screen created or deleted an entity.** Create arrived on 2026-11-12 with edit and status (items 1 and 3 below): a create action on the tree (`web-app/src/app/features/entities/entities-tree.component.ts:835`). No screen deletes one yet; the API can and nothing calls it.
 - **The topic panel looked editable and saved nothing. Fixed 2026-11-12.** Its form had live inputs and toggles and no submit path, so an edit was discarded in silence; the panel is read-only text now.
 - **The metrics dashboard drew random numbers** and could not be reached. Removed 2026-11-12, with its two unreachable tabs. The real metrics service of the API still has no consumer in the app.
 - **No capability flag hid anything.** Since 2026-11-12 `ProviderService` follows the active connection and sessions, scheduled messages and the dead-letter side are hidden where the flag is explicitly false (`web-app/src/app/features/entities/entity-details.component.ts:2219`). The provider registry and the provider shell are still mounted nowhere (`web-app/src/app/features/entities/entities-container.component.ts:17`); one shared panel serves both brokers.

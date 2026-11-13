@@ -115,33 +115,45 @@ test('a failed start must be shown to the user: exited as soon as the process ha
   assert.equal(attempts, 2);
 });
 
-test('a failed start must be shown to the user: timeout when /health never answers ok', async () => {
+async function settleOnFakeClock(t, run, stepMs) {
+  let settled = false;
+  const result = run().finally(() => { settled = true; });
+  while (!settled) {
+    await new Promise((resolve) => setImmediate(resolve));
+    if (!settled) t.mock.timers.tick(stepMs);
+  }
+  return result;
+}
+
+test('a failed start must be shown to the user: timeout when /health never answers ok', { timeout: 5_000 }, async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
   let attempts = 0;
-  const started = Date.now();
-  const result = await waitForHealth({
+  const result = await settleOnFakeClock(t, () => waitForHealth({
     url: 'http://127.0.0.1:5917/health',
-    timeoutMs: 40,
-    intervalMs: 5,
+    timeoutMs: 300_000,
+    intervalMs: 1_000,
     fetchFn: () => {
       attempts += 1;
       return Promise.resolve({ ok: false });
     },
     hasExited: () => false
-  });
+  }), 1_000);
   assert.deepEqual(result, { healthy: false, reason: 'timeout' });
-  assert.ok(attempts > 1, `expected more than one attempt, got ${attempts}`);
-  assert.ok(Date.now() - started >= 40, 'resolved before timeoutMs elapsed');
+  assert.equal(attempts, 300, 'one attempt per interval until the deadline, none after it');
+  assert.equal(Date.now(), 300_000, 'resolved at the deadline, not before and not after');
 });
 
-test('a failed start must be shown to the user: timeout when a fetch never settles', async () => {
-  const result = await waitForHealth({
+test('a failed start must be shown to the user: timeout when a fetch never settles', { timeout: 5_000 }, async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
+  const result = await settleOnFakeClock(t, () => waitForHealth({
     url: 'http://127.0.0.1:5917/health',
-    timeoutMs: 30,
-    intervalMs: 5,
+    timeoutMs: 300_000,
+    intervalMs: 1_000,
     fetchFn: () => new Promise(() => {}),
     hasExited: () => false
-  });
+  }), 1_000);
   assert.deepEqual(result, { healthy: false, reason: 'timeout' });
+  assert.equal(Date.now(), 300_000, 'resolved at the deadline, not before and not after');
 });
 
 function fakeChild() {

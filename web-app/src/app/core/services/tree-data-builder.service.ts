@@ -28,8 +28,8 @@ export class TreeDataBuilderService {
   buildTree(): Observable<TreeNode[]> {
     this.logger.log('[TreeDataBuilder] Building tree...');
     return forkJoin({
-      queues: this.queueService.getQueues().pipe(catchError(() => of([]))),
-      topics: this.topicService.getTopics().pipe(catchError(() => of([])))
+      queues: this.queueService.getQueues(),
+      topics: this.topicService.getTopics()
     }).pipe(
       switchMap(({ queues, topics }) => {
         this.logger.log('[TreeDataBuilder] Got topics:', topics.length, topics.map(t => ({ name: t.name, subscriptionCount: t.subscriptionCount })));

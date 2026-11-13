@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
-import { NEVER, of } from 'rxjs';
+import { BehaviorSubject, NEVER, of, throwError } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
 import {
   ConnectionService, DeadLetterNotificationService, EntitySelectionService, LoggerService, TreeDataBuilderService
@@ -89,5 +89,55 @@ describe('EntitiesTreeComponent create entry points', () => {
       expect(labels(render(capabilities))).toStrictEqual([]);
       TestBed.resetTestingModule();
     }
+  });
+});
+
+describe('EntitiesTreeComponent when the entities cannot be loaded', () => {
+  it('says the entities could not be loaded, not that there are none', () => {
+    TestBed.configureTestingModule({
+      imports: [EntitiesTreeComponent],
+      providers: [
+        { provide: TreeDataBuilderService, useValue: { buildTree: () => throwError(() => new Error('503 Service Unavailable')) } },
+        { provide: EntitySelectionService, useValue: { selection$: of(null), treeRefresh$: NEVER, select: vi.fn() } },
+        { provide: ConnectionService, useValue: { isConnected: true, connectionStatus$: NEVER } },
+        { provide: LoggerService, useValue: { log: () => undefined, error: () => undefined } },
+        { provide: DeadLetterNotificationService, useValue: { clear: () => undefined } },
+        { provide: ProviderService, useValue: { capabilities: signal(DEFAULT_AZURE_CAPABILITIES) } },
+        { provide: MatDialog, useValue: { open: vi.fn() } }
+      ]
+    });
+    const fixture = TestBed.createComponent(EntitiesTreeComponent);
+    fixture.detectChanges();
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+
+    expect(text).toContain('Could not load entities');
+    expect(text).not.toContain('No Entities Found');
+  });
+});
+
+describe('EntitiesTreeComponent on a switch to another connection', () => {
+  it('the dead-letter alerts of the previous connection are not shown when the next connection fails to load', () => {
+    const status = new BehaviorSubject({ connected: true, namespace: 'first' });
+    let fail = false;
+    TestBed.configureTestingModule({
+      imports: [EntitiesTreeComponent],
+      providers: [
+        { provide: TreeDataBuilderService, useValue: { buildTree: () => (fail ? throwError(() => new Error('503 Service Unavailable')) : of([])) } },
+        { provide: EntitySelectionService, useValue: { selection$: of(null), treeRefresh$: NEVER, select: vi.fn() } },
+        { provide: ConnectionService, useValue: { isConnected: true, connectionStatus$: status } },
+        { provide: LoggerService, useValue: { log: () => undefined, error: () => undefined } },
+        { provide: ProviderService, useValue: { capabilities: signal(DEFAULT_AZURE_CAPABILITIES) } },
+        { provide: MatDialog, useValue: { open: vi.fn() } }
+      ]
+    });
+    const alerts = TestBed.inject(DeadLetterNotificationService);
+    TestBed.createComponent(EntitiesTreeComponent).detectChanges();
+    alerts.updateFromSubscriptions([{ name: 'audit', topicName: 'events', deadLetterMessageCount: 4 } as never]);
+    expect(alerts.alertCount()).toBe(1);
+
+    fail = true;
+    status.next({ connected: true, namespace: 'second' });
+
+    expect(alerts.alertCount()).toBe(0);
   });
 });

@@ -80,7 +80,7 @@ The owner remembers a user reporting layout problems on macOS, with no details. 
 ### A7. Smaller risks
 
 - **Fonts for code.** `'Consolas', 'Courier New'` (`web-app/src/app/features/entities/entity-details.component.ts:942`), `'Fira Code', 'Consolas', 'Monaco'` (`web-app/src/app/shared/components/message-body-editor/message-body-editor.component.ts:237`), `'Courier New'` (`web-app/src/app/shared/components/bulk-operation-results-dialog/bulk-operation-results-dialog.component.ts:302`). A Mac has neither Consolas nor Fira Code, so each place falls to a different font. Fix: one stack defined once, starting with `ui-monospace, "SF Mono", Menlo`, as in the prototype's `--mono`.
-- **Custom scrollbar in the tree** (`web-app/src/app/features/entities/entities-tree.component.ts:650`): it replaces the overlay scrollbar of macOS with a permanent 8 px one in Bootstrap colours. Fix: remove it; `color-scheme` already themes the native one.
+- **Custom scrollbar in the tree** (`web-app/src/app/features/entities/entities-tree.component.ts:656`): it replaces the overlay scrollbar of macOS with a permanent 8 px one in Bootstrap colours. Fix: remove it; `color-scheme` already themes the native one.
 - **Tray icon.** One bitmap resized to 16 px on darwin (`web-app/electron/main.js:319`), from `tray-icon.png` (`web-app/electron/main.js:287`); no `@2x` file and no template image, so it is soft on Retina and does not adapt to a light or dark menu bar.
 - **Application icon.** The build names `src/assets/icon.icns` (`web-app/package.json:146`); no such file is tracked in git. Whether the build generates it or ships the default icon was not checked.
 - **Window size.** The window opens at 1400 by 900 (`web-app/electron/main.js:622`), larger than the usable area of a 13 inch display at its default scaling, and allows 1000 by 700 (`web-app/electron/main.js:624`). Board `#min` draws the shell at that minimum.
@@ -110,8 +110,8 @@ P1 can hurt a broker, mislead about a secret, or blocks a whole screen. P2 break
 13. **Update states are terse.** A failed update is one icon with a tooltip (`web-app/src/app/app.html:66`); the channel switch is a click on the version number (`web-app/src/app/app.html:11`). Rule 9. Target: `#updates`, `#settings`.
 14. **Send hides delivery options behind tabs** (`web-app/src/app/features/messages/send-message-dialog.component.ts:76`), where the schedule and time to live are (`web-app/src/app/features/messages/send-message-dialog.component.ts:167`), and the header does not name the environment. Target: `#send`.
 15. **Fixed widths.** The tree column is 320 px (`web-app/src/app/features/entities/entities-container.component.ts:31`), the import preview fixes its columns (`web-app/src/app/features/messages/import-messages-dialog.component.ts:92`), the connection dialog has a 500 px minimum (`web-app/src/app/features/connections/add-connection-dialog.component.ts:360`). Rule 5. Target: `#min`, `#msg-import`.
-16. **The tree has no filter and is not virtualised** (`web-app/src/app/features/entities/entities-tree.component.ts:68`). Rule 11 once a namespace has hundreds of entities. Target: `#topic`.
-17. **No screen created an entity. Fixed 2026-11-12:** a create action on the tree opens the form dialog drawn on `#create` (`web-app/src/app/features/entities/entities-tree.component.ts:824`).
+16. **The tree has no filter and is not virtualised** (`web-app/src/app/features/entities/entities-tree.component.ts:74`). Rule 11 once a namespace has hundreds of entities. Target: `#topic`.
+17. **No screen created an entity. Fixed 2026-11-12:** a create action on the tree opens the form dialog drawn on `#create` (`web-app/src/app/features/entities/entities-tree.component.ts:835`).
 
 ### P3
 

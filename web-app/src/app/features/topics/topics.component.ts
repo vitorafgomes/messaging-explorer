@@ -82,7 +82,9 @@ import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
               @if (topic.expanded) {
                 <div class="card-body">
                   <h6 class="text-muted mb-3">Subscriptions</h6>
-                  @if (topic.subscriptions && topic.subscriptions.length > 0) {
+                  @if (!subscriptionsLoaded.has(topic.name)) {
+                    <p class="text-muted text-center fst-italic py-3">Loading subscriptions...</p>
+                  } @else if (topic.subscriptions && topic.subscriptions.length > 0) {
                     @for (sub of topic.subscriptions; track sub.name) {
                       <div class="card subscription-card mb-2">
                         <div class="card-body">
@@ -179,6 +181,7 @@ export class TopicsComponent implements OnInit {
 
   topics = signal<TopicInfo[]>([]);
   loading = signal(false);
+  protected readonly subscriptionsLoaded = new Set<string>();
 
   get isConnected(): boolean {
     return this.connectionService.isConnected;
@@ -209,9 +212,8 @@ export class TopicsComponent implements OnInit {
       takeUntilDestroyed(this.destroyRef)
     ).subscribe({
       next: (topics) => {
+        this.subscriptionsLoaded.clear();
         this.topics.set(topics);
-        // Load subscriptions for each topic
-        topics.forEach(topic => this.loadSubscriptions(topic));
       },
       error: () => {
         this.snackBar.open('Failed to load topics', 'Close', { duration: 3000 });
@@ -221,6 +223,9 @@ export class TopicsComponent implements OnInit {
 
   toggleTopic(topic: TopicInfo) {
     topic.expanded = !topic.expanded;
+    if (topic.expanded && !this.subscriptionsLoaded.has(topic.name)) {
+      this.loadSubscriptions(topic);
+    }
     this.topics.set([...this.topics()]);
   }
 
@@ -232,6 +237,8 @@ export class TopicsComponent implements OnInit {
       next: (subscriptions) => {
         this.logger.log(`[TopicsComponent] Loaded ${subscriptions.length} subscriptions for topic ${topic.name}`);
         topic.subscriptions = subscriptions;
+        this.subscriptionsLoaded.add(topic.name);
+        this.topics.set([...this.topics()]);
 
         if (subscriptions.length > 0) {
           this.logger.log(`[TopicsComponent] Subscription names: ${subscriptions.map(s => s.name).join(', ')}`);
@@ -239,6 +246,11 @@ export class TopicsComponent implements OnInit {
       },
       error: (err) => {
         this.logger.log(`[TopicsComponent] Failed to load subscriptions for topic ${topic.name}:`, err);
+        this.snackBar.open(`Failed to load the subscriptions of ${topic.name}`, 'Close', { duration: 3000 });
+        if (!this.subscriptionsLoaded.has(topic.name)) {
+          topic.expanded = false;
+          this.topics.set([...this.topics()]);
+        }
       }
     });
   }

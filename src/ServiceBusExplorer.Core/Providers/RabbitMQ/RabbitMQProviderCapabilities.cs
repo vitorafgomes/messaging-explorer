@@ -109,7 +109,7 @@ public class RabbitMQProviderCapabilities : IProviderCapabilities
     /// <summary>
     /// RabbitMQ supported exchange types.
     /// </summary>
-    private static readonly string[] ExchangeTypes = ["direct", "fanout", "topic", "headers"];
+    private static readonly IReadOnlyCollection<string> ExchangeTypes = Array.AsReadOnly(["direct", "fanout", "topic", "headers"]);
 
     /// <inheritdoc />
     /// <remarks>
