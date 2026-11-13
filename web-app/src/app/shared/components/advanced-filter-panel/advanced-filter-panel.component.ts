@@ -36,7 +36,6 @@ import { AdvancedMessageFilterService } from '../../../core/services';
  * - Collapsible panel to save space
  * - Filter count badge when collapsed
  * - Responsive layout for different screen sizes
- * - SmartAdmin/Bootstrap themed styling
  *
  * @example
  * <!-- Option 1: Pass messages and let component extract custom properties -->
@@ -75,13 +74,10 @@ import { AdvancedMessageFilterService } from '../../../core/services';
       <!-- Header with collapse toggle, logic toggle and clear all button -->
       <div class="panel-header" (click)="toggleCollapse()">
         <div class="header-left">
-          <button
-            class="btn btn-link collapse-toggle p-0"
-            [attr.aria-expanded]="!isCollapsed"
-            type="button">
-            <i class="fa" [class.fa-chevron-down]="!isCollapsed" [class.fa-chevron-right]="isCollapsed"></i>
+          <button matButton type="button" class="collapse-toggle" [attr.aria-expanded]="!isCollapsed">
+            <mat-icon [fontIcon]="isCollapsed ? 'chevron_right' : 'expand_more'" aria-hidden="true"></mat-icon>
+            Advanced Filters
           </button>
-          <h5 class="panel-title">Advanced Filters</h5>
           @if (filterState.conditions.length > 0) {
             <span class="filter-count-badge">{{ filterState.conditions.length }}</span>
           }
@@ -102,11 +98,12 @@ import { AdvancedMessageFilterService } from '../../../core/services';
           }
           @if (filterState.conditions.length > 0 && !isCollapsed) {
             <button
-              mat-button
-              color="warn"
+              matButton
+              type="button"
+              class="danger"
               (click)="clearAllFilters()"
               matTooltip="Clear all filter conditions">
-              <mat-icon>clear_all</mat-icon>
+              <mat-icon fontIcon="clear_all" aria-hidden="true"></mat-icon>
               Clear All
             </button>
           }
@@ -120,7 +117,7 @@ import { AdvancedMessageFilterService } from '../../../core/services';
         <div class="filter-conditions">
           @if (filterState.conditions.length === 0) {
             <div class="empty-state">
-              <mat-icon>filter_alt_off</mat-icon>
+              <mat-icon fontIcon="filter_alt_off" aria-hidden="true"></mat-icon>
               <p>No filters applied</p>
               <p class="hint">Click "Add Filter" to create a new filter condition</p>
             </div>
@@ -188,12 +185,13 @@ import { AdvancedMessageFilterService } from '../../../core/services';
 
                 <!-- Remove Button -->
                 <button
-                  mat-icon-button
-                  color="warn"
+                  matIconButton
+                  type="button"
                   (click)="removeCondition(condition.id)"
+                  aria-label="Remove this filter condition"
                   matTooltip="Remove this filter condition"
-                  class="btn-remove">
-                  <mat-icon>delete</mat-icon>
+                  class="remove danger">
+                  <mat-icon fontIcon="delete" aria-hidden="true"></mat-icon>
                 </button>
               </div>
             }
@@ -203,11 +201,11 @@ import { AdvancedMessageFilterService } from '../../../core/services';
         <!-- Add Filter Button -->
         <div class="panel-footer">
           <button
-            mat-raised-button
-            color="primary"
+            matButton="tonal"
+            type="button"
             (click)="addCondition()"
             matTooltip="Add a new filter condition">
-            <mat-icon>add</mat-icon>
+            <mat-icon fontIcon="add" aria-hidden="true"></mat-icon>
             Add Filter
           </button>
         </div>
@@ -215,332 +213,7 @@ import { AdvancedMessageFilterService } from '../../../core/services';
       }
     </div>
   `,
-  styles: [`
-    .advanced-filter-panel {
-      display: flex;
-      flex-direction: column;
-      background: var(--bs-body-bg, #fff);
-      border-radius: var(--bs-border-radius, 0.375rem);
-      border: 1px solid var(--bs-border-color, #dee2e6);
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-      overflow: hidden;
-      transition: all 0.25s ease;
-    }
-
-    .advanced-filter-panel.collapsed {
-      background: var(--bs-light, #f8f9fa);
-    }
-
-    .panel-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 12px 16px;
-      background: var(--bs-light, #f8f9fa);
-      border-bottom: 1px solid var(--bs-border-color, #dee2e6);
-      cursor: pointer;
-      user-select: none;
-      transition: background-color 0.15s ease;
-    }
-
-    .panel-header:hover {
-      background: var(--bs-secondary-bg, #e9ecef);
-    }
-
-    .advanced-filter-panel.collapsed .panel-header {
-      border-bottom: none;
-    }
-
-    .collapse-toggle {
-      color: var(--bs-body-color, #212529);
-      text-decoration: none;
-      font-size: 14px;
-      width: 20px;
-      height: 20px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: transform 0.2s ease;
-    }
-
-    .collapse-toggle:hover,
-    .collapse-toggle:focus {
-      color: var(--bs-primary, #0d6efd);
-      text-decoration: none;
-    }
-
-    .header-left {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .panel-title {
-      margin: 0;
-      font-size: 15px;
-      font-weight: 600;
-      color: var(--bs-body-color, #212529);
-    }
-
-    .filter-count-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 22px;
-      height: 22px;
-      padding: 0 6px;
-      background: var(--bs-primary, #0d6efd);
-      color: white;
-      border-radius: 11px;
-      font-size: 11px;
-      font-weight: 600;
-      line-height: 1;
-    }
-
-    .header-right {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .logic-toggle {
-      box-shadow: none;
-      font-size: 13px;
-    }
-
-    .panel-content {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      padding: 16px;
-    }
-
-    .filter-conditions {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .filter-row {
-      display: flex;
-      align-items: flex-start;
-      gap: 8px;
-      padding: 14px;
-      background: var(--bs-body-bg, #fff);
-      border-radius: var(--bs-border-radius, 0.375rem);
-      border: 1px solid var(--bs-border-color, #dee2e6);
-      flex-wrap: wrap;
-      transition: box-shadow 0.2s ease, border-color 0.2s ease;
-    }
-
-    .filter-row:hover {
-      border-color: var(--bs-primary, #0d6efd);
-      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
-
-    .field-property {
-      flex: 0 0 180px;
-      min-width: 180px;
-    }
-
-    .field-custom-property {
-      flex: 0 0 180px;
-      min-width: 180px;
-    }
-
-    .field-operator {
-      flex: 0 0 150px;
-      min-width: 150px;
-    }
-
-    .field-value {
-      flex: 1 1 200px;
-      min-width: 200px;
-    }
-
-    .btn-remove {
-      margin-top: 8px;
-    }
-
-    .empty-state {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 40px 24px;
-      color: var(--bs-secondary, #6c757d);
-      text-align: center;
-      background: var(--bs-light, #f8f9fa);
-      border-radius: var(--bs-border-radius, 0.375rem);
-
-      mat-icon {
-        font-size: 48px;
-        width: 48px;
-        height: 48px;
-        margin-bottom: 12px;
-        color: var(--bs-secondary, #6c757d);
-        opacity: 0.5;
-      }
-
-      p {
-        margin: 4px 0;
-
-        &:first-of-type {
-          font-size: 15px;
-          font-weight: 500;
-          color: var(--bs-body-color, #212529);
-        }
-
-        &.hint {
-          font-size: 13px;
-          color: var(--bs-secondary, #6c757d);
-        }
-      }
-    }
-
-    .panel-footer {
-      display: flex;
-      justify-content: flex-start;
-      padding-top: 4px;
-    }
-
-    /* Responsive adjustments */
-    @media (max-width: 992px) {
-      .panel-header {
-        flex-wrap: wrap;
-      }
-
-      .header-right {
-        flex-wrap: wrap;
-      }
-    }
-
-    @media (max-width: 768px) {
-      .advanced-filter-panel {
-        border-radius: 0.25rem;
-      }
-
-      .panel-header {
-        padding: 10px 12px;
-      }
-
-      .panel-content {
-        padding: 12px;
-      }
-
-      .filter-row {
-        flex-direction: column;
-        align-items: stretch;
-        padding: 12px;
-      }
-
-      .field-property,
-      .field-custom-property,
-      .field-operator,
-      .field-value {
-        flex: 1 1 auto;
-        width: 100%;
-        min-width: 100%;
-      }
-
-      .btn-remove {
-        align-self: flex-end;
-        margin-top: 4px;
-      }
-
-      .header-right {
-        width: 100%;
-        justify-content: space-between;
-      }
-
-      .logic-toggle {
-        flex: 1;
-      }
-    }
-
-    /* Material form field density */
-    ::ng-deep {
-      .advanced-filter-panel {
-        .mat-mdc-form-field {
-          .mat-mdc-text-field-wrapper {
-            padding-bottom: 0;
-          }
-
-          .mat-mdc-form-field-subscript-wrapper {
-            margin-top: 4px;
-          }
-        }
-      }
-    }
-
-    /* Dark mode styles */
-    :host-context([data-bs-theme="dark"]) {
-      .advanced-filter-panel {
-        background: var(--bs-body-bg, #212529);
-        border-color: var(--bs-border-color, #495057);
-      }
-
-      .advanced-filter-panel.collapsed {
-        background: var(--bs-secondary-bg, #343a40);
-      }
-
-      .panel-header {
-        background: var(--bs-secondary-bg, #343a40);
-        border-color: var(--bs-border-color, #495057);
-      }
-
-      .panel-header:hover {
-        background: var(--bs-tertiary-bg, #495057);
-      }
-
-      .filter-row {
-        background: var(--bs-body-bg, #212529);
-        border-color: var(--bs-border-color, #495057);
-      }
-
-      .filter-row:hover {
-        border-color: var(--bs-primary, #0d6efd);
-        box-shadow: 0 2px 4px rgba(255,255,255,0.05);
-      }
-
-      .empty-state {
-        background: var(--bs-secondary-bg, #343a40);
-        color: var(--bs-secondary-color, #adb5bd);
-      }
-
-      .empty-state p:first-of-type {
-        color: var(--bs-body-color, #dee2e6);
-      }
-
-      // Material buttons in dark mode
-      ::ng-deep {
-        .mat-mdc-raised-button.mat-primary {
-          --mdc-protected-button-container-color: #0d6efd !important;
-          --mdc-protected-button-label-text-color: #ffffff !important;
-          background-color: #0d6efd !important;
-          color: #ffffff !important;
-
-          &:hover {
-            background-color: #0b5ed7 !important;
-          }
-
-          .mat-icon {
-            color: #ffffff !important;
-          }
-        }
-
-        .mat-mdc-icon-button.mat-warn {
-          --mdc-icon-button-icon-color: #dc3545 !important;
-          color: #dc3545 !important;
-
-          &:hover {
-            background-color: rgba(220, 53, 69, 0.1) !important;
-          }
-        }
-      }
-    }
-  `]
+  styleUrl: './advanced-filter-panel.component.scss'
 })
 export class AdvancedFilterPanelComponent implements OnInit, OnChanges {
   /**

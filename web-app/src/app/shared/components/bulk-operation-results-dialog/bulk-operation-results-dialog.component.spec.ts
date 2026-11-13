@@ -74,7 +74,7 @@ describe('BulkOperationResultsDialogComponent for a scheduled-message cancel', (
     const el = fixture.nativeElement as HTMLElement;
     const text = (e: Element | null) => (e?.textContent ?? '').replace(/\s+/g, ' ').trim();
 
-    expect(text(el.querySelector('.modal-title'))).toBe('Cancel scheduled results');
+    expect(text(el.querySelector('[mat-dialog-title]'))).toBe('Cancel scheduled results');
     expect(text(el.querySelector('.operation-summary'))).toBe('Attempted to cancel 3 scheduled messages in billing.');
     expect(Array.from(el.querySelectorAll('.failure-item')).map(i => [text(i.querySelector('.failure-seq-value')), text(i.querySelector('.failure-error'))]))
       .toEqual([['13', 'Failed: Not a scheduled message']]);

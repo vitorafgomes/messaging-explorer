@@ -1,7 +1,9 @@
 import { Component, OnDestroy, inject, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { Subject } from 'rxjs';
 import { SUB_QUEUE_LABEL, SubQueue } from '../../../core/models/message.model';
 
@@ -25,248 +27,106 @@ export interface ProgressUpdate {
   selector: 'app-bulk-operation-progress-dialog',
   standalone: true,
   imports: [
-    CommonModule,
     MatDialogModule,
-    MatProgressBarModule
+    MatButtonModule,
+    MatIconModule,
+    MatProgressBarModule,
+    MatProgressSpinnerModule
   ],
-  host: {
-    '[class.dark-mode-dialog]': 'isDarkMode()'
-  },
   template: `
-    <div class="modal-header" [class.bg-dark]="isDarkMode()" [class.text-light]="isDarkMode()">
-      <h5 class="modal-title d-flex align-items-center gap-2" [class.text-light]="isDarkMode()">
-        <i class="fa" [ngClass]="getOperationIcon()"></i>
-        {{ getOperationTitle() }}
-      </h5>
-    </div>
+    <h2 mat-dialog-title class="title">
+      <mat-icon [fontIcon]="getOperationIcon()" [class.danger]="data.operation === 'delete'" aria-hidden="true"></mat-icon>
+      {{ getOperationTitle() }}
+    </h2>
 
-    <div class="modal-body" [class.bg-dark]="isDarkMode()" [class.text-light]="isDarkMode()">
-      <div class="operation-details mb-4">
-        <p class="mb-2" [class.text-light]="isDarkMode()">
-          {{ getOperationDescription() }}
-        </p>
-      </div>
+    <mat-dialog-content class="content">
+      <p class="description">{{ getOperationDescription() }}</p>
 
-      <!-- Progress Section -->
       <!--
         The backend processes each batch as a single request without streaming
         per-message progress, so a determinate percentage would be dishonest.
         Show an indeterminate indicator while the request is in flight instead.
       -->
-      <div class="progress-section mb-4">
+      <div class="progress-section">
         @if (!isComplete() && !cancelled()) {
-          <div class="progress-stats mb-2">
-            <span class="progress-label">
-              <i class="fa fa-spinner fa-spin me-2"></i>
-              Processing {{ progress().total }} {{ progress().total === 1 ? 'message' : 'messages' }}...
-            </span>
-          </div>
-          <mat-progress-bar mode="indeterminate" color="primary"></mat-progress-bar>
+          <span class="progress-label" aria-live="polite">
+            Processing {{ progress().total }} {{ progress().total === 1 ? 'message' : 'messages' }}...
+          </span>
+          <mat-progress-bar mode="indeterminate" aria-label="Operation in progress"></mat-progress-bar>
         } @else {
-          <div class="progress-stats mb-2">
-            <span class="progress-label">
-              <strong>{{ progress().processed }}</strong> of <strong>{{ progress().total }}</strong> messages processed
-            </span>
-          </div>
-          <div class="progress" style="height: 8px;">
-            <div
-              class="progress-bar"
-              [class.bg-success]="isComplete() && progress().failureCount === 0"
-              [class.bg-warning]="isComplete() && progress().failureCount > 0 && progress().successCount > 0"
-              [class.bg-danger]="isComplete() && progress().successCount === 0"
-              [class.bg-secondary]="cancelled()"
-              role="progressbar"
-              style="width: 100%;">
-            </div>
-          </div>
+          <span class="progress-label">
+            <strong>{{ progress().processed }}</strong> of <strong>{{ progress().total }}</strong> messages processed
+          </span>
+          <mat-progress-bar mode="determinate" value="100" aria-hidden="true"
+            [class.success]="isComplete() && progress().failureCount === 0"
+            [class.partial]="isComplete() && progress().failureCount > 0 && progress().successCount > 0"
+            [class.failed]="isComplete() && progress().successCount === 0"
+            [class.cancelled]="cancelled()"></mat-progress-bar>
         }
       </div>
 
-      <!-- Success/Failure Counts -->
       @if (progress().processed > 0 && !cancelled()) {
         <div class="result-stats">
-          <div class="stat-item success">
-            <i class="fa fa-check-circle me-2"></i>
+          <span class="stat">
+            <mat-icon fontIcon="check_circle" aria-hidden="true"></mat-icon>
             <span>Success: <strong>{{ progress().successCount }}</strong></span>
-          </div>
+          </span>
           @if (progress().failureCount > 0) {
-            <div class="stat-item failure">
-              <i class="fa fa-exclamation-circle me-2"></i>
+            <span class="stat failure">
+              <mat-icon fontIcon="error" aria-hidden="true"></mat-icon>
               <span>Failed: <strong>{{ progress().failureCount }}</strong></span>
-            </div>
+            </span>
           }
         </div>
       }
 
-      <!-- Status Message -->
-      <div class="status-message mt-3" [class.text-light]="isDarkMode()">
+      <p class="status-message" role="status"
+        [class.success]="!cancelled() && isComplete() && progress().failureCount === 0"
+        [class.partial]="!cancelled() && isComplete() && progress().failureCount > 0 && progress().successCount > 0"
+        [class.failed]="!cancelled() && isComplete() && progress().failureCount > 0 && progress().successCount === 0">
         @if (cancelled()) {
-          <i class="fa fa-ban text-secondary me-2"></i>
-          <span class="text-secondary">Operation cancelled</span>
+          <mat-icon fontIcon="block" aria-hidden="true"></mat-icon>
+          <span>Operation cancelled</span>
         } @else if (!isComplete()) {
-          <i class="fa fa-spinner fa-spin me-2"></i>
+          <mat-progress-spinner mode="indeterminate" diameter="18" aria-hidden="true"></mat-progress-spinner>
           <span>{{ getStatusMessage() }}</span>
         } @else if (progress().failureCount === 0) {
-          <i class="fa fa-check-circle text-success me-2"></i>
-          <span class="text-success">Operation completed successfully!</span>
+          <mat-icon fontIcon="check_circle" aria-hidden="true"></mat-icon>
+          <span>Operation completed successfully!</span>
         } @else if (progress().successCount > 0) {
-          <i class="fa fa-exclamation-triangle text-warning me-2"></i>
-          <span class="text-warning">Operation completed with some failures</span>
+          <mat-icon fontIcon="warning" aria-hidden="true"></mat-icon>
+          <span>Operation completed with some failures</span>
         } @else {
-          <i class="fa fa-times-circle text-danger me-2"></i>
-          <span class="text-danger">Operation failed</span>
+          <mat-icon fontIcon="cancel" aria-hidden="true"></mat-icon>
+          <span>Operation failed</span>
         }
-      </div>
+      </p>
 
-      <!-- Cancellation Info -->
       @if (cancelled()) {
-        <div class="alert alert-secondary mt-3 mb-0" role="alert">
-          <i class="fa fa-info-circle me-2"></i>
-          <strong>Cancelled:</strong> The request was aborted. Any messages already
+        <p class="cancelled-info" role="alert">
+          <mat-icon fontIcon="info" aria-hidden="true"></mat-icon>
+          <span><strong>Cancelled:</strong> The request was aborted. Any messages already
           processed by the server before the abort may still have been affected.
-          Refresh the list to see the current state.
-        </div>
+          Refresh the list to see the current state.</span>
+        </p>
       }
-    </div>
+    </mat-dialog-content>
 
-    <div class="modal-footer" [class.bg-dark]="isDarkMode()">
+    <mat-dialog-actions align="end">
       @if (!isComplete() && !cancelled()) {
-        <button class="btn btn-warning" (click)="cancel()">
-          <i class="fa fa-ban me-2"></i>
+        <button matButton="outlined" type="button" (click)="cancel()">
+          <mat-icon fontIcon="block" aria-hidden="true"></mat-icon>
           Cancel
         </button>
       } @else {
-        <button class="btn btn-primary" [mat-dialog-close]="true">
-          <i class="fa fa-check me-2"></i>
+        <button matButton="filled" type="button" [mat-dialog-close]="true">
+          <mat-icon fontIcon="check" aria-hidden="true"></mat-icon>
           Close
         </button>
       }
-    </div>
+    </mat-dialog-actions>
   `,
-  styles: [`
-    .modal-header {
-      border-bottom: 1px solid var(--bs-border-color);
-      padding: 16px 24px;
-    }
-
-    .modal-title {
-      margin: 0;
-      font-size: 18px;
-      font-weight: 500;
-      color: var(--bs-body-color);
-
-      i {
-        font-size: 20px;
-      }
-    }
-
-    .modal-body {
-      padding: 24px;
-      min-width: 500px;
-
-      p {
-        color: var(--bs-secondary-color);
-      }
-    }
-
-    .modal-footer {
-      border-top: 1px solid var(--bs-border-color);
-      padding: 16px 24px;
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
-    }
-
-    .operation-details {
-      p {
-        font-size: 0.95rem;
-        margin-bottom: 0;
-      }
-    }
-
-    .progress-section {
-      .progress-stats {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        font-size: 0.9rem;
-        color: var(--bs-secondary-color);
-
-        .progress-label {
-          font-weight: 500;
-        }
-
-        .progress-count {
-          flex: 1;
-          text-align: center;
-        }
-
-        .progress-percentage {
-          font-weight: 600;
-          color: var(--bs-body-color);
-          min-width: 50px;
-          text-align: right;
-        }
-      }
-
-      .progress {
-        border-radius: 6px;
-        background-color: var(--bs-secondary-bg);
-      }
-    }
-
-    .result-stats {
-      display: flex;
-      gap: 24px;
-      padding: 12px;
-      background-color: var(--bs-light);
-      border-radius: 6px;
-      border: 1px solid var(--bs-border-color);
-
-      .stat-item {
-        display: flex;
-        align-items: center;
-        font-size: 0.95rem;
-
-        &.success {
-          color: var(--bs-success);
-        }
-
-        &.failure {
-          color: var(--bs-danger);
-        }
-
-        i {
-          font-size: 1.1rem;
-        }
-      }
-    }
-
-    .status-message {
-      text-align: center;
-      font-size: 0.95rem;
-      padding: 12px;
-      background-color: var(--bs-light);
-      border-radius: 6px;
-
-      i {
-        font-size: 1rem;
-      }
-    }
-
-    .alert {
-      border-radius: 6px;
-      font-size: 0.9rem;
-    }
-
-    // Dark mode adjustments
-    :host.dark-mode-dialog {
-      .result-stats,
-      .status-message {
-        background-color: var(--bs-dark);
-      }
-    }
-  `]
+  styleUrl: './bulk-operation-progress-dialog.component.scss'
 })
 export class BulkOperationProgressDialogComponent implements OnDestroy {
   data = inject<BulkOperationProgressDialogData>(MAT_DIALOG_DATA);
@@ -298,25 +158,18 @@ export class BulkOperationProgressDialogComponent implements OnDestroy {
     this.cancelRequested$.complete();
   }
 
-  isDarkMode(): boolean {
-    if (typeof document === 'undefined') return false;
-    const bsTheme = document.documentElement.getAttribute('data-bs-theme');
-    const hasThemeDark = document.body.classList.contains('theme-dark');
-    return bsTheme === 'dark' || hasThemeDark;
-  }
-
   getOperationIcon(): string {
     switch (this.data.operation) {
       case 'delete':
-        return 'fa-trash text-danger';
+        return 'delete';
       case 'resubmit':
-        return 'fa-sync text-success';
+        return 'replay';
       case 'move':
-        return 'fa-exchange text-primary';
+        return 'swap_horiz';
       case 'export':
-        return 'fa-download text-info';
+        return 'download';
       default:
-        return 'fa-cog text-secondary';
+        return 'settings';
     }
   }
 

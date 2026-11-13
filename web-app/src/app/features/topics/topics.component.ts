@@ -1,15 +1,10 @@
 import { Component, OnInit, inject, signal, DestroyRef } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatExpansionModule } from '@angular/material/expansion';
-import { MatListModule } from '@angular/material/list';
+import { MatMenuModule } from '@angular/material/menu';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { MatBadgeModule } from '@angular/material/badge';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
-import { MatTooltipModule } from '@angular/material/tooltip';
 import { Subscription, finalize } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TopicService, ConnectionService, LoggerService } from '../../core/services';
@@ -22,154 +17,119 @@ import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
   selector: 'app-topics',
   standalone: true,
   imports: [
-    CommonModule,
+    MatButtonModule,
+    MatIconModule,
+    MatMenuModule,
+    MatProgressSpinnerModule,
     MatSnackBarModule,
     MatDialogModule
   ],
   template: `
     <div class="topics-container">
-      <div class="header d-flex justify-content-between align-items-center mb-4">
-        <h2 class="mb-0">Topics</h2>
-        <button class="btn btn-primary" (click)="loadTopics()" [disabled]="!isConnected">
-          <i class="fa-solid fa-arrows-rotate me-2"></i>
+      <div class="header">
+        <h2>Topics</h2>
+        <button matButton="outlined" type="button" (click)="loadTopics()" [disabled]="!isConnected || loading()">
+          <mat-icon fontIcon="refresh" aria-hidden="true"></mat-icon>
           Refresh
         </button>
       </div>
 
       @if (!isConnected) {
-        <div class="card text-center py-5">
-          <div class="card-body">
-            <i class="fa fa-exclamation-triangle fa-4x text-warning mb-3"></i>
-            <p class="mb-0">Please connect to a Service Bus namespace first</p>
-          </div>
+        <div class="state">
+          <mat-icon class="state-icon" fontIcon="cloud_off" aria-hidden="true"></mat-icon>
+          <h3>Not connected</h3>
+          <p>Please connect to a Service Bus namespace first</p>
         </div>
       } @else if (loading()) {
-        <div class="text-center py-5">
-          <div class="spinner-border text-primary" role="status">
-            <span class="visually-hidden">Loading...</span>
-          </div>
+        <div class="state" role="status">
+          <mat-progress-spinner mode="indeterminate" diameter="32" aria-label="Loading"></mat-progress-spinner>
+          <span>Loading the topics</span>
         </div>
-      } @else if (topics().length === 0) {
-        <div class="card text-center py-5">
-          <div class="card-body">
-            <i class="fa fa-inbox fa-4x text-secondary mb-3"></i>
-            <p class="mb-0">No topics found</p>
+      } @else if (loadError()) {
+        <section class="load-error" role="alert" aria-label="Error">
+          <mat-icon fontIcon="error" aria-hidden="true"></mat-icon>
+          <div class="load-error-body">
+            <h3>Could not load the topics</h3>
+            <p>The API did not return the topic list. Nothing is shown because nothing was read, and nothing on the broker was changed.</p>
+            <button matButton="outlined" type="button" (click)="loadTopics()">
+              <mat-icon fontIcon="refresh" aria-hidden="true"></mat-icon>
+              Retry
+            </button>
           </div>
+        </section>
+      } @else if (topics().length === 0) {
+        <div class="state">
+          <mat-icon class="state-icon" fontIcon="inbox" aria-hidden="true"></mat-icon>
+          <h3>No topics found</h3>
+          <p>The broker answered and holds no topic.</p>
         </div>
       } @else {
         <div class="topics-list">
           @for (topic of topics(); track topic.name) {
-            <div class="card topic-card mb-3">
-              <div class="card-header cursor-pointer user-select-none" (click)="toggleTopic(topic)">
-                <div class="d-flex align-items-center justify-content-between">
-                  <div class="d-flex align-items-center">
-                    <i class="fa fa-comments text-primary fa-lg me-3"></i>
-                    <div>
-                      <h5 class="mb-0 d-flex align-items-center">
-                        <i class="fa me-2" [class.fa-chevron-down]="topic.expanded" [class.fa-chevron-right]="!topic.expanded"></i>
-                        {{ topic.name }}
-                      </h5>
-                      <small class="text-muted">{{ topic.subscriptionCount }} subscription(s) | {{ formatSize(topic.sizeInBytes) }}</small>
-                    </div>
-                  </div>
-                  <button class="btn btn-sm btn-outline-primary" (click)="sendMessage(topic); $event.stopPropagation()">
-                    <i class="fa fa-paper-plane me-1"></i>
-                    Send Message
-                  </button>
-                </div>
+            <section class="topic-card" [attr.aria-label]="'Topic ' + topic.name">
+              <div class="topic-header">
+                <button matButton type="button" class="topic-toggle" [attr.aria-expanded]="!!topic.expanded" (click)="toggleTopic(topic)">
+                  <mat-icon [fontIcon]="topic.expanded ? 'expand_more' : 'chevron_right'" aria-hidden="true"></mat-icon>
+                  <span class="topic-name">{{ topic.name }}</span>
+                  <span class="topic-meta">{{ topic.subscriptionCount }} subscription(s) | {{ formatSize(topic.sizeInBytes) }}</span>
+                </button>
+                <button matButton="outlined" type="button" (click)="sendMessage(topic)">
+                  <mat-icon fontIcon="send" aria-hidden="true"></mat-icon>
+                  Send Message
+                </button>
               </div>
 
               @if (topic.expanded) {
-                <div class="card-body">
-                  <h6 class="text-muted mb-3">Subscriptions</h6>
+                <div class="topic-body">
+                  <h3 class="subscriptions-title">Subscriptions</h3>
                   @if (!subscriptionsLoaded.has(topic)) {
-                    <p class="text-muted text-center fst-italic py-3">Loading subscriptions...</p>
+                    <p class="note" role="status">Loading subscriptions...</p>
                   } @else if (topic.subscriptions && topic.subscriptions.length > 0) {
                     @for (sub of topic.subscriptions; track sub.name) {
-                      <div class="card subscription-card mb-2">
-                        <div class="card-body">
-                          <div class="d-flex align-items-center justify-content-between">
-                            <div class="d-flex align-items-center">
-                              <i class="fa-solid fa-bell text-success fa-lg me-3"></i>
-                              <div>
-                                <h6 class="mb-0">{{ sub.name }}</h6>
-                                <small class="text-muted">
-                                  Active: <span class="clickable-stat badge bg-primary" (click)="viewSubscriptionMessages(topic, sub, 0); $event.stopPropagation()">{{ sub.activeMessageCount }}</span>
-                                  Dead Letter: <span class="clickable-stat badge" [class.bg-danger]="sub.deadLetterMessageCount > 0" [class.bg-secondary]="sub.deadLetterMessageCount === 0" (click)="viewSubscriptionMessages(topic, sub, 1); $event.stopPropagation()">{{ sub.deadLetterMessageCount }}</span>
-                                </small>
-                              </div>
-                            </div>
-                            <div class="btn-group">
-                              <button class="btn btn-sm btn-outline-primary" (click)="viewSubscriptionMessages(topic, sub)" title="View Messages">
-                                <i class="fa fa-eye"></i>
-                              </button>
-                              <button class="btn btn-sm btn-outline-secondary" (click)="purgeSubscriptionMessages(topic, sub)" [disabled]="sub.activeMessageCount === 0" title="Purge Messages">
-                                <i class="fa fa-trash"></i>
-                              </button>
-                              <button class="btn btn-sm btn-outline-danger" (click)="purgeSubscriptionDeadLetter(topic, sub)" [disabled]="sub.deadLetterMessageCount === 0" title="Purge Dead Letter">
-                                <i class="fa fa-times-circle"></i>
-                              </button>
-                            </div>
-                          </div>
+                      <div class="subscription-card">
+                        <div class="subscription-info">
+                          <span class="subscription-name">{{ sub.name }}</span>
+                          <span class="counts">
+                            Active:
+                            <button matButton type="button" class="count" (click)="viewSubscriptionMessages(topic, sub, 0)"
+                                    [attr.aria-label]="'View the ' + sub.activeMessageCount + ' active messages of ' + sub.name">{{ sub.activeMessageCount }}</button>
+                            Dead Letter:
+                            <button matButton type="button" class="count" [class.dead-letter]="sub.deadLetterMessageCount > 0" (click)="viewSubscriptionMessages(topic, sub, 1)"
+                                    [attr.aria-label]="'View the ' + sub.deadLetterMessageCount + ' dead-letter messages of ' + sub.name">{{ sub.deadLetterMessageCount }}</button>
+                          </span>
+                        </div>
+                        <div class="actions">
+                          <button matIconButton type="button" (click)="viewSubscriptionMessages(topic, sub)" title="View Messages" [attr.aria-label]="'View the messages of ' + sub.name">
+                            <mat-icon fontIcon="visibility" aria-hidden="true"></mat-icon>
+                          </button>
+                          <button matIconButton type="button" [matMenuTriggerFor]="purgeMenu" title="More actions" [attr.aria-label]="'More actions for ' + sub.name">
+                            <mat-icon fontIcon="more_vert" aria-hidden="true"></mat-icon>
+                          </button>
+                          <mat-menu #purgeMenu="matMenu">
+                            <button mat-menu-item class="danger" (click)="purgeSubscriptionMessages(topic, sub)" [disabled]="sub.activeMessageCount === 0">
+                              <mat-icon fontIcon="delete_sweep" aria-hidden="true"></mat-icon>
+                              Purge Messages
+                            </button>
+                            <button mat-menu-item class="danger" (click)="purgeSubscriptionDeadLetter(topic, sub)" [disabled]="sub.deadLetterMessageCount === 0">
+                              <mat-icon fontIcon="delete_forever" aria-hidden="true"></mat-icon>
+                              Purge Dead Letter
+                            </button>
+                          </mat-menu>
                         </div>
                       </div>
                     }
                   } @else {
-                    <p class="text-muted text-center fst-italic py-3">No subscriptions</p>
+                    <p class="note">No subscriptions</p>
                   }
                 </div>
               }
-            </div>
+            </section>
           }
         </div>
       }
     </div>
   `,
-  styles: [`
-    .topics-container {
-      max-width: 1200px;
-      margin: 0 auto;
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      padding: 12px;
-    }
-
-    .topics-list {
-      flex: 1;
-      overflow-y: auto;
-      overflow-x: hidden;
-    }
-
-    .cursor-pointer {
-      cursor: pointer;
-    }
-
-    .user-select-none {
-      user-select: none;
-    }
-
-    .topic-card {
-      border-left: 4px solid var(--bs-primary);
-    }
-
-    .subscription-card {
-      border-left: 3px solid var(--bs-success);
-    }
-
-    .card-header:hover {
-      background-color: rgba(0, 0, 0, 0.02);
-    }
-
-    .clickable-stat {
-      cursor: pointer;
-      transition: opacity 0.2s ease;
-
-      &:hover {
-        opacity: 0.8;
-      }
-    }
-  `]
+  styleUrl: './topics.component.scss'
 })
 export class TopicsComponent implements OnInit {
   private topicService = inject(TopicService);
@@ -181,6 +141,7 @@ export class TopicsComponent implements OnInit {
 
   topics = signal<TopicInfo[]>([]);
   loading = signal(false);
+  loadError = signal(false);
   protected readonly subscriptionsLoaded = new WeakSet<TopicInfo>();
   private topicsLoad?: Subscription;
 
@@ -207,6 +168,7 @@ export class TopicsComponent implements OnInit {
   loadTopics() {
     this.topicsLoad?.unsubscribe();
     this.loading.set(true);
+    this.loadError.set(false);
     this.topicsLoad = this.topicService.getTopics().pipe(
       finalize(() => {
         this.loading.set(false);
@@ -217,7 +179,8 @@ export class TopicsComponent implements OnInit {
         this.topics.set(topics);
       },
       error: () => {
-        this.snackBar.open('Failed to load topics', 'Close', { duration: 3000 });
+        this.topics.set([]);
+        this.loadError.set(true);
       }
     });
   }
