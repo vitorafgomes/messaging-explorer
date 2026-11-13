@@ -764,6 +764,7 @@ describe('EntityDetailsComponent: one panel shape for a queue and a subscription
     const alert = el.querySelector('[role="alert"]');
     expect(text(alert)).toContain('Could not load the queue orders');
     expect(text(alert)).toContain('504 Gateway Timeout');
+    expect(text(alert), 'a re-read can follow a purge or a send, so the panel claims nothing about the broker').not.toContain('nothing on the broker was changed');
     button(el, 'Retry')!.click();
     expect(refreshCurrentSelection).toHaveBeenCalledTimes(1);
   });

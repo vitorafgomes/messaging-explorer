@@ -100,7 +100,7 @@ type PropertyRow = [label: string, value: string];
               <div class="error-text">
                 <h3>Could not load the {{ state.selection.type }} {{ state.selection.node.name }}</h3>
                 <p>{{ state.error }}</p>
-                <p>Nothing was read, and nothing on the broker was changed.</p>
+                <p>The details could not be read. Check the entity before acting on it again.</p>
                 <button mat-stroked-button type="button" (click)="refresh()"><mat-icon fontIcon="refresh" />Retry</button>
               </div>
             </section>
