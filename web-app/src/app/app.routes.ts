@@ -25,5 +25,9 @@ export const routes: Routes = [
   {
     path: 'monitoring',
     loadComponent: () => import('./features/monitoring/monitoring.component').then(m => m.MonitoringComponent)
+  },
+  {
+    path: 'settings',
+    loadComponent: () => import('./features/settings/settings.component').then(m => m.SettingsComponent)
   }
 ];

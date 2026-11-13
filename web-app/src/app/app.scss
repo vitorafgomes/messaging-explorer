@@ -15,6 +15,11 @@
   color: inherit;
 }
 
+.settings-link.active-link {
+  background-color: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+}
+
 .nav-link.active-link {
   background-color: var(--mat-sys-secondary-container);
   color: var(--mat-sys-on-secondary-container);
@@ -22,34 +27,6 @@
   text-decoration: underline;
   text-underline-offset: 6px;
   text-decoration-thickness: 2px;
-}
-
-.version-badge {
-  font-size: 0.65rem;
-  opacity: 0.6;
-  font-weight: 400;
-  margin-right: 8px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-
-  &:hover {
-    opacity: 0.9;
-  }
-}
-
-.channel-tag {
-  font-size: 0.55rem;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  padding: 1px 5px;
-  border-radius: 4px;
-  line-height: 1.2;
-
-  &.beta {
-    background-color: rgba(255, 152, 0, 0.25);
-    color: #ff9800;
-  }
 }
 
 .update-btn {

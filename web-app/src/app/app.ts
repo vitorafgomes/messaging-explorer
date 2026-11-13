@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal, NgZone, HostListener } from '@angular/core';
+import { Component, inject, OnInit, NgZone, HostListener } from '@angular/core';
 import { Router, RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { AsyncPipe } from '@angular/common';
 import { MatToolbarModule } from '@angular/material/toolbar';
@@ -10,19 +10,18 @@ import { MatBadgeModule } from '@angular/material/badge';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatDividerModule } from '@angular/material/divider';
-import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatDialogModule } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { ConnectionService, ThemeService, EntitySelectionService, DevSettingsService } from './core/services';
 import { DeadLetterNotificationService, DeadLetterAlert } from './core/services/dead-letter-notification.service';
-import { BugReportDialogComponent } from './shared/bug-report-dialog.component';
+import { BugReportService } from './shared/bug-report.service';
+import { AppUpdateService } from './features/settings/app-update.service';
 import { ResubmitRunIndicatorComponent } from './features/messages/resubmit-run-indicator.component';
 
 interface NavItem {
   label: string;
   route: string;
 }
-
-type UpdateStatus = 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'up-to-date' | 'error' | 'dev-mode';
 
 @Component({
   selector: 'app-root',
@@ -52,7 +51,6 @@ export class App implements OnInit {
   private router = inject(Router);
   private selectionService = inject(EntitySelectionService);
   private ngZone = inject(NgZone);
-  private dialog = inject(MatDialog);
 
   readonly themeService = inject(ThemeService);
   readonly devSettingsService = inject(DevSettingsService);
@@ -63,16 +61,8 @@ export class App implements OnInit {
 
   isElectron = typeof window !== 'undefined' && !!(window as any).electronAPI;
 
-  // Error capture for bug reports
-  private lastErrors: string[] = [];
-
-  // Version & Update
-  appVersion = signal('');
-  updateStatus = signal<UpdateStatus>('idle');
-  updateVersion = signal('');
-  downloadPercent = signal(0);
-  updateError = signal('');
-  updateChannel = signal<'latest' | 'beta'>('latest');
+  readonly updates = inject(AppUpdateService);
+  private readonly bugReport = inject(BugReportService);
 
   navItems: NavItem[] = [
     { label: 'Connections', route: '/connections' },
@@ -85,13 +75,11 @@ export class App implements OnInit {
   ngOnInit() {
     this.themeService.initialize();
     this.devSettingsService.initialize();
-    this.setupErrorCapture();
+    this.bugReport.startCapture();
 
     if (this.isElectron) {
       this.setupElectronListeners();
-      this.loadVersion();
-      this.loadUpdateChannel();
-      this.setupUpdateListener();
+      void this.updates.initialize();
     }
   }
 
@@ -106,37 +94,6 @@ export class App implements OnInit {
     }
   }
 
-  private setupErrorCapture() {
-    window.addEventListener('error', (event) => {
-      const message = event.message?.includes('[object') ? this.formatError(event.error) : event.message;
-      this.lastErrors.push(`${new Date().toISOString()} — ${message} (${event.filename}:${event.lineno})`);
-      if (this.lastErrors.length > 5) this.lastErrors.shift();
-    });
-    window.addEventListener('unhandledrejection', (event) => {
-      this.lastErrors.push(`${new Date().toISOString()} — Unhandled: ${this.formatError(event.reason)}`);
-      if (this.lastErrors.length > 5) this.lastErrors.shift();
-    });
-  }
-
-  private formatError(reason: unknown): string {
-    if (reason instanceof Error) {
-      return `${reason.name}: ${reason.message}`;
-    }
-    if (typeof reason === 'object' && reason !== null) {
-      const r = reason as any;
-      // HttpErrorResponse
-      if (r.status !== undefined && r.url) {
-        return `HTTP ${r.status} ${r.statusText || ''} — ${r.url}`;
-      }
-      // Generic object with message
-      if (r.message) {
-        return String(r.message);
-      }
-      try { return JSON.stringify(reason).substring(0, 300); } catch { /* fallthrough */ }
-    }
-    return String(reason);
-  }
-
   onNotificationClick(alert: DeadLetterAlert) {
     this.router.navigate(['/entities']).then(() => {
       setTimeout(() => {
@@ -146,78 +103,7 @@ export class App implements OnInit {
   }
 
   openBugReport(type: 'bug' | 'feature') {
-    const version = this.appVersion() || 'unknown';
-    const platform = this.isElectron ? ((window as any).electronAPI?.platform || 'unknown') : 'browser';
-
-    this.dialog.open(BugReportDialogComponent, {
-      width: '520px',
-      data: {
-        type,
-        version,
-        platform,
-        errors: [...this.lastErrors],
-      },
-    });
-  }
-
-  checkForUpdates() {
-    if (!this.isElectron) return;
-    const api = (window as any).electronAPI;
-    api.checkForUpdates();
-  }
-
-  downloadUpdate() {
-    if (!this.isElectron) return;
-    const api = (window as any).electronAPI;
-    api.downloadUpdate();
-  }
-
-  installUpdate() {
-    if (!this.isElectron) return;
-    const api = (window as any).electronAPI;
-    api.installUpdate();
-  }
-
-  private async loadVersion() {
-    const api = (window as any).electronAPI;
-    if (api.getAppVersion) {
-      const version = await api.getAppVersion();
-      this.appVersion.set(version);
-    }
-  }
-
-  private async loadUpdateChannel() {
-    const api = (window as any).electronAPI;
-    if (api.getUpdateChannel) {
-      const channel = await api.getUpdateChannel();
-      this.updateChannel.set(channel === 'beta' ? 'beta' : 'latest');
-    }
-  }
-
-  async switchChannel(channel: 'latest' | 'beta') {
-    if (!this.isElectron) return;
-    const api = (window as any).electronAPI;
-    if (api.setUpdateChannel) {
-      await api.setUpdateChannel(channel);
-      this.updateChannel.set(channel);
-      this.snackBar.open(`Update channel set to ${channel === 'beta' ? 'Beta' : 'Stable'}`, 'Close', { duration: 3000 });
-      // Re-check for updates on the new channel
-      this.checkForUpdates();
-    }
-  }
-
-  private setupUpdateListener() {
-    const api = (window as any).electronAPI;
-    if (api.onUpdateStatus) {
-      api.onUpdateStatus((data: any) => {
-        this.ngZone.run(() => {
-          this.updateStatus.set(data.status);
-          if (data.version) this.updateVersion.set(data.version);
-          if (data.percent) this.downloadPercent.set(data.percent);
-          if (data.message) this.updateError.set(data.message);
-        });
-      });
-    }
+    this.bugReport.open(type);
   }
 
   private setupElectronListeners() {

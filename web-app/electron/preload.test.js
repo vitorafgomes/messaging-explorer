@@ -6,9 +6,10 @@ const path = require('node:path');
 function loadPreload() {
   const exposed = {};
   const listened = [];
+  const invoked = [];
   const fakeElectron = {
     contextBridge: { exposeInMainWorld: (name, api) => { exposed[name] = api; } },
-    ipcRenderer: { invoke: () => Promise.resolve(), on: (channel) => { listened.push(channel); } }
+    ipcRenderer: { invoke: (channel) => { invoked.push(channel); return Promise.resolve(); }, on: (channel) => { listened.push(channel); } }
   };
   const originalLoad = Module._load;
   Module._load = function (request, ...rest) {
@@ -24,7 +25,7 @@ function loadPreload() {
     Module._load = originalLoad;
     console.log = originalLog;
   }
-  return { exposed, listened };
+  return { exposed, listened, invoked };
 }
 
 test('the preload exposes only window.electronAPI, with no generic channel listener', () => {
@@ -42,4 +43,10 @@ test('the preload exposes no listener for a channel the removed menu sent', () =
   assert.equal('onToggleDevMode' in api, false);
   assert.equal('onClearAllData' in api, false);
   assert.equal('onNewConnection' in api, false);
+});
+
+test('getSelfUpdateBlocker reads the get-self-update-blocker channel and sends nothing with it', () => {
+  const { exposed, invoked } = loadPreload();
+  exposed.electronAPI.getSelfUpdateBlocker();
+  assert.deepEqual(invoked, ['get-self-update-blocker']);
 });

@@ -2,7 +2,7 @@
 title: "Testing"
 version: "1.0"
 date: 2026-11-12
-changes: "2026-11-13: counts after the report of a failed send as possible duplicates and the protocol pin (Core 389, Api 364, Integration 94). Earlier the same day: counts after the peek without bodies and the scan-reach defect pin. Earlier the same day: counts after the peek from a position. Before: integration project against the Azure Service Bus emulator: the Running row, the emulator fixture, what the emulator cannot do; also on 2026-11-13: 2026-11-13: end-to-end tests with Playwright, the app in Chromium against the API and brokers in containers, with screenshots in both themes; the Running row, the section, the E2E workflow in What CI runs. Earlier: integration project against the Azure Service Bus emulator: the Running row, the emulator fixture, what the emulator cannot do. Also on 2026-11-13: 2026-11-13: the Running counts after the monitoring counts change; the monitoring controller and poll have tests. Earlier: integration project against the Azure Service Bus emulator: the Running row, the emulator fixture, what the emulator cannot do"
+changes: "2026-11-13: counts after the Settings screen (web 59 files and 1021 tests, Electron 32, end-to-end 16 with the Settings flow). Earlier 2026-11-13: counts after the report of a failed send as possible duplicates and the protocol pin (Core 389, Api 364, Integration 94). Earlier the same day: counts after the peek without bodies and the scan-reach defect pin. Earlier the same day: counts after the peek from a position. Before: integration project against the Azure Service Bus emulator: the Running row, the emulator fixture, what the emulator cannot do; also on 2026-11-13: 2026-11-13: end-to-end tests with Playwright, the app in Chromium against the API and brokers in containers, with screenshots in both themes; the Running row, the section, the E2E workflow in What CI runs. Earlier: integration project against the Azure Service Bus emulator: the Running row, the emulator fixture, what the emulator cannot do. Also on 2026-11-13: 2026-11-13: the Running counts after the monitoring counts change; the monitoring controller and poll have tests. Earlier: integration project against the Azure Service Bus emulator: the Running row, the emulator fixture, what the emulator cannot do"
 page_type: convention
 status: active
 description: "How Messaging Explorer is tested: xUnit with Moq for the two .NET projects, vitest for the Angular app, what runs in CI, the state at the founding, and what has no test."
@@ -22,20 +22,20 @@ reliability: high
 
 ## Stack
 
-- **.NET:** xUnit 2.9.3 with plain `Assert`, Moq 4.20.70 in the Core tests (`src/ServiceBusExplorer.Core.Tests/ServiceBusExplorer.Core.Tests.csproj#<PackageReference Include="Moq" Version="4.20.70" />`), `Microsoft.AspNetCore.Mvc.Testing` in the Api tests (`src/ServiceBusExplorer.Api.Tests/ServiceBusExplorer.Api.Tests.csproj#<PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.15" /`), `coverlet.collector` in both. No assertion library beyond xUnit; adding one is an ADR, not a package reference.
-- **Web:** vitest 4 with jsdom, driven by the Angular unit-test builder (`web-app/angular.json#"builder": "@angular/build:unit-test"`).
+- **.NET:** xUnit 2.9.3 with plain `Assert`, Moq 4.20.70 in the Core tests (`src/ServiceBusExplorer.Core.Tests/ServiceBusExplorer.Core.Tests.csproj`), `Microsoft.AspNetCore.Mvc.Testing` in the Api tests (`src/ServiceBusExplorer.Api.Tests/ServiceBusExplorer.Api.Tests.csproj`), `coverlet.collector` in both. No assertion library beyond xUnit; adding one is an ADR, not a package reference.
+- **Web:** vitest 4 with jsdom, driven by the Angular unit-test builder (`web-app/angular.json`).
 - The test projects live under `src/`, beside the code, not under `tests/`.
 
 ## Running
 
-| What | Command | Covers |
+| What | Command | State on 2026-11-12 |
 |---|---|---|
-| Core | `dotnet test src/ServiceBusExplorer.Core.Tests` | every unit test of the Core library; no skip allowed |
-| Api | `dotnet test src/ServiceBusExplorer.Api.Tests` | the API through the test server; no skip allowed |
-| Integration (Docker) | `dotnet test src/ServiceBusExplorer.IntegrationTests` | the providers against the brokers the run starts in containers (RabbitMQ, the Azure Service Bus emulator); a few minutes; run when broker code changes |
-| Web | `npm test -- --watch=false` in `web-app/` | every spec under `web-app/src`; the 8 skips in `metrics.service.spec.ts` are the only ones allowed |
-| Electron shell helpers and preload | `npm run test:electron` in `web-app/` (`node --test`) | the pure Electron helpers and the preload contract |
-| End-to-end (Docker, Chromium) | `npx playwright test -c e2e` in `web-app/` | the app in a browser against the API and brokers in containers, with screenshots; the expected failures pin known defects |
+| Core | `dotnet test src/ServiceBusExplorer.Core.Tests` | 433 passed, 0 skipped (2026-11-13) |
+| Api | `dotnet test src/ServiceBusExplorer.Api.Tests` | 444 passed, 0 skipped (2026-11-13) |
+| Integration (Docker) | `dotnet test src/ServiceBusExplorer.IntegrationTests` | 105 passed, 0 skipped (29 RabbitMQ, 65 Azure Service Bus) on 2026-11-13, 392 s wall for the whole project run on that day, of which about 70 s is the scan-reach defect pin and about 110 s the protocol pin, each arranging 800 dead-lettered messages (231 s earlier the same day with 93); earlier, 93 to 102 s wall with the images cached, as measured when the project had 74 tests. The two collections run in parallel and the Azure one dominates: about 20 s to start SQL Server and the emulator, about 68 s of tests, of which 20 s is the deep dead-letter resubmit (350 messages arranged one by one) and 15 s three calls to a closed port that wait out the SDK retries |
+| Web | `npm test -- --watch=false` in `web-app/` | 59 files: 1021 passed, 8 skipped (2026-11-13) |
+| Electron shell helpers and preload | `npm run test:electron` in `web-app/` (`node --test`) | 32 passed, 0 skipped (2026-11-13) |
+| End-to-end (Docker, Chromium) | `npx playwright test -c e2e` in `web-app/` | 16 passed, of which 3 are expected failures that pin known defects, 0 skipped; about 1 min 25 s wall with the images cached (2026-11-13) |
 | Build | `dotnet build ServiceBusExplorer.slnx` | 0 warnings, 0 errors |
 
 The Api tests share process-wide environment variables, so the assembly disables parallelisation (`src/ServiceBusExplorer.Api.Tests/Usings.cs#[assembly: CollectionBehavior(DisableTestParallelization = true)]`).
@@ -127,6 +127,10 @@ Since 2026-11-13, `web-app/e2e/` drives the app in Chromium with Playwright agai
     - The Connections screen lists the connection while the toolbar shows it connected.
     - The Queues and Topics screens list the entities.
     - Monitoring shows the queue with 4 after a refresh.
+  - Settings (`web-app/e2e/settings.e2e.ts#opens from the toolbar and shows the version and the state of the updates`), with no broker: the page also gets sample update members of the preload (version, channel, the reason a package cannot update itself, a check that answers up to date) and a hook to send an update status.
+    - Opens Settings from the toolbar icon; the version and About show the sample version and the Stable channel, and the API as local.
+    - Not checked yet, then Check now: up to date; then an available version, in the screen and as the toolbar link.
+    - Opens Clear all data, whose button is disabled until the words are typed, and cancels it; nothing is cleared.
 - **Known defects are pinned as expected failures.** A flow that meets a recorded defect asserts what works. The correct behaviour sits in its own test, marked `test.fail` with the defect in one line. The suite stays green while the defect stands and turns red on the day it is fixed, when the mark is removed. Three are pinned:
   - The RabbitMQ peek returns the head message again and again ([[pages/roadmap/code-audit-2026-11]]).
   - The connection card says "Unknown Provider", because the provider type of the app is numeric and the API sends a name (same page).
@@ -141,7 +145,7 @@ Since 2026-11-13, `web-app/e2e/` drives the app in Chromium with Playwright agai
 
 ## Web tests run through `ng test` only
 
-`npm test` is `ng test`, the Angular unit-test builder with vitest as its runner (`web-app/angular.json#"builder": "@angular/build:unit-test"`). It compiles the components and picks up every `*.spec.ts`. The gate is `npm test -- --watch=false` in `web-app/`.
+`npm test` is `ng test`, the Angular unit-test builder with vitest as its runner (`web-app/angular.json`). It compiles the components and picks up every `*.spec.ts`. The gate is `npm test -- --watch=false` in `web-app/`.
 
 Plain `npx vitest` is not a second way to run them. It has no Angular compiler, so a component with a signal `input()` or a `templateUrl` fails with errors such as NG0303, NG0950 and "Component is not resolved" on tests that are sound. The founding of this context made that mistake and recorded 12 failures that did not exist; the `vitest.config.ts` that listed 11 files for that mode was removed the same day. A failure seen under plain vitest is not evidence of anything.
 
@@ -153,7 +157,7 @@ Plain `npx vitest` is not a second way to run them. It has no Angular compiler, 
 
 ## Patterns in use
 
-- **Core seams for the Azure provider.** The bulk operations are tested through internal `*Core` methods against fake receivers and senders (`src/ServiceBusExplorer.Core.Tests/Providers/Azure/AzureServiceBusProviderBatchTests.cs#DeleteMessagesCore_finds_all_targets_across_many_small_batches`); `InternalsVisibleTo` opens them (`src/ServiceBusExplorer.Core/ServiceBusExplorer.Core.csproj#<InternalsVisibleTo Include="ServiceBusExplorer.Core.Tests" />`). This is the model for a new bulk path: order of calls and the result per sequence number, never "complete was called".
+- **Core seams for the Azure provider.** The bulk operations are tested through internal `*Core` methods against fake receivers and senders (`src/ServiceBusExplorer.Core.Tests/Providers/Azure/AzureServiceBusProviderBatchTests.cs#DeleteMessagesCore_finds_all_targets_across_many_small_batches`); `InternalsVisibleTo` opens them (`src/ServiceBusExplorer.Core/ServiceBusExplorer.Core.csproj`). This is the model for a new bulk path: order of calls and the result per sequence number, never "complete was called".
 - **Whole-API tests.** `WebApplicationFactory` with a seeded workspace (`src/ServiceBusExplorer.Api.Tests/ApiFactory.cs#SeedConnectionAsync`) for the key middleware, CORS and masking.
 - **No real broker.** No test connects to a broker it did not start. Since [[pages/decisions/0002-integration-tests-against-brokers-in-docker]] the providers are also tested against RabbitMQ and the Azure Service Bus emulator in containers the run starts, in a project of its own, outside the fast gate ([[pages/roadmap/tests-of-everything]]). A reproduction against a real broker is manual, on a broker the owner named, and never a destructive operation.
 - **One failing-call test per external boundary (Rule I).** A new call to a broker SDK, the RabbitMQ management API, Azure Monitor, the filesystem or a subprocess ships one test where it fails and asserts what the caller does. `src/ServiceBusExplorer.Core.Tests/Providers/Azure/AzureServiceBusProviderBatchTests.cs#DeleteMessagesCore_returns_partial_result_on_transient_broker_failure` is the shape.
@@ -165,7 +169,7 @@ From the founding survey; each is on its service page.
 
 - **Core:** `ProviderFactory`, `RabbitMQPatternDetector`. The RabbitMQ provider and its management client are reached only by the integration project, through the provider's public surface; their bulk resubmit and move, search and pattern detection have no test of their working path.
 - **Api:** `QueuesController` and `TopicsController` beyond the entity administration, rule and message routes, which have tests since 2026-11-12 (the message routes in `src/ServiceBusExplorer.Api.Tests/MessageRouteTests.cs#Each_transfer_dead_letter_route_answers_as_its_dead_letter_sibling_and_reads_the_transfer_dead_letter_queue`; the session routes since 2026-11-13, `src/ServiceBusExplorer.Api.Tests/SessionRouteTests.cs#The_list_of_a_queue_or_a_subscription_hands_the_provider_the_clamped_scan_size_and_answers_the_contract_shape`), `ConnectionGroupsController`, port resolution, the loopback binding. `MonitoringController` and the monitoring poll have tests since 2026-11-13 (`src/ServiceBusExplorer.Api.Tests/MonitoringBackgroundServiceTests.cs#A_tick_while_the_previous_poll_has_not_finished_is_skipped_and_the_next_tick_after_it_finished_polls`, `src/ServiceBusExplorer.Api.Tests/MonitoringControllerTests.cs#On_demand_refresh_of_one_queue_reads_its_counts_now_with_the_request_token_and_answers_them`).
-- **Electron shell:** `main.js`. The pure helpers in `web-app/electron/shell-helpers.js` are tested with `node:test`, and what `preload.js` exposes is tested against a fake `electron` module (`web-app/electron/preload.test.js#the preload exposes only window.electronAPI, with no generic channel listener`); the wiring around them (dialogs, window order, quit, IPC handlers) needs Electron and has no test.
+- **Electron shell:** `main.js`. The pure helpers in `web-app/electron/shell-helpers.js` are tested with `node:test`, and what `preload.js` exposes is tested against a fake `electron` module (`web-app/electron/preload.test.js#originalLog`); the wiring around them (dialogs, window order, quit, IPC handlers) needs Electron and has no test.
 
 A refactor of any of these starts with pinning tests (the refactor lane, step 3).
 
