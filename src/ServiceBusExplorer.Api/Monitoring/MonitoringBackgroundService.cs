@@ -28,18 +28,20 @@ public class MonitoringBackgroundService : BackgroundService
     private readonly MonitoringStore _store;
     private readonly ILogger _logger;
     private readonly Func<IMessagingProvider?> _currentProvider;
+    private readonly TimeProvider _timeProvider;
     private IMessagingProvider? _lastProvider;
     private Task _cycle = Task.CompletedTask;
     private CancellationTokenSource? _cycleCancellation;
     private IMessagingProvider? _cycleProvider;
 
     public MonitoringBackgroundService(MonitoringStore store, ILogger<MonitoringBackgroundService> logger, IConfiguration configuration)
-        : this(store, logger, configuration, ConnectionsController.GetCurrentProvider)
+        : this(store, logger, configuration, ConnectionsController.GetCurrentProvider, TimeProvider.System)
     {
     }
 
-    internal MonitoringBackgroundService(MonitoringStore store, ILogger logger, IConfiguration configuration, Func<IMessagingProvider?> currentProvider)
+    internal MonitoringBackgroundService(MonitoringStore store, ILogger logger, IConfiguration configuration, Func<IMessagingProvider?> currentProvider, TimeProvider? timeProvider = null)
     {
+        _timeProvider = timeProvider ?? TimeProvider.System;
         _store = store;
         _logger = logger;
         _currentProvider = currentProvider;
@@ -69,7 +71,7 @@ public class MonitoringBackgroundService : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("Monitoring polls every {Interval}", Interval);
-        using var timer = new PeriodicTimer(Interval);
+        using var timer = new PeriodicTimer(Interval, _timeProvider);
         do
         {
             StartCycle(stoppingToken);

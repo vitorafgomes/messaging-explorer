@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="ServiceBusExplorer.Api.Tests" />
+    <InternalsVisibleTo Include="ServiceBusExplorer.IntegrationTests" />
   </ItemGroup>
 
 </Project>

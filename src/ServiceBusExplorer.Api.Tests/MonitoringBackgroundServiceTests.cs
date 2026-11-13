@@ -337,4 +337,119 @@ public class MonitoringBackgroundServiceTests
         Assert.Equal(["new-orders"], store.GetLatest()!.Queues.Select(q => q.Name));
         Assert.Null(store.LastFailureAt);
     }
+
+    /// <summary>
+    /// A clock the test moves by hand. It keeps the one timer the poll creates, with the due time and period it was
+    /// given, and fires its callback once per period that <see cref="Advance"/> passes.
+    /// </summary>
+    private sealed class ManualTimeProvider : TimeProvider
+    {
+        private readonly object _gate = new();
+        private DateTimeOffset _now = new(2026, 11, 13, 9, 0, 0, TimeSpan.Zero);
+        private ManualTimer? _timer;
+
+        public (TimeSpan DueTime, TimeSpan Period)? Created { get; private set; }
+
+        public override DateTimeOffset GetUtcNow() { lock (_gate) return _now; }
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            lock (_gate)
+            {
+                Created = (dueTime, period);
+                return _timer = new ManualTimer(this, callback, state, dueTime, period);
+            }
+        }
+
+        public void Advance(TimeSpan by)
+        {
+            ManualTimer? timer;
+            var fires = 0;
+            lock (_gate)
+            {
+                _now += by;
+                timer = _timer;
+                if (timer is null) return;
+                while (timer.Next is { } next && next <= _now)
+                {
+                    fires++;
+                    timer.Next = timer.Period > TimeSpan.Zero && timer.Period != Timeout.InfiniteTimeSpan ? next + timer.Period : null;
+                }
+            }
+            for (var i = 0; i < fires; i++) timer.Fire();
+        }
+
+        private sealed class ManualTimer(ManualTimeProvider clock, TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period) : ITimer
+        {
+            public DateTimeOffset? Next = dueTime == Timeout.InfiniteTimeSpan ? null : clock.GetUtcNow() + dueTime;
+            public TimeSpan Period = period;
+
+            public void Fire() => callback(state);
+
+            public bool Change(TimeSpan dueTime, TimeSpan period)
+            {
+                lock (clock._gate)
+                {
+                    clock.Created = (dueTime, period);
+                    Next = dueTime == Timeout.InfiniteTimeSpan ? null : clock._now + dueTime;
+                    Period = period;
+                }
+                return true;
+            }
+
+            public void Dispose() => Next = null;
+            public ValueTask DisposeAsync() { Dispose(); return ValueTask.CompletedTask; }
+        }
+    }
+
+    [Fact]
+    public async Task The_interval_floor_prevents_hammering_a_production_namespace_ninety_seconds_of_a_running_service_poll_once_at_start_and_once_per_30_seconds_never_more()
+    {
+        var topics = Enumerable.Range(1, 1000).Select(i => $"topic-{i:0000}").ToArray();
+        var subscriptions = Enumerable.Range(1, 10).Select(i => new SubscriptionInfo { Name = $"sub-{i:00}" }).ToList();
+        int queueReads = 0, topicReads = 0, subscriptionReads = 0;
+        var (provider, _) = FakeBroker.Create((name, _) =>
+        {
+            switch (name)
+            {
+                case nameof(IMessagingProvider.GetQueuesAsync): Interlocked.Increment(ref queueReads); return Queues(new QueueInfo { Name = "orders" });
+                case nameof(IMessagingProvider.GetTopicsAsync): Interlocked.Increment(ref topicReads); return Topics(topics);
+                case nameof(IMessagingProvider.GetSubscriptionsAsync): Interlocked.Increment(ref subscriptionReads); return Task.FromResult<IEnumerable<SubscriptionInfo>>(subscriptions);
+                default: return null;
+            }
+        });
+        var clock = new ManualTimeProvider();
+        var store = new MonitoringStore();
+        var service = new MonitoringBackgroundService(store, NullLogger.Instance, Config("5"), () => provider, clock);
+
+        async Task PolledAsync(int cycles)
+        {
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (store.GetHistory(120).Length < cycles || !service.Cycle.IsCompleted)
+            {
+                Assert.True(DateTime.UtcNow < deadline, $"poll {cycles} did not finish");
+                await Task.Yield();
+            }
+        }
+
+        await service.StartAsync(CancellationToken.None);
+        try
+        {
+            await PolledAsync(1);
+            for (var tick = 1; tick <= 3; tick++)
+            {
+                clock.Advance(TimeSpan.FromSeconds(30));
+                await PolledAsync(1 + tick);
+            }
+        }
+        finally
+        {
+            await service.StopAsync(CancellationToken.None);
+        }
+
+        Assert.Equal((TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30)), clock.Created);
+        Assert.Equal((4, 4, 4000), (queueReads, topicReads, subscriptionReads));
+        Assert.Equal(4, store.GetHistory(120).Length);
+        Assert.Equal(10_000, store.GetLatest()!.Subscriptions.Count);
+    }
 }

@@ -109,6 +109,7 @@ Paths under `src/ServiceBusExplorer.Core/Providers/RabbitMQ/`. No broker was con
 - **One channel serves every request** (PLAUSIBLE, `src/ServiceBusExplorer.Core/Providers/RabbitMQ/RabbitMQProvider.cs:17`); channels in this client version are not safe for concurrent use.
 - **Exchange-to-exchange bindings are listed as subscriptions. Fixed 2026-11-13:** a binding whose destination is not a queue is skipped (`src/ServiceBusExplorer.Core/Providers/RabbitMQ/RabbitMQProvider.cs:358`). The `Defect_` test became the regression test `An_exchange_bound_to_an_exchange_is_not_listed_as_its_subscription_and_a_bound_queue_still_is` (`src/ServiceBusExplorer.IntegrationTests/RabbitMQProviderTests.cs:229`).
 - **The dead-letter queue is always assumed to be `<queue>.dlq`**; the queue's real dead-letter exchange is parsed and never used.
+- **A queue's dead-letter count was always 0. Fixed 2026-11-13:** the management client's mapper sets it to zero and nothing filled it; the provider now reads it from `<queue>.dlq` (`src/ServiceBusExplorer.Core/Providers/RabbitMQ/RabbitMQProvider.cs:1215`). Found by the test that compares the monitoring counts with the broker (`src/ServiceBusExplorer.IntegrationTests/RabbitMQProviderTests.cs:255`).
 
 ### P3
 

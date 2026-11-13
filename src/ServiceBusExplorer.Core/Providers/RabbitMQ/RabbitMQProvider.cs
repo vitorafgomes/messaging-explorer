@@ -135,14 +135,14 @@ public class RabbitMQProvider : IMessagingProvider
     public async Task<IEnumerable<IQueueEntity>> GetQueuesAsync()
     {
         EnsureConnected();
-        return await _managementClient!.GetQueuesAsync();
+        return WithDeadLetterCounts(await _managementClient!.GetQueuesAsync());
     }
 
     /// <inheritdoc />
     public async Task<IQueueEntity?> GetQueueAsync(string queueName)
     {
         EnsureConnected();
-        return await _managementClient!.GetQueueAsync(queueName);
+        return await WithDeadLetterCountAsync(await _managementClient!.GetQueueAsync(queueName), CancellationToken.None);
     }
 
     /// <inheritdoc />
@@ -1180,7 +1180,7 @@ public class RabbitMQProvider : IMessagingProvider
     public async Task<IQueueEntity?> GetQueueCountsAsync(string queueName, CancellationToken cancellationToken)
     {
         EnsureConnected();
-        return await _managementClient!.GetQueueAsync(queueName, cancellationToken);
+        return await WithDeadLetterCountAsync(await _managementClient!.GetQueueAsync(queueName, cancellationToken), cancellationToken);
     }
 
     /// <inheritdoc />
@@ -1206,6 +1206,38 @@ public class RabbitMQProvider : IMessagingProvider
         var queue = await _managementClient.GetQueueAsync(binding.Destination, cancellationToken);
         var dlqQueue = await _managementClient.GetQueueAsync($"{binding.Destination}.dlq", cancellationToken);
         return MapBindingToSubscriptionInfo(topicName, binding, queue, dlqQueue);
+    }
+
+    /// <summary>
+    /// Fills each queue's dead-letter count with the ready messages of its <c>&lt;queue&gt;.dlq</c> from the same list,
+    /// the convention a subscription's dead-letter count follows; zero when there is none.
+    /// </summary>
+    private static List<RabbitMQQueueInfo> WithDeadLetterCounts(IEnumerable<RabbitMQQueueInfo> queues)
+    {
+        var listed = queues.ToList();
+        var byName = listed.ToDictionary(q => q.Name, StringComparer.Ordinal);
+        foreach (var queue in listed)
+        {
+            queue.DeadLetterMessageCount = byName.TryGetValue($"{queue.Name}.dlq", out var deadLetter) ? deadLetter.ActiveMessageCount : 0;
+        }
+
+        return listed;
+    }
+
+    /// <summary>
+    /// Reads the queue's <c>&lt;queue&gt;.dlq</c> and fills its dead-letter count with that queue's ready messages; zero
+    /// when there is none.
+    /// </summary>
+    private async Task<RabbitMQQueueInfo?> WithDeadLetterCountAsync(RabbitMQQueueInfo? queue, CancellationToken cancellationToken)
+    {
+        if (queue == null)
+        {
+            return null;
+        }
+
+        var deadLetter = await _managementClient!.GetQueueAsync($"{queue.Name}.dlq", cancellationToken);
+        queue.DeadLetterMessageCount = deadLetter?.ActiveMessageCount ?? 0;
+        return queue;
     }
 
     #endregion

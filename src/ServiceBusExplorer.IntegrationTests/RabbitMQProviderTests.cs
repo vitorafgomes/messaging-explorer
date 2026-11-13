@@ -1,4 +1,7 @@
 using System.Net.Http.Json;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
+using ServiceBusExplorer.Api.Monitoring;
 using ServiceBusExplorer.Core.Abstractions;
 using ServiceBusExplorer.Core.Models;
 using ServiceBusExplorer.Core.Providers.RabbitMQ;
@@ -240,5 +243,59 @@ public sealed class RabbitMQProviderTests(RabbitMqFixture fixture) : IAsyncLifet
         var subscriptions = await _provider.GetSubscriptionsAsync(source);
 
         Assert.Equal([queue], subscriptions.Select(s => s.Name));
+    }
+
+    /// <summary>
+    /// The counts the monitoring screen shows equal what the broker holds: 3 messages in a queue and 2 in its
+    /// <c>.dlq</c>, read by the one-entity counts read, by the queue list and through a poll of the monitoring service.
+    /// Unlike the rest of this class it reads the management statistics on purpose, because they are what the screen
+    /// shows; they lag the broker by seconds, so each read is repeated until it matches or a deadline passes.
+    /// </summary>
+    [Fact]
+    public async Task The_counts_on_the_monitoring_screen_equal_the_broker_three_active_and_two_dead_lettered()
+    {
+        var queue = Queue("counted");
+        var deadLetter = $"{queue}.dlq";
+        _queues.Add(deadLetter);
+        await _provider.CreateQueueAsync(queue);
+        await _provider.CreateQueueAsync(deadLetter);
+        for (var i = 0; i < 3; i++) fixture.PublishToQueue(queue, $"active-{i}");
+        for (var i = 0; i < 2; i++) fixture.PublishToQueue(deadLetter, $"dead-{i}");
+
+        async Task<(long Active, long DeadLetter)> SettledAsync(Func<Task<(long, long)>> read)
+        {
+            var deadline = DateTime.UtcNow.AddSeconds(30);
+            var counts = await read();
+            while (counts != (3L, 2L) && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(500));
+                counts = await read();
+            }
+            return counts;
+        }
+
+        var countsRead = await SettledAsync(async () =>
+        {
+            var read = await _provider.GetQueueCountsAsync(queue, CancellationToken.None);
+            return (read!.ActiveMessageCount, read.DeadLetterMessageCount);
+        });
+        var listed = await SettledAsync(async () =>
+        {
+            var row = (await _provider.GetQueuesAsync()).Single(q => q.Name == queue);
+            return (row.ActiveMessageCount, row.DeadLetterMessageCount);
+        });
+        var store = new MonitoringStore();
+        var monitoring = new MonitoringBackgroundService(store, NullLogger.Instance, new ConfigurationBuilder().Build(), () => _provider);
+        var polled = await SettledAsync(async () =>
+        {
+            Assert.True(monitoring.StartCycle(CancellationToken.None));
+            await monitoring.Cycle;
+            var row = store.GetLatest()!.Queues.Single(q => q.Name == queue);
+            return (row.ActiveMessageCount, row.DeadLetterMessageCount);
+        });
+
+        Assert.Equal((3L, 2L), countsRead);
+        Assert.Equal((3L, 2L), listed);
+        Assert.Equal((3L, 2L), polled);
     }
 }

@@ -780,6 +780,10 @@ public sealed class AzureServiceBusProviderTests(AzureServiceBusFixture fixture)
         Assert.Empty(await _messaging.PeekMessagesAsync(queue, 10));
     }
 
+    /// <summary>
+    /// Finds the entity and answers null for one that does not exist. It does not prove that the counts equal the
+    /// broker: the emulator reports every runtime count as zero, so equality is proven only against RabbitMQ.
+    /// </summary>
     [Fact]
     public async Task A_counts_read_finds_a_created_queue_and_subscription_and_is_null_for_an_entity_that_does_not_exist()
     {
