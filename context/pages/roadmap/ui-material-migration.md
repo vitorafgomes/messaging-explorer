@@ -34,7 +34,7 @@ No dates are set; the owner sets them.
 
 - **As of 2026-11-12:** the convention is written and the target layout is drawn in `context/prototypes/web-app/` (38 artboards since the review of [[pages/roadmap/ui-review-2026-11]], light and dark, with screenshots); nothing is built in the application. Phase 0 waits for the Azure emulator fixture of [[pages/roadmap/tests-of-everything]] Phase 1, which gives a broker with data to point the app at.
 - **As of 2026-11-13:** Phase 0 is in progress. The end-to-end tests and their screenshots exist and pass locally; CI, three of the planned flows and the owner's review remain.
-- **As of 2026-11-13, later:** Phase 3 has started with the messages dialog and the message tools.
+- **2026-11-13, the visual migration starts with Settings,** a new screen built from its artboard (`context/prototypes/web-app/Settings.dc.html`) in Material components and theme tokens only: updates with every state of the artboard, the data file and the danger zone with a typed confirmation, developer mode, About. Its end-to-end flow (`web-app/e2e/settings.e2e.ts`) asserts the version and the update state and saves four screens in light and dark. Connections, Messages and Send come next, one change each.
 
 ## Phases
 
@@ -55,14 +55,13 @@ No dates are set; the owner sets them.
 - **Success criteria:** a queue created with a 2-minute lock, 7 deliveries and sessions shows exactly those values; the end-to-end screenshots of a queue and a subscription differ only by the rules tab.
 
 ### Phase 2 - Actions that can hurt
-- **Status:** not started
+- **Status:** in progress (2026-11-13).
+  - **Connections, migrated 2026-11-13, with a recorded residual:** the screen and its add, edit, groups and export dialogs are Material and theme tokens, with the three states and named icon controls; the end-to-end flows pass unchanged. The counts reach zero once the debug panel goes; the light and dark screenshots wait for the owner's review. In `features/connections/` the Bootstrap classes went from 233 to 27, Font Awesome from 46 to 5, literal colours from 8 to 2 and `--bs-*` from 74 to 0. What is left is the developer-mode debug panel, kept as it was apart from its Clear All Data button, removed on 2026-11-13, and the class `badge` on the connected chip, which a pinned expected failure looks for. Details on [[pages/services/web-app]].
 - **Scope:** rule 6 everywhere: destructive actions out of the routine row, one confirmation builder that names entity, parent and connection with the live count; an environment badge in the toolbar; fields with no save path become text (rule 8).
 - **Success criteria:** no purge or delete can be confirmed without the entity and the connection on screen.
 
 ### Phase 3 - Material, screen by screen
-- **Status:** in progress (2026-11-13).
-  - **Connections, migrated 2026-11-13, with a recorded residual:** the screen and its add, edit, groups and export dialogs are Material and theme tokens, with the three states and named icon controls; the end-to-end flows pass unchanged. The counts reach zero once the debug panel goes; the light and dark screenshots wait for the owner's review. In `features/connections/` the Bootstrap classes went from 233 to 27, Font Awesome from 46 to 5, literal colours from 8 to 2 and `--bs-*` from 74 to 0. What is left is the developer-mode debug panel, kept as it was apart from its Clear All Data button, removed on 2026-11-13, and the class `badge` on the connected chip, which a pinned expected failure looks for. Details on [[pages/services/web-app]].
-  - **Messages dialog and message tools, migrated 2026-11-13:** the messages, send, move, import, export, compare and automatic resubmit dialogs reach zero Bootstrap classes, Font Awesome icons, `--bs-*` variables and literal colours (from 179, 109, 43, 106, 59, 52 and 2 Bootstrap classes, and 26, 10, 5, 10, 6, 8 and 0 icons); the end-to-end flows pass and both themes are captured. The list and the detail sit side by side as the artboard draws them, and the send, import, move, export and auto resubmit dialogs no longer cut off their right edge. Left for later: the shared selection bar, advanced filters and bulk progress and results dialogs the messages dialog hosts, and what the `Messages` and `Send` strips list as not built ([[pages/services/web-app]]).
+- **Status:** started 2026-11-13 with Settings, a screen that did not exist: no Bootstrap class, Font Awesome icon or literal colour in `web-app/src/app/features/settings/`; the warning and success tokens the artboard uses are not defined in `styles.scss` yet, so the cannot-update panel takes the tertiary container and the ready panel the primary container.
 - **Scope:** in this order: entity details, entities tree, connections, messages dialog, monitoring, queues and topics pages. Per screen: buttons and form controls to Material, Font Awesome to `mat-icon`, `--bs-*` and hex colours to theme tokens, styles into their own file, the three states of rule 9, names on icon controls.
 - **Success criteria:** per screen, the counts on [[pages/conventions/ui]] reach zero for that screen and its end-to-end flow still passes; the light and dark screenshots are reviewed.
 

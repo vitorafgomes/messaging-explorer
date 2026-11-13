@@ -76,15 +76,45 @@ describe('App', () => {
       };
     });
 
-    it('every screen reachable without the menu: the toolbar links to the five routes', () => {
+    it('every screen reachable without the menu: the main links and the Settings link cover every route', () => {
       const fixture = TestBed.createComponent(App);
       fixture.detectChanges();
       const links: HTMLAnchorElement[] = Array.from(
         fixture.nativeElement.querySelectorAll('mat-toolbar nav[aria-label="Main"] a'));
+      const settings = fixture.nativeElement.querySelector('mat-toolbar a[aria-label="Settings"]') as HTMLAnchorElement;
 
-      expect(routePaths).toEqual(['connections', 'entities', 'queues', 'topics', 'monitoring']);
-      expect(links.map(a => a.getAttribute('href'))).toEqual(routePaths.map(p => `/${p}`));
+      expect(routePaths).toEqual(['connections', 'entities', 'queues', 'topics', 'monitoring', 'settings']);
+      expect([...links, settings].map(a => a.getAttribute('href'))).toEqual(routePaths.map(p => `/${p}`));
       expect(links.map(a => a.textContent?.trim())).toEqual(['Connections', 'Entities', 'Queues', 'Topics', 'Monitoring']);
+    });
+
+    it('the toolbar no longer shows the version or the badge that opened the channel menu: they live in Settings', async () => {
+      const fixture = TestBed.createComponent(App);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      const toolbar = fixture.nativeElement.querySelector('mat-toolbar') as HTMLElement;
+      expect(toolbar.textContent).not.toContain('2.4.1');
+      expect(toolbar.querySelector('.version-badge')).toBeNull();
+      expect(Array.from(toolbar.querySelectorAll('[aria-haspopup="menu"]')).map(b => b.querySelector('mat-icon')?.textContent?.trim()))
+        .toEqual(['notifications', 'help_outline']);
+    });
+
+    it('an available update shows in the toolbar as a link to Settings, never a direct download', async () => {
+      let push: (data: unknown) => void = () => {};
+      const downloadUpdate = vi.fn();
+      Object.assign((window as any).electronAPI, { onUpdateStatus: (cb: (d: unknown) => void) => { push = cb; }, downloadUpdate });
+      const fixture = TestBed.createComponent(App);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      push({ status: 'available', version: '2.5.0' });
+      fixture.detectChanges();
+
+      const indicator = fixture.nativeElement.querySelector('mat-toolbar a[aria-label="Version 2.5.0 is available: open Settings"]') as HTMLAnchorElement;
+      expect(indicator.getAttribute('href')).toBe('/settings');
+      expect(indicator.textContent?.trim()).toContain('Update v2.5.0');
+      indicator.click();
+      expect(downloadUpdate).not.toHaveBeenCalled();
     });
 
     it('the toolbar marks the active route', async () => {
@@ -100,10 +130,10 @@ describe('App', () => {
     });
   });
 
-  it('in the browser the toolbar links to the same five routes', () => {
+  it('in the browser the toolbar links to the same routes, Settings included', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
-    const hrefs = Array.from(fixture.nativeElement.querySelectorAll('mat-toolbar nav[aria-label="Main"] a'))
+    const hrefs = Array.from(fixture.nativeElement.querySelectorAll('mat-toolbar nav[aria-label="Main"] a, mat-toolbar a[aria-label="Settings"]'))
       .map(a => (a as HTMLAnchorElement).getAttribute('href'));
     expect(hrefs).toEqual(routePaths.map(p => `/${p}`));
   });

@@ -33,6 +33,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setUpdateChannel: (channel) => ipcRenderer.invoke('set-update-channel', channel),
   getUpdateChannel: () => ipcRenderer.invoke('get-update-channel'),
 
+  // Why this package cannot update itself, or null
+  getSelfUpdateBlocker: () => ipcRenderer.invoke('get-self-update-blocker'),
+
   // Platform detection
   platform: process.platform,
 
