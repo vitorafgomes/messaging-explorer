@@ -1,6 +1,6 @@
 # Refactor lane
 
-1. **ADR check** - read `vault/pages/decisions/*` that established the current shape. A refactor that
+1. **ADR check** - read `context/pages/decisions/*` that established the current shape. A refactor that
    contradicts an accepted ADR needs a superseding ADR FIRST, not code. If no ADR governs the shape,
    say so and continue.
 2. **Capability check** - run the table in SKILL.md gate 1 before the first edit. A refactor that
@@ -11,7 +11,7 @@
    before the restructure and green after it; a test that is red before shows the change is a
    feature or fix, so stop and reclassify it. Pinning tests for uncovered branches are step one of
    the plan, written by `explorer-implementer` BEFORE it moves code; most controllers and the
-   RabbitMQ provider have no tests today (`vault/pages/conventions/testing.md`), so expect this
+   RabbitMQ provider have no tests today (`context/pages/conventions/testing.md`), so expect this
    step to be most of the work. If the refactor changes nothing executable, say so explicitly
    rather than silently skipping this stage.
 4. **Restructure** - dispatch `explorer-implementer` (opus) with the plan and check its diff against
@@ -21,7 +21,7 @@
    the restructure touches a hot path named in SKILL.md gate 6.
 6. **Gates 3-9** from SKILL.md, including **Prove the requirement** (gate 5): every `behaviour lock`
    test green before and after, the full surface green.
-7. **Crystallize** - use `wiki-crystallize` to specify updates to any vault reference the refactor
-   moved (grep the vault for the old paths); the implementer writes them as the plan names and the
+7. **Crystallize** - use `wiki-crystallize` to specify updates to any context reference the refactor
+   moved (grep the context for the old paths); the implementer writes them as the plan names and the
    manager reviews them. A ref that still resolves proves the file exists, never that it still
    describes the claim.

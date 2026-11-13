@@ -273,21 +273,6 @@ public sealed class RabbitMQProviderDefectTests(RabbitMqFixture fixture) : IAsyn
         await Assert.ThrowsAsync<HttpRequestException>(() => provider.GetQueuesAsync());
     }
 
-    /// <summary>Correct: only queues bound to an exchange are listed as its subscriptions.</summary>
-    [Fact]
-    public async Task Defect_an_exchange_to_exchange_binding_is_listed_as_a_subscription()
-    {
-        var source = await CreateExchangeAsync("e2e-src", "topic");
-        var destination = await CreateExchangeAsync("e2e-dst", "topic");
-        using var bound = await fixture.Management.PostAsJsonAsync($"bindings/%2F/e/{source}/e/{destination}", new { routing_key = "k" });
-        bound.EnsureSuccessStatusCode();
-
-        var subscription = Assert.Single(await _provider.GetSubscriptionsAsync(source));
-
-        Assert.Equal(destination, subscription.Name);
-        Assert.Equal("k", Assert.Single(subscription.Rules).SqlExpression);
-    }
-
     /// <summary>Correct: a user whose password has a non-ASCII character reaches the management API as it reaches AMQP.</summary>
     [Fact]
     public async Task Defect_a_non_ascii_password_connects_over_amqp_and_fails_every_management_call()

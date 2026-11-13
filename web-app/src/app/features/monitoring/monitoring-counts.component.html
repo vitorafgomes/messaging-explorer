@@ -1,0 +1,83 @@
+<div class="controls">
+  <mat-form-field class="filter" subscriptSizing="dynamic">
+    <mat-label>Filter by name</mat-label>
+    <mat-icon matPrefix aria-hidden="true">search</mat-icon>
+    <input matInput name="filter" placeholder="Part of a name" autocomplete="off"
+           [value]="filter()" (input)="onFilter($any($event.target).value)">
+  </mat-form-field>
+  <mat-form-field class="threshold" subscriptSizing="dynamic">
+    <mat-label>Dead-letter threshold</mat-label>
+    <input matInput name="threshold" inputmode="numeric" autocomplete="off"
+           [value]="thresholdText()" (input)="onThreshold($any($event.target).value)">
+    <mat-hint>A row above it is marked.</mat-hint>
+  </mat-form-field>
+</div>
+
+<p class="summary" aria-live="polite">{{ summary() }}</p>
+@if (refreshFailure(); as failure) {
+  <p class="refresh-failure" role="alert">{{ failure }}</p>
+}
+
+<table mat-table [dataSource]="dataSource" [trackBy]="trackRow" matSort matSortActive="deadLetter" matSortDirection="desc" matSortStart="desc"
+       class="counts" aria-label="Counts of every queue and subscription">
+  <ng-container matColumnDef="name">
+    <th mat-header-cell *matHeaderCellDef mat-sort-header start="asc">Name</th>
+    <td mat-cell *matCellDef="let row">
+      <button mat-button type="button" class="open" (click)="open(row)" [attr.aria-label]="'Open ' + row.name + ' in Entities'">{{ row.name }}</button>
+      @if (row.topicName !== null) {
+        <span class="parent"> in {{ row.topicName }}</span>
+      }
+    </td>
+  </ng-container>
+
+  <ng-container matColumnDef="kind">
+    <th mat-header-cell *matHeaderCellDef mat-sort-header start="asc">Kind</th>
+    <td mat-cell *matCellDef="let row">{{ row.kind }}</td>
+  </ng-container>
+
+  <ng-container matColumnDef="active">
+    <th mat-header-cell *matHeaderCellDef mat-sort-header arrowPosition="before" class="number">Active</th>
+    <td mat-cell *matCellDef="let row" class="number">{{ count(row.active) }}</td>
+  </ng-container>
+
+  <ng-container matColumnDef="deadLetter">
+    <th mat-header-cell *matHeaderCellDef mat-sort-header arrowPosition="before" class="number">Dead-letter</th>
+    <td mat-cell *matCellDef="let row" class="number">
+      @if (isOver(row)) {
+        <span class="over">
+          <mat-icon aria-hidden="true">warning</mat-icon>{{ count(row.deadLetter) }} <span class="over-label">over threshold</span>
+        </span>
+      } @else {
+        {{ count(row.deadLetter) }}
+      }
+    </td>
+  </ng-container>
+
+  <ng-container matColumnDef="scheduled">
+    <th mat-header-cell *matHeaderCellDef mat-sort-header arrowPosition="before" class="number">Scheduled</th>
+    <td mat-cell *matCellDef="let row" class="number" [class.not-counted]="row.scheduled === null">{{ count(row.scheduled) }}</td>
+  </ng-container>
+
+  <ng-container matColumnDef="transferDeadLetter">
+    <th mat-header-cell *matHeaderCellDef mat-sort-header arrowPosition="before" class="number">Transfer dead-letter</th>
+    <td mat-cell *matCellDef="let row" class="number" [class.not-counted]="row.transferDeadLetter === null">{{ count(row.transferDeadLetter) }}</td>
+  </ng-container>
+
+  <ng-container matColumnDef="actions">
+    <th mat-header-cell *matHeaderCellDef><span class="visually-hidden">Actions</span></th>
+    <td mat-cell *matCellDef="let row" class="actions">
+      <button mat-icon-button type="button" (click)="refresh(row)" [disabled]="isRefreshing(row)"
+              [attr.aria-label]="'Refresh the counts of ' + row.name" [matTooltip]="'Refresh the counts of ' + row.name">
+        <mat-icon aria-hidden="true">refresh</mat-icon>
+      </button>
+    </td>
+  </ng-container>
+
+  <tr mat-header-row *matHeaderRowDef="columns"></tr>
+  <tr mat-row *matRowDef="let row; columns: columns" class="count-row" [class.over-threshold]="isOver(row)"></tr>
+  <tr class="mat-mdc-row no-match" *matNoDataRow>
+    <td class="mat-mdc-cell" [attr.colspan]="columns.length">No entity matches the filter.</td>
+  </tr>
+</table>
+
+<p class="footnote">A name opens the entity. Refresh reads one entity's counts from the broker now. A subscription has no scheduled count.</p>

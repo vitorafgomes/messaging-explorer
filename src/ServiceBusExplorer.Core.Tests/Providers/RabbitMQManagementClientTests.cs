@@ -60,6 +60,32 @@ public class RabbitMQManagementClientTests
         Assert.True(content.Disposed, "the failed response was left undisposed");
     }
 
+    public static TheoryData<string> ReadsThatTakeAToken => new() { "GetQueue", "GetExchangeBindings" };
+
+    [Theory]
+    [MemberData(nameof(ReadsThatTakeAToken))]
+    public async Task A_counts_read_stops_when_the_callers_token_is_cancelled_instead_of_waiting_for_the_broker(string read)
+    {
+        using var client = NewClient(new HangingHandler());
+        using var cts = new CancellationTokenSource();
+        Task call = read == "GetQueue"
+            ? client.GetQueueAsync("orders", cts.Token)
+            : client.GetExchangeBindingsAsync("events", cts.Token);
+
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => call.WaitAsync(TimeSpan.FromSeconds(10)));
+    }
+
+    private sealed class HangingHandler : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            await Task.Delay(Timeout.Infinite, cancellationToken);
+            throw new InvalidOperationException("unreachable");
+        }
+    }
+
     private static RabbitMQManagementClient NewClient(HttpMessageHandler handler) =>
         new(new HttpClient(handler), "http://127.0.0.1:15672/api", "/", "user", "password");
 

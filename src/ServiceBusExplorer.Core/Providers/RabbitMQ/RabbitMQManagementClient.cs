@@ -135,12 +135,12 @@ public class RabbitMQManagementClient : IDisposable
     /// </summary>
     /// <param name="queueName">The name of the queue.</param>
     /// <returns>The queue information, or null if not found.</returns>
-    public async Task<RabbitMQQueueInfo?> GetQueueAsync(string queueName)
+    public async Task<RabbitMQQueueInfo?> GetQueueAsync(string queueName, CancellationToken cancellationToken = default)
     {
         var encodedVHost = EncodeVirtualHost(_virtualHost);
         var encodedName = Uri.EscapeDataString(queueName);
 
-        using var response = await _httpClient.GetAsync($"{_baseUrl}/queues/{encodedVHost}/{encodedName}");
+        using var response = await _httpClient.GetAsync($"{_baseUrl}/queues/{encodedVHost}/{encodedName}", cancellationToken);
 
         if (response.StatusCode == HttpStatusCode.NotFound)
         {
@@ -149,7 +149,7 @@ public class RabbitMQManagementClient : IDisposable
 
         response.EnsureSuccessStatusCode();
 
-        var apiQueue = await response.Content.ReadFromJsonAsync<ManagementQueueResponse>(_jsonOptions);
+        var apiQueue = await response.Content.ReadFromJsonAsync<ManagementQueueResponse>(_jsonOptions, cancellationToken);
         return apiQueue != null ? MapToQueueInfo(apiQueue) : null;
     }
 
@@ -408,15 +408,15 @@ public class RabbitMQManagementClient : IDisposable
     /// </summary>
     /// <param name="exchangeName">The name of the exchange.</param>
     /// <returns>A list of bindings for the exchange.</returns>
-    public async Task<IEnumerable<RabbitMQBindingInfo>> GetExchangeBindingsAsync(string exchangeName)
+    public async Task<IEnumerable<RabbitMQBindingInfo>> GetExchangeBindingsAsync(string exchangeName, CancellationToken cancellationToken = default)
     {
         var encodedVHost = EncodeVirtualHost(_virtualHost);
         var encodedName = Uri.EscapeDataString(exchangeName);
 
-        using var response = await _httpClient.GetAsync($"{_baseUrl}/exchanges/{encodedVHost}/{encodedName}/bindings/source");
+        using var response = await _httpClient.GetAsync($"{_baseUrl}/exchanges/{encodedVHost}/{encodedName}/bindings/source", cancellationToken);
         response.EnsureSuccessStatusCode();
 
-        var apiBindings = await response.Content.ReadFromJsonAsync<List<ManagementBindingResponse>>(_jsonOptions);
+        var apiBindings = await response.Content.ReadFromJsonAsync<List<ManagementBindingResponse>>(_jsonOptions, cancellationToken);
         return apiBindings?.Select(MapToBindingInfo) ?? Enumerable.Empty<RabbitMQBindingInfo>();
     }
 

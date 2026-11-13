@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Subject, interval } from 'rxjs';
+import { Subject, forkJoin, interval, of } from 'rxjs';
 import { filter, takeUntil } from 'rxjs/operators';
 import { NgApexchartsModule } from 'ng-apexcharts';
 import type {
@@ -15,8 +15,13 @@ import type {
   ApexGrid,
   ApexFill
 } from 'ng-apexcharts';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatTabsModule } from '@angular/material/tabs';
 import { MonitoringService, ConnectionService } from '../../core/services';
-import { MonitoringSnapshot, MonitoringEntity, MonitoringSubscription } from '../../core/models';
+import { MonitoringSnapshot, MonitoringEntity, MonitoringStatus, MonitoringSubscription } from '../../core/models';
+import { MonitoringCountsComponent } from './monitoring-counts.component';
 
 interface SnapshotHistory {
   timestamp: string;
@@ -27,49 +32,78 @@ interface SnapshotHistory {
 @Component({
   selector: 'app-monitoring',
   standalone: true,
-  imports: [CommonModule, NgApexchartsModule],
+  imports: [CommonModule, NgApexchartsModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatTabsModule, MonitoringCountsComponent],
   template: `
     <div class="monitoring-container">
       <div class="monitoring-header">
         <div class="header-left">
-          <i class="fa fa-chart-line header-icon"></i>
-          <h2>Monitoring Dashboard</h2>
+          <mat-icon class="header-icon" aria-hidden="true">monitoring</mat-icon>
+          <h2>Monitoring</h2>
         </div>
         <div class="header-right">
-          <span class="last-update" *ngIf="lastUpdate()">
-            <i class="fa fa-clock-o"></i>
-            Last update: {{ lastUpdate() | date:'HH:mm:ss' }}
-          </span>
-          <button class="btn btn-sm btn-outline-primary"
-                  (click)="fetchSnapshot()"
-                  [disabled]="loading() || !isConnected">
-            <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="loading()"></i>
+          @if (status(); as s) {
+            <span class="last-update" aria-live="polite">
+              @if (s.snapshot) {
+                Last update {{ s.snapshot.timestamp | date:'HH:mm:ss' }}.
+              }
+              The API reads the broker every {{ s.pollIntervalSeconds }} seconds.
+            </span>
+          }
+          <button mat-stroked-button type="button" (click)="fetchSnapshot()" [disabled]="loading() || !isConnected">
+            <mat-icon aria-hidden="true">refresh</mat-icon>
             Refresh
           </button>
         </div>
       </div>
 
       @if (!isConnected) {
-        <div class="monitoring-empty">
-          <i class="fa fa-cloud fa-4x"></i>
-          <h3>Not Connected</h3>
-          <p>Connect to a Service Bus to view monitoring data</p>
-        </div>
-      } @else if (loading() && !lastUpdate()) {
-        <div class="monitoring-loading">
-          <div class="spinner-border text-primary" role="status">
-            <span class="visually-hidden">Loading...</span>
-          </div>
-          <span>Loading monitoring data...</span>
+        <div class="monitoring-state">
+          <mat-icon class="state-icon" aria-hidden="true">cloud_off</mat-icon>
+          <h3>Not connected</h3>
+          <p>Connect to a broker to see its counts.</p>
         </div>
       } @else if (error()) {
-        <div class="monitoring-empty">
-          <i class="fa fa-exclamation-triangle fa-4x text-warning"></i>
-          <h3>Error loading data</h3>
-          <p>{{ error() }}</p>
-          <button class="btn btn-primary mt-2" (click)="fetchSnapshot()">Retry</button>
+        <section class="monitoring-error" role="alert" aria-label="Error">
+          <mat-icon aria-hidden="true">error</mat-icon>
+          <div class="grow">
+            <h3>Could not load the monitoring data</h3>
+            <p>{{ error() }} Nothing is shown because nothing was read, and nothing on the broker was changed.</p>
+            <button mat-stroked-button type="button" (click)="fetchSnapshot()">Retry</button>
+          </div>
+        </section>
+      } @else if (!status()) {
+        <div class="monitoring-state" role="status">
+          <mat-progress-spinner mode="indeterminate" diameter="32" aria-label="Loading"></mat-progress-spinner>
+          <span>Loading the monitoring data</span>
+        </div>
+      } @else if (!status()!.snapshot) {
+        @if (status()!.lastPollFailedAt) {
+          <section class="monitoring-error" role="alert" aria-label="Error">
+            <mat-icon aria-hidden="true">error</mat-icon>
+            <div class="grow">
+              <h3>Could not read the counts from the broker</h3>
+              <p>The API's poll failed at {{ status()!.lastPollFailedAt | date:'HH:mm:ss' }}. Nothing is shown because nothing was read, and nothing on the broker was changed. The API tries again every {{ status()!.pollIntervalSeconds }} seconds.</p>
+              <button mat-stroked-button type="button" (click)="fetchSnapshot()">Retry</button>
+            </div>
+          </section>
+        } @else {
+          <div class="monitoring-state" role="status">
+            <mat-progress-spinner mode="indeterminate" diameter="32" aria-label="Waiting"></mat-progress-spinner>
+            <span>Waiting for the API's first poll of the broker</span>
+          </div>
+        }
+      } @else if (totalEntities() === 0) {
+        <div class="monitoring-state">
+          <mat-icon class="state-icon" aria-hidden="true">inbox</mat-icon>
+          <h3>Nothing to monitor in this namespace</h3>
+          <p>The broker answered and holds no queue and no subscription. Counts appear here once an entity exists.</p>
         </div>
       } @else {
+        @if (status()!.lastPollFailedAt) {
+          <p class="stale" role="alert">The API's last poll failed at {{ status()!.lastPollFailedAt | date:'HH:mm:ss' }}. These counts are from {{ status()!.snapshot!.timestamp | date:'HH:mm:ss' }}.</p>
+        }
+        <mat-tab-group mat-stretch-tabs="false" animationDuration="0ms">
+          <mat-tab label="Overview">
         <!-- Summary Cards -->
         <div class="summary-cards">
           <div class="summary-card card-active">
@@ -185,7 +219,7 @@ interface SnapshotHistory {
                         </span>
                       </td>
                       <td class="text-end">{{ q.transferMessageCount }}</td>
-                      <td class="text-end">{{ q.scheduledMessageCount || 0 }}</td>
+                      <td class="text-end">{{ q.scheduledMessageCount ?? 'Not counted' }}</td>
                       <td class="text-end">
                         @if (queueDeltas[q.name] !== undefined && queueDeltas[q.name] !== 0) {
                           <span class="delta-badge" [class.positive]="queueDeltas[q.name] > 0" [class.negative]="queueDeltas[q.name] < 0">
@@ -259,6 +293,13 @@ interface SnapshotHistory {
             </div>
           </div>
         }
+          </mat-tab>
+          <mat-tab label="All entities">
+            <ng-template matTabContent>
+              <app-monitoring-counts class="counts-tab" [snapshot]="status()!.snapshot!"></app-monitoring-counts>
+            </ng-template>
+          </mat-tab>
+        </mat-tab-group>
       }
     </div>
   `,
@@ -273,8 +314,10 @@ interface SnapshotHistory {
 
     .monitoring-header {
       display: flex;
+      flex-wrap: wrap;
       justify-content: space-between;
       align-items: center;
+      gap: 12px;
       margin-bottom: 24px;
     }
 
@@ -285,15 +328,13 @@ interface SnapshotHistory {
 
       h2 {
         margin: 0;
-        font-size: 20px;
-        font-weight: 600;
-        color: var(--bs-body-color);
+        font: var(--mat-sys-title-large);
+        color: var(--mat-sys-on-surface);
       }
     }
 
     .header-icon {
-      font-size: 24px;
-      color: var(--bs-primary);
+      color: var(--mat-sys-primary);
     }
 
     .header-right {
@@ -303,31 +344,73 @@ interface SnapshotHistory {
     }
 
     .last-update {
-      font-size: 12px;
-      color: var(--bs-secondary-color);
-      display: flex;
-      align-items: center;
-      gap: 4px;
+      font: var(--mat-sys-body-small);
+      color: var(--mat-sys-on-surface-variant);
     }
 
-    .monitoring-empty, .monitoring-loading {
+    .monitoring-state {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       padding: 80px 20px;
-      color: var(--bs-secondary-color);
       gap: 12px;
       text-align: center;
+      color: var(--mat-sys-on-surface-variant);
 
       h3 {
         margin: 8px 0 0;
-        color: var(--bs-body-color);
+        font: var(--mat-sys-title-medium);
+        color: var(--mat-sys-on-surface);
       }
 
       p {
-        color: var(--bs-secondary-color);
+        margin: 0;
       }
+    }
+
+    .state-icon {
+      width: 48px;
+      height: 48px;
+      font-size: 48px;
+      color: var(--mat-sys-outline);
+    }
+
+    .monitoring-error {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      max-width: 680px;
+      padding: 16px;
+      border-radius: 8px;
+      background: var(--mat-sys-error-container);
+      color: var(--mat-sys-on-error-container);
+
+      h3 {
+        margin: 0;
+        font: var(--mat-sys-title-medium);
+      }
+
+      p {
+        margin: 8px 0;
+      }
+    }
+
+    .grow {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .stale {
+      margin: 0 0 16px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: var(--mat-sys-error-container);
+      color: var(--mat-sys-on-error-container);
+    }
+
+    .counts-tab {
+      padding-top: 16px;
     }
 
     /* Summary Cards */
@@ -544,7 +627,7 @@ export class MonitoringComponent implements OnInit, OnDestroy {
 
   loading = signal(false);
   error = signal<string | null>(null);
-  lastUpdate = signal<Date | null>(null);
+  status = signal<MonitoringStatus | null>(null);
 
   queues = signal<MonitoringEntity[]>([]);
   subscriptions = signal<MonitoringSubscription[]>([]);
@@ -617,21 +700,18 @@ export class MonitoringComponent implements OnInit, OnDestroy {
 
   ngOnInit() {
     if (this.isConnected) {
-      this.loadHistory();
+      this.load(true);
     }
 
     this.connectionService.connectionStatus$
       .pipe(takeUntil(this.destroy$))
       .subscribe(status => {
         if (status.connected) {
-          this.history = [];
-          this.previousSnapshot = null;
-          this.lastProcessedTimestamp = null;
-          this.loadHistory();
+          this.status.set(null);
+          this.load(true);
         }
       });
 
-    // Auto-poll every 30 seconds
     interval(30000)
       .pipe(
         filter(() => this.connectionService.isConnected),
@@ -648,54 +728,37 @@ export class MonitoringComponent implements OnInit, OnDestroy {
   }
 
   fetchSnapshot() {
-    this.loading.set(true);
-    this.error.set(null);
-
-    this.monitoringService.getSnapshot()
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (snapshot) => {
-          // Skip empty snapshots (store not yet populated) and duplicates
-          if (snapshot.queues.length === 0 && snapshot.subscriptions.length === 0) {
-            this.loading.set(false);
-            return;
-          }
-          if (snapshot.timestamp === this.lastProcessedTimestamp) {
-            this.loading.set(false);
-            return;
-          }
-          this.processSnapshot(snapshot);
-          this.loading.set(false);
-          this.lastUpdate.set(new Date());
-        },
-        error: (err) => {
-          this.error.set(err?.error?.message || err?.message || 'Failed to load monitoring data');
-          this.loading.set(false);
-        }
-      });
+    this.load(false);
   }
 
-  private loadHistory() {
+  /** Reads the API's status, and with it the recent history when the screen starts or the connection changes. */
+  private load(withHistory: boolean) {
     this.loading.set(true);
     this.error.set(null);
-    this.history = [];
-    this.previousSnapshot = null;
-    this.lastProcessedTimestamp = null;
 
-    this.monitoringService.getHistory(20)
+    forkJoin({
+      history: withHistory ? this.monitoringService.getHistory(20) : of(null),
+      status: this.monitoringService.getSnapshot()
+    })
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: (snapshots) => {
-          for (const snapshot of snapshots) {
-            this.processSnapshot(snapshot);
+        next: ({ history, status }) => {
+          if (history) {
+            this.history = [];
+            this.previousSnapshot = null;
+            this.lastProcessedTimestamp = null;
+            for (const snapshot of history) {
+              this.processSnapshot(snapshot);
+            }
           }
+          if (status.snapshot && status.snapshot.timestamp !== this.lastProcessedTimestamp) {
+            this.processSnapshot(status.snapshot);
+          }
+          this.status.set(status);
           this.loading.set(false);
-          if (snapshots.length > 0) {
-            this.lastUpdate.set(new Date(snapshots[snapshots.length - 1].timestamp));
-          }
         },
-        error: (err) => {
-          this.error.set(err?.error?.message || err?.message || 'Failed to load monitoring history');
+        error: () => {
+          this.error.set('The API did not answer the request for the monitoring data.');
           this.loading.set(false);
         }
       });
@@ -725,24 +788,22 @@ export class MonitoringComponent implements OnInit, OnDestroy {
       this.deltaActive.set(active - prevActive);
       this.deltaDeadLetter.set(deadLetter - prevDeadLetter);
 
-      // Per-queue deltas
+      const previousQueues = new Map(this.previousSnapshot.queues.map(q => [q.name, q.activeMessageCount]));
       this.queueDeltas = {};
       for (const q of snapshot.queues) {
-        const prev = this.previousSnapshot.queues.find(pq => pq.name === q.name);
-        if (prev) {
-          this.queueDeltas[q.name] = q.activeMessageCount - prev.activeMessageCount;
+        const prev = previousQueues.get(q.name);
+        if (prev !== undefined) {
+          this.queueDeltas[q.name] = q.activeMessageCount - prev;
         }
       }
 
-      // Per-subscription deltas
+      const previousSubscriptions = new Map(this.previousSnapshot.subscriptions.map(s => [`${s.topicName}/${s.name}`, s.activeMessageCount]));
       this.subscriptionDeltas = {};
       for (const s of snapshot.subscriptions) {
         const key = `${s.topicName}/${s.name}`;
-        const prev = this.previousSnapshot.subscriptions.find(
-          ps => ps.topicName === s.topicName && ps.name === s.name
-        );
-        if (prev) {
-          this.subscriptionDeltas[key] = s.activeMessageCount - prev.activeMessageCount;
+        const prev = previousSubscriptions.get(key);
+        if (prev !== undefined) {
+          this.subscriptionDeltas[key] = s.activeMessageCount - prev;
         }
       }
     }
