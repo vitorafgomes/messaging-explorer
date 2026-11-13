@@ -28,7 +28,10 @@ describe('ConnectionsComponent debug panel', () => {
     TestBed.inject(DevSettingsService).toggle();
     const fixture = TestBed.createComponent(ConnectionsComponent);
     fixture.detectChanges();
-    (fixture.nativeElement.querySelector('button[title="Toggle Debug Mode (F9)"]') as HTMLElement).click();
+    const debugButton = (Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLElement[])
+      .find(b => b.textContent?.trim().endsWith('Debug'));
+    expect(debugButton, 'the Debug button of the header').toBeDefined();
+    debugButton!.click();
     fixture.detectChanges();
 
     const panel = fixture.nativeElement.querySelector('.debug-panel') as HTMLElement;
