@@ -90,12 +90,13 @@ public class ErrorBodyTests
     [Theory]
     [InlineData("POST", "/api/queues/q/deadletter/1/resubmit")]
     [InlineData("POST", "/api/topics/t/subscriptions/s/deadletter/1/resubmit")]
-    [InlineData("PUT", "/api/sessions/q/state/session-1")]
+    [InlineData("PUT", "/api/queues/q/sessions/session-1/state")]
     public async Task A_caught_provider_failure_answers_500_with_the_message_key(string method, string path)
     {
         var provider = StubProxy.For<IMessagingProvider>(m => m.Name switch
         {
             "get_ProviderType" => ProviderType.AzureServiceBus,
+            "get_Capabilities" => ServiceBusExplorer.Core.Providers.Azure.AzureProviderCapabilities.Instance,
             "get_CurrentTarget" => "fake-target",
             "get_IsConnected" => false,
             "DisconnectAsync" => Task.CompletedTask,
@@ -115,7 +116,7 @@ public class ErrorBodyTests
         {
             using var connected = await client.PostAsync("/api/connections/c1/connect", null);
             Assert.Equal(HttpStatusCode.OK, connected.StatusCode);
-            using var request = new HttpRequestMessage(new HttpMethod(method), path) { Content = JsonContent.Create(new { state = "s" }) };
+            using var request = new HttpRequestMessage(new HttpMethod(method), path) { Content = JsonContent.Create(new { state = "s", expectedState = (string?)null }) };
             using var response = await client.SendAsync(request);
 
             Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);

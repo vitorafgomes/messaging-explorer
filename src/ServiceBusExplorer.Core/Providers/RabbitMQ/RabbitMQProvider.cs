@@ -1097,11 +1097,19 @@ public class RabbitMQProvider : IMessagingProvider
     #region Session Operations (Not supported)
 
     /// <inheritdoc />
-    public Task<IEnumerable<SessionInfo>> GetSessionsAsync(string entityName, string? subscriptionName = null, int maxSessions = 50)
-        => Task.FromResult(Enumerable.Empty<SessionInfo>());
+    public Task<SessionList> GetSessionsAsync(string entityName, string? subscriptionName, int maxMessages, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("RabbitMQ does not support message sessions.");
 
     /// <inheritdoc />
-    public Task SetSessionStateAsync(string entityName, string sessionId, string? state, string? subscriptionName = null)
+    public Task<SessionDetail> SetSessionStateAsync(string entityName, string? subscriptionName, string sessionId, string? state, string? expectedState, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("RabbitMQ does not support message sessions.");
+
+    /// <inheritdoc />
+    public Task<SessionDetail> GetSessionAsync(string entityName, string? subscriptionName, string sessionId, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("RabbitMQ does not support message sessions.");
+
+    /// <inheritdoc />
+    public Task<IEnumerable<IMessage>> PeekSessionMessagesAsync(string entityName, string? subscriptionName, string sessionId, int count, CancellationToken cancellationToken = default)
         => throw new NotSupportedException("RabbitMQ does not support message sessions.");
 
     #endregion

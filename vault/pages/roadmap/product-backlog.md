@@ -41,7 +41,7 @@ The owner asked what the reference tool for Azure Service Bus has that this prod
 - **2026-11-12 - Enable and disable an entity** (active, disabled, send disabled, receive disabled). Item 3.
 - **2026-11-12 - Export and import the definitions of a namespace** (queues, topics, subscriptions, rules), to recreate them elsewhere. Item 4.
 - **2026-11-12 - Counts of every entity on one screen**, sortable, filterable, with the dead-letter threshold the user sets. Item 5.
-- **2026-11-12 - Browse sessions**: the messages of one session, the state editor, sessions on queues. Item 6, which starts with a defect: listing sessions locks each one.
+- **2026-11-12 - Browse sessions**: the messages of one session, the state editor, sessions on queues. Item 6. Built on 2026-11-13, with the defect it started with fixed: listing sessions no longer locks any.
 - **2026-11-12 - Scheduled and deferred messages**: list, cancel a scheduled one, mark a deferred one. Item 7. Built on 2026-11-12: the state of each message, a filter of the loaded ones and the cancel on queues. Left: a listing from the broker, topics, and deferral itself.
 - **2026-11-12 - Transfer dead-letter queue** reachable from the messages dialog. Item 8. Built on 2026-11-12.
 - **2026-11-12 - Send many messages** with a count, a cap and a split by batch size. Item 9.

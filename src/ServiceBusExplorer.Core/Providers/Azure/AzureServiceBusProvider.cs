@@ -2274,80 +2274,196 @@ public class AzureServiceBusProvider : IMessagingProvider
 
     #region Session Operations
 
+    /// <summary>How long accepting one session may wait before it is answered as in use.</summary>
+    internal static readonly TimeSpan SessionAcceptWait = TimeSpan.FromSeconds(5);
+
+    private const int MaxListedSessions = 100;
+
+    private static readonly System.Text.UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+
     /// <inheritdoc />
-    public async Task<IEnumerable<SessionInfo>> GetSessionsAsync(string entityName, string? subscriptionName = null, int maxSessions = 50)
+    public async Task<SessionList> GetSessionsAsync(string entityName, string? subscriptionName, int maxMessages, CancellationToken cancellationToken = default)
     {
         EnsureConnected();
-
-        var entityPath = subscriptionName != null
-            ? $"{entityName}/subscriptions/{subscriptionName}"
-            : entityName;
-
-        var sessions = new List<SessionInfo>();
-        var seen = new HashSet<string>();
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-
-        while (sessions.Count < maxSessions && !cts.Token.IsCancellationRequested)
+        await using var receiver = CreateReceiver(_client!, entityName, subscriptionName, MessageSubQueue.Active);
+        try
         {
-            try
-            {
-                await using var receiver = await _client!.AcceptNextSessionAsync(
-                    entityPath,
-                    new ServiceBusSessionReceiverOptions { ReceiveMode = ServiceBusReceiveMode.PeekLock },
-                    cts.Token);
-
-                if (!seen.Add(receiver.SessionId))
-                {
-                    break;
-                }
-
-                BinaryData? stateData = await receiver.GetSessionStateAsync(cts.Token);
-                string? stateString = null;
-                if (stateData != null && stateData.ToMemory().Length > 0)
-                {
-                    try { stateString = stateData.ToString(); }
-                    catch { stateString = Convert.ToBase64String(stateData.ToMemory().ToArray()); }
-                }
-
-                sessions.Add(new SessionInfo
-                {
-                    SessionId = receiver.SessionId,
-                    LockedUntil = receiver.SessionLockedUntil,
-                    State = stateString
-                });
-            }
-            catch (ServiceBusException ex) when (ex.Reason == ServiceBusFailureReason.ServiceTimeout)
-            {
-                break;
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
+            return await RefuseDisabledAsync(() => ListSessionsCoreAsync(receiver, maxMessages, cancellationToken));
         }
+        catch (ServiceBusException ex) when (ex.Reason == ServiceBusFailureReason.MessagingEntityNotFound)
+        {
+            throw new EntityNotFoundException(ex);
+        }
+    }
 
-        return sessions;
+    /// <summary>
+    /// Groups the messages a plain receiver peeks by session id, in order of first appearance, without accepting any
+    /// session. Peeks in batches of at most 250 from the last sequence number until a batch is empty,
+    /// <paramref name="maxMessages"/> messages are counted or a 101st session appears; the last batch asks for one
+    /// message more than it counts, so a scan that stops at the limit knows whether the entity holds more. Every batch
+    /// that is not empty counts at least one message, so the scan makes at most <paramref name="maxMessages"/> plus two
+    /// calls. A message without a session id means the entity does not use sessions. The caller's token is checked
+    /// before each call and handed to the SDK.
+    /// </summary>
+    internal static async Task<SessionList> ListSessionsCoreAsync(ServiceBusReceiver receiver, int maxMessages, CancellationToken cancellationToken)
+    {
+        var sessions = new List<SessionInfo>();
+        var byId = new Dictionary<string, SessionInfo>(StringComparer.Ordinal);
+        var scanned = 0;
+        long? fromSequenceNumber = null;
+
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var batch = await receiver.PeekMessagesAsync(Math.Min(maxMessages - scanned + 1, PeekBatchSize), fromSequenceNumber, cancellationToken);
+            if (batch.Count == 0)
+            {
+                return new SessionList { Sessions = sessions, ScannedMessages = scanned, Truncated = false };
+            }
+
+            foreach (var message in batch)
+            {
+                if (scanned >= maxMessages)
+                {
+                    return new SessionList { Sessions = sessions, ScannedMessages = scanned, Truncated = true };
+                }
+
+                if (string.IsNullOrEmpty(message.SessionId))
+                {
+                    throw new SessionsNotEnabledException();
+                }
+
+                if (!byId.TryGetValue(message.SessionId, out var session))
+                {
+                    if (sessions.Count == MaxListedSessions)
+                    {
+                        return new SessionList { Sessions = sessions, ScannedMessages = scanned, Truncated = true };
+                    }
+
+                    session = new SessionInfo { SessionId = message.SessionId, FirstSequenceNumber = message.SequenceNumber };
+                    byId.Add(message.SessionId, session);
+                    sessions.Add(session);
+                }
+
+                session.MessageCount++;
+                scanned++;
+            }
+
+            fromSequenceNumber = batch[^1].SequenceNumber + 1;
+        }
     }
 
     /// <inheritdoc />
-    public async Task SetSessionStateAsync(string entityName, string sessionId, string? state, string? subscriptionName = null)
+    public async Task<SessionDetail> GetSessionAsync(string entityName, string? subscriptionName, string sessionId, CancellationToken cancellationToken = default)
     {
+        ValidateSessionId(sessionId);
         EnsureConnected();
+        await using var session = await RefuseDisabledAsync(() => AcceptSessionCoreAsync(_client!, entityName, subscriptionName, sessionId, SessionAcceptWait, cancellationToken));
+        var (state, isBinary) = DecodeSessionState(await session.GetSessionStateAsync(cancellationToken));
+        return new SessionDetail { SessionId = session.SessionId, State = state, StateIsBinary = isBinary, LockedUntil = session.SessionLockedUntil };
+    }
 
-        ServiceBusSessionReceiver receiver;
-        if (subscriptionName != null)
+    /// <inheritdoc />
+    public async Task<IEnumerable<IMessage>> PeekSessionMessagesAsync(string entityName, string? subscriptionName, string sessionId, int count, CancellationToken cancellationToken = default)
+    {
+        ValidateSessionId(sessionId);
+        EnsureConnected();
+        await using var session = await RefuseDisabledAsync(() => AcceptSessionCoreAsync(_client!, entityName, subscriptionName, sessionId, SessionAcceptWait, cancellationToken));
+        var messages = await PeekCoreAsync(session, count, cancellationToken);
+        return messages.Select(m => MapToMessageInfo(m, false));
+    }
+
+    /// <inheritdoc />
+    public async Task<SessionDetail> SetSessionStateAsync(string entityName, string? subscriptionName, string sessionId, string? state, string? expectedState, CancellationToken cancellationToken = default)
+    {
+        ValidateSessionId(sessionId);
+        if (state != null && System.Text.Encoding.UTF8.GetByteCount(state) > IMessagingProvider.MaxSessionStateBytes)
         {
-            receiver = await _client!.AcceptSessionAsync(entityName, subscriptionName, sessionId);
-        }
-        else
-        {
-            receiver = await _client!.AcceptSessionAsync(entityName, sessionId);
+            throw new InvalidEntityConfigurationException([$"state must be at most {IMessagingProvider.MaxSessionStateBytes} bytes as UTF-8."]);
         }
 
-        await using (receiver)
+        EnsureConnected();
+        await using var session = await RefuseDisabledAsync(() => AcceptSessionCoreAsync(_client!, entityName, subscriptionName, sessionId, SessionAcceptWait, cancellationToken));
+        var (current, isBinary) = DecodeSessionState(await session.GetSessionStateAsync(cancellationToken));
+        if (isBinary)
         {
-            var stateData = state != null ? BinaryData.FromString(state) : null;
-            await receiver.SetSessionStateAsync(stateData);
+            throw new BinarySessionStateException();
+        }
+
+        if (!string.Equals(current, EmptyAsNoState(expectedState), StringComparison.Ordinal))
+        {
+            throw new SessionStateChangedException();
+        }
+
+        var stored = EmptyAsNoState(state);
+        await session.SetSessionStateAsync(stored == null ? null : BinaryData.FromString(stored), cancellationToken);
+        return new SessionDetail { SessionId = session.SessionId, State = stored, StateIsBinary = false, LockedUntil = session.SessionLockedUntil };
+    }
+
+    /// <summary>
+    /// Accepts one session of a queue or subscription, waiting at most <paramref name="wait"/>. A session another
+    /// receiver holds, or a wait that elapses, is <see cref="SessionInUseException"/>; a missing entity
+    /// <see cref="EntityNotFoundException"/>; an entity that does not require sessions, which the SDK refuses with
+    /// <see cref="InvalidOperationException"/>, <see cref="SessionsNotEnabledException"/>. A cancellation by the caller
+    /// propagates as it is. The caller disposes the receiver, which releases the session.
+    /// </summary>
+    internal static async Task<ServiceBusSessionReceiver> AcceptSessionCoreAsync(
+        ServiceBusClient client, string entityName, string? subscriptionName, string sessionId, TimeSpan wait, CancellationToken cancellationToken)
+    {
+        using var waitLimit = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        waitLimit.CancelAfter(wait);
+        try
+        {
+            return subscriptionName == null
+                ? await client.AcceptSessionAsync(entityName, sessionId, cancellationToken: waitLimit.Token)
+                : await client.AcceptSessionAsync(entityName, subscriptionName, sessionId, cancellationToken: waitLimit.Token);
+        }
+        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new SessionInUseException(ex);
+        }
+        catch (ServiceBusException ex) when (ex.Reason is ServiceBusFailureReason.SessionCannotBeLocked or ServiceBusFailureReason.ServiceTimeout)
+        {
+            throw new SessionInUseException(ex);
+        }
+        catch (ServiceBusException ex) when (ex.Reason == ServiceBusFailureReason.MessagingEntityNotFound)
+        {
+            throw new EntityNotFoundException(ex);
+        }
+        catch (InvalidOperationException ex) when (ex is not ObjectDisposedException)
+        {
+            throw new SessionsNotEnabledException(ex);
+        }
+    }
+
+    /// <summary>
+    /// The state as text when its bytes are valid UTF-8, otherwise as base64 with the binary flag; an invalid byte is
+    /// never replaced. No bytes is no state: the broker reads an empty state back as none.
+    /// </summary>
+    internal static (string? State, bool IsBinary) DecodeSessionState(BinaryData? state)
+    {
+        if (state == null || state.ToMemory().IsEmpty)
+        {
+            return (null, false);
+        }
+
+        try
+        {
+            return (StrictUtf8.GetString(state.ToMemory().Span), false);
+        }
+        catch (System.Text.DecoderFallbackException)
+        {
+            return (Convert.ToBase64String(state.ToMemory().Span), true);
+        }
+    }
+
+    private static string? EmptyAsNoState(string? state) => string.IsNullOrEmpty(state) ? null : state;
+
+    private static void ValidateSessionId(string sessionId)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId) || sessionId.Length > IMessagingProvider.MaxSessionIdLength)
+        {
+            throw new InvalidEntityConfigurationException([$"sessionId must hold 1 to {IMessagingProvider.MaxSessionIdLength} characters, not only white space."]);
         }
     }
 

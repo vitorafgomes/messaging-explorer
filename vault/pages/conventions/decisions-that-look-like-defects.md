@@ -36,4 +36,4 @@ An entry is a claim about the code today: when the code under it changes, the en
 
 ## RabbitMQ
 
-- **Sessions return empty and setting session state throws `NotSupportedException`.** RabbitMQ has no sessions. Locked by `src/ServiceBusExplorer.Core.Tests/Providers/RabbitMQSessionTests.cs:14` and `:40` of the same file. Whether the UI hides the feature through a capability flag is a separate question on [[pages/invariants/provider-boundaries]].
+- **Every session operation throws `NotSupportedException`.** RabbitMQ has no sessions: since 2026-11-13 the list, the detail, the messages of one session and the state write all refuse, where the list used to answer empty, and `SupportsSessions` is false, so the API answers 400 without calling the provider. Locked by `src/ServiceBusExplorer.Core.Tests/Providers/RabbitMQSessionTests.cs:18` and `src/ServiceBusExplorer.Core.Tests/Providers/RabbitMQSessionTests.cs:12`. Whether the UI hides the feature through a capability flag is a separate question on [[pages/invariants/provider-boundaries]].

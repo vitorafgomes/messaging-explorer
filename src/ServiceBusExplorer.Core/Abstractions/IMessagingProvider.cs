@@ -371,14 +371,40 @@ public interface IMessagingProvider : IAsyncDisposable
     #region Session Operations
 
     /// <summary>
-    /// Gets active sessions for a session-enabled queue or subscription.
+    /// Lists the sessions of a session-enabled queue or subscription from a peek of its first
+    /// <paramref name="maxMessages"/> messages, in order of first appearance, at most 100. No session is accepted or
+    /// locked. A session holding a state and no message is not listed. Throws <see cref="SessionsNotEnabledException"/>
+    /// when a peeked message carries no session id, <see cref="EntityNotFoundException"/> when the entity does not
+    /// exist, and <see cref="NotSupportedException"/> for a provider without sessions.
     /// </summary>
-    Task<IEnumerable<SessionInfo>> GetSessionsAsync(string entityName, string? subscriptionName = null, int maxSessions = 50);
+    Task<SessionList> GetSessionsAsync(string entityName, string? subscriptionName, int maxMessages, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Sets the state of a specific session.
+    /// Accepts one session, reads its state and releases it before returning. Throws
+    /// <see cref="SessionInUseException"/> when another receiver holds the session or the accept waits too long.
     /// </summary>
-    Task SetSessionStateAsync(string entityName, string sessionId, string? state, string? subscriptionName = null);
+    Task<SessionDetail> GetSessionAsync(string entityName, string? subscriptionName, string sessionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Accepts one session, peeks up to <paramref name="count"/> of its messages and releases it. Nothing is received,
+    /// completed or removed.
+    /// </summary>
+    Task<IEnumerable<IMessage>> PeekSessionMessagesAsync(string entityName, string? subscriptionName, string sessionId, int count, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Accepts one session and writes <paramref name="state"/> (null or empty clears it) only when the current state
+    /// equals <paramref name="expectedState"/>, where null or empty means no state; otherwise throws <see cref="SessionStateChangedException"/> and writes nothing.
+    /// A binary current state throws <see cref="BinarySessionStateException"/>. A state over
+    /// <see cref="MaxSessionStateBytes"/> UTF-8 bytes or a session id that is empty, white space or longer than
+    /// <see cref="MaxSessionIdLength"/> throws <see cref="InvalidEntityConfigurationException"/> before any broker call.
+    /// </summary>
+    Task<SessionDetail> SetSessionStateAsync(string entityName, string? subscriptionName, string sessionId, string? state, string? expectedState, CancellationToken cancellationToken = default);
+
+    /// <summary>The longest session id a broker accepts.</summary>
+    const int MaxSessionIdLength = 128;
+
+    /// <summary>The largest session state, in UTF-8 bytes, that can be written from here.</summary>
+    const int MaxSessionStateBytes = 262144;
 
     #endregion
 }
@@ -691,3 +717,25 @@ public class SubscriptionUpdateOptions
     public string? UserMetadata { get; set; }
     public string? Status { get; set; }
 }
+
+/// <summary>
+/// The session is locked by another receiver, or accepting it did not finish within the provider's wait. The message is
+/// fixed; the broker's own error, if any, is the inner exception and is for the log only.
+/// </summary>
+public sealed class SessionInUseException(Exception? innerException = null)
+    : Exception("The session is in use by another receiver. Try again in a moment.", innerException);
+
+/// <summary>
+/// The queue or subscription does not require sessions, so it has none to list or open. The message is fixed; the
+/// broker's own error, if any, is the inner exception and is for the log only.
+/// </summary>
+public sealed class SessionsNotEnabledException(Exception? innerException = null)
+    : Exception("This entity does not use sessions.", innerException);
+
+/// <summary>The session state is not the one the caller expected, so nothing was written.</summary>
+public sealed class SessionStateChangedException()
+    : Exception("The session state changed since it was read. Reload it and try again.");
+
+/// <summary>The session holds a state that is not UTF-8 text, so it cannot be edited as text; nothing was written.</summary>
+public sealed class BinarySessionStateException()
+    : Exception("This session holds a binary state and cannot be edited here.");
