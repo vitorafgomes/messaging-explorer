@@ -38,6 +38,10 @@ jobs:
             bash "$t"
           done
           bash scripts/check-context-refs.sh
+          bash scripts/check-hidden-text.sh
+          # A warning, not a failure, while service pages are still over their ceiling and other
+          # pull requests add to them: scripts/doc-size-baseline.txt lists the debts.
+          bash scripts/check-doc-sizes.sh || echo "::warning::a document a model reads grew past its ceiling (scripts/check-doc-sizes.sh)"
 
       - name: Site script tests
         run: node --test docs/app.test.js

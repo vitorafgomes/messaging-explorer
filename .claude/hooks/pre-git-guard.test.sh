@@ -47,6 +47,54 @@ for c in "gh issue create --title x --body y" "gh issue comment 12 --body x" "gh
          "bash -lc \"gh issue comment 12 --body x\"" "cd /tmp/x && gh pr comment 12 --body x" \
          "for n in 1 2; do gh issue close \$n; done" "GH_REPO=o/r gh issue create -t x -b y" \
          "gh issue view 12 && gh issue comment 12 -b x" "(gh api repos/o/r/issues -f title=x)"; do check ASK "$c"; done
+# work that is discarded, history that is rewritten or dropped, a push sent elsewhere, a publish: must ASK
+while IFS= read -r c; do [ -n "$c" ] && check ASK "$c"; done <<'CASES'
+rm -rf .git
+rm -rf ../other/.git
+git filter-repo --path src
+git clean -fdx
+git clean -f
+git checkout -- .
+git checkout -- src/ServiceBusExplorer.Core/ProviderFactory.cs
+git checkout .
+git restore .
+git restore src/ServiceBusExplorer.Core/ProviderFactory.cs
+git checkout -B main
+git checkout -f main
+git switch -C main origin/main
+git switch --discard-changes main
+git worktree remove --force ../wt
+git worktree prune
+git reflog expire --expire=now --all
+git gc --prune=now
+git remote set-url origin https://example.com/x.git
+git remote add other https://example.com/x.git
+git -C /x clean -fd
+npm publish
+bun publish
+dotnet nuget push a.nupkg
+cd ui && git restore .
+CASES
+# the same commands in their harmless forms: must PASS
+while IFS= read -r c; do [ -n "$c" ] && check PASS "$c"; done <<'CASES'
+git checkout main
+git checkout -b feat/x
+git switch feat/x
+git switch -c feat/x
+git restore --staged src/ServiceBusExplorer.Core/ProviderFactory.cs
+git clean -n
+git clean -nd
+git remote -v
+git remote show origin
+git worktree list
+git worktree add ../wt -b feat/x
+git gc
+git reflog
+rm -rf node_modules
+rm -rf ui/dist
+cat .gitignore
+ls .github
+CASES
 # must PASS
 for c in "git status" "git diff HEAD" "git log --grep=commit" "git show HEAD" "git blame f.ts" \
          "git tag -l" "git tag --list" "git merge --abort" "git branch" "git branch -a" \
@@ -91,7 +139,7 @@ for c in "gh api repos/o/r/issues --jq '.[].number' | cut -f2" "gh api repos/o/r
          "gh api repos/o/r/issues --jq '.[] | .title' | sort -u" "gh issue view 1 2>&1 | tail -f" "gh pr list && rm -f x.txt" \
          "gh project list --owner o" "gh project view 1 --owner o" "gh project item-list 1 --owner o" "gh cache list" \
          "gh codespace list" "gh cs ls" "gh ssh-key list" "gh gpg-key list" "gh extension list" "gh alias list" "gh config get editor" \
-         "gh --version" "gh version" "gh help" "gh help issue" "gh status" "gh auth status" "gh search repos explorer" "gh browse" \
+         "gh --version" "gh version" "gh help" "gh help issue" "gh status" "gh auth status" "gh search repos scout" "gh browse" \
          "gh co 12" "gh ruleset list" "gh org list" "which gh" "gh" \
          "bash -lc \"gh api repos/o/r/issues | cut -f2\"" "bash -lc \"cd /tmp/x && gh issue list | head -3\""; do check PASS "$c"; done
 reason() { printf '{"tool_input":{"command":%s}}' "$(jq -Rn --arg c "$1" '$c')" | bash "$HOOK" | jq -r '.hookSpecificOutput.permissionDecisionReason // ""'; }

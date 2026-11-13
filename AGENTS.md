@@ -1,45 +1,94 @@
-# AGENTS.md - .NET skills & agents routing (Messaging Explorer)
+# Messaging Explorer
 
-Referenced from `CLAUDE.md`. This file maps **tasks to the official [`dotnet/skills`](https://github.com/dotnet/skills) plugins** (marketplace `dotnet-agent-skills`, .NET Team at Microsoft). It does **not** change the context-first workflow: the context is the source of truth for *what this codebase is and why*; these skills are the source of truth for *how to do a .NET task well*.
+An open-source (MIT) desktop and web tool to explore and manage messaging brokers: Azure Service
+Bus and RabbitMQ. It lists and creates queues, topics, subscriptions and exchanges, and peeks,
+sends, receives, resubmits, moves, deletes and purges messages, on brokers that are usually
+someone's production. .NET 10 API and core under `src/` (test projects sit beside them under
+`src/`, not `tests/`), Angular app under `web-app/`, Electron shell under `web-app/electron/`.
+The stack: `Azure.Messaging.ServiceBus`, `Azure.Identity` and `RabbitMQ.Client` behind the provider
+interface; Angular 21 with Angular Material and ng-bootstrap; Electron with `electron-builder` and
+`electron-updater`. CI is `.github/workflows/ci.yml`; `release.yml` packages three systems, unsigned.
 
-> **Verified 2026-11-12 against the skills listed in a session on the owner's machine.** Installed: **`dotnet`**, **`dotnet-test`**, **`dotnet-diag`**. Every row below is tagged **[installed]** or **[needs install]**; a `[needs install]` skill cannot be invoked until someone runs `/plugin install <plugin>@dotnet-agent-skills`, and reasoning from pretraining because "the table said so" is exactly the failure Rule D exists for. Re-check with `jq -r '.plugins | keys[] | select(test("dotnet"))' ~/.claude/plugins/installed_plugins.json`.
+## Commands
 
-## Order of operations
+Unit and web tests run in the project's container, never directly on the machine.
 
-1. **Context first.** `context/index.md`, then `context/pages/services/<project>.md`, then the linked `context/pages/invariants/*`, `decisions/*`, `conventions/*`.
-2. **Then a skill/agent from the table below** for the .NET mechanics; invoke by name, do not reason from pretraining when a skill covers the task.
-3. **Then grep source** only if context + skill leave a gap.
-4. **Crystallize** new findings back with `/wiki-crystallize`.
+| To | Run |
+|---|---|
+| Build | `dotnet build ServiceBusExplorer.slnx` and read the summary line: nothing fails the build on a warning, and the count must be 0 |
+| Test the core | `scripts/in-docker.sh dotnet test src/ServiceBusExplorer.Core.Tests` |
+| Test the API | `scripts/in-docker.sh dotnet test src/ServiceBusExplorer.Api.Tests` |
+| Test one test | add `--filter "FullyQualifiedName~<Name>"` |
+| Integration tests | `dotnet test src/ServiceBusExplorer.IntegrationTests`, on the machine: they start brokers in Docker |
+| Web tests, in `web-app/` | `../scripts/in-docker.sh npm test -- --watch=false`. Never plain `npx vitest`: it has no Angular compiler |
+| Web build, in `web-app/` | `npm run build` |
 
-This file is consulted from inside the `explorer-pipeline` skill: it is what "scans (diff-gated)" in each lane resolves against. A scan whose surface the diff does not touch does not run. How tests prove the requirement is gate 5 of `.claude/skills/explorer-pipeline/SKILL.md`; the review lenses are gate 6.
+A change to `ServiceBusExplorer.Core` runs both unit projects: the API references the core. The
+integration suite runs only when broker code changes, and the end-to-end suite once, at the end of
+a lane that changes the screen. At most two such heavy lanes run at once on the owner's machine.
 
-## How to invoke
+## Rules
 
-- **Skill**: `Skill` tool with `skill: "<plugin>:<skill>"`, e.g. `dotnet-test:run-tests`.
-- **Agent**: `Agent` tool with `subagent_type: "<plugin>:<agent>"`, e.g. `dotnet-test:test-quality-auditor`. Agents are multi-step orchestrators; use them for large sweeps, not single-file edits.
-- **LSP (Roslyn)**: the installed `dotnet` plugin registers a C# language server for `.cs`. Prefer LSP find-refs over blind grep for symbol work. This repo has no `global.json`; the SDK on PATH must be .NET 10.
+Three things are never left for later: nobody but the local user reaches the API, a secret never
+leaves the backend unmasked or reaches a log, and a bulk operation never loses a message
+silently. Each known breach is written under "Known gaps" on the service pages and in
+`context/pages/roadmap/followups.md`. A change may leave a recorded gap as it found it. It never
+adds one and never widens one.
 
-## Tier 1 - Primary (use routinely on this repo)
+**The API is local and authenticated.** It listens on loopback only, filters the Host header,
+restricts CORS to the configured front end, and refuses every request without the per-launch
+`X-Api-Key`, compared in fixed time. `/health` is the one exemption. The Angular app reaches it
+only through `ApiService`.
 
-| Task | Skill / Agent | Notes for Messaging Explorer |
-|---|---|---|
-| Navigate/rename/diagnose C# across the solution | `dotnet` **LSP** (auto) **[installed]** | Solution is `ServiceBusExplorer.slnx`. |
-| Run / filter .NET tests, read pass-fail | `dotnet-test:run-tests` **[installed]** | Respects Rule B. Surface per `explorer-pipeline` SKILL.md gate 4: a Core edit runs both test projects. Report the skipped count per project. |
-| Write tests for untested code | `dotnet-test:code-testing-agent` **[installed]** | Most controllers and the RabbitMQ provider have none; `context/pages/conventions/testing.md`. xUnit + Moq, plain `Assert`. |
-| Which sources have no tests | `dotnet-test:find-untested-sources` **[installed]** | |
-| Coverage plateau / where to add tests | `dotnet-test:coverage-analysis`, `dotnet-test:test-gap-analysis` **[installed]** | `coverlet.collector` is referenced by both test projects. |
-| Test-quality smells / weak asserts / over-mocking | `dotnet-test:test-anti-patterns`, `dotnet-test:test-smell-detection`, `dotnet-test:assertion-quality`, `dotnet-test:grade-tests` **[installed]** | Gate 5 runs the first and third over every mapped test path. |
-| Risk score for complex code under test | `dotnet-test:crap-score` **[installed]** | The Azure provider is the first candidate. |
-| Broad test-suite health audit | Agent `dotnet-test:test-quality-auditor` **[installed]** | |
-| Make code testable (static state, `TimeProvider`, `IFileSystem`) | Agent `dotnet-test:testability-migration`, `dotnet-test:testability-obstacle` **[installed]** | The static provider slot in `ConnectionsController` is the known obstacle. |
-| Behaviour-preserving C# refactor | `dotnet:csharp-refactoring` **[installed]** | Inside the refactor lane only. |
-| Hot-path perf, allocations, async traps; benchmarks | `dotnet-diag:analyzing-dotnet-performance`, `dotnet-diag:microbenchmarking`, agent `dotnet-diag:optimizing-dotnet-performance` **[installed]** | The `performance` lens: `explorer-optimizer` runs `analyzing-dotnet-performance` over the changed files first. |
-| Hang / leak / crash triage | `dotnet-diag:dotnet-trace-collect`, `dotnet-diag:dump-collect` **[installed]** | |
-| Build fails opaquely | `dotnet:msbuild` **[installed]** | |
-| Pin/install a .NET SDK locally | `dotnet:setup-local-sdk` **[installed]** | |
+**Secrets are masked and never logged.** A connection string, a password, a client secret and the
+API secret leave the backend only as the mask, except on an export the user asked for with
+secrets. The mask never overwrites a stored secret. A new secret field is added to the mask, to
+the merge on save and import, and to a masking test, in one change.
 
-## Not applicable to this repo
+**A bulk operation never loses a message silently.** Send first, complete after. A message that
+was sent and could not be removed from its source is reported as a possible duplicate, never
+resent in silence. Every failure is reported per sequence number. Scans are bounded. The caller's
+`CancellationToken` stops the batch. Operations are at-least-once, and the UI says so.
 
-- `dotnet-blazor:*`, `dotnet-maui:*`: the UI is Angular + Electron under `web-app/`, driven by npm.
-- `dotnet-data:*`: no EF Core or database; storage is one JSON file.
-- `dotnet-test:writing-mstest-tests`, `dotnet-test:mtp-hot-reload`: the test projects are xUnit on VSTest.
+**A broker is reached through `IMessagingProvider`.** What a provider cannot do is declared in
+`IProviderCapabilities`, never a silent no-op. `Azure.*` and `RabbitMQ.Client` types stay inside
+`src/ServiceBusExplorer.Core/Providers/<Provider>/`.
+
+**Never touch a broker the owner did not name.** No operation that removes or moves messages
+runs against a broker the owner did not name for that purpose. No real namespace, host,
+connection string or id from the owner's environment goes into code, tests, pages or a commit.
+
+**A change ships with its test.** The test fails without the change and asserts the requirement
+in the words of the request. A refactor names tests that are green before and after.
+
+**One test where the call fails.** A change that adds or alters a call to a broker SDK, the
+RabbitMQ management API, Azure Monitor, the filesystem or a subprocess ships a test in which
+that call fails (timeout, 5xx, a broker exception) and asserts what the caller does.
+
+**No abstraction for one user.** A generic, a base class or a helper needs a second caller. The
+provider interface, the capabilities and the factory are documented abstractions and stay.
+
+**Read before you cite.** A file, class or convention is read in the current tree before it is
+recommended. `docs/ADDING_PROVIDERS.md` describes a flow the code does not fully run; the service
+pages say which parts.
+
+**Documentation lives in `context/`, in English.** Code carries a `<summary>` on a public type or
+member, and no comment that narrates inside a member or refers to a decision, a page or an issue;
+the one exception is a `ponytail:` line that names a deferral. Identifiers and comments are in
+English. An existing file is edited before a new one is created, and no planning or analysis
+Markdown is written outside `context/`.
+`README.md` is the public front page; how it works and why stays in `context/`. A page cites code
+by name, `path#Member`, never by line number.
+
+**Git belongs to the owner.** No commit, push, pull request, release or merge unless the owner
+asks for that action. A batch authorisation in words covers one session's commits and pull
+requests on a `feat/`, `fix/`, `chore/` or `docs/` branch, and never a push to `main`: every
+change reaches `main` through a pull request. A commit, a pull
+request and a source file never carry a line that credits an AI tool.
+
+## Where things are
+
+- Why something is the way it is: `context/pages/decisions/`.
+- Rules that span projects: `context/pages/invariants/`.
+- How each part works, and its known gaps: `context/pages/services/`.
+- What is owed: `context/pages/roadmap/followups.md`.

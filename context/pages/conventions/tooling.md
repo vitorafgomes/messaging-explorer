@@ -1,8 +1,8 @@
 ---
 title: "Tooling"
-version: "1.0"
+version: "1.1"
 date: 2026-11-12
-changes: "2026-11-13: the private-names check. Earlier on 2026-11-13: removed the stale line that CI runs no web test; CI runs them since 2026-11-12. Founded with the harness on 2026-11-12"
+changes: "v1.1 (2026-11-13): the pipeline sized by risk, rules files per part of the project, two new hooks and two renamed, unit and web tests in a container, check-hidden-text and token-usage. Earlier on 2026-11-13: the private-names check. Earlier on 2026-11-13: removed the stale line that CI runs no web test; CI runs them since 2026-11-12. Founded with the harness on 2026-11-12"
 page_type: convention
 status: active
 description: "Who runs on which model and writes what, what lives in .claude/ and scripts/, what each hook does, and how the review workflow fits the gates."
@@ -35,7 +35,24 @@ The session model does every survey, plan and check; Opus implements and reviews
 
 ## `.claude/skills/explorer-pipeline`
 
-The single source of the pipeline: gate 0 (classify from `git status --porcelain` and `git diff HEAD --stat`, written as an instruction and never as a dynamic shell block), classification (fast path or full), the never-list, the ladder (`ponytail` after the context, before the edit), the six-part plan, the nine gates, the two dispatch templates. Lane files `feature.md`, `bugfix.md`, `refactor.md`, `diagnose.md` carry only the stage order.
+The single source of the pipeline. `SKILL.md` holds the order of work and three sizes of process,
+chosen by risk: a **fast path** (the session edits and checks, no agent), **standard** (a plan, the
+session implements when the plan edits one project and `explorer-implementer` when it edits two or
+more, one review with the `invariants` lens) and **sensitive** (the whole process, every lens its
+row names). Proof follows [[pages/decisions/0005-cite-code-by-name-and-prove-in-proportion-to-risk]].
+What makes a change sensitive, which tests it runs, what it records, how to build what an artboard
+draws, the dispatch forms and which superpowers skills apply live in `reference/`, read when the
+step needs them; the widest test-surface rule is also in `SKILL.md`, because the evals read only
+that file. The four lanes give the order per kind of task.
+
+## `.claude/rules/`
+
+Loaded by Claude Code when a file of the matching paths is opened, and by a subagent that opens
+one: `core.md`, `api.md`, `integration-tests.md`, `web-app.md` (with the tools for Angular work:
+the Angular CLI's own server, registered read-only in `.mcp.json`), `electron-shell.md` and
+`dotnet-skills.md`. Each holds the part's responsibility, the invariants it keeps, what to read
+before changing it and its commands, taken from its service page; the service page stays the full
+account.
 
 ## `.claude/workflows/explorer-review.js`
 
@@ -51,19 +68,58 @@ All seven fail open: a missing `jq`, malformed JSON, or any error exits 0 having
 
 | Hook | Event | What it does |
 |---|---|---|
-| `session-start.sh` | SessionStart | Proves the hook runtime works, loudly: checks `jq` is on PATH and pipes `git commit -m x` through `pre-git-guard.sh`; when either fails it emits a `systemMessage` saying the hooks are dead and which gates are silent. |
-| `prompt-router.sh` | UserPromptSubmit | One line reminding that a code task routes through `explorer-pipeline` first and that a change to the API surface, to secret handling or to a bulk message operation is a review lens, never a fast path. |
-| `pre-git-guard.sh` | PreToolUse (Bash) | Turns Rule E into a permission **ask**: history-writing git (`commit`, `push`, `merge`, `rebase`, `revert`, `cherry-pick`, `pull`, `am`, a moving `reset`, `tag` creation or deletion, `branch -D/-m`, an alias, a `git stash` that moves work), every `gh` command that writes to GitHub, a `gh` subcommand it does not know, `docker push`, `wrangler deploy/publish/secret`, `dotnet ef database update/drop`. "Ask" not "deny": "commit this for me" still works, it cannot happen silently. Read-only git and `gh` reads pass. |
-| `post-edit-rule-b.sh` | PostToolUse (Edit\|Write) | On `src/**/*.cs` outside the `*.Tests` projects: the edit needs its test now, the build at 0 warnings, the gate 4 surface, and Rules A, G and H in one sentence each. On `web-app/src/**/*.ts` that is not a spec and on `web-app/electron/*.js`: a spec now, then `npm test -- --watch=false` (never plain `npx vitest`) and `npm run build`. |
-| `post-edit-oracle-note.sh` | PostToolUse (Edit\|Write) | On `.github/workflows/**`, `web-app/angular.json`, `web-app/tsconfig*.json`, `Directory.Build.props`, `Directory.Packages.props`, `.editorconfig` and `global.json`: these files grade a change and are not part of it; the reply must say why the task needed the edit. |
+| `session-start.sh` | SessionStart | Proves the hook runtime works: checks `jq` is on PATH and pipes `git commit -m x` through `pre-git-guard.sh`; when either fails it emits a `systemMessage` saying the hooks are dead and which gates are silent. |
+| `prompt-router.sh` | UserPromptSubmit | One line, under 320 characters: a code task routes through `explorer-pipeline` first, and a change to the API surface, a secret or a message operation is never a fast path. |
+| `pre-git-guard.sh` | PreToolUse (Bash) | A permission **ask** for git that writes history, discards work (`git clean -f`, `git restore`, `git checkout --`, `rm -rf .git`) or changes where a push goes, every `gh` command that writes to GitHub, a publish and `docker push`. Read-only git passes. |
+| `pre-test-in-docker.sh` | PreToolUse (Bash) | **Denies** a unit or web test run (`dotnet test`, `npm test`, `ng test`, `vitest`) that does not go through `scripts/in-docker.sh`, and names the command to use. `dotnet test src/ServiceBusExplorer.IntegrationTests` passes: it starts brokers in Docker, which the container has no access to. |
+| `agent-read-only-bash.sh` | PreToolUse (Bash) | **Denies** `explorer-reviewer` and `explorer-optimizer` any shell command other than read-only git, and any redirect into a file. The session and the implementer are not bound by it. |
+| `post-edit-test-reminder.sh` | PostToolUse (Edit\|Write) | Two sentences, under 340 characters, after an edit to `src/**/*.cs` outside the test projects, to `web-app/src/**` or to `web-app/electron/**`: the test now, through the container, and the checks before a report. |
+| `post-edit-build-rules-note.sh` | PostToolUse (Edit\|Write) | On a `.csproj`, `ServiceBusExplorer.slnx`, `Directory.Build.props`, `Directory.Packages.props`, `.editorconfig`, `global.json`, `web-app/angular.json`, `web-app/tsconfig*.json` and `.github/workflows/**`: these judge a change and are not part of it; the reply must say why the task needed the edit. |
 | `stop-review-gate.sh` | Stop | **Blocks** the turn once when the session edited production code (`src/**/*.cs` outside `*.Tests`, `web-app/src/**/*.ts` that is not a spec, `web-app/electron/*.js`) without dispatching `explorer-reviewer` (an `Agent` call or a `Workflow` run of `explorer-review`). `stop_hook_active` passes on the continuation, so no loop. Keyed on what *this* session edited, in `<session>.jsonl` and every `<session>/subagents/*.jsonl`. |
-| `session-end-metrics.sh` | SessionEnd | Appends one JSON line per session to `.claude/metrics/sessions.jsonl` (gitignored): production and test edits, reviewer dispatches, review workflow runs, pipeline invocations, agents, tool calls, `endedUnreviewed`. |
+| `session-end-metrics.sh` | SessionEnd | Appends one JSON line per session to `.claude/metrics/sessions.jsonl` (gitignored): production and test edits, reviewer dispatches, review workflow runs, pipeline invocations, agents, tool calls, `endedUnreviewed`. It parses only the lines that hold a tool call. |
 
 Every hook carries a case-matrix self-test (`<hook>.test.sh`, prints `ALL CASES PASS`). The `harness` job of `.github/workflows/ci.yml` runs all seven plus `.claude/workflows/explorer-review.test.sh`, `scripts/check-context-refs.test.sh` and a real `scripts/check-context-refs.sh` run.
 
 ## `scripts/check-context-refs.sh`
 
 Resolves every code citation in `context/pages` against the working tree. A citation is `path#anchor` (paths under `src`, `web-app`, `scripts`, `docs`, `.claude`, `.github`, written in full): the anchor is a member, a type, a test title or a key that occurs in the file, so an edit elsewhere in the file never breaks it. It fails on a missing file, an anchor the file does not contain, a citation by line number (`path:12`, refused since 2026-11-13, [[pages/decisions/0005-cite-code-by-name-and-prove-in-proportion-to-risk]]) and a missing `context/pages`. It proves the anchor exists, never that the page still describes it truly; that part is read. Pages whose `status` marks them as a record are skipped. Runs in gate 7b and in CI.
+
+## `scripts/in-docker.sh`
+
+Runs a command in the image `scripts/docker/Dockerfile` builds (the .NET 10 SDK, Node 22, git, jq,
+perl). The container sees the repository at its own path and a volume for its caches, runs as the
+calling user with every capability dropped, sees 8 processors (`EXPLORER_CPUS`), and has no Docker
+socket; `EXPLORER_OFFLINE=1` takes its network away. When Docker does not answer it runs nothing
+and exits 2. The unit projects and the web tests run through it; the integration suite and the
+end-to-end suite run on the machine.
+
+## `scripts/check-hidden-text.sh`, `scripts/token-usage.sh`
+
+`check-hidden-text.sh [paths]` finds text a person does not see but a model reads: zero-width and
+direction characters, control characters, HTML comments and hidden HTML in Markdown, words mixing
+Latin with Cyrillic or Greek letters. CI runs it on the repository. `token-usage.sh [transcript]`
+and `token-usage.sh docs` report the tokens a session used per agent type, and the size of every
+document a model reads here.
+
+## `scripts/check-doc-sizes.sh`, `scripts/claude-session.sh`, `scripts/try-harness.sh`
+
+`check-doc-sizes.sh` keeps the documents a model reads from growing back: each kind has a ceiling
+in characters (6,000 for `CLAUDE.md`, `AGENTS.md`, a rules file or an agent file; 12,000 for a
+context page outside the roadmap and the history), and a file over it fails unless
+`scripts/doc-size-baseline.txt` lists it with the size it had, in which case it fails only if it
+grew. CI reports it as a warning while the service pages are still over their ceiling.
+
+`claude-session.sh [worker|ui]` opens Claude Code with only the servers this work needs (Rider;
+for `ui` also WebStorm and the Angular CLI's server) and without the plugins this repo has no use
+for. Nothing in the user's own configuration changes.
+
+`try-harness.sh` copies the repo to a throwaway folder under `~/.cache`, opens six short sessions
+in it and checks eleven facts: what loads at the start and on opening a file, that a rules file
+reaches a subagent, that a unit test run is denied outside the container and passes through it,
+and that a reviewing agent's shell reads git only. It spends about one US dollar.
+
+The `explorer-meter` agent answers where a session spent its tokens and what would lower that,
+from `token-usage.sh` and from reading the documents themselves.
 
 ## `scripts/check-private-names.sh`
 

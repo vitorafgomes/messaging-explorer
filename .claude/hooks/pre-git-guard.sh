@@ -1,6 +1,6 @@
 #!/bin/sh
-# PreToolUse hook (Bash): surface history-writing git, every gh command that writes to GitHub, deploys and
-# schema-applying EF commands as a permission ask (CLAUDE.md Rule E).
+# PreToolUse hook (Bash): ask before git that writes history, discards work or changes where a push
+# goes, before every gh command that writes to GitHub, and before a publish.
 #
 # "ask" (not deny) preserves the per-instance exception - "commit this for me" still works,
 # it just cannot happen silently. Read-only git passes without a prompt.
@@ -18,16 +18,25 @@ jq -c '
   | "(?:-X\\s*|--method(?:=|\\s+))" as $m
   | "\\bgit\\s+(?:-\\S+\\s+(?:(?!-)(?:[^\\s\"\\x27]|\"[^\"]*\"|\\x27[^\\x27]*\\x27)+\\s+)?)*" as $g
   | [
-      ($g + "(commit|push|rebase|revert|cherry-pick|pull|am|filter-branch|update-ref|fast-import)\\b"),
+      ($g + "(commit|push|rebase|revert|cherry-pick|pull|am|filter-branch|filter-repo|update-ref|fast-import|replace)\\b"),
+      ($g + "clean\\b[^|;&]{0,100}\\s-[a-zA-Z]*f"),
+      ($g + "restore\\b(?![^|;&]{0,200}--staged\\b)"),
+      ($g + "checkout\\b[^|;&]{0,200}(\\s--(\\s|$)|\\s\\.(\\s|$))"),
+      ($g + "(checkout|switch)\\b[^|;&]{0,200}\\s((?-i:-B|-C|-f)|--force-create|--force|--discard-changes)\\b"),
+      ($g + "reflog\\s+(expire|delete)\\b"),
+      ($g + "gc\\b[^|;&]{0,100}--prune"),
+      ($g + "worktree\\s+(remove|prune)\\b"),
+      ($g + "remote\\s+(set-url|add|remove|rm|rename)\\b"),
+      "\\brm\\s+(?:-[a-zA-Z]+\\s+)*(?:\\S*/)?\\.git(?:/|\\s|$)",
+      "\\b(?:npm|pnpm|yarn|bun)\\s+publish\\b",
+      "\\bdotnet\\s+nuget\\s+push\\b",
       ($g + "merge\\b(?![^|;&]{0,200}--(abort|continue|quit))"),
       ($g + "reset\\b[^|;&]{0,200}(--hard|--soft|--merge|--keep|HEAD[~^]|@[~^]|\\b[0-9a-f]{7,40}\\b)"),
       ($g + "tag\\s+(-[adfsm]\\b|--delete\\b|--force\\b|(?!\\d+\\s*>)[^-\\s|&><;)(])"),
       ($g + "branch\\b[^|;&]{0,200}\\s(-f|--force|-D|-d|--delete|-m|--move)\\b"),
       ($g + "config\\s+[^|;&]{0,100}alias\\."),
       ($g + "stash\\b(?!\\s+(list|show)\\b)"),
-      "\\bdocker\\s+(push|image\\s+push)\\b",
-      "\\bwrangler\\s+(deploy|publish|secret)\\b",
-      "\\bdotnet\\s+ef\\s+database\\s+(update|drop)\\b"
+      "\\bdocker\\s+(push|image\\s+push)\\b"
     ] as $whole
   | [
       ([["issue", "view|list|ls|status"], ["pr", "view|list|ls|status|diff|checks|checkout"],
@@ -50,8 +59,8 @@ jq -c '
         hookEventName: "PreToolUse",
         permissionDecision: "ask",
         permissionDecisionReason: (if $writes
-          then "Rule E (CLAUDE.md): Claude never runs history-writing git, a gh command that writes to GitHub, a deploy, or a command that applies schema to a live database - the human does. Approve only if you explicitly asked for this operation."
-          else "Rule E (CLAUDE.md): this gh subcommand is not a command this guard knows, so it cannot tell whether it writes to GitHub. Approve only if you know it only reads, or you asked for it."
+          then "Git and publishing belong to the owner: this command writes history, discards work, changes where a push goes, writes to GitHub, or publishes. Approve only if you asked for this operation."
+          else "This gh subcommand is not a command this guard knows, so it cannot tell whether it writes to GitHub. Approve only if you know it only reads, or you asked for it."
           end)
       }
     }

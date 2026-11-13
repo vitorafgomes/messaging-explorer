@@ -21,10 +21,16 @@ SUBAGENTS="${TRANSCRIPT%.jsonl}/subagents"
 set -- "$TRANSCRIPT"
 [ -d "$SUBAGENTS" ] && set -- "$@" "$SUBAGENTS"/*.jsonl
 
-ROW=$(cat "$@" 2>/dev/null | jq -c -s --arg session "$SESSION" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+# Only lines that hold a tool call are parsed, and each call is cut down to the five fields the
+# counts need before anything is gathered, so a long session is never held in memory whole.
+ROW=$(LC_ALL=C grep -h '"tool_use"' "$@" 2>/dev/null | jq -c '
+    .message.content? | arrays | .[] | select(.type == "tool_use")
+    | {name, input: {file_path: (.input.file_path? // ""), subagent_type: (.input.subagent_type? // ""),
+                     skill: (.input.skill? // ""), name: (.input.name? // "")}}' 2>/dev/null \
+  | jq -c -s --arg session "$SESSION" --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
   def is_test: test("\\.Tests/.*\\.cs$") or test("\\.spec\\.ts$");
   def is_src: (test("/src/.*\\.cs$") or test("/web-app/src/.*\\.ts$") or test("/web-app/electron/.*\\.js$")) and (is_test | not);
-  [ .[] | .message.content? | arrays | .[] | select(.type == "tool_use") ] as $calls
+  . as $calls
   | ($calls | map(select((.name == "Edit" or .name == "Write" or .name == "NotebookEdit")
       and ((.input.file_path // "") | is_src))) | length) as $src
   | ($calls | map(select((.name == "Edit" or .name == "Write")
