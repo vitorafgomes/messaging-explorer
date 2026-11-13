@@ -2,7 +2,7 @@
 title: "Testing"
 version: "1.0"
 date: 2026-11-12
-changes: "Integration project against the Azure Service Bus emulator: the Running row, the emulator fixture, what the emulator cannot do"
+changes: "2026-11-13: end-to-end tests with Playwright, the app in Chromium against the API and brokers in containers, with screenshots in both themes; the Running row, the section, the E2E workflow in What CI runs. Earlier: integration project against the Azure Service Bus emulator: the Running row, the emulator fixture, what the emulator cannot do"
 page_type: convention
 status: active
 description: "How Messaging Explorer is tested: xUnit with Moq for the two .NET projects, vitest for the Angular app, what runs in CI, the state at the founding, and what has no test."
@@ -35,6 +35,7 @@ reliability: high
 | Integration (Docker) | `dotnet test src/ServiceBusExplorer.IntegrationTests` | 91 passed, 0 skipped (29 RabbitMQ, 62 Azure Service Bus) on 2026-11-13, 165 s wall for the whole project run on that day; earlier, 93 to 102 s wall with the images cached, as measured when the project had 74 tests. The two collections run in parallel and the Azure one dominates: about 20 s to start SQL Server and the emulator, about 68 s of tests, of which 20 s is the deep dead-letter resubmit (350 messages arranged one by one) and 15 s three calls to a closed port that wait out the SDK retries |
 | Web | `npm test -- --watch=false` in `web-app/` | 47 files: 874 passed, 8 skipped (2026-11-13) |
 | Electron shell helpers and preload | `npm run test:electron` in `web-app/` (`node --test`) | 28 passed, 0 skipped (2026-11-13) |
+| End-to-end (Docker, Chromium) | `npx playwright test -c e2e` in `web-app/` | 15 passed, of which 3 are expected failures that pin known defects, 0 skipped; about 1 min 45 s wall with the images cached (2026-11-13) |
 | Build | `dotnet build ServiceBusExplorer.slnx` | 0 warnings, 0 errors |
 
 The Api tests share process-wide environment variables, so the assembly disables parallelisation (`src/ServiceBusExplorer.Api.Tests/Usings.cs:4`).
@@ -85,6 +86,57 @@ Untested by integration, per [[pages/decisions/0002-integration-tests-against-br
 
 The emulator is not the service: a result here proves the code path against the emulator's behaviour, which may differ from a namespace in session hand-out order, peek batching, duplicate detection timing and fan-out latency (a message sent to a topic reaches its subscriptions about 100 to 170 ms later on the emulator).
 
+## End-to-end tests
+
+Since 2026-11-13, `web-app/e2e/` drives the app in Chromium with Playwright against the real API and real brokers in containers the run starts, and saves a screenshot of every screen the flows reach in the light and the dark theme. `@playwright/test` is pinned exactly and is the one development dependency they added; only Chromium is installed. They are Phase 0 of [[pages/roadmap/ui-material-migration]] and the behaviour lock for the visual migration that follows.
+
+- **One global setup starts everything and tears it down** (`web-app/e2e/global-setup.ts:129`), with the docker CLI, because Testcontainers has no package in this stack. It starts RabbitMQ (`rabbitmq:4.3.7-management`), and the Service Bus emulator (`2.0.1`) with its SQL Server (`2022-CU14-ubuntu-22.04`) on a network of the run's own. The images are pinned as in the integration fixtures.
+  - Every port is published on `127.0.0.1` with a random host port, and a port bound anywhere else fails the run (`web-app/e2e/global-setup.ts:88`).
+  - Every container carries a label of the run and is removed in teardown, whatever the outcome.
+  - The files the containers need are copied in, not mounted, because Docker Desktop refuses a mount from the system temporary folder.
+- **The emulator sits behind one endpoint.** The app takes one connection string, but the emulator serves AMQP and management on two ports. A pinned `haproxy:3.0.30-alpine` on a random loopback port routes each connection by its first four bytes, as in `dev/brokers/` ([[pages/runbooks/local-brokers]]), never on the fixed ports of that folder.
+- **The API runs as it does under Electron**, with values the run makes:
+  - a fresh 64-character key;
+  - a temporary data path, never the owner's `workspace.json`;
+  - a temporary `config.json` through `EXPLORER_CONFIG_PATH`, naming the API port and the front-end port. Both are picked free per run, so CORS allows exactly the origin the browser uses.
+
+  `ASPNETCORE_URLS` is unset, so the API binds to loopback itself. The key is never printed. Tracing, video and the HTML report are off because they would record it.
+- **The app is the production build**, served from `dist/e2e/app` by a small static server on loopback inside the runner (`web-app/e2e/global-setup.ts:30`).
+- **The browser reaches the API only through `ApiService`.** The tests give the page the two members of the Electron preload contract that the app reads, `getApiPort` and `getApiSecret` (`web-app/e2e/fixtures.ts:13`), so `ApiService` attaches the key itself.
+  - The tests run the Electron renderer path in a browser, hash routing included, which is what users run.
+  - Browser mode without a key, a plain tab on the API, stays unreachable by design ([[pages/invariants/local-authenticated-api]]).
+  - Nothing exempts the tests from the key, CORS, the Host filter or loopback.
+- **Seeding goes through the API**, with the same key (`web-app/e2e/seed.ts:48`). Each broker gets a queue `orders` with three messages and two dead-lettered ones, and a topic `order-events` with a subscription `warehouse` holding one message.
+  - RabbitMQ's dead letters are the queue `orders.dlq`, by the provider's convention.
+  - The emulator's are made by expiry: two messages with a one-second time to live go to a queue that dead-letters on expiry, and a receive after they expire moves them (`web-app/e2e/seed.ts:64`).
+  - The seeding connection is deleted afterwards, so the flows start from an empty Connections screen.
+- **The flows each assert what the user sees.** The files run in name order on one worker, each file serially, and each starts by connecting its own broker.
+  - Azure Service Bus emulator (`web-app/e2e/azure-service-bus.e2e.ts:18`):
+    - Add a connection by connection string and connect; the tree lists the seeded queue and topic.
+    - Open the queue and the subscription.
+    - Peek the three bodies of the queue in order, the two dead-lettered ones, and the subscription's one.
+    - Send a message and find it as the fourth body.
+  - RabbitMQ (`web-app/e2e/rabbitmq.e2e.ts:10`):
+    - Add a connection and connect; the toolbar names the broker and the tree lists every entity.
+    - The queue panel shows 3 active messages.
+    - Open the subscription panel.
+    - Peek shows the seeded bodies on the active and dead-letter tabs.
+    - Sending makes the count 4.
+    - The Connections screen lists the connection while the toolbar shows it connected.
+    - The Queues and Topics screens list the entities.
+    - Monitoring shows the queue with 4 after a refresh.
+- **Known defects are pinned as expected failures.** A flow that meets a recorded defect asserts what works. The correct behaviour sits in its own test, marked `test.fail` with the defect in one line. The suite stays green while the defect stands and turns red on the day it is fixed, when the mark is removed. Three are pinned:
+  - The RabbitMQ peek returns the head message again and again ([[pages/roadmap/code-audit-2026-11]]).
+  - The connection card says "Unknown Provider", because the provider type of the app is numeric and the API sends a name (same page).
+  - The Connections screen loses the Connected mark when it reloads its list, because Connect never stores `IsConnected`.
+- **Screenshots** go to `web-app/dist/e2e/screenshots/` as `<screen>-<broker>-<light|dark>.png`, 1280 by 800, cleared at the start of each run. The dark one is taken with the toolbar's own theme toggle (`web-app/e2e/fixtures.ts:51`), pressed through a dispatched click because a dialog's backdrop covers it. That way the theme signal some dialogs read changes too.
+- **Not covered, and why:**
+  - On the emulator, the entities tree cannot reach a subscription. The tree loads the subscriptions of a topic only when the topic reports a subscription count, and the emulator reports every runtime count as zero (`web-app/src/app/core/services/tree-data-builder.service.ts:57`). The Azure flows therefore open the subscription from the Topics screen, and assert no Azure count.
+  - The RabbitMQ peek flows assert the first body only, because of the defect above.
+  - Resubmit from a dead-letter queue, delete of a selection, and purge with its confirmation are listed in Phase 0 and not written yet.
+  - Sessions, rules, entity administration, import, export and the bulk dialogs have no flow.
+- **Flakiness.** On 2026-11-13, 3 of 9 full runs after the flows settled had one test fail on a blank page: two under the dev server and one under the static build, a different test each time. The test waited 90 s for the entities tree while the page showed only the background, with no accessibility snapshot. Every run since the page listeners that collect the browser's page errors, console errors and failed requests went into the fixture (`web-app/e2e/fixtures.ts:13`) was green: at least seven full runs and eleven partial ones. The stability coincides with those listeners. The mechanism is not known, and removing them may bring the flake back. The suite runs with `retries: 0`, so a recurrence shows in CI. A failing test carries what the listeners collected as an attachment.
+
 ## Web tests run through `ng test` only
 
 `npm test` is `ng test`, the Angular unit-test builder with vitest as its runner (`web-app/angular.json:91`). It compiles the components and picks up every `*.spec.ts`. The gate is `npm test -- --watch=false` in `web-app/`.
@@ -95,7 +147,7 @@ Plain `npx vitest` is not a second way to run them. It has no Angular compiler, 
 
 ## What CI runs
 
-`.github/workflows/ci.yml`: the `harness` job (hook, workflow and script self-tests, the vault citation check), the `dotnet` job (restore, build the solution, `dotnet test` on Core.Tests and Api.Tests by path, so it starts no container), the `integration` job (builds and runs `src/ServiceBusExplorer.IntegrationTests` on its own Linux runner) and the `web` job, which installs, runs the Angular tests (`.github/workflows/ci.yml:115`) and the Electron helper tests (`.github/workflows/ci.yml:119`), both since 2026-11-12, and builds (`.github/workflows/ci.yml:123`). There is no lint step. The release workflow calls this workflow before it packages (`.github/workflows/ci.yml:10`).
+`.github/workflows/ci.yml`: the `harness` job (hook, workflow and script self-tests, the vault citation check), the `dotnet` job (restore, build the solution, `dotnet test` on Core.Tests and Api.Tests by path, so it starts no container), the `integration` job (builds and runs `src/ServiceBusExplorer.IntegrationTests` on its own Linux runner) and the `web` job, which installs, runs the Angular tests (`.github/workflows/ci.yml:115`) and the Electron helper tests (`.github/workflows/ci.yml:119`), both since 2026-11-12, and builds (`.github/workflows/ci.yml:123`). There is no lint step. The release workflow calls this workflow before it packages (`.github/workflows/ci.yml:10`). The end-to-end tests have their own workflow, `.github/workflows/e2e.yml`. It runs on a push to `main` or a pull request that changes `web-app/**` or `src/**`, caches the Playwright browsers, and uploads `web-app/dist/e2e/screenshots/` as the artifact `e2e-screenshots`, also when the tests fail (`.github/workflows/e2e.yml:71`).
 
 ## Patterns in use
 

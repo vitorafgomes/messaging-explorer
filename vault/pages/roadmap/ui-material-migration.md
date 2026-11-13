@@ -33,11 +33,17 @@ No dates are set; the owner sets them.
 ## Status
 
 - **As of 2026-11-12:** the convention is written and the target layout is drawn in `vault/prototypes/web-app/` (38 artboards since the review of [[pages/roadmap/ui-review-2026-11]], light and dark, with screenshots); nothing is built in the application. Phase 0 waits for the Azure emulator fixture of [[pages/roadmap/tests-of-everything]] Phase 1, which gives a broker with data to point the app at.
+- **As of 2026-11-13:** Phase 0 is in progress. The end-to-end tests and their screenshots exist and pass locally; CI, three of the planned flows and the owner's review remain.
 
 ## Phases
 
 ### Phase 0 - See it: end-to-end tests with screenshots
-- **Status:** not started
+- **Status:** in progress (2026-11-13). The flows run green locally with Playwright in `web-app/e2e/`, in a workflow of their own, `.github/workflows/e2e.yml`, which has not run in CI yet. The owner has not looked at the screenshots yet.
+  - **Built:** add a connection and connect, open a queue and a subscription, peek, and send and see, against RabbitMQ and the Service Bus emulator, plus the Connections, Queues, Topics and Monitoring screens. That is 23 screens, in light and dark, 46 screenshots, uploaded by CI as `e2e-screenshots`.
+  - **How:** the tests run the Electron renderer path in a browser. The page gets the preload's `getApiPort` and `getApiSecret`, so `ApiService` sends the key; browser mode without a key stays unreachable.
+  - **Pinned defects:** three known defects met on the way are pinned as expected failures, not worked around.
+  - **Not written yet:** resubmit from a dead-letter queue, delete a selection, purge with its confirmation.
+  - Details on [[pages/conventions/testing]].
 - **Scope:** Playwright (one new development dependency) driving the Angular app in a browser, with the real API started on loopback with a known key and a broker in a container, never a real one ([[pages/decisions/0002-integration-tests-against-brokers-in-docker]]). First flows: add a connection and connect; open a queue and a subscription; peek messages; send a message and see it; resubmit one from a dead-letter queue; delete a selection; purge with its confirmation. Each flow saves a screenshot of each screen in light and in dark, as build artefacts.
 - **Success criteria:** the flows pass locally and in a CI job; the screenshots exist for every screen the flows reach; the owner has looked at them.
 - **Notes:** these flows are also the behaviour lock for every later phase. A flow that exposes a defect of [[pages/roadmap/code-audit-2026-11]] is reported, not worked around.

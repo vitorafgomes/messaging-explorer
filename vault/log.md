@@ -1,6 +1,9 @@
 ## [2026-11-12] integrate | Next version: Azure Event Hubs and Azure Event Grid, surveyed
 The owner decided the next version adds Event Hubs and Event Grid, presented with Service Bus as one Microsoft Azure family. [[pages/roadmap/azure-event-hubs-and-event-grid]] has the survey: one sign-in that discovers the three products, one provider per product behind a small shared contract (an ADR first), fourteen items with the current SDK members and their sources, and the testing gap: the Event Hubs data plane has an emulator, Event Grid and every management call have none. It also found that the metrics package the code uses is deprecated upstream.
 
+## [2026-11-13] test | End-to-end tests: the app seen in a browser for the first time
+Phase 0 of the UI migration is built: Playwright drives the built app in Chromium against the real API and brokers started per run in containers (RabbitMQ, and the Azure Service Bus emulator behind a proxy), with a per-run key and data folder. Fifteen tests cover connecting, opening a queue and a subscription, peeking, sending, and the Connections, Queues, Topics and Monitoring screens, with 46 screenshots in both themes; three known defects are pinned as expected failures. They found four more, recorded in [[pages/roadmap/followups]]. [[pages/conventions/testing]].
+
 ## [2026-11-13] feat | Sessions: a list that locks nothing, one session opened, a guarded state write
 Listing sessions used to accept and lock each one in turn, taking them from the real consumers. It is now a bounded peek grouped by session id; a test on the emulator showed that a plain receiver peeks a session entity and locks none. Only opening one session accepts it, for at most five seconds. The state editor shows the old state beside the new, and the write carries the state as read, so a state changed meanwhile is refused. Queues gained the Sessions tab. [[pages/roadmap/azure-service-bus-administration]] item 6, [[pages/services/api]].
 
