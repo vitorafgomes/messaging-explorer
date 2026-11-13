@@ -247,7 +247,9 @@ public interface IMessagingProvider : IAsyncDisposable
 
     /// <summary>
     /// Reads every queue, topic, subscription and rule with its configuration into one versioned document. It holds no
-    /// secret. One failed read fails the whole export; a partial document is never returned. A provider without
+    /// secret. One failed read fails the whole export; a partial document is never returned. A namespace holding more
+    /// entities or rules than an import accepts throws <see cref="InvalidEntityConfigurationException"/> naming the count
+    /// and the limit, so no file is written that cannot be imported. A provider without
     /// definitions throws <see cref="NotSupportedException"/> and declares it in
     /// <see cref="IProviderCapabilities.SupportsDefinitions"/>; so does <see cref="ImportDefinitionsAsync"/>.
     /// </summary>

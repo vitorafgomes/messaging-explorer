@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Azure;
 using Azure.Messaging.ServiceBus;
 using Azure.Messaging.ServiceBus.Administration;
@@ -585,5 +587,81 @@ public class AzureEntityDefinitionsTests
         Assert.Contains("Subscription events/audit: Failed (The broker did not create it.)", result.Items.Select(Row));
         Assert.Contains("Subscription events/email: Created", result.Items.Select(Row));
         Assert.Contains("subscription events/email with rule $Default TrueRuleFilter", target.Writes);
+    }
+
+    [Fact]
+    public async Task An_export_of_more_than_5000_queues_topics_and_subscriptions_is_refused_naming_the_count_and_the_limit_before_any_rule_is_read()
+    {
+        var ns = new Namespace();
+        ns.Queues.AddRange(Enumerable.Range(0, 4000).Select(i => Queue($"q{i:0000}")));
+        ns.Topics.Add(Topic("events"));
+        ns.Subscriptions["events"] = Enumerable.Range(0, 1000).Select(i => Subscription("events", $"s{i:0000}")).ToList();
+        var admin = ns.Admin();
+
+        var error = await Assert.ThrowsAsync<InvalidEntityConfigurationException>(() => AzureEntityDefinitions.ExportCoreAsync(admin.Object, CancellationToken.None));
+
+        Assert.Equal("The namespace holds 5001 queues, topics and subscriptions; a definitions file holds at most 5000, so it cannot be exported.", error.Message);
+        admin.Verify(a => a.GetRulesAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task An_export_of_more_than_10000_rules_is_refused_naming_the_count_and_the_limit()
+    {
+        var ns = new Namespace();
+        ns.Topics.Add(Topic("events"));
+        ns.Subscriptions["events"] = [Subscription("events", "audit"), Subscription("events", "email")];
+        ns.Rules["events/audit"] = Enumerable.Range(0, 6000).Select(i => SqlRule($"a{i}", "1=1")).ToList();
+        ns.Rules["events/email"] = Enumerable.Range(0, 4001).Select(i => SqlRule($"e{i}", "1=1")).ToList();
+
+        var error = await Assert.ThrowsAsync<InvalidEntityConfigurationException>(() => ExportAsync(ns));
+
+        Assert.Equal("The namespace holds 10001 rules; a definitions file holds at most 10000, so it cannot be exported.", error.Message);
+    }
+
+    [Fact]
+    public async Task An_export_at_the_limits_is_written_whole()
+    {
+        var ns = new Namespace();
+        ns.Queues.AddRange(Enumerable.Range(0, 3999).Select(i => Queue($"q{i:0000}")));
+        ns.Topics.Add(Topic("events"));
+        ns.Subscriptions["events"] = Enumerable.Range(0, 1000).Select(i => Subscription("events", $"s{i:0000}")).ToList();
+        ns.Rules["events/s0000"] = Enumerable.Range(0, 10000).Select(i => SqlRule($"r{i}", "1=1")).ToList();
+
+        var document = await ExportAsync(ns);
+
+        Assert.Equal((3999, 1000, 10000), (document.Entities!.Queues!.Count, document.Entities.Topics![0]!.Subscriptions!.Count, document.Entities.Topics[0]!.Subscriptions!.Sum(s => s!.Rules!.Count)));
+    }
+
+    [Fact]
+    public async Task An_import_into_a_namespace_above_the_file_limits_still_reads_it_and_answers_the_dry_run()
+    {
+        var target = new Namespace();
+        target.Queues.AddRange(Enumerable.Range(0, 5001).Select(i => Queue($"q{i:0000}")));
+        var document = Document(new QueueDefinition { Name = "orders" });
+
+        var result = await ImportAsync(target, document, dryRun: true);
+
+        Assert.Equal("Queue orders: Create", Row(Assert.Single(result.Items)));
+    }
+
+    [Fact]
+    public async Task An_export_holds_no_shared_access_rule_and_no_key_of_one()
+    {
+        const string sentinel = "SasKeySentinelxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+        var ns = new Namespace();
+        var queue = Queue("orders");
+        queue.AuthorizationRules.Add(new SharedAccessAuthorizationRule("orders-send", sentinel, sentinel, [AccessRights.Send]));
+        var topic = Topic("events");
+        topic.AuthorizationRules.Add(new SharedAccessAuthorizationRule("events-listen", sentinel, sentinel, [AccessRights.Listen]));
+        ns.Queues.Add(queue);
+        ns.Topics.Add(topic);
+        var apiJson = new JsonSerializerOptions(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
+
+        var json = JsonSerializer.Serialize(await ExportAsync(ns), apiJson);
+
+        Assert.Contains("\"orders\"", json);
+        Assert.DoesNotContain(sentinel, json);
+        Assert.DoesNotContain("authorizationRules", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("orders-send", json);
     }
 }

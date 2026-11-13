@@ -20,10 +20,12 @@ public sealed class AzureServiceBusDefinitionsTests(AzureServiceBusFixture fixtu
     private readonly List<string> _queues = [];
     private readonly List<string> _topics = [];
     private IMessagingProvider _management = null!;
+    private IMessagingProvider _messaging = null!;
 
     public async Task InitializeAsync()
     {
         _management = await fixture.ConnectManagementAsync();
+        _messaging = await fixture.ConnectMessagingAsync();
     }
 
     public async Task DisposeAsync()
@@ -31,6 +33,7 @@ public sealed class AzureServiceBusDefinitionsTests(AzureServiceBusFixture fixtu
         foreach (var queue in _queues) await fixture.DeleteQueueAsync(queue);
         foreach (var topic in _topics) await fixture.DeleteTopicAsync(topic);
         await _management.DisposeAsync();
+        await _messaging.DisposeAsync();
     }
 
     private string Name(List<string> owner, string tag)
@@ -134,7 +137,9 @@ public sealed class AzureServiceBusDefinitionsTests(AzureServiceBusFixture fixtu
         Assert.All(imported.Items, i => Assert.Equal((DefinitionImportOutcome.Created, null), (i.Outcome, i.Reason)));
         QueueProperties copy = await fixture.Admin.GetQueueAsync(newQueue);
         Assert.Equal((7, TimeSpan.FromSeconds(45)), (copy.MaxDeliveryCount, copy.LockDuration));
-        Assert.EndsWith(newTarget, copy.ForwardDeadLetteredMessagesTo, StringComparison.OrdinalIgnoreCase);
+        QueueProperties source = await fixture.Admin.GetQueueAsync(queue);
+        Assert.Equal(source.ForwardDeadLetteredMessagesTo.Replace(target, newTarget), copy.ForwardDeadLetteredMessagesTo);
+        Assert.Equal(newTarget, Assert.IsType<QueueInfo>(await _management.GetQueueAsync(newQueue)).ForwardDeadLetteredMessagesTo);
         var rules = new List<RuleProperties>();
         await foreach (var rule in fixture.Admin.GetRulesAsync(newTopic, "audit")) rules.Add(rule);
         Assert.Equal(["high-value"], rules.Select(r => r.Name));
@@ -159,5 +164,56 @@ public sealed class AzureServiceBusDefinitionsTests(AzureServiceBusFixture fixtu
         Assert.Equal(DefinitionImportOutcome.Differs, Assert.Single(imported.Items).Outcome);
         QueueProperties after = await fixture.Admin.GetQueueAsync(queue);
         Assert.Equal(7, after.MaxDeliveryCount);
+    }
+
+    private async Task<List<string>> RuleNamesAsync(string topic, string subscription)
+    {
+        var names = new List<string>();
+        await foreach (var rule in fixture.Admin.GetRulesAsync(topic, subscription)) names.Add(rule.Name);
+        return names;
+    }
+
+    [Fact]
+    public async Task Import_deletes_no_entity_the_document_leaves_out_and_no_rule_of_a_subscription_it_names_with_other_rules()
+    {
+        var keep = Name(_queues, "defs-keep");
+        await fixture.Admin.CreateQueueAsync(keep);
+        await fixture.SendAsync(keep, "first", "second");
+        var topic = Name(_topics, "defs-keep");
+        await fixture.Admin.CreateTopicAsync(topic);
+        await fixture.Admin.CreateSubscriptionAsync(new CreateSubscriptionOptions(topic, "audit"), new CreateRuleOptions("r1", new SqlRuleFilter("total > 100")));
+        var other = Name(_queues, "defs-other");
+        var namesNeither = new EntityDefinitionsDocument
+        {
+            Version = 1,
+            Entities = new EntityDefinitions { Queues = [new QueueDefinition { Name = other }], Topics = [] }
+        };
+        var namesAuditWithOtherRules = new EntityDefinitionsDocument
+        {
+            Version = 1,
+            Entities = new EntityDefinitions
+            {
+                Queues = [],
+                Topics =
+                [
+                    new TopicDefinition
+                    {
+                        Name = topic,
+                        Subscriptions = [new SubscriptionDefinition { Name = "audit", Rules = [new SubscriptionRuleInfo { Name = "r2", FilterType = RuleFilterType.Sql, SqlExpression = "total < 10" }] }]
+                    }
+                ]
+            }
+        };
+
+        var first = await _management.ImportDefinitionsAsync(namesNeither, dryRun: false);
+        var second = await _management.ImportDefinitionsAsync(namesAuditWithOtherRules, dryRun: false);
+
+        Assert.Equal((other, DefinitionImportOutcome.Created), (Assert.Single(first.Items).Name, first.Items[0].Outcome));
+        Assert.Equal(
+            [(DefinitionEntityKind.Topic, DefinitionImportOutcome.Exists), (DefinitionEntityKind.Subscription, DefinitionImportOutcome.Differs)],
+            second.Items.Select(i => (i.Kind, i.Outcome)));
+        Assert.True((await fixture.Admin.QueueExistsAsync(keep)).Value);
+        Assert.Equal(["first", "second"], (await _messaging.PeekMessagesAsync(keep, 10)).Select(m => m.Body));
+        Assert.Equal(["r1"], await RuleNamesAsync(topic, "audit"));
     }
 }

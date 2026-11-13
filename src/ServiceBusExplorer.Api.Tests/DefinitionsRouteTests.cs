@@ -229,6 +229,17 @@ public class DefinitionsRouteTests
         Assert.Equal(violations, Message(answered));
     }
 
+    [Fact]
+    public async Task An_export_above_the_file_limits_answers_400_naming_the_count_and_the_limit()
+    {
+        const string refusal = "The namespace holds 5001 queues, topics and subscriptions; a definitions file holds at most 5000, so it cannot be exported.";
+        var answered = await SendAsync("POST", "/api/namespace/export", null,
+            Fails(nameof(IMessagingProvider.ExportDefinitionsAsync), new InvalidEntityConfigurationException([refusal])));
+
+        Assert.Equal(HttpStatusCode.BadRequest, answered.Status);
+        Assert.Equal(refusal, Message(answered));
+    }
+
     [Theory]
     [InlineData("/api/namespace/export", nameof(IMessagingProvider.ExportDefinitionsAsync))]
     [InlineData("/api/namespace/import?dryRun=false", nameof(IMessagingProvider.ImportDefinitionsAsync))]

@@ -36,6 +36,10 @@ public class NamespaceController : ControllerBase
         {
             return Ok(await provider.ExportDefinitionsAsync(HttpContext.RequestAborted));
         }
+        catch (InvalidEntityConfigurationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Export of the entity definitions failed");

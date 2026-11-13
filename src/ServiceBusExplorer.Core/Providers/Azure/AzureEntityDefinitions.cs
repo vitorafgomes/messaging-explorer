@@ -28,7 +28,12 @@ internal static class AzureEntityDefinitions
     internal const string RulesIncomplete = "The subscription was created, but not with all of its rules.";
     internal const string MatchNothingRuleKept = "The subscription was created without rules, but the rule that holds its messages back could not be removed.";
 
-    internal static async Task<EntityDefinitionsDocument> ExportCoreAsync(ServiceBusAdministrationClient adminClient, CancellationToken cancellationToken)
+    /// <summary>
+    /// Reads every entity and rule into one document. For a file (<paramref name="forFile"/>), a namespace above the
+    /// bounds an import accepts is refused with <see cref="InvalidEntityConfigurationException"/> naming the count and the
+    /// limit, before its rules are read when the entities are already too many: a file the app cannot import is never written.
+    /// </summary>
+    internal static async Task<EntityDefinitionsDocument> ExportCoreAsync(ServiceBusAdministrationClient adminClient, CancellationToken cancellationToken, bool forFile = true)
     {
         var queuesRead = ReadAllAsync(adminClient.GetQueuesAsync(cancellationToken), ToDefinition);
         var topicsRead = ReadAllAsync(adminClient.GetTopicsAsync(cancellationToken), ToDefinition);
@@ -40,10 +45,18 @@ internal static class AzureEntityDefinitions
             topic.Subscriptions = ByName(await ReadAllAsync(adminClient.GetSubscriptionsAsync(topic.Name, token), ToDefinition), s => s.Name));
 
         var subscriptions = topics.SelectMany(t => t.Subscriptions!.Select(s => (Topic: t.Name!, Subscription: s!))).ToList();
+        var entities = queuesRead.Result.Count + topics.Count + subscriptions.Count;
+        if (forFile && entities > EntityConfigurationValidator.MaxDefinitionEntities)
+            throw TooLarge($"{entities} queues, topics and subscriptions", EntityConfigurationValidator.MaxDefinitionEntities);
+
         await Parallel.ForEachAsync(subscriptions, parallel, async (pair, token) =>
             pair.Subscription.Rules = ByName(
                 await ReadAllAsync(adminClient.GetRulesAsync(pair.Topic, pair.Subscription.Name, token), AzureServiceBusProvider.MapToSubscriptionRuleInfo),
                 r => r.Name));
+
+        var rules = subscriptions.Sum(s => s.Subscription.Rules!.Count);
+        if (forFile && rules > EntityConfigurationValidator.MaxDefinitionRules)
+            throw TooLarge($"{rules} rules", EntityConfigurationValidator.MaxDefinitionRules);
 
         return new EntityDefinitionsDocument
         {
@@ -57,6 +70,10 @@ internal static class AzureEntityDefinitions
         };
     }
 
+    // ponytail: one file per namespace; a namespace above the bounds needs a chunked export, not built.
+    private static InvalidEntityConfigurationException TooLarge(string held, int limit) =>
+        new([$"The namespace holds {held}; a definitions file holds at most {limit}, so it cannot be exported."]);
+
     internal static async Task<DefinitionsImportResult> ImportCoreAsync(
         ServiceBusAdministrationClient adminClient, EntityDefinitionsDocument document, bool dryRun, ILogger logger, CancellationToken cancellationToken)
     {
@@ -64,7 +81,7 @@ internal static class AzureEntityDefinitions
         if (violations.Count > 0)
             throw new InvalidEntityConfigurationException(violations);
 
-        var existing = (await ExportCoreAsync(adminClient, cancellationToken)).Entities!;
+        var existing = (await ExportCoreAsync(adminClient, cancellationToken, forFile: false)).Entities!;
         var existingQueues = existing.Queues!.ToDictionary(q => q!.Name!, q => q!, StringComparer.OrdinalIgnoreCase);
         var existingTopics = existing.Topics!.ToDictionary(t => t!.Name!, t => t!, StringComparer.OrdinalIgnoreCase);
 
