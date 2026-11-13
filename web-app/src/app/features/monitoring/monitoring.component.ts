@@ -295,7 +295,9 @@ interface SnapshotHistory {
         }
           </mat-tab>
           <mat-tab label="All entities">
-            <app-monitoring-counts class="counts-tab" [snapshot]="status()!.snapshot!"></app-monitoring-counts>
+            <ng-template matTabContent>
+              <app-monitoring-counts class="counts-tab" [snapshot]="status()!.snapshot!"></app-monitoring-counts>
+            </ng-template>
           </mat-tab>
         </mat-tab-group>
       }
@@ -786,24 +788,22 @@ export class MonitoringComponent implements OnInit, OnDestroy {
       this.deltaActive.set(active - prevActive);
       this.deltaDeadLetter.set(deadLetter - prevDeadLetter);
 
-      // Per-queue deltas
+      const previousQueues = new Map(this.previousSnapshot.queues.map(q => [q.name, q.activeMessageCount]));
       this.queueDeltas = {};
       for (const q of snapshot.queues) {
-        const prev = this.previousSnapshot.queues.find(pq => pq.name === q.name);
-        if (prev) {
-          this.queueDeltas[q.name] = q.activeMessageCount - prev.activeMessageCount;
+        const prev = previousQueues.get(q.name);
+        if (prev !== undefined) {
+          this.queueDeltas[q.name] = q.activeMessageCount - prev;
         }
       }
 
-      // Per-subscription deltas
+      const previousSubscriptions = new Map(this.previousSnapshot.subscriptions.map(s => [`${s.topicName}/${s.name}`, s.activeMessageCount]));
       this.subscriptionDeltas = {};
       for (const s of snapshot.subscriptions) {
         const key = `${s.topicName}/${s.name}`;
-        const prev = this.previousSnapshot.subscriptions.find(
-          ps => ps.topicName === s.topicName && ps.name === s.name
-        );
-        if (prev) {
-          this.subscriptionDeltas[key] = s.activeMessageCount - prev.activeMessageCount;
+        const prev = previousSubscriptions.get(key);
+        if (prev !== undefined) {
+          this.subscriptionDeltas[key] = s.activeMessageCount - prev;
         }
       }
     }

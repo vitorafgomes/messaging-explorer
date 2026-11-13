@@ -30,6 +30,8 @@ public class MonitoringBackgroundService : BackgroundService
     private readonly Func<IMessagingProvider?> _currentProvider;
     private IMessagingProvider? _lastProvider;
     private Task _cycle = Task.CompletedTask;
+    private CancellationTokenSource? _cycleCancellation;
+    private IMessagingProvider? _cycleProvider;
 
     public MonitoringBackgroundService(MonitoringStore store, ILogger<MonitoringBackgroundService> logger, IConfiguration configuration)
         : this(store, logger, configuration, ConnectionsController.GetCurrentProvider)
@@ -76,24 +78,39 @@ public class MonitoringBackgroundService : BackgroundService
     }
 
     /// <summary>
-    /// Starts a poll, or skips this tick and returns false when the previous poll has not finished.
+    /// Starts a poll, or skips this tick and returns false when the previous poll of the same connection has not
+    /// finished. A poll still reading a connection that is no longer the current one is cancelled and a poll of the
+    /// current connection starts at once.
     /// </summary>
-    internal bool StartCycle(CancellationToken cancellationToken)
+    internal bool StartCycle(CancellationToken stoppingToken)
     {
+        var provider = _currentProvider();
         if (!_cycle.IsCompleted)
         {
-            _logger.LogWarning("Monitoring poll skipped: the previous poll is still running after {Interval}", Interval);
-            return false;
+            if (ReferenceEquals(provider, _cycleProvider))
+            {
+                _logger.LogWarning("Monitoring poll skipped: the previous poll is still running after {Interval}", Interval);
+                return false;
+            }
+
+            _logger.LogInformation("Connection changed during a monitoring poll; cancelling it");
+            var cancelled = _cycleCancellation!;
+            cancelled.Cancel();
+            _cycle.ContinueWith(_ => cancelled.Dispose(), TaskScheduler.Default);
+        }
+        else
+        {
+            _cycleCancellation?.Dispose();
         }
 
-        _cycle = RunCycleAsync(cancellationToken);
+        _cycleCancellation = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+        _cycleProvider = provider;
+        _cycle = RunCycleAsync(provider, _cycleCancellation.Token);
         return true;
     }
 
-    private async Task RunCycleAsync(CancellationToken cancellationToken)
+    private async Task RunCycleAsync(IMessagingProvider? provider, CancellationToken cancellationToken)
     {
-        var provider = _currentProvider();
-
         if (!ReferenceEquals(provider, _lastProvider))
         {
             _logger.LogInformation("Provider changed, clearing monitoring store");

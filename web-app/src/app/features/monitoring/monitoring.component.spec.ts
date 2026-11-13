@@ -5,6 +5,7 @@ import { Observable, Subject, of, throwError } from 'rxjs';
 import { MonitoringSnapshot, MonitoringStatus } from '../../core/models';
 import { ConnectionService, MonitoringService } from '../../core/services';
 import { MonitoringComponent } from './monitoring.component';
+import { DEAD_LETTER_THRESHOLD_KEY } from './monitoring-counts.component';
 
 const SNAPSHOT: MonitoringSnapshot = {
   timestamp: '2026-11-13T09:00:00Z',
@@ -89,14 +90,37 @@ describe('MonitoringComponent: loading, empty and error are three different stat
     expect(Array.from(el.querySelectorAll('[role="tab"]')).map(text)).toStrictEqual(['Overview', 'All entities']);
   });
 
-  it('opens the counts of every entity on the All entities tab', async () => {
+  it('shows the change in active messages of each queue and subscription since the previous snapshot', () => {
+    const before: MonitoringSnapshot = {
+      timestamp: '2026-11-13T09:00:00Z',
+      queues: [SNAPSHOT.queues[0], { ...SNAPSHOT.queues[0], name: 'billing', activeMessageCount: 9 }],
+      subscriptions: [{ ...SNAPSHOT.queues[0], topicName: 'events', name: 'audit', activeMessageCount: 4 }]
+    };
+    const after: MonitoringSnapshot = {
+      timestamp: '2026-11-13T09:00:30Z',
+      queues: [{ ...SNAPSHOT.queues[0], activeMessageCount: 8 }, { ...SNAPSHOT.queues[0], name: 'billing', activeMessageCount: 2 }, { ...SNAPSHOT.queues[0], name: 'new-queue', activeMessageCount: 1 }],
+      subscriptions: [{ ...SNAPSHOT.queues[0], topicName: 'events', name: 'audit', activeMessageCount: 10 }, { ...SNAPSHOT.queues[0], topicName: 'other', name: 'audit', activeMessageCount: 3 }]
+    };
+    render(() => of(status(after)), [before]);
+
+    const deltas = (section: number) => Array.from(el.querySelectorAll('.table-section')[section].querySelectorAll('tbody tr'))
+      .map(r => { const cells = r.querySelectorAll('td'); return `${text(cells[0])} ${text(cells[cells.length - 1])}`; });
+    expect(deltas(0)).toStrictEqual(['orders +3', 'billing -7', 'new-queue 0']);
+    expect(deltas(1)).toStrictEqual(['events/audit +6', 'other/audit 0']);
+  });
+
+  it('opens the counts of every entity on the All entities tab, and creates them only when that tab is opened', async () => {
+    const created = vi.spyOn(Storage.prototype, 'getItem');
     render(() => of(status(SNAPSHOT)));
+    expect(created.mock.calls.filter(([key]) => key === DEAD_LETTER_THRESHOLD_KEY)).toStrictEqual([]);
 
     (Array.from(el.querySelectorAll('[role="tab"]')).find(t => text(t) === 'All entities') as HTMLElement).click();
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
 
+    expect(created.mock.calls.filter(([key]) => key === DEAD_LETTER_THRESHOLD_KEY)).toStrictEqual([[DEAD_LETTER_THRESHOLD_KEY]]);
+    created.mockRestore();
     const row = el.querySelector('app-monitoring-counts tr.count-row');
     expect(Array.from(row!.querySelectorAll('td')).slice(0, 6).map(text)).toStrictEqual(['orders', 'Queue', '5', '2', '1', '0']);
     expect(text(el.querySelector('.last-update'))).toMatch(/^Last update \d\d:\d\d:\d\d\. The API reads the broker every 30 seconds\.$/);

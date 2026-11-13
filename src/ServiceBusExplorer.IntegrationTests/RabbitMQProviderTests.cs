@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using ServiceBusExplorer.Core.Abstractions;
 using ServiceBusExplorer.Core.Models;
 using ServiceBusExplorer.Core.Providers.RabbitMQ;
@@ -222,5 +223,22 @@ public sealed class RabbitMQProviderTests(RabbitMqFixture fixture) : IAsyncLifet
         Assert.Equal((queue, exchange), (subscriptionCounts?.Name, subscriptionCounts?.TopicName));
         Assert.Null(await _provider.GetQueueCountsAsync(RabbitMqFixture.UniqueName("missing"), CancellationToken.None));
         Assert.Null(await _provider.GetSubscriptionCountsAsync(RabbitMqFixture.UniqueName("missing-ex"), queue, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task An_exchange_bound_to_an_exchange_is_not_listed_as_its_subscription_and_a_bound_queue_still_is()
+    {
+        var source = Exchange("e2e-src");
+        var destination = Exchange("e2e-dst");
+        var queue = Queue("e2e-q");
+        await _provider.CreateTopicAsync(source);
+        await _provider.CreateTopicAsync(destination);
+        await _provider.CreateSubscriptionAsync(source, queue);
+        using var bound = await fixture.Management.PostAsJsonAsync($"bindings/%2F/e/{source}/e/{destination}", new { routing_key = "k" });
+        bound.EnsureSuccessStatusCode();
+
+        var subscriptions = await _provider.GetSubscriptionsAsync(source);
+
+        Assert.Equal([queue], subscriptions.Select(s => s.Name));
     }
 }

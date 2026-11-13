@@ -288,4 +288,53 @@ public class MonitoringBackgroundServiceTests
         Assert.Null(store.GetLatest());
         Assert.Null(store.LastFailureAt);
     }
+
+    [Fact]
+    public async Task A_connection_change_during_a_poll_cancels_the_reads_of_the_previous_broker_and_polls_the_new_one_at_once()
+    {
+        var gate = new TaskCompletionSource();
+        using var entered = new SemaphoreSlim(0);
+        var previousReads = 0;
+        async Task<IEnumerable<SubscriptionInfo>> HeldRead()
+        {
+            Interlocked.Increment(ref previousReads);
+            entered.Release();
+            await gate.Task;
+            return new List<SubscriptionInfo>();
+        }
+
+        var previousTopics = Enumerable.Range(1, 10).Select(i => $"old-{i:00}").ToArray();
+        var (previous, _) = FakeBroker.Create((name, _) => name switch
+        {
+            nameof(IMessagingProvider.GetQueuesAsync) => Queues(new QueueInfo { Name = "old-orders" }),
+            nameof(IMessagingProvider.GetTopicsAsync) => Topics(previousTopics),
+            nameof(IMessagingProvider.GetSubscriptionsAsync) => HeldRead(),
+            _ => null
+        });
+        var (next, _) = FakeBroker.Create((name, _) => name switch
+        {
+            nameof(IMessagingProvider.GetQueuesAsync) => Queues(new QueueInfo { Name = "new-orders" }),
+            nameof(IMessagingProvider.GetTopicsAsync) => Topics(),
+            _ => null
+        });
+        IMessagingProvider? current = previous;
+        var store = new MonitoringStore();
+        var service = Service(store, () => current);
+
+        service.StartCycle(CancellationToken.None);
+        var previousCycle = service.Cycle;
+        for (var i = 0; i < MonitoringBackgroundService.MaxConcurrentSubscriptionReads; i++)
+            Assert.True(await entered.WaitAsync(TimeSpan.FromSeconds(5)), $"only {i} subscription reads started");
+        current = next;
+        Assert.True(service.StartCycle(CancellationToken.None), "the tick after the connection changed was skipped");
+        await service.Cycle.WaitAsync(TimeSpan.FromSeconds(5));
+        var newQueues = store.GetLatest()?.Queues.Select(q => q.Name).ToList();
+        gate.SetResult();
+        await previousCycle;
+
+        Assert.Equal(["new-orders"], newQueues);
+        Assert.Equal(4, previousReads);
+        Assert.Equal(["new-orders"], store.GetLatest()!.Queues.Select(q => q.Name));
+        Assert.Null(store.LastFailureAt);
+    }
 }

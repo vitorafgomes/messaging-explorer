@@ -122,6 +122,34 @@ describe('MonitoringCountsComponent: the counts of every entity on one screen', 
     });
   });
 
+  describe('the work done on each snapshot', () => {
+    it('keeps the row elements of the same entities when a new snapshot arrives and shows its counts in them', () => {
+      render();
+      const before = Array.from(el.querySelectorAll('tr.count-row'));
+
+      fixture.componentRef.setInput('snapshot', {
+        timestamp: '2026-11-13T09:00:30Z',
+        queues: SNAPSHOT.queues.map(q => ({ ...q })),
+        subscriptions: SNAPSHOT.subscriptions.map(x => x.name === 'warehouse' ? { ...x, activeMessageCount: 13 } : { ...x })
+      });
+      fixture.detectChanges();
+
+      const after = Array.from(el.querySelectorAll('tr.count-row'));
+      expect(after.length).toBe(before.length);
+      expect(after.every((row, i) => row === before[i])).toBe(true);
+      expect(rows()).toContainEqual(['warehouse in order-events', 'Subscription', '13', '0', 'Not counted', '0']);
+    });
+
+    it('is not rendered again when its parent is checked and nothing it shows has changed', () => {
+      render();
+      const formatting = vi.spyOn(fixture.componentInstance, 'count');
+
+      fixture.detectChanges();
+
+      expect(formatting).not.toHaveBeenCalled();
+    });
+  });
+
   describe('the dead-letter threshold the user sets', () => {
     it('marks the rows whose dead-letter count is above 100 until the user sets another threshold', () => {
       render();

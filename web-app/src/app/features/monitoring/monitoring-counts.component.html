@@ -18,7 +18,7 @@
   <p class="refresh-failure" role="alert">{{ failure }}</p>
 }
 
-<table mat-table [dataSource]="dataSource" matSort matSortActive="deadLetter" matSortDirection="desc" matSortStart="desc"
+<table mat-table [dataSource]="dataSource" [trackBy]="trackRow" matSort matSortActive="deadLetter" matSortDirection="desc" matSortStart="desc"
        class="counts" aria-label="Counts of every queue and subscription">
   <ng-container matColumnDef="name">
     <th mat-header-cell *matHeaderCellDef mat-sort-header start="asc">Name</th>

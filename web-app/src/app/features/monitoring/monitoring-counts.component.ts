@@ -1,4 +1,4 @@
-import { AfterViewInit, Component, DestroyRef, computed, effect, inject, input, linkedSignal, signal, viewChild } from '@angular/core';
+import { AfterViewInit, ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, input, linkedSignal, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
@@ -54,7 +54,8 @@ function toRow(entity: MonitoringEntity, topicName: string | null): CountsRow {
   standalone: true,
   imports: [MatButtonModule, MatFormFieldModule, MatIconModule, MatInputModule, MatSortModule, MatTableModule, MatTooltipModule],
   templateUrl: './monitoring-counts.component.html',
-  styleUrl: './monitoring-counts.component.scss'
+  styleUrl: './monitoring-counts.component.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class MonitoringCountsComponent implements AfterViewInit {
   private readonly monitoring = inject(MonitoringService);
@@ -91,6 +92,7 @@ export class MonitoringCountsComponent implements AfterViewInit {
   private readonly visibleRows = computed(() => this.rows().filter(row => matches(row, this.needle())));
 
   readonly dataSource = new MatTableDataSource<CountsRow>([]);
+  readonly trackRow = (_: number, row: CountsRow) => row.key;
   private readonly sort = viewChild.required(MatSort);
 
   readonly summary = computed(() => {

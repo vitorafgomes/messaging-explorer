@@ -48,6 +48,11 @@ Each entry carries its date. This page is a tracker: `version` changes only when
 - **2026-11-12 - After a cancelled bulk operation the list and counters are not reloaded; progress is one final update.** [[pages/services/web-app]]
 - **2026-11-12 - RabbitMQ members that throw or return empty behind the shared interface** (dead-lettering, search, sessions) and RabbitMQ logging through `Console.WriteLine`. [[pages/services/core]], [[pages/invariants/provider-boundaries]]
 
+## P2 - performance
+
+- **2026-11-13 - The RabbitMQ monitoring poll costs one management request per queue twice over.** A poll lists queues and exchanges (the topic list itself reads the queues and the bindings of each exchange), then per exchange its bindings, then for each queue binding the queue and its `.dlq` queue: about 3 + 2E + 2B requests for E exchanges and B queue bindings, every period. Since 2026-11-13 a binding to an exchange is no longer read as a queue. Left: one bindings lookup per topic where one `GET /api/bindings/{vhost}` would do, a topic read that needs only names, and the two queue reads per binding, which the queue list of the same poll already holds. [[pages/services/api]], [[pages/services/core]]
+- **2026-11-13 - The monitoring store keeps 120 snapshots while the app reads 20.** The history route is asked for 20 (`count=20` in the web app), the store keeps 120 whole snapshots, one record per queue and subscription each. Estimate of the performance review, reasoned, not measured: about 200 bytes per entity per snapshot, so about 0.7 MB per snapshot and 80 MB held for 120 snapshots on a namespace of 3,500 entities, of the API's memory held for nothing the app reads. Either keep 20, or keep only the totals for the older ones. [[pages/services/api]]
+
 ## P3 - dead code and stale documents
 
 - **2026-11-12 - The legacy `ServiceBusService` is registered and never connected.** Delete it. [[pages/services/core]]

@@ -355,7 +355,7 @@ public class RabbitMQProvider : IMessagingProvider
         var bindings = await _managementClient!.GetExchangeBindingsAsync(topicName);
 
         var subscriptions = new List<SubscriptionInfo>();
-        foreach (var binding in bindings)
+        foreach (var binding in bindings.Where(b => b.DestinationType == "queue"))
         {
             var queue = await _managementClient.GetQueueAsync(binding.Destination);
             // Try to get the DLQ message count (convention: {queueName}.dlq)
@@ -1152,6 +1152,24 @@ public class RabbitMQProvider : IMessagingProvider
     public async ValueTask DisposeAsync()
     {
         await DisconnectAsync();
+    }
+
+    #endregion
+
+    #region Construction
+
+    public RabbitMQProvider()
+    {
+    }
+
+    /// <summary>
+    /// A provider over a connection and a management client that are already open, for tests that answer the
+    /// management API with a handler of their own.
+    /// </summary>
+    internal RabbitMQProvider(IConnection connection, RabbitMQManagementClient managementClient)
+    {
+        _connection = connection;
+        _managementClient = managementClient;
     }
 
     #endregion
