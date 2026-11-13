@@ -89,13 +89,13 @@ The emulator is not the service: a result here proves the code path against the 
 
 `npm test` is `ng test`, the Angular unit-test builder with vitest as its runner (`web-app/angular.json:91`). It compiles the components and picks up every `*.spec.ts`. The gate is `npm test -- --watch=false` in `web-app/`.
 
-Plain `npx vitest` is not a second way to run them. It has no Angular compiler, so a component with a signal `input()` or a `templateUrl` fails with errors such as NG0303, NG0950 and "Component is not resolved" on tests that are sound. The founding of this vault made that mistake and recorded 12 failures that did not exist; the `vitest.config.ts` that listed 11 files for that mode was removed the same day. A failure seen under plain vitest is not evidence of anything.
+Plain `npx vitest` is not a second way to run them. It has no Angular compiler, so a component with a signal `input()` or a `templateUrl` fails with errors such as NG0303, NG0950 and "Component is not resolved" on tests that are sound. The founding of this context made that mistake and recorded 12 failures that did not exist; the `vitest.config.ts` that listed 11 files for that mode was removed the same day. A failure seen under plain vitest is not evidence of anything.
 
 **Skipped:** 8 tests in three `describe.skip` blocks, the refresh variants of the metrics service (`web-app/src/app/core/services/metrics.service.spec.ts:314`), with a TODO about timers under zoneless Angular. They are the only skips allowed; a new one fails the gate.
 
 ## What CI runs
 
-`.github/workflows/ci.yml`: the `harness` job (hook, workflow and script self-tests, the vault citation check), the `dotnet` job (restore, build the solution, `dotnet test` on Core.Tests and Api.Tests by path, so it starts no container), the `integration` job (builds and runs `src/ServiceBusExplorer.IntegrationTests` on its own Linux runner) and the `web` job, which installs, runs the Angular tests (`.github/workflows/ci.yml:115`) and the Electron helper tests (`.github/workflows/ci.yml:119`), both since 2026-11-12, and builds (`.github/workflows/ci.yml:123`). There is no lint step. The release workflow calls this workflow before it packages (`.github/workflows/ci.yml:10`).
+`.github/workflows/ci.yml`: the `harness` job (hook, workflow and script self-tests, the context citation check), the `dotnet` job (restore, build the solution, `dotnet test` on Core.Tests and Api.Tests by path, so it starts no container), the `integration` job (builds and runs `src/ServiceBusExplorer.IntegrationTests` on its own Linux runner) and the `web` job, which installs, runs the Angular tests (`.github/workflows/ci.yml:115`) and the Electron helper tests (`.github/workflows/ci.yml:119`), both since 2026-11-12, and builds (`.github/workflows/ci.yml:123`). There is no lint step. The release workflow calls this workflow before it packages (`.github/workflows/ci.yml:10`).
 
 ## Patterns in use
 

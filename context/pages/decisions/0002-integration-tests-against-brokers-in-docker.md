@@ -9,7 +9,7 @@ description: "The providers are tested against a real RabbitMQ and the Azure Ser
 updated: 2026-11-12
 source:
   - chat
-  - "vault/pages/roadmap/code-audit-2026-11.md"
+  - "context/pages/roadmap/code-audit-2026-11.md"
 reliability: high
 ---
 

@@ -146,12 +146,12 @@ web-app/
   electron/                             the desktop shell: starts the API, updates, tray
 dev/brokers/                            local brokers in Docker for manual testing
 docs/                                   the project website
-vault/                                  the project's documentation
+context/                                  the project's documentation
 ```
 
-The documentation lives in [`vault/`](vault/index.md): how each part works, the rules the code must keep, the decisions taken and what is planned. The screens are drawn in the [UI prototype](vault/prototypes/web-app/README.md).
+The documentation lives in [`context/`](context/index.md): how each part works, the rules the code must keep, the decisions taken and what is planned. The screens are drawn in the [UI prototype](context/prototypes/web-app/README.md).
 
-To add another broker, start from [`docs/ADDING_PROVIDERS.md`](docs/ADDING_PROVIDERS.md) and the [provider boundaries](vault/pages/invariants/provider-boundaries.md) page.
+To add another broker, start from [`docs/ADDING_PROVIDERS.md`](docs/ADDING_PROVIDERS.md) and the [provider boundaries](context/pages/invariants/provider-boundaries.md) page.
 
 ## Contributing
 

@@ -31,7 +31,7 @@ Example scope hierarchy:
 ```
 Your machine
 ├── Everything else
-└── Your knowledge space (vault/notes)
+└── Your knowledge space (context/notes)
     ├── Private/       ← never expose to agent
     ├── Sensitive/     ← work confidential
     ├── Archive/       ← legacy notes

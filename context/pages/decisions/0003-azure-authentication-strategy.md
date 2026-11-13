@@ -18,7 +18,7 @@ reliability: high
 
 ## Status
 
-Accepted by the owner on 2026-04-19, before this vault existed. Numbered here in order of migration, not of date. Partly implemented; see "Where it stands".
+Accepted by the owner on 2026-04-19, before this context existed. Numbered here in order of migration, not of date. Partly implemented; see "Where it stands".
 
 ## Context
 

@@ -9,7 +9,7 @@ edit_web=$(edit /repo/web-app/src/app/core/services/api.service.ts)
 edit_electron=$(edit /repo/web-app/electron/main.js)
 edit_test=$(edit /repo/src/ServiceBusExplorer.Core.Tests/Providers/RabbitMQSessionTests.cs)
 edit_spec=$(edit /repo/web-app/src/app/core/services/queue.service.spec.ts)
-edit_doc=$(edit /repo/vault/log.md)
+edit_doc=$(edit /repo/context/log.md)
 review='{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Agent","input":{"subagent_type":"explorer-reviewer"}}]}}'
 workflow='{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Workflow","input":{"name":"explorer-review","args":{"module":"ServiceBusExplorer.Core"}}}]}}'
 check() {

@@ -9,8 +9,8 @@ description: "Every part of the product has a test that would fail if it broke: 
 updated: 2026-11-12
 source:
   - chat
-  - "vault/pages/conventions/testing.md"
-  - "vault/pages/roadmap/code-audit-2026-11.md"
+  - "context/pages/conventions/testing.md"
+  - "context/pages/roadmap/code-audit-2026-11.md"
 reliability: medium
 ---
 

@@ -1,2 +1,2 @@
-# vault/log.md is prepend-only and edited by every branch; keep both sides on merge instead of conflicting.
-vault/log.md merge=union
+# context/log.md is prepend-only and edited by every branch; keep both sides on merge instead of conflicting.
+context/log.md merge=union

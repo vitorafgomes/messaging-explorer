@@ -1,6 +1,8 @@
 ## [2026-11-12] integrate | Next version: Azure Event Hubs and Azure Event Grid, surveyed
 The owner decided the next version adds Event Hubs and Event Grid, presented with Service Bus as one Microsoft Azure family. [[pages/roadmap/azure-event-hubs-and-event-grid]] has the survey: one sign-in that discovers the three products, one provider per product behind a small shared contract (an ADR first), fourteen items with the current SDK members and their sources, and the testing gap: the Event Hubs data plane has an emulator, Event Grid and every management call have none. It also found that the metrics package the code uses is deprecated upstream.
 
+## [2026-11-13] decision | The documentation folder is named context
+The owner asked for `vault/` to be named `context/`. The folder, the citation checker (`scripts/check-context-refs.sh`) and every pointer to them in `CLAUDE.md`, `AGENTS.md`, the README, the harness and CI moved; entries above this one keep the old path as written. [[pages/decisions/0004-the-in-repo-documentation-folder-is-named-context]].
 ## [2026-11-13] chore | Private names cannot enter the repository
 The owner asked to guarantee that no name of another project or employer ever appears here. A search of the tree, every branch and tag, every commit and diff in the history, the issues, the pull requests and the release notes found none. `scripts/check-private-names.sh` now keeps it so: a required check fails a push or a pull request whose files, title, body or commit messages carry one, and the names themselves live only in a secret and a local file, never in the repository. [[pages/conventions/tooling]].
 

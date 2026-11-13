@@ -8,8 +8,8 @@ status: active
 description: "The order of work to make Messaging Explorer safe to point at a production broker and trustworthy to ship on Windows, macOS and Linux: seven phases, each with its scope and the observable result that closes it."
 updated: 2026-11-12
 source:
-  - "vault/pages/roadmap/followups.md"
-  - "vault/pages/services/"
+  - "context/pages/roadmap/followups.md"
+  - "context/pages/services/"
   - ".github/workflows/release.yml"
   - "web-app/package.json"
   - chat
@@ -39,7 +39,7 @@ No dates are set; the owner sets them. The plan is done when each phase's succes
 
 ## Status
 
-- **As of 2026-11-12:** nothing started. The working tree holds the owner's uncommitted work on `fix/dlq-bulk-operations` plus the uncommitted harness and vault.
+- **As of 2026-11-12:** nothing started. The working tree holds the owner's uncommitted work on `fix/dlq-bulk-operations` plus the uncommitted harness and context.
 - **Next milestone:** Phase 0.
 - **Blocker:** the open branch. Every phase below edits files that branch touches (`AzureServiceBusProvider.cs`, `view-messages-dialog.component.ts`, `api.service.ts`, `package.json`); it lands first.
 
@@ -49,7 +49,7 @@ The order is by what each phase makes possible, not only by risk: Phase 1 comes 
 
 ### Phase 0 - Land what is open
 - **Status:** not started
-- **Scope:** the owner's DLQ bulk-operations branch as its own PR; the harness and vault as a separate `chore/` PR. The untracked `metrics-dashboard.component.ts` goes with whichever change owns it.
+- **Scope:** the owner's DLQ bulk-operations branch as its own PR; the harness and context as a separate `chore/` PR. The untracked `metrics-dashboard.component.ts` goes with whichever change owns it.
 - **Success criteria:** `main` holds both; a fresh clone runs the nine harness self-tests green in CI.
 
 ### Phase 1 - Gates that tell the truth

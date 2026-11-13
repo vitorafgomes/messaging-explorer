@@ -1,6 +1,6 @@
-# Vault Operation Schema
+# Context Operation Schema
 
-This file is the operation contract for Claude when working on this wiki. It is **project-agnostic** — it defines HOW Claude operates on the vault, not WHAT this project is. Project-specific content lives in `pages/`.
+This file is the operation contract for Claude when working on this wiki. It is **project-agnostic** — it defines HOW Claude operates on the context, not WHAT this project is. Project-specific content lives in `pages/`.
 
 Read this file at session start (or rely on the root-repo `CLAUDE.md` to auto-include it). Follow it verbatim unless the user overrides.
 
@@ -26,10 +26,10 @@ On every session, before any code grep or file read:
    - **Bug fix** — correcting existing behavior.
    - **Refactor** — restructuring without behavior change.
    - **Investigation** — answering a question about the codebase.
-   - **Lint** — health-checking the vault itself.
+   - **Lint** — health-checking the context itself.
 3. Route via the table below.
 4. Read every routed page before proposing or coding anything.
-5. Only after the vault is exhausted, grep source.
+5. Only after the context is exhausted, grep source.
 
 ## Task routing
 
@@ -51,7 +51,7 @@ All pages use the schema in `wiki-schema.md`. Mandatory frontmatter: `title`, `v
 
 **Where a page goes.** A service page states how the project works now; what changed when goes to `pages/history/<project>.md`. Follow-ups go to a tracker page under `pages/roadmap/` (create `pages/roadmap/followups.md` from `templates/_roadmap-initiative.md` on first use).
 
-Two personal-wiki defaults this vault uses beyond `knowledge`:
+Two personal-wiki defaults this context uses beyond `knowledge`:
 - `longform` — a linear authored document (spec, architecture brief, design doc), typically under `pages/architecture/`.
 - `established-patterns` — a memory record of what was decided, what worked and what was rejected, under `pages/conventions/`.
 
@@ -130,7 +130,7 @@ Claude:
 
 ## Rules for Claude
 
-0. **This vault covers the whole repo.** Messaging Explorer is one repo: the .NET API and Core
+0. **This context covers the whole repo.** Messaging Explorer is one repo: the .NET API and Core
    library under `src/`, the Angular app and the Electron shell under `web-app/`, the site under
    `docs/`. Pages here cover all of it. The owner's private notes (plans, handoffs, sessions,
    audits) live in the Obsidian vault outside this repo and are never copied here, because this
