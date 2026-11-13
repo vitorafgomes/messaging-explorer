@@ -1,6 +1,9 @@
 ## [2026-11-12] integrate | Next version: Azure Event Hubs and Azure Event Grid, surveyed
 The owner decided the next version adds Event Hubs and Event Grid, presented with Service Bus as one Microsoft Azure family. [[pages/roadmap/azure-event-hubs-and-event-grid]] has the survey: one sign-in that discovers the three products, one provider per product behind a small shared contract (an ADR first), fourteen items with the current SDK members and their sources, and the testing gap: the Event Hubs data plane has an emulator, Event Grid and every management call have none. It also found that the metrics package the code uses is deprecated upstream.
 
+## [2026-11-13] chore | Private names cannot enter the repository
+The owner asked to guarantee that no name of another project or employer ever appears here. A search of the tree, every branch and tag, every commit and diff in the history, the issues, the pull requests and the release notes found none. `scripts/check-private-names.sh` now keeps it so: a required check fails a push or a pull request whose files, title, body or commit messages carry one, and the names themselves live only in a secret and a local file, never in the repository. [[pages/conventions/tooling]].
+
 ## [2026-11-13] feat | Sessions: a list that locks nothing, one session opened, a guarded state write
 Listing sessions used to accept and lock each one in turn, taking them from the real consumers. It is now a bounded peek grouped by session id; a test on the emulator showed that a plain receiver peeks a session entity and locks none. Only opening one session accepts it, for at most five seconds. The state editor shows the old state beside the new, and the write carries the state as read, so a state changed meanwhile is refused. Queues gained the Sessions tab. [[pages/roadmap/azure-service-bus-administration]] item 6, [[pages/services/api]].
 
