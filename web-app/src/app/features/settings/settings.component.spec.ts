@@ -114,12 +114,12 @@ describe('SettingsComponent', () => {
     expect(state()).toBe('check_circle You are up to date 2.4.2 is the newest version on the Stable channel.');
   });
 
-  it('available: names the version and Download starts the download through the shell', async () => {
+  it('available: names the version, says it is downloading in the background, and Download joins the download through the shell', async () => {
     const { state, push, button, shell } = await render();
     await push({ status: 'available', version: '2.5.0' });
 
     expect(state()).toContain('Version 2.5.0 is available');
-    expect(state()).toContain('Nothing is downloaded until you choose Download.');
+    expect(state()).toContain('It is downloading in the background and installs the next time you quit the app.');
     button('download Download')!.click();
     expect(shell.downloadUpdate).toHaveBeenCalledTimes(1);
   });
@@ -166,7 +166,7 @@ describe('SettingsComponent', () => {
     expect(shell.checkForUpdates).toHaveBeenCalledTimes(1);
   });
 
-  it('a package that cannot update itself offers the download page, never Download or Restart', async () => {
+  it('a package that cannot update itself links the release of the new version, never Download or Restart', async () => {
     const { state, push, el } = await render({ getSelfUpdateBlocker: async () => 'macos-unsigned' });
     await push({ status: 'available', version: '2.5.0' });
 
@@ -174,7 +174,7 @@ describe('SettingsComponent', () => {
     expect(state()).toContain('macOS: the build is not signed, and macOS installs an update only into a signed app.');
     const actions = Array.from(el.querySelectorAll('[data-testid="update-state"] a, [data-testid="update-state"] button'));
     expect(actions.map(a => words(a))).toEqual(['Open the download page open_in_new']);
-    expect(actions[0].getAttribute('href')).toBe(RELEASES_URL);
+    expect(actions[0].getAttribute('href')).toBe(`${RELEASES_URL}/tag/v2.5.0`);
     expect(actions[0].getAttribute('target')).toBe('_blank');
 
     await push({ status: 'downloaded', version: '2.5.0' });

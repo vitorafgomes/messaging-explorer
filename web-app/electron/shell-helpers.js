@@ -137,7 +137,15 @@ function selfUpdateBlocker(platform, env) {
   return null;
 }
 
+/** Downloads an update as soon as it is found and installs it on quit, only where this package can replace itself. */
+function configureAutoUpdate(updater, platform, env) {
+  const canReplaceItself = selfUpdateBlocker(platform, env) === null;
+  updater.autoDownload = canReplaceItself;
+  updater.autoInstallOnAppQuit = canReplaceItself;
+}
+
 module.exports = {
+  configureAutoUpdate,
   isSafeExternalUrl,
   normalizeUpdateChannel,
   applyUpdateChannel,

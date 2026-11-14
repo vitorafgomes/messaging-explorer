@@ -38,7 +38,7 @@ The builds are not code signed, so the system asks before the first start:
 - **Windows:** SmartScreen shows "Windows protected your PC". Choose **More info**, then **Run anyway**.
 - **macOS:** open the app from Finder with a right click, then **Open**. Because the build is unsigned, macOS cannot install an update by itself: download the new version from the releases page.
 
-The app looks for a new version a few seconds after it starts and every four hours. It tells you when one exists and downloads it only when you ask.
+The app looks for a new version a few seconds after it starts and every four hours. On Windows (the installer) and the Linux AppImage it downloads a new version on its own and installs it the next time you quit; on macOS, the portable exe and the deb it links the release to download by hand.
 
 ## What it does
 
