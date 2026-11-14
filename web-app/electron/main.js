@@ -4,7 +4,7 @@ const { spawn } = require('child_process');
 const { autoUpdater } = require('electron-updater');
 const crypto = require('crypto');
 const Store = require('electron-store');
-const { isSafeExternalUrl, normalizeUpdateChannel, applyUpdateChannel, waitForHealth, stopProcess, applicationMenuTemplate, mainWindowOptions, shellShortcut, selfUpdateBlocker } = require('./shell-helpers');
+const { isSafeExternalUrl, normalizeUpdateChannel, applyUpdateChannel, waitForHealth, stopProcess, applicationMenuTemplate, mainWindowOptions, shellShortcut, selfUpdateBlocker, configureAutoUpdate } = require('./shell-helpers');
 
 // Generate a per-session API secret for Electron <-> .NET API authentication
 const API_SECRET = crypto.randomBytes(32).toString('hex');
@@ -834,8 +834,7 @@ ipcMain.handle('get-api-secret', () => API_SECRET);
 ipcMain.handle('get-api-port', () => apiPort);
 
 // === Auto Updater ===
-autoUpdater.autoDownload = false;
-autoUpdater.autoInstallOnAppQuit = true;
+configureAutoUpdate(autoUpdater, process.platform, process.env);
 applyUpdateChannel(autoUpdater, normalizeUpdateChannel(store.get('updateChannel', 'latest')) ?? 'latest');
 
 function sendUpdateStatus(status, data = {}) {
@@ -879,6 +878,7 @@ ipcMain.handle('check-for-updates', async () => {
   if (isDev) return { status: 'dev-mode' };
   try {
     const result = await autoUpdater.checkForUpdates();
+    result?.downloadPromise?.catch(() => {});
     return { status: 'ok', version: result?.updateInfo?.version };
   } catch (err) {
     return { status: 'error', message: err.message };
@@ -926,7 +926,7 @@ const UPDATE_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
 function scheduleUpdateChecks() {
   if (isDev) return;
   const runCheck = () => {
-    autoUpdater.checkForUpdates().catch(err => {
+    autoUpdater.checkForUpdates().then(result => result?.downloadPromise?.catch(() => {})).catch(err => {
       console.log('[Updater] Auto-check failed (offline?):', err.message);
     });
   };

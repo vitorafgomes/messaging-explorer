@@ -9,7 +9,8 @@ const {
   applicationMenuTemplate,
   mainWindowOptions,
   shellShortcut,
-  selfUpdateBlocker
+  selfUpdateBlocker,
+  configureAutoUpdate
 } = require('./shell-helpers');
 
 test('no File/Edit/View/Window/Help bar: no application menu on win32 and linux', () => {
@@ -301,4 +302,26 @@ test('the portable Windows build cannot update itself; the installed one can', (
 test('on Linux the AppImage can update itself; the deb package cannot', () => {
   assert.equal(selfUpdateBlocker('linux', { APPIMAGE: '/home/user/Messaging-Explorer.AppImage' }), null);
   assert.equal(selfUpdateBlocker('linux', {}), 'linux-package');
+});
+
+test('an update downloads on its own and installs on quit only where the package can replace itself', () => {
+  const cases = [
+    ['the Windows installer', 'win32', {}, true],
+    ['the AppImage', 'linux', { APPIMAGE: '/home/user/Messaging-Explorer.AppImage' }, true],
+    ['macOS, unsigned', 'darwin', {}, false],
+    ['the Windows portable exe', 'win32', { PORTABLE_EXECUTABLE_FILE: 'C:\\apps\\Messaging Explorer.exe' }, false],
+    ['the deb', 'linux', {}, false]
+  ];
+  for (const [name, platform, env, expected] of cases) {
+    const updater = { autoDownload: !expected, autoInstallOnAppQuit: !expected };
+    configureAutoUpdate(updater, platform, env);
+    assert.equal(updater.autoDownload, expected, `${name}: autoDownload`);
+    assert.equal(updater.autoInstallOnAppQuit, expected, `${name}: autoInstallOnAppQuit`);
+  }
+});
+
+test('main.js configures the updater through configureAutoUpdate and sets autoDownload nowhere else', () => {
+  const main = require('node:fs').readFileSync(require('node:path').join(__dirname, 'main.js'), 'utf8');
+  assert.match(main, /^configureAutoUpdate\(autoUpdater, process\.platform, process\.env\);$/m);
+  assert.doesNotMatch(main, /autoUpdater\.(autoDownload|autoInstallOnAppQuit)\s*=/);
 });

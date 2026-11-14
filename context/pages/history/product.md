@@ -2,7 +2,7 @@
 title: "Product history"
 version: "1.1"
 date: 2026-11-12
-changes: "2026-11-13: the release from main. Initial history page, migrated from the owner's notes"
+changes: "2026-11-13: updates download on their own. Earlier 2026-11-13: the release from main. Initial history page, migrated from the owner's notes"
 page_type: reference
 status: active
 description: "How Messaging Explorer got here: the private version line up to 3.0.0, the public relaunch as 1.0.0, why 2.3.0 followed, and the decisions taken on the way that still shape the code."
@@ -33,6 +33,7 @@ Everything before 2026-04-30 comes from the owner's notes and predates the publi
 | 2026-11-12 | - | The agent harness, this context, the code audit and the integration tests ([[pages/decisions/0001-in-repo-vault-and-agent-harness]], [[pages/roadmap/code-audit-2026-11]]). |
 | 2026-11-12 | 2.4.0 | The fixes of the audit (connection fields kept on save, entity names with reserved characters, bulk actions bound to the selection, a start that waits for the API), the Beta update channel, block maps in the release, dependencies moved inside their majors (`CHANGELOG.md`). First release built by the gated workflow: CI on the tagged commit, tag checked against the package version, then the three builds. |
 | 2026-11-13 | - | The release runs from `main`: Run workflow computes the version from the commits since the last tag, stamps it into the build, and creates the tag and the GitHub Release once every build passes, so no commit bumps the version any more. Until then a version needed a `chore(release)` pull request that edited `web-app/package.json` and `CHANGELOG.md`, then a pushed tag that `verify-version` checked against the package. The notes of each release on GitHub replace `CHANGELOG.md`, which stops at 2.4.4. Tests: three new cases in `web-app/electron/release-workflow.test.js`, and `tools/release/next-version.test.sh`. |
+| 2026-11-13 | - | Updates download on their own. Until then a found version waited for Download in Settings; now the Windows installer and the AppImage download it in the background and install it on the next quit, as the owner asked. macOS (unsigned), the portable exe and the deb still cannot replace themselves; their Open the download page now opens the release of the new version instead of the release list. Tests changed on purpose: the available and the cannot-update-itself cases of `settings.component.spec.ts`. |
 
 ## Decisions taken on the way that still hold
 

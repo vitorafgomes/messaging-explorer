@@ -106,6 +106,8 @@ export class AppUpdateService {
     if (!SHELL_STATUSES.includes(data?.status)) return;
     if (data.version) this.availableVersion.set(data.version);
     if (typeof data.percent === 'number') this.percent.set(data.percent);
+    if (data.status === 'checking') this.downloadRequested = false;
+    if (data.status === 'downloading' || (data.status === 'available' && !this.blocker())) this.downloadRequested = true;
     if (data.status === 'error') {
       this.fail(this.downloadRequested ? 'download' : 'check', data.message);
       return;
