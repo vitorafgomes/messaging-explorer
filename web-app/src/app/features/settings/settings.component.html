@@ -41,7 +41,7 @@
             <mat-icon>refresh</mat-icon>Check now
           </button>
         </div>
-        <p class="note">Checked 5 seconds after the app starts, then every 4 hours. Beta also receives pre-releases; going back to Stable never downgrades, you stay on the beta until a newer stable version is out.</p>
+        <p class="note">Checked 5 seconds after the app starts, then every 4 hours; a new version downloads on its own where this package can update itself. Beta also receives pre-releases; going back to Stable never downgrades, you stay on the beta until a newer stable version is out, and a beta already downloaded still installs on the next quit.</p>
 
         <div class="state" aria-live="polite" data-testid="update-state">
           @switch (updates.status()) {
@@ -97,7 +97,7 @@
                   </h3>
                   <p><strong>{{ blocked.platform }}:</strong> {{ blocked.reason }}</p>
                   <p>Download the new version and replace this copy. Your connections stay: they live in the data folder, not in the app.</p>
-                  <a mat-stroked-button [href]="releasesUrl" target="_blank" rel="noopener noreferrer">
+                  <a mat-stroked-button [href]="releaseOfVersion()" target="_blank" rel="noopener noreferrer">
                     Open the download page<mat-icon iconPositionEnd aria-hidden="true">open_in_new</mat-icon>
                   </a>
                 </div>
@@ -106,7 +106,7 @@
                   @case ('available') {
                     <div class="panel available-panel">
                       <h3><mat-icon aria-hidden="true">download</mat-icon>Version {{ updates.availableVersion() }} is available</h3>
-                      <p>You have {{ updates.version() }}. Nothing is downloaded until you choose Download.</p>
+                      <p>You have {{ updates.version() }}. It is downloading in the background and installs the next time you quit the app.</p>
                       <div class="actions">
                         <button mat-flat-button type="button" (click)="updates.download()"><mat-icon>download</mat-icon>Download</button>
                         <a mat-button [href]="releaseOfVersion()" target="_blank" rel="noopener noreferrer">
