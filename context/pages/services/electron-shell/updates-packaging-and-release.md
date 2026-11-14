@@ -1,9 +1,9 @@
 ---
 title: "Electron Shell: Updates, packaging and release"
-version: "1.1"
+version: "1.2"
 date: 2026-11-13
 updated: 2026-11-13
-changes: "2026-11-13: an update downloads on its own where the package can replace itself. v1.0: split out of the Electron Shell service page"
+changes: "v1.2 (2026-11-13): an update downloads on its own where the package can replace itself. v1.1: the release runs by hand from main. v1.0: split out of the Electron Shell service page"
 page_type: service
 status: active
 description: "Read when a change touches electron-store, electron-updater and the update channel, the electron-builder configuration, or the release workflow."
@@ -43,7 +43,10 @@ One topic of [[pages/services/electron-shell|Electron Shell]]; the map lists the
 
 ## Release workflow (`.github/workflows/release.yml`)
 
-- Trigger: push of a tag matching `v*` only (`.github/workflows/release.yml`). One release per tag at a time (`.github/workflows/release.yml#concurrency:`). `contents: write` (`.github/workflows/release.yml#permissions:`).
-- Jobs: `build-linux` on ubuntu-latest (`.github/workflows/release.yml#build-linux:`), `build-windows` on windows-latest (`.github/workflows/release.yml#build-windows:`), `build-mac` on macos-latest (`.github/workflows/release.yml#build-mac:`); each sets up .NET 10 and Node 22, runs `npm ci` and `npm run electron:build:{linux,win,mac}`, and uploads artifacts with `if-no-files-found: error`. `release` needs all three, downloads them and calls `softprops/action-gh-release@v2` with generated notes; `prerelease` is true when the tag contains `-beta` (`.github/workflows/release.yml#release:`, `.github/workflows/release.yml#uses: softprops/action-gh-release@v2`, `.github/workflows/release.yml#prerelease: ${{ contains(github.ref_name, '-beta') }}`).
-- Signing: none. No certificate, `CSC_*` or notarization settings exist in the workflow or in `package.json`; the workflow header says macOS is unsigned (`.github/workflows/release.yml#macOS: dmg + zip (unsigned)`). Windows output is unsigned as well (nothing configures it). Since 2026-11-12 the `verify-version` job fails the run when the tag is not `v` plus the `package.json` version (`.github/workflows/release.yml#- name: Compare tag and package.json`).
-- Tests: since 2026-11-12 every build job needs `verify`, which calls the CI workflow on the tagged commit (`.github/workflows/release.yml#name: CI on the tagged commit`, `.github/workflows/release.yml#needs: [verify, verify-version]`), so a tag on a commit with a failing test packages nothing. CI does not build the Electron app (`.github/workflows/ci.yml## Angular / web app — install, test, build`), and nothing starts a packaged app.
+- Trigger: Run workflow on `main` (`.github/workflows/release.yml#workflow_dispatch:`), kind release or prerelease, optional version override; or a pushed `v*` tag (`.github/workflows/release.yml#tags: ['v*']`). Other refs fail `check`. Only `vX.Y.Z` and `vX.Y.Z-beta.N`: the updater has no other channel. One run per ref (`.github/workflows/release.yml#concurrency:`).
+- Version: `tools/release/next-version.sh` bumps the last `vX.Y.Z` tag from the conventional commits since it (breaking major, `feat` minor, else patch; prerelease `X.Y.Z-beta.N`, `.github/workflows/release.yml#args=(prerelease beta)`) and writes the notes. No commit carries it: each build stamps it into `web-app/package.json` before packaging (`.github/workflows/release.yml#- name: Set the app version`), so electron-builder writes `latest*.yml` or `beta*.yml` with it. `CHANGELOG.md` stops at 2.4.4.
+- Token: read-only (`.github/workflows/release.yml#permissions:`); only `publish` writes, creating tag and release on the built commit (`.github/workflows/release.yml#gh release create "$TAG" --target "$GITHUB_SHA"`), a beta as a prerelease. A workflow-token tag starts no other run; a personal-token one would release twice.
+- Jobs: `check`, `verify`, `build-linux` (`.github/workflows/release.yml#build-linux:`), `build-windows` (`.github/workflows/release.yml#build-windows:`), `build-mac` (`.github/workflows/release.yml#build-mac:`): .NET 10, Node 22, `npm ci`, stamp, `npm run electron:build:{linux,win,mac}`, `SHA256SUMS-<os>.txt`, upload with `if-no-files-found: error`; then `publish`.
+- Signing: none; macOS unsigned (`.github/workflows/release.yml#macOS: dmg + zip (unsigned)`), Windows too.
+- Tests: builds need `verify`, the CI workflow on the released commit (`.github/workflows/release.yml#name: CI on the released commit`, `.github/workflows/release.yml#needs: [check, verify]`). `web-app/electron/release-workflow.test.js` pins trigger and version (`web-app/electron/release-workflow.test.js#a release runs by hand from main, as a release or a beta, with the version computed from the commits`), the stamp (`web-app/electron/release-workflow.test.js#every build stamps the computed version into package.json before electron-builder runs`), the token (`web-app/electron/release-workflow.test.js#only the publish job can write, and it creates the tag on the commit it built`) and the prerelease flag (`web-app/electron/release-workflow.test.js#a beta is published as a prerelease, so stable updaters keep reading the latest stable release`); `tools/release/next-version.test.sh` covers the version and notes.
+

@@ -96,3 +96,47 @@ test('builder debug files are never uploaded', () => {
     }
   }
 });
+
+function job(name) {
+  const lines = workflow.split('\n');
+  const start = lines.findIndex((line) => line === `  ${name}:`);
+  assert.notEqual(start, -1, `no "${name}" job in release.yml`);
+  const end = lines.findIndex((line, index) => index > start && /^ {2}[a-z][\w-]*:$/.test(line));
+  return lines.slice(start, end === -1 ? undefined : end).join('\n');
+}
+
+test('a release runs by hand from main, as a release or a beta, with the version computed from the commits', () => {
+  assert.match(workflow, /^ {2}workflow_dispatch:\n {4}inputs:\n {6}kind:/m, 'Run workflow offers the kind of release');
+  assert.match(workflow, /options: \[release, prerelease\]/);
+  assert.match(job('check'), /bash tools\/release\/next-version\.sh "\$\{args\[@\]\}"/, 'the version comes from tools/release/next-version.sh');
+  assert.match(job('check'), /args=\(prerelease beta\)/, 'a prerelease is a beta, so the updater writes beta*.yml');
+});
+
+test('every build stamps the computed version into package.json before electron-builder runs', () => {
+  for (const [name, os] of [['build-linux', 'linux'], ['build-windows', 'win'], ['build-mac', 'mac']]) {
+    const steps = job(name);
+    const stamp = steps.indexOf('npm pkg set version="$VERSION"');
+    const build = steps.indexOf(`npm run electron:build:${os}`);
+    assert.notEqual(stamp, -1, `${name} does not set the version, so electron-builder writes the version of main into ${os} metadata`);
+    assert.ok(stamp < build, `${name} sets the version after packaging`);
+    assert.match(steps, /VERSION: \$\{\{ needs\.check\.outputs\.version \}\}/, `${name} takes the version from the check job`);
+  }
+});
+
+test('only the publish job can write, and it creates the tag on the commit it built', () => {
+  assert.match(workflow, /^permissions:\n {2}contents: read$/m, 'the workflow token is read-only');
+  assert.match(job('publish'), /permissions:\n {6}contents: write/);
+  assert.match(job('publish'), /gh release create "\$TAG" --target "\$GITHUB_SHA"/);
+  assert.doesNotMatch(workflow, /secrets\.(?!GITHUB_TOKEN)/, 'no secret other than the workflow token: a tag pushed with a personal token would start a second release');
+});
+
+test('a beta is published as a prerelease, so stable updaters keep reading the latest stable release', () => {
+  const check = job('check');
+  assert.match(check, /prerelease\) args=\(prerelease beta\); prerelease=true;/, 'a dispatched prerelease is flagged');
+  assert.equal((check.match(/prerelease=true/g) || []).length, 1, 'only the prerelease kind sets the flag');
+  assert.match(check, /shape='\^\[0-9\]\+\\\.\[0-9\]\+\\\.\[0-9\]\+-beta\\\.\[0-9\]\+\$'/, 'a prerelease override must be X.Y.Z-beta.N: the updater has no other channel');
+  assert.match(check, /=~ \^v\[0-9\]\+\\\.\[0-9\]\+\\\.\[0-9\]\+\(-beta\\\.\[0-9\]\+\)\?\$ \]\]/, 'a pushed tag must be vX.Y.Z or vX.Y.Z-beta.N');
+  const publish = job('publish');
+  assert.match(publish, /if \[ "\$PRERELEASE" = true \]; then flags\+=\(--prerelease\); fi/, 'a dispatched beta is created as a prerelease');
+  assert.match(publish, /if \[\[ "\$TAG" == \*-\* \]\]; then flags\+=\(--prerelease\); fi/, 'a pushed beta tag is created as a prerelease');
+});
