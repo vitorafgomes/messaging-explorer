@@ -92,7 +92,6 @@ Each is an entry in [[pages/roadmap/followups]].
 ## Not part of the harness yet
 
 - An architecture-test project: it rests on build strictness this repo does not have yet.
-- Knowledge-graph git hooks: this repo has no knowledge graph.
 - Whole-project mutation testing as a required step: the Prove step's targeted mutation is the proof, and `stryker-project` runs only on request.
 - `evals/` for the pipeline skill, and project slash commands.
 
