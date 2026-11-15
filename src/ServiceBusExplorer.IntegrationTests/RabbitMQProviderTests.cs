@@ -170,6 +170,94 @@ public sealed class RabbitMQProviderTests(RabbitMqFixture fixture) : IAsyncLifet
         Assert.Equal("survives", after.Body);
     }
 
+    private async Task<(string Queue, string DeadLetter)> QueueWithDeadLettersAsync(string tag, params string[] bodies)
+    {
+        var queue = Queue(tag);
+        var deadLetter = $"{queue}.dlq";
+        _queues.Add(deadLetter);
+        await _provider.CreateQueueAsync(queue);
+        await _provider.CreateQueueAsync(deadLetter);
+        foreach (var body in bodies) fixture.PublishToQueue(deadLetter, body);
+        await fixture.WaitForMessageCountAsync(deadLetter, (uint)bodies.Length);
+        return (queue, deadLetter);
+    }
+
+    [Fact]
+    public async Task A_resubmit_of_dead_letter_position_2_sends_only_that_message_to_the_queue_and_keeps_the_others_in_their_order()
+    {
+        var (queue, deadLetter) = await QueueWithDeadLettersAsync("resubmit-one", "d1", "d2", "d3");
+
+        var result = await _provider.ResubmitDeadLetterMessagesAsync(queue, [2]);
+
+        Assert.Equal((1, 0), (result.SuccessCount, result.FailureCount));
+        await fixture.WaitForMessageCountAsync(queue, 1);
+        await fixture.WaitForMessageCountAsync(deadLetter, 2);
+        Assert.Equal(["d2"], fixture.Drain(queue));
+        Assert.Equal(["d1", "d3"], fixture.Drain(deadLetter));
+    }
+
+    [Fact]
+    public async Task A_single_resubmit_of_position_3_sends_the_third_message_never_the_head()
+    {
+        var (queue, deadLetter) = await QueueWithDeadLettersAsync("resubmit-third", "d1", "d2", "d3");
+
+        await _provider.ResubmitDeadLetterMessageAsync(queue, 3);
+
+        await fixture.WaitForMessageCountAsync(queue, 1);
+        Assert.Equal(["d3"], fixture.Drain(queue));
+        Assert.Equal(["d1", "d2"], fixture.Drain(deadLetter));
+    }
+
+    [Fact]
+    public async Task A_resubmitted_message_keeps_its_body_its_message_id_its_content_type_and_its_headers()
+    {
+        var queue = Queue("resubmit-props");
+        var deadLetter = $"{queue}.dlq";
+        _queues.Add(deadLetter);
+        await _provider.CreateQueueAsync(queue);
+        await _provider.CreateQueueAsync(deadLetter);
+        fixture.Publish("", deadLetter, "{\"café\":\"ação\"}", p =>
+        {
+            p.MessageId = "message-7";
+            p.ContentType = "application/json";
+            p.Headers = new Dictionary<string, object> { ["tenant"] = "contoso" };
+        });
+        await fixture.WaitForMessageCountAsync(deadLetter, 1);
+
+        var result = await _provider.ResubmitDeadLetterMessagesAsync(queue, [1]);
+
+        Assert.Equal(1, result.SuccessCount);
+        await fixture.WaitForMessageCountAsync(queue, 1);
+        var sent = Assert.Single(await _provider.PeekMessagesAsync(queue, 1));
+        Assert.Equal("{\"café\":\"ação\"}", sent.Body);
+        Assert.Equal("message-7", sent.MessageId);
+        Assert.Equal("application/json", sent.ContentType);
+        Assert.Equal("contoso", sent.ApplicationProperties["tenant"]);
+    }
+
+    [Fact]
+    public async Task A_resubmit_while_a_consumer_holds_the_dead_letter_queue_is_refused_per_message_and_moves_nothing()
+    {
+        var (queue, deadLetter) = await QueueWithDeadLettersAsync("resubmit-consumer", "d1", "d2");
+        using (var connection = new RabbitMQ.Client.ConnectionFactory
+        {
+            HostName = fixture.Host, Port = fixture.AmqpPort, UserName = fixture.Username, Password = fixture.Password
+        }.CreateConnection())
+        using (var channel = connection.CreateModel())
+        {
+            RabbitMQ.Client.IModelExensions.BasicConsume(channel, deadLetter, false, new RabbitMQ.Client.Events.EventingBasicConsumer(channel));
+
+            var result = await _provider.ResubmitDeadLetterMessagesAsync(queue, [1]);
+
+            Assert.Equal((0, 1), (result.SuccessCount, result.FailureCount));
+            var failure = Assert.Single(result.Failures);
+            Assert.Equal(1, failure.SequenceNumber);
+            Assert.Equal("Not resubmitted: the dead-letter queue has a consumer, so the position of a message may have changed. Nothing was sent or removed.", failure.Error);
+        }
+        await fixture.WaitForMessageCountAsync(deadLetter, 2);
+        Assert.Equal(0u, fixture.MessageCount(queue));
+    }
+
     [Fact]
     public async Task Receive_returns_the_message_and_removes_it_from_the_queue()
     {
