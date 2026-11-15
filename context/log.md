@@ -1,3 +1,6 @@
+## [2026-11-15] fix | RabbitMQ: empty properties, a missing dead-letter queue and a closed channel
+Found in the hand test: opening orders.audit failed and broke the connection. [[pages/services/core/rabbitmq-and-legacy]]
+
 ## [2026-11-15] decision | ADR 0006: choose the version to install, per channel
 Proposed after the owner tested v2.4.5-beta.1: Stable claimed a beta as newest, and no version could be picked. [[pages/decisions/0006-choose-the-version-to-install]]
 

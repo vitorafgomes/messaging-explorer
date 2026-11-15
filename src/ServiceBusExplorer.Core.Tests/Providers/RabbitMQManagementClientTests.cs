@@ -60,6 +60,28 @@ public class RabbitMQManagementClientTests
         Assert.True(content.Disposed, "the failed response was left undisposed");
     }
 
+    [Fact]
+    public async Task A_message_published_without_properties_comes_back_as_an_empty_list_and_is_read_with_the_others()
+    {
+        const string body = """
+            [
+              { "payload": "{\"orderId\":\"a\"}", "payload_encoding": "string", "payload_bytes": 15, "redelivered": false,
+                "exchange": "orders", "routing_key": "order.shipped", "message_count": 1, "properties": [] },
+              { "payload": "{\"orderId\":\"b\"}", "payload_encoding": "string", "payload_bytes": 15, "redelivered": false,
+                "exchange": "orders", "routing_key": "order.created", "message_count": 0,
+                "properties": { "message_id": "b-1", "content_type": "application/json", "headers": { "source": "hand-test" } } }
+            ]
+            """;
+        using var client = NewClient(new RecordingHandler(HttpStatusCode.OK, body));
+
+        var messages = (await client.GetMessagesAsync("orders.audit", 20, "ack_requeue_false")).ToList();
+
+        Assert.Equal(2, messages.Count);
+        Assert.Equal("order.shipped", messages[0].RoutingKey);
+        Assert.Equal("{\"orderId\":\"a\"}", messages[0].Payload);
+        Assert.Equal("b-1", messages[1].Properties?.MessageId);
+    }
+
     public static TheoryData<string> ReadsThatTakeAToken => new() { "GetQueue", "GetExchangeBindings" };
 
     [Theory]

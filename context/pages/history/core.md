@@ -18,6 +18,7 @@ What changed when in the project [[pages/services/core|Core]] describes, newest 
 
 ## 2026-11-15
 
+- RabbitMQ: a message published with no property, which the management API writes as `"properties": []`, no longer breaks the bulk reads (a delete consumed the messages and then threw); a peek of the dead-letter side of a queue with no `<queue>.dlq` answers empty; and a channel the broker closed is opened again, so one missing queue no longer breaks every later call ([[pages/services/core/rabbitmq-and-legacy]]). Found in the owner's hand test.
 - The masked list and get name an Azure connection's endpoint host as its namespace, read by `AzureConnectionConfig.EndpointHost`, which keeps neither the key nor user info ([[pages/services/core/workspace-and-metrics]]).
 
 ## 2026-11-14

@@ -524,24 +524,25 @@ public class RabbitMQProvider : IMessagingProvider
     #region Message Operations
 
     /// <inheritdoc />
-    public Task<IEnumerable<IMessage>> PeekMessagesAsync(string entityName, int count = 10, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, long? fromSequenceNumber = null, bool includeBody = true, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<IMessage>> PeekMessagesAsync(string entityName, int count = 10, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, long? fromSequenceNumber = null, bool includeBody = true, CancellationToken cancellationToken = default)
     {
         if (subQueue == MessageSubQueue.TransferDeadLetter)
-            return Task.FromException<IEnumerable<IMessage>>(TransferDeadLetterNotSupported());
+            throw TransferDeadLetterNotSupported();
         if (fromSequenceNumber is not null)
-            return Task.FromException<IEnumerable<IMessage>>(new NotSupportedException("RabbitMQ cannot peek from a sequence number."));
+            throw new NotSupportedException("RabbitMQ cannot peek from a sequence number.");
         EnsureConnected();
 
         var queueName = QueueOf(subscriptionName ?? entityName, subQueue);
         var isDeadLetter = subQueue == MessageSubQueue.DeadLetter;
+        if (isDeadLetter && await _managementClient!.GetQueueAsync(queueName, cancellationToken) is null)
+            return [];
 
         // Use AMQP BasicGet directly for reliable message reading
         // Peek mode: get message, read body, then nack with requeue=true
         var messages = new List<IMessage>();
         for (var i = 0; i < count; i++)
         {
-            if (cancellationToken.IsCancellationRequested)
-                return Task.FromCanceled<IEnumerable<IMessage>>(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
 
             var result = _channel!.BasicGet(queueName, autoAck: false);
             if (result == null)
@@ -553,7 +554,7 @@ public class RabbitMQProvider : IMessagingProvider
             _channel.BasicNack(result.DeliveryTag, multiple: false, requeue: true);
         }
 
-        return Task.FromResult<IEnumerable<IMessage>>(messages);
+        return messages;
     }
 
     /// <inheritdoc />
@@ -1183,6 +1184,8 @@ public class RabbitMQProvider : IMessagingProvider
     {
         if (!IsConnected)
             throw new InvalidOperationException("Not connected to RabbitMQ. Please connect first.");
+        if (_channel is { IsOpen: false })
+            _channel = _connection!.CreateModel();
     }
 
     private static Dictionary<string, object> MapPropertiesToPublishDictionary(MessageProperties? props)
