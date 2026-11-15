@@ -516,6 +516,8 @@ describe('ViewMessagesDialogComponent: transfer dead-letter queue, message state
   describe('the transfer dead-letter queue is reachable', () => {
     it('RabbitMQ, which declares no safe bulk operations, offers no Delete, Move or Resubmit, in the toolbar or the detail pane; Azure offers them', () => {
       const rabbit = render({ initialTab: 1 }, { deadLetter: messages(2) }, DEFAULT_RABBITMQ_CAPABILITIES);
+      expect(Array.from(rabbit.el.querySelectorAll('button')).map(b => text(b)).filter(t => t.includes('Auto resubmit')), 'no Auto resubmit beside the dead-letter search').toStrictEqual([]);
+      expect(text(rabbit.el.querySelector('app-bulk-actions-toolbar')), 'the empty selection bar names only what RabbitMQ offers').not.toMatch(/resubmit|move|delete/i);
       rabbit.component.toggleAllDeadLetter(true);
       rabbit.component.selectMessage(rabbit.component.filteredDeadLetterMessages[0]);
       rabbit.refresh();

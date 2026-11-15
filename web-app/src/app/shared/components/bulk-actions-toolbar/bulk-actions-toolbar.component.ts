@@ -32,7 +32,7 @@ export interface BulkActionEvent {
           <mat-icon fontIcon="check_circle" aria-hidden="true"></mat-icon>
           <span><strong class="selected-count">{{ selectedCount }}</strong> {{ detail || (selectedCount === 1 ? 'message selected' : 'messages selected') }}</span>
         } @else {
-          No message selected. Tick rows to resubmit, move, compare, export or delete them.
+          {{ showDelete ? 'No message selected. Tick rows to resubmit, move, compare, export or delete them.' : 'No message selected. Tick rows to compare or export them.' }}
         }
       </span>
 
