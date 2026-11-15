@@ -244,13 +244,25 @@
   color: var(--mat-sys-error);
 }
 
-.routing-key {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font: var(--mat-sys-body-small);
+.node-binding {
+  gap: 6px;
   color: var(--mat-sys-on-surface-variant);
+
+  .binding-key {
+    flex: none;
+    padding: 0 6px;
+    border-radius: 4px;
+    background: var(--mat-sys-surface-container-high);
+    font: var(--mat-sys-label-medium);
+    font-family: var(--app-font-mono, monospace);
+  }
+
+  .binding-arrow {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    font-size: 16px;
+  }
 }
 
 .pattern-chip {

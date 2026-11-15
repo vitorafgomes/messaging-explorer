@@ -51,12 +51,13 @@ test.describe('RabbitMQ', () => {
     await expect(page.getByRole('button', { name: 'Auto resubmit' }), 'RabbitMQ declares no safe bulk operations').toHaveCount(0);
   });
 
-  test('opens a subscription of a topic', async ({ page }) => {
+  test('a binding under an exchange opens the queue it feeds, which is listed once, under Queues', async ({ page }) => {
     await open(page, 'entities');
     await openSubscription(page, SEED.topic, SEED.subscription);
     await expect(page.locator('.entity-title h2')).toHaveText(SEED.subscription);
-    await expect(page.locator('.entity-title')).toContainText('Subscription');
-    await shoot(page, 'subscription-rabbitmq');
+    await expect(page.locator('.entity-title')).toContainText('Queue');
+    await expect(treeNode(page, SEED.subscription), 'the queue row under Queues is the selected one').toHaveAttribute('aria-current', 'true');
+    await shoot(page, 'binding-rabbitmq');
   });
 
   test('peeks the messages of a queue and its dead-letter queue', async ({ page }) => {
