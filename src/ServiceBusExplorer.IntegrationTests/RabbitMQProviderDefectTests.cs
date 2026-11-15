@@ -69,17 +69,19 @@ public sealed class RabbitMQProviderDefectTests(RabbitMqFixture fixture) : IAsyn
         return port;
     }
 
-    /// <summary>Correct: peeking 3 messages returns the 3 messages in queue order.</summary>
+    /// <summary>Fixed 2026-11-15: peeking 3 messages returns the 3 messages in queue order, and the queue keeps them in that order.</summary>
     [Fact]
-    public async Task Defect_peek_returns_the_head_message_count_times()
+    public async Task A_peek_returns_each_message_once_in_queue_order_and_leaves_them_in_place()
     {
         var queue = await CreateQueueAsync("peek-head");
         foreach (var body in new[] { "m1", "m2", "m3" })
             await _provider.SendMessageAsync(queue, new SendMessageRequest { Body = body });
 
         var peeked = (await _provider.PeekMessagesAsync(queue, 3)).Select(m => m.Body).ToList();
+        var more = (await _provider.PeekMessagesAsync(queue, 20)).Select(m => m.Body).ToList();
 
-        Assert.Equal(["m1", "m1", "m1"], peeked);
+        Assert.Equal(["m1", "m2", "m3"], peeked);
+        Assert.Equal(["m1", "m2", "m3"], more);
         await fixture.WaitForMessageCountAsync(queue, 3);
         Assert.Equal(["m1", "m2", "m3"], fixture.Drain(queue));
     }
@@ -110,19 +112,19 @@ public sealed class RabbitMQProviderDefectTests(RabbitMqFixture fixture) : IAsyn
         await Assert.ThrowsAsync<InvalidCastException>(async () => (await _provider.GetTopicsAsync()).ToList());
     }
 
-    /// <summary>Correct: peeking the dead-letter side of a queue with no dead-letter queue answers empty or a clear error, and later calls on the provider still work.</summary>
+    /// <summary>Fixed 2026-11-15: peeking the dead-letter side of a queue with no dead-letter queue answers empty, and later calls on the provider still work.</summary>
     [Fact]
-    public async Task Defect_peeking_a_missing_dead_letter_queue_breaks_every_later_peek_while_still_connected()
+    public async Task Peeking_a_missing_dead_letter_queue_answers_empty_and_every_later_call_still_works()
     {
         var queue = await CreateQueueAsync("no-dlq");
         fixture.PublishToQueue(queue, "kept");
 
-        await Assert.ThrowsAsync<OperationInterruptedException>(() => _provider.PeekMessagesAsync(queue, 1, subQueue: MessageSubQueue.DeadLetter));
+        Assert.Empty(await _provider.PeekMessagesAsync(queue, 1, subQueue: MessageSubQueue.DeadLetter));
 
         Assert.True(_provider.IsConnected);
-        await Assert.ThrowsAsync<AlreadyClosedException>(() => _provider.PeekMessagesAsync(queue, 1));
-        await Assert.ThrowsAsync<AlreadyClosedException>(() => _provider.SendMessageAsync(queue, new SendMessageRequest { Body = "x" }));
-        Assert.Equal(1u, fixture.MessageCount(queue));
+        Assert.Equal("kept", Assert.Single(await _provider.PeekMessagesAsync(queue, 1)).Body);
+        await _provider.SendMessageAsync(queue, new SendMessageRequest { Body = "x" });
+        await fixture.WaitForMessageCountAsync(queue, 2);
     }
 
     /// <summary>Correct: an application property bound from the API's JSON is sent as a header with its value.</summary>
@@ -183,16 +185,18 @@ public sealed class RabbitMQProviderDefectTests(RabbitMqFixture fixture) : IAsyn
         Assert.Equal(["m3"], fixture.Drain(queue));
     }
 
-    /// <summary>Correct: a bulk delete of a message published without properties deletes it, and a response it cannot read never costs the messages it consumed.</summary>
+    /// <summary>Fixed 2026-11-15: a bulk delete of a message published without properties deletes it, and the others it read go back to the queue.</summary>
     [Fact]
-    public async Task Defect_bulk_delete_of_messages_without_properties_throws_after_consuming_them_all()
+    public async Task A_bulk_delete_of_messages_without_properties_deletes_the_chosen_one_and_keeps_the_others()
     {
         var queue = await CreateQueueAsync("no-props");
         foreach (var body in new[] { "m1", "m2", "m3" }) fixture.Publish("", queue, body);
 
-        await Assert.ThrowsAsync<JsonException>(() => _provider.DeleteMessagesAsync(queue, [3]));
+        var result = await _provider.DeleteMessagesAsync(queue, [3]);
 
-        Assert.Equal(0u, fixture.MessageCount(queue));
+        Assert.Equal(1, result.SuccessCount);
+        Assert.Empty(result.Failures);
+        Assert.Equal(["m1", "m2"], fixture.Drain(queue).OrderBy(b => b));
     }
 
     /// <summary>Correct: resubmitting dead-letter message 3 resubmits message 3.</summary>

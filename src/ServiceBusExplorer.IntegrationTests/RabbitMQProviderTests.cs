@@ -157,6 +157,20 @@ public sealed class RabbitMQProviderTests(RabbitMqFixture fixture) : IAsyncLifet
     }
 
     [Fact]
+    public async Task A_queue_deleted_behind_the_app_fails_its_own_peek_and_the_next_read_of_another_queue_still_works()
+    {
+        var gone = Queue("gone");
+        var other = Queue("survivor");
+        await _provider.CreateQueueAsync(other);
+        await _provider.SendMessageAsync(other, new SendMessageRequest { Body = "survives" });
+
+        await Assert.ThrowsAnyAsync<Exception>(() => _provider.PeekMessagesAsync(gone, 1));
+
+        var after = Assert.Single(await _provider.PeekMessagesAsync(other, 1));
+        Assert.Equal("survives", after.Body);
+    }
+
+    [Fact]
     public async Task Receive_returns_the_message_and_removes_it_from_the_queue()
     {
         var queue = Queue("receive");

@@ -1008,6 +1008,7 @@ public class ManagementMessageResponse
     /// The message properties.
     /// </summary>
     [JsonPropertyName("properties")]
+    [JsonConverter(typeof(MessagePropertiesConverter))]
     public MessageProperties? Properties { get; set; }
 
     /// <summary>
@@ -1015,6 +1016,28 @@ public class ManagementMessageResponse
     /// </summary>
     [JsonPropertyName("message_count")]
     public long MessageCount { get; set; }
+}
+
+/// <summary>
+/// Reads the properties of a message from the management API, which writes a message published with no
+/// property as an empty list (<c>[]</c>) instead of an empty object; a list reads as no properties.
+/// </summary>
+public sealed class MessagePropertiesConverter : JsonConverter<MessageProperties?>
+{
+    /// <inheritdoc />
+    public override MessageProperties? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.StartArray)
+        {
+            reader.Skip();
+            return null;
+        }
+        return reader.TokenType == JsonTokenType.Null ? null : JsonSerializer.Deserialize<MessageProperties>(ref reader, options);
+    }
+
+    /// <inheritdoc />
+    public override void Write(Utf8JsonWriter writer, MessageProperties? value, JsonSerializerOptions options) =>
+        JsonSerializer.Serialize(writer, value, options);
 }
 
 /// <summary>
