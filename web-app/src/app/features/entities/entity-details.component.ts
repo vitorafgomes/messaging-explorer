@@ -736,6 +736,9 @@ export class EntityDetailsComponent {
       maxWidth: '1400px',
       height: '90vh',
       data: { entityType, entityName, topicName, activeMessageCount, deadLetterMessageCount, transferDeadLetterMessageCount, initialTab, initialStateFilter, targetDetectsDuplicates }
+    }).afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      this.refresh();
+      this.selectionService.refreshTree();
     });
   }
 
