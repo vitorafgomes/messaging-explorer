@@ -167,6 +167,23 @@ export class EntityFormDialogComponent {
     return n === 0 ? 'Save' : `Save ${n} ${n === 1 ? 'change' : 'changes'}`;
   }
 
+  /** The fields that show an error now, as the form shows them, in the order of the form, for the summary beside Save. */
+  fieldErrors(): { key: string; message: string }[] {
+    const paths = [{ key: 'name', path: 'name' }, ...this.valueFields.map(f => ({ key: f.key, path: f.type === 'duration' ? `${f.key}.amount` : f.key }))];
+    return paths
+      .filter(({ path }) => {
+        const control = this.form.get(path);
+        return !!control && this.showErrors.isErrorState(control as never, null);
+      })
+      .map(({ key, path }) => ({ key, message: this.errorOf(path) }))
+      .filter(e => e.message !== '');
+  }
+
+  /** Takes the user to a field the summary names. */
+  focusField(key: string): void {
+    (document.getElementById(`field-${key}`) as HTMLElement | null)?.focus();
+  }
+
   errorOf(path: string): string {
     return this.form.get(path)?.errors?.['message'] ?? '';
   }
