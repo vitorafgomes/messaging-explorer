@@ -127,6 +127,8 @@ export class AppUpdateService {
     if (typeof data.percent === 'number') this.percent.set(data.percent);
     if (data.status === 'available') this.releaseNotes.set(releaseNoteLines(data.releaseNotes));
     if (data.status === 'up-to-date' || data.status === 'available') this.lastChecked.set(new Date());
+    if (data.status === 'checking') this.downloadRequested = false;
+    if (data.status === 'downloading' || (data.status === 'available' && !this.blocker())) this.downloadRequested = true;
     if (data.status === 'error') {
       this.fail(this.downloadRequested ? 'download' : 'check', data.message);
       return;

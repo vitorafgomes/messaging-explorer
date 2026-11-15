@@ -27,7 +27,8 @@ what to read before changing it, and its commands.
 | `context/` | `context/CLAUDE.md`, the contract of the documentation folder |
 
 For where a type lives or who calls it, ask the code graph before reading files:
-`graphify explain "<Type>"`, `graphify affected "<Type>" --depth 1`.
+`graphify explain "<Type>"`, `graphify affected "<Type>" --depth 1`. A SessionStart hook keeps the
+graph of the checkout fresh and says in its first line whether it is current yet.
 
 ## One task per session
 

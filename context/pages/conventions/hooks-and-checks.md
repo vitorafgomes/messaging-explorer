@@ -1,9 +1,9 @@
 ---
 title: "Hooks and checks"
-version: "1.1"
+version: "1.2"
 date: 2026-11-13
-updated: 2026-11-13
-changes: "2026-11-13: tools/release/next-version.sh. v1.0: split out of the tooling page"
+updated: 2026-11-14
+changes: "2026-11-14: session-start-graph.sh keeps the graphify code graph fresh. 2026-11-13: tools/release/next-version.sh. v1.0: split out of the tooling page"
 page_type: convention
 status: active
 description: "Read when a change touches a hook under .claude/hooks/, a script under tools/, or what the harness job of CI runs."
@@ -20,11 +20,12 @@ What runs without being asked: the hooks of `.claude/hooks/` and the scripts und
 
 ## `.claude/hooks/`
 
-All nine fail open: a missing `jq`, malformed JSON, or any error exits 0 having written nothing, so a broken hook can never block work. That is why the first one exists.
+All ten fail open: a missing `jq`, malformed JSON, or any error exits 0 having written nothing, so a broken hook can never block work. That is why the first one exists.
 
 | Hook | Event | What it does |
 |---|---|---|
 | `session-start.sh` | SessionStart | Proves the hook runtime works: checks `jq` is on PATH and pipes `git commit -m x` through `pre-git-guard.sh`; when either fails it emits a `systemMessage` saying the hooks are dead and which gates are silent. |
+| `session-start-graph.sh` | SessionStart | Keeps the graphify code graph of the checkout fresh. It is fresh when `graphify-out/.session-head` names HEAD and no `.cs`, `.ts` or `.js` under `src/`, `web-app/src/` or `web-app/electron/` is newer than `graphify-out/graph.json`; a pull or a checkout rewrites what it changes, so it counts as newer. Otherwise it starts `graphify update .` detached (`setsid nohup`, every stream to `~/.cache/graphify-session.log`), one per checkout under the `graphify-out/.session-rebuild.lock` directory (taken over after 10 minutes), writes the stamp only after a build that succeeded, and returns at once. A checkout where it cannot take the lock for another reason, such as no write access, gets no rebuild and no line. The log is set aside as `.old` past 1 MB. One line of `additionalContext` says whether the graph is current, being built or rebuilt by another session. Silent without graphify on PATH or outside a git checkout. Each git worktree builds its own graph. Limits: the graphify git hooks rebuild without this lock and do not write the stamp, so the first session after a commit rebuilds once more. |
 | `prompt-router.sh` | UserPromptSubmit | One line, under 320 characters: a code task routes through `explorer-pipeline` first, and a change to the API surface, a secret or a message operation is never a fast path. |
 | `pre-git-guard.sh` | PreToolUse (Bash) | A permission **ask** for git that writes history, discards work (`git clean -f`, `git restore`, `git checkout --`, `rm -rf .git`) or changes where a push goes, every `gh` command that writes to GitHub, a publish and `docker push`. Read-only git passes. |
 | `pre-test-in-docker.sh` | PreToolUse (Bash) | **Denies** a unit or web test run (`dotnet test`, `npm test`, `ng test`, `vitest`) that does not go through `tools/checks/in-docker.sh`, and names the command to use. `dotnet test src/ServiceBusExplorer.IntegrationTests` passes: it starts brokers in Docker, which the container has no access to. |

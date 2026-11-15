@@ -89,6 +89,36 @@ describe('AppUpdateService', () => {
     expect(updates.percent()).toBe(42);
   });
 
+  it('a download the shell started on its own that fails is reported as a download, not as a check', async () => {
+    const { updates, push } = await start();
+    push({ status: 'available', version: '2.5.0' });
+    push({ status: 'downloading', percent: 10 });
+    push({ status: 'error', message: 'net::ERR_CONNECTION_RESET' });
+
+    expect(updates.status()).toBe('error');
+    expect(updates.failedDuring()).toBe('download');
+    expect(updates.error()).toBe('net::ERR_CONNECTION_RESET');
+  });
+
+  it('an automatic download that fails before any progress is reported as a download', async () => {
+    const { updates, push } = await start();
+    push({ status: 'available', version: '2.5.0' });
+    push({ status: 'error', message: 'net::ERR_CONNECTION_RESET' });
+
+    expect(updates.failedDuring()).toBe('download');
+  });
+
+  it('a later scheduled check that fails after a finished download is reported as a check', async () => {
+    const { updates, push } = await start();
+    push({ status: 'available', version: '2.5.0' });
+    push({ status: 'downloading', percent: 50 });
+    push({ status: 'downloaded', version: '2.5.0' });
+    push({ status: 'checking' });
+    push({ status: 'error', message: 'net::ERR_INTERNET_DISCONNECTED' });
+
+    expect(updates.failedDuring()).toBe('check');
+  });
+
   it('the channel changes only when the shell accepts it', async () => {
     const { updates, shell } = await start({
       setUpdateChannel: vi.fn(async () => ({ status: 'error', message: 'Unknown update channel' })),
