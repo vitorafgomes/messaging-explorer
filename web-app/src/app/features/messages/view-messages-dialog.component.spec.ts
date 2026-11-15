@@ -514,6 +514,22 @@ describe('ViewMessagesDialogComponent: transfer dead-letter queue, message state
   afterEach(() => vi.useRealTimers());
 
   describe('the transfer dead-letter queue is reachable', () => {
+    it('a subscription with dead-letter messages selected says, above Resubmit, that the topic sends them to every subscription; none selected, or a queue, says nothing', () => {
+      const { component, el, refresh } = render({ entityType: 'subscription', topicName: 'sales', entityName: 'eu', initialTab: 1 }, { deadLetter: messages(2) });
+      expect(el.querySelector('.topic-resubmit-note'), 'nothing selected').toBeNull();
+
+      component.toggleAllDeadLetter(true);
+      refresh();
+      expect(text(el.querySelector('.topic-resubmit-note[role="note"]')))
+        .toBe('Resubmit publishes to the topic sales. Every subscription of sales receives these messages again, not only eu.');
+
+      TestBed.resetTestingModule();
+      const onQueue = render({ initialTab: 1 }, { deadLetter: messages(2) });
+      onQueue.component.toggleAllDeadLetter(true);
+      onQueue.refresh();
+      expect(onQueue.el.querySelector('.topic-resubmit-note'), 'a queue resubmits to itself').toBeNull();
+    });
+
     it('a queue: the tab lists the transfer dead-letter queue, and delete and resubmit send the selected sequence numbers to its routes only', () => {
       const component = create({ initialTab: 2 }, { transfer: messages(3) });
 

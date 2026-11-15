@@ -339,13 +339,6 @@ type PropertyRow = [label: string, value: string];
                   </div>
                 }
               </div>
-              @if (!isQueue) {
-                <p class="resubmit-notice" role="note">
-                  <mat-icon fontIcon="warning" aria-hidden="true" />
-                  <span><strong>A resubmit from this subscription publishes to the topic.</strong> The message goes to {{ holder.topicName }}, so every subscription of the topic receives it again.</span>
-                </p>
-              }
-
               @if (isQueue) {
                 <mat-tab-group [selectedIndex]="queueTab()" (selectedIndexChange)="setQueueTab($event)" animationDuration="0ms" [preserveContent]="true" mat-stretch-tabs="false" mat-align-tabs="start">
                   <mat-tab label="Properties">
