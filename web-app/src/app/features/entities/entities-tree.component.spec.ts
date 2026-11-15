@@ -396,7 +396,7 @@ describe('EntitiesTreeComponent as Main.dc.html draws the tree', () => {
     expect(invoicesRow.querySelectorAll('.count-chip').length, 'badges on a queue with no messages').toBe(0);
   });
 
-  it('an opened topic shows its subscriptions under it, and its row carries no count and no chip', () => {
+  it('an opened topic shows its subscriptions under it, and its row carries no count, only the chip of its pattern', () => {
     const { fixture, el } = render();
     const topicRow = rows(el)[2];
     topicRow.click();
@@ -404,7 +404,8 @@ describe('EntitiesTreeComponent as Main.dc.html draws the tree', () => {
 
     expect(Array.from(el.querySelectorAll('.tree-children button.tree-node .node-name')).map(text)).toStrictEqual(['warehouse', 'email']);
     expect(topicRow.querySelectorAll('.count-chip, .node-count').length, 'counts or chips on the topic row').toBe(0);
-    expect(text(topicRow)).toBe('order-events');
+    expect(text(topicRow.querySelector('.node-name'))).toBe('order-events');
+    expect(text(topicRow.querySelector('.pattern-chip')), 'the pattern the builder gave this topic').toBe('Fan-out');
   });
 });
 
@@ -624,6 +625,38 @@ describe('EntitiesTreeComponent on a RabbitMQ connection names exchanges and bin
     const bound = el.querySelector('.tree-children button.tree-node')!;
     expect(text(bound.querySelector('.node-name'))).toBe('orders.created');
     expect(text(bound.querySelector('.routing-key'))).toBe('order.created');
+  });
+
+  it('an exchange and a queue that carry a pattern show it as a chip on their row; a row without one shows none', () => {
+    const labelled = (): TreeNode[] => [
+      { id: 'category-queues', name: 'Queues', type: 'category', icon: 'folder', expandable: true, level: 0, children: [
+        { id: 'queue-tasks', name: 'tasks', type: 'queue', icon: 'inbox', expandable: false, level: 1, data: { activeMessageCount: 0, deadLetterMessageCount: 0, patternDisplay: 'Work queue, 3 consumers' } as never },
+        { id: 'queue-plain', name: 'plain', type: 'queue', icon: 'inbox', expandable: false, level: 1, data: { activeMessageCount: 0, deadLetterMessageCount: 0 } as never }
+      ] },
+      { id: 'category-topics', name: 'Topics', type: 'category', icon: 'folder', expandable: true, level: 0, children: [
+        { id: 'topic-orders.dlx', name: 'orders.dlx', type: 'topic', icon: 'topic', expandable: false, level: 1,
+          data: { subscriptionCount: 0, patternDisplay: 'Pub/Sub', detectedPattern: { pattern: 'PubSub', confidence: 1, reason: 'Fanout exchange broadcasts to every bound queue' } } as never, children: [] }
+      ] }
+    ];
+    TestBed.configureTestingModule({
+      imports: [EntitiesTreeComponent],
+      providers: [
+        { provide: TreeDataBuilderService, useValue: { buildTree: () => of(labelled()) } },
+        { provide: EntitySelectionService, useValue: { selection$: of(null), treeRefresh$: NEVER, select: vi.fn() } },
+        { provide: ConnectionService, useValue: { isConnected: true, connectionStatus$: NEVER } },
+        resubmitRuns,
+        { provide: LoggerService, useValue: { log: () => undefined, error: () => undefined } },
+        { provide: DeadLetterNotificationService, useValue: { clear: () => undefined } },
+        { provide: ProviderService, useValue: { capabilities: signal(DEFAULT_RABBITMQ_CAPABILITIES), selectedProvider: ProviderType.RabbitMQ } },
+        { provide: MatDialog, useValue: { open: vi.fn() } }
+      ]
+    });
+    const fixture = TestBed.createComponent(EntitiesTreeComponent);
+    fixture.detectChanges();
+    const rows = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('.entity-tree button.tree-node'));
+
+    expect(rows.map(r => [text(r.querySelector('.node-name')), text(r.querySelector('.pattern-chip'))]))
+      .toStrictEqual([['tasks', 'Work queue, 3 consumers'], ['plain', ''], ['orders.dlx', 'Pub/Sub']]);
   });
 
   it('Azure Service Bus keeps Topics and subscriptions', () => {
