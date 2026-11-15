@@ -39,7 +39,8 @@ cd web-app && npm install && npm test -- --watch=false
 2. Keep commits atomic, one concern per commit, with a conventional message.
 3. A change needs a test that fails without it, a build with 0 warnings and
    the test suites green.
-4. Open a pull request against `main` and fill in the template.
+4. Open a pull request against `main` and fill in every section of the
+   template; one that does not apply says so in words.
 
 ## Code style
 

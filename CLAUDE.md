@@ -59,3 +59,10 @@ You do not need to remember these; a hook stops or flags them.
   top of `context/log.md`.
 - The owner's private notes are outside this repository. Nothing from them is copied here without
   the owner's word: this repository is public.
+
+## Pull requests
+
+- A pull request's description fills every section of `.github/PULL_REQUEST_TEMPLATE.md`; one that
+  does not apply says so in words.
+- A form under `.github/` may start a heading with an emoji shortcode such as `:clipboard:`; no
+  file holds an emoji character.
