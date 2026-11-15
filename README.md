@@ -8,6 +8,8 @@ A free, open-source desktop app to explore and manage message brokers: **Azure S
 
 Browse queues, topics, subscriptions and exchanges, read the messages in them, send new ones, and deal with the dead-letter queue: resubmit, move or delete what is stuck there.
 
+![A tour of Messaging Explorer: the saved connections, the entities of a RabbitMQ broker, a queue with its counts, its active and dead-letter messages, the send dialog and the monitoring screen](docs/screenshots/tour.gif)
+
 **Website:** https://vitorafgomes.github.io/messaging-explorer/
 
 ## Contents
