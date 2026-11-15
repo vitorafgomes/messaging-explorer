@@ -917,11 +917,61 @@ public sealed class AzureServiceBusProviderTests(AzureServiceBusFixture fixture)
         return [.. sequenceNumbers];
     }
 
+    /// <summary>
+    /// Sets the status of a queue and waits until the emulator applies it to messages: it answers the management
+    /// call at once but refuses a send or a receive only a moment later, and a test that acts in between finds the
+    /// operation accepted. A probe send that gets in first is removed again; a probe receive is abandoned.
+    /// </summary>
     private async Task SetStatusAsync(string queue, EntityStatus status)
     {
         var properties = (await fixture.Admin.GetQueueAsync(queue)).Value;
         properties.Status = status;
         await fixture.Admin.UpdateQueueAsync(properties);
+
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        while (!await StatusAppliedAsync(queue, status))
+        {
+            if (DateTime.UtcNow > deadline)
+                throw new TimeoutException($"The emulator did not apply {status} to {queue} within 30 seconds.");
+            await Task.Delay(250);
+        }
+    }
+
+    private async Task<bool> StatusAppliedAsync(string queue, EntityStatus status)
+    {
+        if (status == EntityStatus.SendDisabled)
+        {
+            try
+            {
+                await _messaging.SendMessageAsync(queue, new SendMessageRequest { Body = "status-probe" });
+            }
+            catch (EntityDisabledException)
+            {
+                return true;
+            }
+            await using var cleaner = fixture.Client.CreateReceiver(queue);
+            foreach (var message in await cleaner.ReceiveMessagesAsync(10, TimeSpan.FromSeconds(2)))
+            {
+                if (message.Body.ToString() == "status-probe") await cleaner.CompleteMessageAsync(message);
+                else await cleaner.AbandonMessageAsync(message);
+            }
+            return false;
+        }
+        if (status == EntityStatus.ReceiveDisabled)
+        {
+            await using var probe = fixture.Client.CreateReceiver(queue);
+            try
+            {
+                var received = await probe.ReceiveMessageAsync(TimeSpan.FromSeconds(1));
+                if (received is not null) await probe.AbandonMessageAsync(received);
+                return false;
+            }
+            catch (ServiceBusException ex) when (ex.Reason == ServiceBusFailureReason.MessagingEntityDisabled)
+            {
+                return true;
+            }
+        }
+        return true;
     }
 
     private async Task<List<(string? Body, string State)>> PeekBodiesAndStatesAsync(string queue) =>
