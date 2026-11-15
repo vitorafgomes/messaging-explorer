@@ -97,6 +97,7 @@ What changed when in the project [[pages/services/web-app|Web App]] describes, n
 
 - **A binary body and single-message actions.** A body that is not text shows as hex with Copy base64; the detail pane dead-letters, defers or deletes one message after a confirmation ([[pages/services/web-app/features-message-detail-actions]]).
 
+- **2026-11-15: a topic opened in the tree reads its subscriptions when its list came without them.** The emulator answers every count as zero, so `order-events` showed no subscription; it now reads them once on opening, and says so when the read fails.
 - **2026-11-15: the topic resubmit warning moved to where a resubmit is chosen.** The subscription panel no longer carries it; the messages dialog shows it above Resubmit on the dead-letter tabs of a subscription, and the automatic resubmit of a subscription shows it.
 - **2026-11-15 (afternoon): Manage Groups and the automatic resubmit as drawn.** Every dialog takes the 20 px title and the surface container of the artboards. Manage Groups gets the bold active tab, the small list headings and outline icons; the automatic resubmit opens at 720 px with the batch size labelled above and the cost rows separated.
 - **2026-11-15 (later): Connections dialogs as drawn, and no broker screen without a connection.** Entities and Monitoring are disabled and guarded until a connection is active. Add Connection, Edit and Manage Groups draw labels above 40 px fields, Organization after the authentication, start-aligned tabs and one-line group rows; Export has no scroll.

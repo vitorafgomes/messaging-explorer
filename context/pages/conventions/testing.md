@@ -137,7 +137,7 @@ Since 2026-11-13, `web-app/e2e/` drives the app in Chromium with Playwright agai
   - The Connections screen loses the Connected mark when it reloads its list, because Connect never stores `IsConnected`.
 - **Screenshots** go to `web-app/dist/e2e/screenshots/` as `<screen>-<broker>-<light|dark>.png`, 1280 by 800, cleared at the start of each run. The dark one is taken by applying the theme the way `ThemeService` does, the `dark-theme` class and `app-theme` in localStorage, with no reload, so a dialog stays open (`web-app/e2e/fixtures.ts#setDark`).
 - **Not covered, and why:**
-  - On the emulator, the entities tree cannot reach a subscription. The tree loads the subscriptions of a topic only when the topic reports a subscription count, and the emulator reports every runtime count as zero (`web-app/src/app/core/services/tree-data-builder.service.ts#topicsWithSubscriptionCount`). The Azure flows therefore open the subscription from the Topics screen, and assert no Azure count.
+  - The emulator reports every runtime count as zero, so a topic lists no subscription until it is opened (`web-app/src/app/core/services/tree-data-builder.service.ts#loadSubscriptions`, since 2026-11-15). The Azure flows open the subscription from the Topics screen and assert no Azure count.
   - The RabbitMQ peek flows assert the first body only, because of the defect above.
   - Resubmit and delete run on the emulator; purge runs on RabbitMQ, as the emulator counts zero and the menu disables a purge at zero.
   - Sessions, rules, entity administration, import, export and the bulk dialogs have no flow.
