@@ -232,6 +232,13 @@ export class TreeDataBuilderService {
     };
   }
 
+  /** Reads the subscriptions of one topic as tree nodes under it, for a topic whose list came without them. */
+  loadSubscriptions(topic: TreeNode): Observable<TreeNode[]> {
+    return this.topicService.getSubscriptions(topic.name).pipe(
+      map(subs => subs.map(s => ({ ...this.createSubscriptionNode(s, topic.name), parent: topic })))
+    );
+  }
+
   refreshQueues(): Observable<TreeNode[]> {
     return this.queueService.getQueues().pipe(
       map(queues => queues.map(q => this.createQueueNode(q)))

@@ -136,6 +136,9 @@ export const STATUS_MARKERS: Partial<Record<string, { icon: string; text: string
             </div>
             @for (node of shown(category.children); track node.id) {
               <ng-container *ngTemplateOutlet="row; context: { $implicit: node }" />
+              @if (node.type === 'topic' && isExpanded(node) && subscriptionsFailed().has(node.id)) {
+                <p class="subscriptions-error" role="alert">Could not load the subscriptions of {{ node.name }}.</p>
+              }
               @if (node.type === 'topic' && isExpanded(node) && shownChildren(node).length) {
                 <div class="tree-children">
                   @for (subscription of shownChildren(node); track subscription.id) {
@@ -301,13 +304,35 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
       || (!!this.selectedNode && (topic.children ?? []).some(child => child.id === this.selectedNode!.id));
   }
 
+  /** The topics whose subscriptions could not be read when they were opened. */
+  readonly subscriptionsFailed = signal<ReadonlySet<string>>(new Set());
+
   selectNode(node: TreeNode) {
     if (node.type === 'topic') {
       const next = new Set(this.opened());
-      if (!next.delete(node.id)) next.add(node.id);
+      const opening = !next.delete(node.id);
+      if (opening) next.add(node.id);
       this.opened.set(next);
+      if (opening && !node.children?.length) this.loadSubscriptions(node);
     }
     this.selectionService.select(node);
+  }
+
+  /** Reads the subscriptions of a topic whose list came without them, as when its count said none. */
+  private loadSubscriptions(topic: TreeNode) {
+    const failed = new Set(this.subscriptionsFailed());
+    failed.delete(topic.id);
+    this.subscriptionsFailed.set(failed);
+    this.treeDataBuilder.loadSubscriptions(topic).pipe(takeUntil(this.destroy$)).subscribe({
+      next: subscriptions => {
+        topic.children = subscriptions;
+        this.opened.set(new Set(this.opened()));
+      },
+      error: err => {
+        this.logger.error(`[EntitiesTree] Could not load the subscriptions of ${topic.name}`, err);
+        this.subscriptionsFailed.set(new Set(this.subscriptionsFailed()).add(topic.id));
+      }
+    });
   }
 
   createLabel(node: TreeNode): string | null {

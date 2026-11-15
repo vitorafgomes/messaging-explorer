@@ -99,3 +99,24 @@ describe('TreeDataBuilderService gives its counts only from a whole build', () =
     expect(builder.wholeCounts(), 'a missed subscription read is not counted as none').toBeNull();
   });
 });
+
+describe('TreeDataBuilderService reads the subscriptions of one topic on demand', () => {
+  it('asks for the subscriptions of that topic and answers them as subscription nodes under it, with their counts', async () => {
+    const getSubscriptions = vi.fn(() => of([{ name: 'warehouse', activeMessageCount: 4, deadLetterMessageCount: 2, status: 'Active' }]));
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: QueueService, useValue: {} },
+        { provide: TopicService, useValue: { getSubscriptions } },
+        { provide: LoggerService, useValue: { log: () => undefined, error: () => undefined } },
+        { provide: DeadLetterNotificationService, useValue: {} }
+      ]
+    });
+    const topic = { id: 'topic-order-events', name: 'order-events', type: 'topic', icon: 'topic', expandable: false, level: 1, children: [] } as never;
+
+    const nodes = await new Promise<any[]>(done => TestBed.inject(TreeDataBuilderService).loadSubscriptions(topic).subscribe(done));
+
+    expect(getSubscriptions).toHaveBeenCalledWith('order-events');
+    expect(nodes.map(n => [n.id, n.type, n.level, n.data.topicName, n.data.deadLetterMessageCount, n.parent === topic]))
+      .toStrictEqual([['subscription-order-events-warehouse', 'subscription', 2, 'order-events', 2, true]]);
+  });
+});
