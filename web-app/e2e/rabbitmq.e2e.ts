@@ -48,10 +48,7 @@ test.describe('RabbitMQ', () => {
     await expect(page.locator('.entity-title h2')).toHaveText(SEED.queue);
     await expect(page.locator('.stat-card', { has: page.locator('.stat-label', { hasText: /^Active$/ }) }).locator('.stat-value')).toHaveText(seededCount);
     await shoot(page, 'queue-rabbitmq');
-    await page.getByRole('button', { name: 'Auto resubmit' }).click();
-    await expect(page.locator('mat-dialog-container')).toBeVisible();
-    await shoot(page, 'dlg-auto-resubmit-rabbitmq');
-    await page.locator('mat-dialog-container').getByRole('button', { name: 'Cancel' }).click();
+    await expect(page.getByRole('button', { name: 'Auto resubmit' }), 'RabbitMQ declares no safe bulk operations').toHaveCount(0);
   });
 
   test('opens a subscription of a topic', async ({ page }) => {

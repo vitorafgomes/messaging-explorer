@@ -476,6 +476,7 @@ public class ConnectionsController : ControllerBase
                 supportsDefinitions = capabilities.SupportsDefinitions,
                 supportsNamespaceProperties = capabilities.SupportsNamespaceProperties,
                 supportsManualDeadLetter = capabilities.SupportsManualDeadLetter,
+                supportsBulkMessageOperations = capabilities.SupportsBulkMessageOperations,
                 supportsBinaryBody = capabilities.SupportsBinaryBody,
                 maxMessageSizeInBytes = capabilities.MaxMessageSizeInBytes,
                 maxTimeToLive = capabilities.MaxTimeToLive.ToString(),

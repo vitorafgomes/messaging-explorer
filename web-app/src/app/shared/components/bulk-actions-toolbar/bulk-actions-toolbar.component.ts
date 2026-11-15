@@ -88,12 +88,14 @@ export interface BulkActionEvent {
 
           <button matButton type="button" (click)="onClearClick()" [disabled]="disabled" title="Clear selection">Clear</button>
 
-          <span class="divider" aria-hidden="true"></span>
-          <button matButton type="button" class="delete"
-                  (click)="onActionClick('delete')" [disabled]="disabled" title="Delete selected messages">
-            <mat-icon fontIcon="delete" aria-hidden="true"></mat-icon>
-            Delete {{ selectedCount }}
-          </button>
+          @if (showDelete) {
+            <span class="divider" aria-hidden="true"></span>
+            <button matButton type="button" class="delete"
+                    (click)="onActionClick('delete')" [disabled]="disabled" title="Delete selected messages">
+              <mat-icon fontIcon="delete" aria-hidden="true"></mat-icon>
+              Delete {{ selectedCount }}
+            </button>
+          }
           @if (deferredCount > 0) {
             <button matButton type="button" class="delete"
                     (click)="onActionClick('delete-deferred')" [disabled]="disabled" title="Delete the selected deferred messages">
@@ -138,6 +140,9 @@ export class BulkActionsToolbarComponent {
    * Whether to show the Move button; a sub-queue that cannot be moved hides it
    */
   @Input() showMove = true;
+
+  /** Whether Delete is offered; false where the broker declares no safe bulk operations. */
+  @Input() showDelete = true;
 
   /**
    * Whether to show Cancel scheduled; offered on a queue's Active tab only
