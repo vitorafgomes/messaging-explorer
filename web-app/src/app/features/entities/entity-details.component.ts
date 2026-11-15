@@ -236,7 +236,7 @@ type PropertyRow = [label: string, value: string];
                     @if (isQueue) {
                       <button mat-menu-item type="button" (click)="importMessages()">Import messages</button>
                     }
-                    @if (supports('supportsDeadLetterQueue')) {
+                    @if (supports('supportsDeadLetterQueue') && supports('supportsBulkMessageOperations')) {
                       <button mat-menu-item type="button" (click)="openAutoResubmit()" [disabled]="deadLetter === 0">
                         Resubmit dead-letter <span class="menu-count">{{ deadLetter | number }}</span>
                       </button>
@@ -292,7 +292,7 @@ type PropertyRow = [label: string, value: string];
                         <button mat-button type="button" (click)="openAutoResubmit()">Open run</button>
                         <button mat-button type="button" (click)="run.stop()"><mat-icon fontIcon="stop" />Stop</button>
                       </div>
-                    } @else if (holder.deadLetterMessageCount > 0) {
+                    } @else if (holder.deadLetterMessageCount > 0 && supports('supportsBulkMessageOperations')) {
                       <button mat-stroked-button type="button" class="auto-resubmit" (click)="openAutoResubmit()">
                         <mat-icon fontIcon="replay" />Auto resubmit
                       </button>

@@ -21,6 +21,7 @@ What changed when in the project [[pages/services/core|Core]] describes, newest 
 - RabbitMQ: a message published with no property, which the management API writes as `"properties": []`, no longer breaks the bulk reads (a delete consumed the messages and then threw); a peek of the dead-letter side of a queue with no `<queue>.dlq` answers empty; and a channel the broker closed is opened again, so one missing queue no longer breaks every later call ([[pages/services/core/rabbitmq-and-legacy]]). Found in the owner's hand test.
 - RabbitMQ peek returns each message once, in queue order: it holds what it read and requeues it all at the end, also on an error or a cancel; before, it returned the head message N times.
 - RabbitMQ peek numbers each message with its position, the key of the bulk delete, move and resubmit: one click no longer ticks every row, and with one row loaded a delete no longer becomes a purge. Found in the owner's hand test.
+- `SupportsBulkMessageOperations`: true for Azure Service Bus, false for RabbitMQ, whose bulk calls consume before they republish; the screen hides them there (owner's decision, 2026-11-15).
 - The masked list and get name an Azure connection's endpoint host as its namespace, read by `AzureConnectionConfig.EndpointHost`, which keeps neither the key nor user info ([[pages/services/core/workspace-and-metrics]]).
 
 ## 2026-11-14
