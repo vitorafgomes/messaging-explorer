@@ -202,22 +202,6 @@ public sealed class RabbitMQProviderDefectTests(RabbitMqFixture fixture) : IAsyn
         Assert.Equal(["m1", "m2"], fixture.Drain(queue).OrderBy(b => b));
     }
 
-    /// <summary>Correct: resubmitting dead-letter message 3 resubmits message 3.</summary>
-    [Fact]
-    public async Task Defect_single_resubmit_ignores_the_sequence_number_and_takes_the_dead_letter_head()
-    {
-        var queue = await CreateQueueAsync("resubmit");
-        var deadLetter = $"{queue}.dlq";
-        _queues.Add(deadLetter);
-        await _provider.CreateQueueAsync(deadLetter);
-        foreach (var body in new[] { "d1", "d2", "d3" }) fixture.PublishToQueue(deadLetter, body);
-
-        await _provider.ResubmitDeadLetterMessageAsync(queue, 3);
-
-        Assert.Equal(["d1"], fixture.Drain(queue));
-        Assert.Equal(["d2", "d3"], fixture.Drain(deadLetter));
-    }
-
     /// <summary>Correct: a send to a fanout exchange reaches its bound queues, or fails when nothing can route it.</summary>
     [Fact]
     public async Task Defect_send_to_a_fanout_exchange_without_subject_is_dropped_and_reports_success()
@@ -304,9 +288,9 @@ public sealed class RabbitMQProviderDefectTests(RabbitMqFixture fixture) : IAsyn
         Assert.False(await new RabbitMQProvider().TestConnectionAsync(config));
     }
 
-    /// <summary>Correct: a dead-letter message first published by another user is resubmitted, or stays in the dead-letter queue when the broker refuses it.</summary>
+    /// <summary>The broker refuses to republish a message that carries another user's user_id: the message stays in the dead-letter queue and the refusal is reported.</summary>
     [Fact]
-    public async Task Defect_resubmit_of_a_message_with_another_users_user_id_fails_after_consuming_it()
+    public async Task A_resubmit_the_broker_refuses_for_another_users_user_id_keeps_the_message_in_the_dead_letter_queue_and_reports_it()
     {
         var queue = await CreateQueueAsync("user-id");
         var deadLetter = $"{queue}.dlq";
@@ -328,9 +312,13 @@ public sealed class RabbitMQProviderDefectTests(RabbitMqFixture fixture) : IAsyn
         }
         await fixture.WaitForMessageCountAsync(deadLetter, 1);
 
-        await Assert.ThrowsAsync<HttpRequestException>(() => _provider.ResubmitDeadLetterMessageAsync(queue, 1));
+        var result = await _provider.ResubmitDeadLetterMessagesAsync(queue, [1]);
 
-        Assert.Equal(0u, fixture.MessageCount(deadLetter));
+        Assert.Equal((0, 1), (result.SuccessCount, result.FailureCount));
+        Assert.Equal(1, Assert.Single(result.Failures).SequenceNumber);
+        Assert.EndsWith("The message is still in the dead-letter queue.", result.Failures[0].Error);
+        await fixture.WaitForMessageCountAsync(deadLetter, 1);
+        Assert.Equal(["from-other"], fixture.Drain(deadLetter));
         Assert.Equal(0u, fixture.MessageCount(queue));
     }
 }

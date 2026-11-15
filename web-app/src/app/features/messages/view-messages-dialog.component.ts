@@ -353,12 +353,10 @@ const SCAN_NOTICE = 'The broker cannot lock one message by its number, so the ap
               <mat-icon fontIcon="refresh" aria-hidden="true"></mat-icon>
               Refresh
             </button>
-            @if (bulkOperations()) {
-              <button mat-flat-button type="button" class="tonal" (click)="openAutoResubmit()">
-                <mat-icon fontIcon="replay" aria-hidden="true"></mat-icon>
-                Auto resubmit
-              </button>
-            }
+            <button mat-flat-button type="button" class="tonal" (click)="openAutoResubmit()">
+              <mat-icon fontIcon="replay" aria-hidden="true"></mat-icon>
+              Auto resubmit
+            </button>
           </div>
           @if (dlRegexError) {
             <p class="regex-error" role="alert">
@@ -694,12 +692,14 @@ const SCAN_NOTICE = 'The broker cannot lock one message by its number, so the ap
             </div>
           }
 
-          @if (subQueue === 'deadletter' && bulkOperations()) {
+          @if (subQueue === 'deadletter') {
             <div class="message-actions">
-              <button mat-stroked-button type="button" (click)="editAndResubmit(selectedMessage)">
-                <mat-icon fontIcon="edit" aria-hidden="true"></mat-icon>
-                Edit & Resubmit
-              </button>
+              @if (bulkOperations()) {
+                <button mat-stroked-button type="button" (click)="editAndResubmit(selectedMessage)">
+                  <mat-icon fontIcon="edit" aria-hidden="true"></mat-icon>
+                  Edit & Resubmit
+                </button>
+              }
               <button mat-flat-button type="button" class="tonal" (click)="resubmit(selectedMessage)">
                 <mat-icon fontIcon="replay" aria-hidden="true"></mat-icon>
                 Resubmit
@@ -736,7 +736,7 @@ const SCAN_NOTICE = 'The broker cannot lock one message by its number, so the ap
     <app-bulk-actions-toolbar
       [selectedCount]="getSelectedCount()"
       [detail]="getSelectionSummary()"
-      [showResubmit]="subQueue !== 'active' && bulkOperations()"
+      [showResubmit]="subQueue !== 'active'"
       [showCompare]="getSelectedCount() === 2 && subQueue !== 'transferdeadletter'"
       [showMove]="subQueue !== 'transferdeadletter' && bulkOperations()"
       [showDelete]="bulkOperations()"
@@ -752,7 +752,7 @@ const SCAN_NOTICE = 'The broker cannot lock one message by its number, so the ap
   styleUrl: './view-messages-dialog.component.scss'
 })
 export class ViewMessagesDialogComponent implements OnInit {
-  /** Delete, move and resubmit are offered unless the broker declares it cannot do them safely, as RabbitMQ does. */
+  /** Delete, Move and Edit & Resubmit are offered unless the broker declares it cannot do them safely, as RabbitMQ does. */
   bulkOperations(): boolean {
     return this.capabilities()?.supportsBulkMessageOperations !== false;
   }

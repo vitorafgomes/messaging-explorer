@@ -38,7 +38,7 @@ export interface ProviderCapabilities {
   supportsNamespaceProperties?: boolean;
   /** An active message can be dead-lettered by its sequence number. An older API does not send it; only an explicit true enables it. */
   supportsManualDeadLetter?: boolean;
-  /** Chosen messages can be deleted, moved and resubmitted with no known way to lose one; false on RabbitMQ. */
+  /** Chosen messages can be deleted, moved, and edited and resubmitted, with no known way to lose one; false on RabbitMQ. */
   supportsBulkMessageOperations?: boolean;
   /** A body that is not UTF-8 is read as base64 and a base64 body can be sent. An older API does not send it; only an explicit true enables it. */
   supportsBinaryBody?: boolean;

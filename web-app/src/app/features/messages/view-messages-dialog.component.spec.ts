@@ -514,15 +514,16 @@ describe('ViewMessagesDialogComponent: transfer dead-letter queue, message state
   afterEach(() => vi.useRealTimers());
 
   describe('the transfer dead-letter queue is reachable', () => {
-    it('RabbitMQ, which declares no safe bulk operations, offers no Delete, Move or Resubmit, in the toolbar or the detail pane; Azure offers them', () => {
+    it('RabbitMQ offers Resubmit of the ticked messages, Resubmit of the open one and Auto resubmit, and no Delete, Move or Edit & Resubmit; Azure offers them all', () => {
       const rabbit = render({ initialTab: 1 }, { deadLetter: messages(2) }, DEFAULT_RABBITMQ_CAPABILITIES);
-      expect(Array.from(rabbit.el.querySelectorAll('button')).map(b => text(b)).filter(t => t.includes('Auto resubmit')), 'no Auto resubmit beside the dead-letter search').toStrictEqual([]);
-      expect(text(rabbit.el.querySelector('app-bulk-actions-toolbar')), 'the empty selection bar names only what RabbitMQ offers').not.toMatch(/resubmit|move|delete/i);
+      expect(text(rabbit.el.querySelector('app-bulk-actions-toolbar'))).toBe('No message selected. Tick rows to resubmit, compare or export them.');
+      expect(Array.from(rabbit.el.querySelectorAll('button')).some(b => text(b).endsWith('Auto resubmit')), 'Auto resubmit beside the dead-letter search').toBe(true);
       rabbit.component.toggleAllDeadLetter(true);
       rabbit.component.selectMessage(rabbit.component.filteredDeadLetterMessages[0]);
       rabbit.refresh();
-      const rabbitButtons = [...toolbarButtons(rabbit.el), ...Array.from(rabbit.el.querySelectorAll('.message-actions button')).map(b => text(b))];
-      expect(rabbitButtons.filter(t => /Delete|Move|Resubmit/.test(t)), 'nothing that deletes, moves or resubmits').toStrictEqual([]);
+      const strip = (t: string) => t.replace(/^[a-z_]+ /, '');
+      expect(toolbarButtons(rabbit.el).map(strip).filter(t => /Delete|Move|Resubmit/.test(t)), 'the selection bar').toStrictEqual(['Resubmit']);
+      expect(Array.from(rabbit.el.querySelectorAll('.message-actions button')).map(b => strip(text(b))), 'the detail pane').toStrictEqual(['Resubmit']);
 
       TestBed.resetTestingModule();
       const azure = render({ initialTab: 1 }, { deadLetter: messages(2) }, withTransfer);

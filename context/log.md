@@ -1,3 +1,6 @@
+## [2026-11-15] feature | RabbitMQ resubmit sends first and removes after
+Resubmit of chosen dead-letter messages and the automatic resubmit are offered on RabbitMQ again. [[pages/services/core/rabbitmq-and-legacy]]
+
 ## [2026-11-15] fix | Counts stayed stale after an automatic resubmit from the messages dialog
 Tabs, panel, tree and bell now read the broker again. [[pages/services/web-app/bulk-automatic-resubmit]]
 

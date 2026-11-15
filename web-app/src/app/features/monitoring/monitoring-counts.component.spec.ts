@@ -276,10 +276,10 @@ describe('MonitoringCountsComponent: the counts of every entity on one screen', 
       expect(el.querySelectorAll('td.actions button').length, 'a provider without a dead-letter queue gets no Auto resubmit').toBe(0);
     });
 
-    it('offers no Auto resubmit where the provider declares no safe bulk operations, as RabbitMQ does', () => {
+    it('offers Auto resubmit on RabbitMQ too, which declares no safe delete or move but resubmits safely', () => {
       render(SNAPSHOT, { supportsDeadLetterQueue: true, supportsBulkMessageOperations: false });
 
-      expect(el.querySelectorAll('td.actions button').length, 'a provider without a dead-letter queue gets no Auto resubmit').toBe(0);
+      expect(el.querySelectorAll('td.actions button').length, 'one per row with dead-letter messages').toBe(2);
     });
 
     it('opens the auto resubmit of that queue, or of that subscription of its topic, with its dead-letter count', async () => {

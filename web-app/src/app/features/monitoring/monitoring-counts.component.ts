@@ -69,8 +69,8 @@ export class MonitoringCountsComponent implements AfterViewInit {
   private readonly dialog = inject(MatDialog);
   private readonly provider = inject(ProviderService);
 
-  /** Auto resubmit is offered unless the provider says it has no dead-letter queue or no safe bulk operations, as on the entity panel. */
-  readonly canResubmit = computed(() => this.provider.capabilities()?.supportsDeadLetterQueue !== false && this.provider.capabilities()?.supportsBulkMessageOperations !== false);
+  /** Auto resubmit is offered unless the provider says it has no dead-letter queue, as on the entity panel. */
+  readonly canResubmit = computed(() => this.provider.capabilities()?.supportsDeadLetterQueue !== false);
 
   readonly snapshot = input.required<MonitoringSnapshot>();
   /** How often the screen reads the snapshot, in seconds; the screen that polls owns it. */
