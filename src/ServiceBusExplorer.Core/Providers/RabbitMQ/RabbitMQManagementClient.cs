@@ -1019,9 +1019,6 @@ public class ManagementMessageResponse
 }
 
 /// <summary>
-/// Message properties from Management API.
-/// </summary>
-/// <summary>
 /// Reads the properties of a message from the management API, which writes a message published with no
 /// property as an empty list (<c>[]</c>) instead of an empty object; a list reads as no properties.
 /// </summary>
@@ -1043,6 +1040,9 @@ public sealed class MessagePropertiesConverter : JsonConverter<MessageProperties
         JsonSerializer.Serialize(writer, value, options);
 }
 
+/// <summary>
+/// Message properties from Management API.
+/// </summary>
 public class MessageProperties
 {
     /// <summary>
