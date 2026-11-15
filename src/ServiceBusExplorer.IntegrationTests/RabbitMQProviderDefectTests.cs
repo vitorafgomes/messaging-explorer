@@ -69,17 +69,19 @@ public sealed class RabbitMQProviderDefectTests(RabbitMqFixture fixture) : IAsyn
         return port;
     }
 
-    /// <summary>Correct: peeking 3 messages returns the 3 messages in queue order.</summary>
+    /// <summary>Fixed 2026-11-15: peeking 3 messages returns the 3 messages in queue order, and the queue keeps them in that order.</summary>
     [Fact]
-    public async Task Defect_peek_returns_the_head_message_count_times()
+    public async Task A_peek_returns_each_message_once_in_queue_order_and_leaves_them_in_place()
     {
         var queue = await CreateQueueAsync("peek-head");
         foreach (var body in new[] { "m1", "m2", "m3" })
             await _provider.SendMessageAsync(queue, new SendMessageRequest { Body = body });
 
         var peeked = (await _provider.PeekMessagesAsync(queue, 3)).Select(m => m.Body).ToList();
+        var more = (await _provider.PeekMessagesAsync(queue, 20)).Select(m => m.Body).ToList();
 
-        Assert.Equal(["m1", "m1", "m1"], peeked);
+        Assert.Equal(["m1", "m2", "m3"], peeked);
+        Assert.Equal(["m1", "m2", "m3"], more);
         await fixture.WaitForMessageCountAsync(queue, 3);
         Assert.Equal(["m1", "m2", "m3"], fixture.Drain(queue));
     }

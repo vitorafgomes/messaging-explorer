@@ -540,18 +540,26 @@ public class RabbitMQProvider : IMessagingProvider
         // Use AMQP BasicGet directly for reliable message reading
         // Peek mode: get message, read body, then nack with requeue=true
         var messages = new List<IMessage>();
-        for (var i = 0; i < count; i++)
+        var channel = _channel!;
+        ulong lastTag = 0;
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            for (var i = 0; i < count; i++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
 
-            var result = _channel!.BasicGet(queueName, autoAck: false);
-            if (result == null)
-                break;
+                var result = channel.BasicGet(queueName, autoAck: false);
+                if (result == null)
+                    break;
 
-            messages.Add(MapBasicGetToMessageInfo(result, isDeadLetter, includeBody));
-
-            // Nack with requeue to put the message back (peek behavior)
-            _channel.BasicNack(result.DeliveryTag, multiple: false, requeue: true);
+                lastTag = result.DeliveryTag;
+                messages.Add(MapBasicGetToMessageInfo(result, isDeadLetter, includeBody));
+            }
+        }
+        finally
+        {
+            if (lastTag != 0 && channel.IsOpen)
+                channel.BasicNack(lastTag, multiple: true, requeue: true);
         }
 
         return messages;

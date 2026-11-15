@@ -79,7 +79,6 @@ test.describe('RabbitMQ', () => {
   });
 
   test('peek lists each message of the queue once', async ({ page }) => {
-    test.fail(true, 'RabbitMQ peek requeues each message to the head, so it returns the first message again and again');
     await open(page, 'entities');
     await treeNode(page, SEED.queue).click();
     await page.getByRole('button', { name: 'View Messages' }).click();
