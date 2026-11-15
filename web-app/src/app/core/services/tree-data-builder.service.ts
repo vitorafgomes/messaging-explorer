@@ -7,7 +7,13 @@ import { TopicService } from './topic.service';
 import { LoggerService } from './logger.service';
 import { DeadLetterNotificationService } from './dead-letter-notification.service';
 import { QueueInfo } from '../models/queue.model';
-import { TopicInfo, SubscriptionInfo, getDetectedPattern, getPatternDisplay } from '../models/topic.model';
+import { TopicInfo, SubscriptionInfo, MessagingPattern, getDetectedPattern, getPatternDisplay, toMessagingPattern } from '../models/topic.model';
+
+/** A stream queue is a Stream; a queue two or more consumers compete for is a work queue; any other has no label. */
+function queuePattern(queue: QueueInfo): string | undefined {
+  if (queue.queueType === 'stream') return 'Stream';
+  return (queue.consumerCount ?? 0) >= 2 ? `Work queue, ${queue.consumerCount} consumers` : undefined;
+}
 
 @Injectable({
   providedIn: 'root'
@@ -156,7 +162,8 @@ export class TreeDataBuilderService {
       deadLetterMessageCount: queue.deadLetterMessageCount,
       sizeInBytes: queue.sizeInBytes,
       status: queue.status,
-      forwardTo: queue.forwardTo
+      forwardTo: queue.forwardTo,
+      patternDisplay: queuePattern(queue)
     };
 
     return {
@@ -188,7 +195,7 @@ export class TreeDataBuilderService {
         confidence: detectedPattern.confidence,
         reason: detectedPattern.reason
       } : undefined,
-      patternDisplay: detectedPattern ? getPatternDisplay(detectedPattern.pattern) : undefined
+      patternDisplay: detectedPattern && toMessagingPattern(detectedPattern.pattern) !== MessagingPattern.None ? getPatternDisplay(detectedPattern.pattern) : undefined
     };
 
     const hasSubscriptions = topic.subscriptions && topic.subscriptions.length > 0;

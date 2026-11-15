@@ -1,4 +1,4 @@
-import { ProviderType } from './provider.model';
+import { ProviderType, toProviderType } from './provider.model';
 
 /**
  * Topic/Exchange entity information supporting multiple messaging providers.
@@ -179,7 +179,7 @@ export function isAzureTopic(topic: TopicInfo): boolean {
  * Helper type guard to check if topic/exchange is from RabbitMQ (Exchange).
  */
 export function isRabbitMQExchange(topic: TopicInfo): boolean {
-  return topic.providerType === ProviderType.RabbitMQ;
+  return toProviderType(topic.providerType) === ProviderType.RabbitMQ;
 }
 
 /**
@@ -264,7 +264,14 @@ export function getExchangeTypeDisplay(topic: TopicInfo): string | null {
 /**
  * Gets a display-friendly name for a messaging pattern.
  */
-export function getPatternDisplay(pattern: MessagingPattern): string {
+/** Reads a pattern as the API sends it, by name, or as the app holds it, by number. */
+export function toMessagingPattern(value: MessagingPattern | string | undefined): MessagingPattern {
+  const parsed = typeof value === 'string' ? MessagingPattern[value as keyof typeof MessagingPattern] : value;
+  return typeof parsed === 'number' ? parsed : MessagingPattern.None;
+}
+
+export function getPatternDisplay(value: MessagingPattern | string): string {
+  const pattern = toMessagingPattern(value);
   const patternMap: Record<MessagingPattern, string> = {
     [MessagingPattern.None]: 'None',
     [MessagingPattern.HelloWorld]: 'Hello World',

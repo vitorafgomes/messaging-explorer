@@ -56,6 +56,9 @@ export const STATUS_MARKERS: Partial<Record<string, { icon: string; text: string
           @if (node.type === 'subscription' && $any(node.data)?.routingKey; as key) {
             <span class="routing-key" [matTooltip]="'Routing key ' + key">{{ key }}</span>
           }
+          @if (node.type !== 'subscription' && $any(node.data)?.patternDisplay; as pattern) {
+            <span class="pattern-chip" [matTooltip]="$any(node.data)?.detectedPattern?.reason || pattern">{{ pattern }}</span>
+          }
           @if (statusMarker(node); as marker) {
             <mat-icon class="node-marker" [fontIcon]="marker.icon" [matTooltip]="marker.text" [attr.aria-label]="marker.text" role="img" />
           }

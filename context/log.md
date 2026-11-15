@@ -1,3 +1,6 @@
+## [2026-11-15] feature | Pattern labels on RabbitMQ exchanges and queues
+The detector's result reaches the tree; it was lost to a name-versus-number enum. [[pages/services/web-app/providers-and-shared]]
+
 ## [2026-11-15] feature | The tree speaks RabbitMQ on a RabbitMQ connection
 Exchanges and bindings with their routing keys instead of topics and subscriptions. [[pages/services/web-app/providers-and-shared]]
 ## [2026-11-15] fix | RabbitMQ peek numbers each message by its position

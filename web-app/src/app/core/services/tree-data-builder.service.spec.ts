@@ -120,3 +120,61 @@ describe('TreeDataBuilderService reads the subscriptions of one topic on demand'
       .toStrictEqual([['subscription-order-events-warehouse', 'subscription', 2, 'order-events', 2, true]]);
   });
 });
+
+describe('TreeDataBuilderService names the pattern of a RabbitMQ exchange as the API sends it', () => {
+  function build(topics: unknown[]) {
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: QueueService, useValue: { getQueues: () => of([]) } },
+        { provide: TopicService, useValue: { getTopics: () => of(topics), getSubscriptions: () => of([]) } },
+        { provide: LoggerService, useValue: { log: () => undefined, error: () => undefined } },
+        { provide: DeadLetterNotificationService, useValue: { updateFromSubscriptions: () => undefined } }
+      ]
+    });
+    let nodes: any[] = [];
+    TestBed.inject(TreeDataBuilderService).buildTree().subscribe(tree => (nodes = tree.find(c => c.id === 'category-topics')?.children ?? []));
+    return nodes.map(n => [n.name, n.data.patternDisplay]);
+  }
+
+  it('the provider and the pattern arrive by name ("RabbitMQ", "PubSub"), and the exchange is labelled Pub/Sub, Routing or Topics', () => {
+    expect(build([
+      { name: 'orders.dlx', providerType: 'RabbitMQ', exchangeType: 'fanout', subscriptionCount: 0, detectedPattern: { pattern: 'PubSub', confidence: 1, reason: 'fanout' } },
+      { name: 'billing', providerType: 'RabbitMQ', exchangeType: 'direct', subscriptionCount: 0, detectedPattern: { pattern: 'Routing', confidence: 0.9, reason: 'direct' } },
+      { name: 'orders', providerType: 'RabbitMQ', exchangeType: 'topic', subscriptionCount: 0, detectedPattern: { pattern: 'Topics', confidence: 0.9, reason: 'topic' } }
+    ])).toStrictEqual([['orders.dlx', 'Pub/Sub'], ['billing', 'Routing'], ['orders', 'Topics']]);
+  });
+
+  it('an exchange with no detected pattern, or the pattern None, and an Azure topic carry no label', () => {
+    expect(build([
+      { name: 'plain', providerType: 'RabbitMQ', subscriptionCount: 0 },
+      { name: 'none', providerType: 'RabbitMQ', subscriptionCount: 0, detectedPattern: { pattern: 'None', confidence: 0, reason: '' } },
+      { name: 'events', providerType: 'AzureServiceBus', subscriptionCount: 0 }
+    ])).toStrictEqual([['plain', undefined], ['none', undefined], ['events', undefined]]);
+  });
+});
+
+describe('TreeDataBuilderService labels a RabbitMQ queue by how it is used', () => {
+  function build(queues: unknown[]) {
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: QueueService, useValue: { getQueues: () => of(queues) } },
+        { provide: TopicService, useValue: { getTopics: () => of([]), getSubscriptions: () => of([]) } },
+        { provide: LoggerService, useValue: { log: () => undefined, error: () => undefined } },
+        { provide: DeadLetterNotificationService, useValue: { updateFromSubscriptions: () => undefined } }
+      ]
+    });
+    let nodes: any[] = [];
+    TestBed.inject(TreeDataBuilderService).buildTree().subscribe(tree => (nodes = tree.find(c => c.id === 'category-queues')?.children ?? []));
+    return nodes.map(n => [n.name, n.data.patternDisplay]);
+  }
+
+  it('a stream queue is Stream, a queue with two or more consumers is a Work queue with their count, and any other queue has no label', () => {
+    expect(build([
+      { name: 'events.stream', queueType: 'stream', consumerCount: 3 },
+      { name: 'tasks', queueType: 'classic', consumerCount: 3 },
+      { name: 'single', queueType: 'quorum', consumerCount: 1 },
+      { name: 'idle', queueType: 'classic', consumerCount: 0 },
+      { name: 'azure-queue' }
+    ])).toStrictEqual([['events.stream', 'Stream'], ['tasks', 'Work queue, 3 consumers'], ['single', undefined], ['idle', undefined], ['azure-queue', undefined]]);
+  });
+});

@@ -19,6 +19,8 @@ export interface QueueNodeData {
   status: string;
   /** The entity this queue forwards every message to; empty when it does not forward. */
   forwardTo?: string | null;
+  /** RabbitMQ: how the queue is used, "Stream" or "Work queue, N consumers"; absent for any other queue. */
+  patternDisplay?: string;
 }
 
 export interface TopicNodeData {
