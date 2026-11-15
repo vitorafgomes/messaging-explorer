@@ -107,6 +107,12 @@ interface LeftRow extends LeftBehind {
         <mat-icon aria-hidden="true">info</mat-icon>
         <span>{{ atLeastOnce }}</span>
       </p>
+      @if (data.topicName) {
+        <p class="topic-resubmit-note" role="note">
+          <mat-icon fontIcon="warning" aria-hidden="true" />
+          <span><strong>Resubmit publishes to the topic {{ data.topicName }}.</strong> Every subscription of {{ data.topicName }} receives these messages again, not only {{ data.entityName }}.</span>
+        </p>
+      }
 
       @if (run(); as run) {
         @let p = run.progress();
@@ -452,6 +458,8 @@ interface LeftRow extends LeftBehind {
     .intro { color: var(--mat-sys-on-surface-variant); }
     .note { display: flex; align-items: flex-start; gap: 8px; padding: 8px 12px; border-radius: 8px; background: var(--mat-sys-surface-container-high); color: var(--mat-sys-on-surface-variant); }
     .note mat-icon { flex: none; }
+    .topic-resubmit-note { display: flex; align-items: flex-start; gap: 12px; margin: 0; padding: 12px 16px; border-radius: 8px; background: var(--app-warning-container); color: var(--app-on-warning-container); }
+    .topic-resubmit-note mat-icon { flex: none; }
     .field { display: flex; flex-direction: column; gap: 4px; }
     .field > label { font: var(--mat-sys-label-medium); color: var(--mat-sys-on-surface-variant); }
     .note.warn { background: var(--app-warning-container); color: var(--app-on-warning-container); }

@@ -1168,13 +1168,10 @@ describe('EntityDetailsComponent as Main.dc.html draws the panel', () => {
     expect(text(el.querySelector('.dead-letter-card button.auto-resubmit'))).toBe('Auto resubmit');
   });
 
-  it('a subscription says that a resubmit publishes to its topic, in a warning beside the cards; a queue does not', () => {
+  it('the subscription panel carries no standing resubmit warning: it is said where a resubmit is chosen', () => {
     const el = render({ selection: subscription() }).nativeElement as HTMLElement;
 
-    expect(text(el.querySelector('.resubmit-notice[role="note"]'))).toBe('A resubmit from this subscription publishes to the topic. The message goes to events, so every subscription of the topic receives it again.');
-    expect(text(el.querySelector('.resubmit-notice strong'))).toBe('A resubmit from this subscription publishes to the topic.');
-    TestBed.resetTestingModule();
-    expect(render({ selection: queue() }).nativeElement.querySelector('.resubmit-notice')).toBeNull();
+    expect(el.querySelector('.resubmit-notice'), 'no warning beside the cards').toBeNull();
   });
 
   it('the subscription tabs are Properties, Sessions when it holds sessions, and Rules with the count of the rules read', () => {
