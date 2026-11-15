@@ -18,6 +18,7 @@ What changed when in the project [[pages/services/api|Api]] describes, newest fi
 
 ## 2026-11-15
 
+- `POST api/connections/test` of a stored connection tests with its stored secret when the dialog sends the mask; it always failed before ([[pages/services/api/connections-and-secrets]]). Found in the owner's hand test.
 - `GET api/connections` and `GET api/connections/{id}` carry the endpoint host of a connection string as `namespace`, so the list shows its target ([[pages/services/api/connections-and-secrets]]).
 
 ## 2026-11-14

@@ -135,20 +135,7 @@ public class ConnectionsController : ControllerBase
                 var existing = await _connectionManager.GetConnectionWithSecretAsync(connection.Id);
                 if (existing != null)
                 {
-                    // Restore masked connection string
-                    if (connection.ConnectionString == "***")
-                    {
-                        connection.ConnectionString = existing.ConnectionString;
-                    }
-                    // Restore masked password
-                    if (connection.Password == "***")
-                    {
-                        connection.Password = existing.Password;
-                    }
-                    if (connection.ClientSecret == "***")
-                    {
-                        connection.ClientSecret = existing.ClientSecret;
-                    }
+                    RestoreMaskedSecrets(connection, existing);
 
                     // Check if only metadata changed (clientId, environmentId, name)
                     var sameConnectionString = connection.ConnectionString == existing.ConnectionString;
@@ -205,6 +192,18 @@ public class ConnectionsController : ControllerBase
         }
     }
 
+    /// <summary>True when a secret of the connection arrives as the mask, as an edit of a stored connection sends it.</summary>
+    private static bool HasMaskedSecret(ServiceBusConnection connection) =>
+        connection.ConnectionString == "***" || connection.Password == "***" || connection.ClientSecret == "***";
+
+    /// <summary>Puts the stored value back in place of each secret that arrives as the mask; a typed secret is kept.</summary>
+    private static void RestoreMaskedSecrets(ServiceBusConnection connection, ServiceBusConnection stored)
+    {
+        if (connection.ConnectionString == "***") connection.ConnectionString = stored.ConnectionString;
+        if (connection.Password == "***") connection.Password = stored.Password;
+        if (connection.ClientSecret == "***") connection.ClientSecret = stored.ClientSecret;
+    }
+
     [HttpPost("test")]
     public async Task<ActionResult> TestConnection([FromBody] ServiceBusConnection connection)
     {
@@ -213,6 +212,12 @@ public class ConnectionsController : ControllerBase
             _logger.LogInformation(
                 "Testing connection {ConnectionName} ({ProviderType})",
                 connection.Name, connection.ProviderType);
+
+            if (!string.IsNullOrEmpty(connection.Id) && HasMaskedSecret(connection)
+                && await _connectionManager.GetConnectionWithSecretAsync(connection.Id) is { } stored)
+            {
+                RestoreMaskedSecrets(connection, stored);
+            }
 
             var isValid = await _providerFactory.TestConnectionAsync(connection);
 

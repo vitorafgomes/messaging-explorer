@@ -1,5 +1,8 @@
 ## [2026-11-15] fix | RabbitMQ: empty properties, a missing dead-letter queue and a closed channel
 Found in the hand test: opening orders.audit failed and broke the connection. [[pages/services/core/rabbitmq-and-legacy]]
+## [2026-11-15] fix | Test of a stored connection tests with the stored secret
+The Edit dialog sent the mask and no id; the test route tested `***`. [[pages/services/api/connections-and-secrets]]
+
 ## [2026-11-15] fix | A topic opened in the tree reads its subscriptions on demand
 Found in the hand test against the emulator, whose counts are always zero. [[pages/services/web-app/features-entities-main]]
 
