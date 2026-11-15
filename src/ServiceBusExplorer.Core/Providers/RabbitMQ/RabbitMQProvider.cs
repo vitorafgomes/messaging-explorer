@@ -789,7 +789,8 @@ public class RabbitMQProvider : IMessagingProvider
             OperationInterruptedException interrupted => interrupted.ShutdownReason,
             _ => null
         };
-        return reason is { Initiator: ShutdownInitiator.Peer, ReplyCode: 403 or 406 };
+        return reason is { Initiator: ShutdownInitiator.Peer, ReplyCode: 403 or 406 }
+            && !reason.ReplyText.Contains("delivery acknowledgement", StringComparison.OrdinalIgnoreCase);
     }
 
     private BatchOperationResult ResubmitConfirmed(string queueName, string deadLetterQueue, long[] positions, CancellationToken cancellationToken)
@@ -823,6 +824,8 @@ public class RabbitMQProvider : IMessagingProvider
         channel.BasicReturn += (_, _) => Volatile.Write(ref returned, 1);
         channel.ConfirmSelect();
         var held = new List<BasicGetResult?>();
+        var sent = new List<long>();
+        string? stopped = null;
         try
         {
             while (held.Count < positions[^1])
@@ -835,6 +838,11 @@ public class RabbitMQProvider : IMessagingProvider
 
             foreach (var position in positions)
             {
+                if (stopped != null)
+                {
+                    Fail(position, stopped);
+                    continue;
+                }
                 if (cancellationToken.IsCancellationRequested)
                 {
                     Fail(position, "Not resubmitted: the operation was cancelled. The message is still in the dead-letter queue.");
@@ -855,6 +863,7 @@ public class RabbitMQProvider : IMessagingProvider
                 catch (Exception ex) when (ex is AlreadyClosedException or OperationInterruptedException or IOException)
                 {
                     Fail(position, $"Not resubmitted: {ex.Message}. The message is still in the dead-letter queue.");
+                    stopped = StoppedAfterAFailure;
                     continue;
                 }
 
@@ -868,16 +877,19 @@ public class RabbitMQProvider : IMessagingProvider
                     Fail(position, IsBrokerRefusal(ex)
                         ? $"Not resubmitted: the broker refused the message ({ex.Message}). It is still in the dead-letter queue."
                         : "The connection failed before the broker confirmed: the message may have been sent and is still in the dead-letter queue. Possible duplicate.");
+                    stopped = StoppedAfterAFailure;
                     continue;
                 }
                 if (timedOut)
                 {
                     Fail(position, "The broker did not confirm in time: the message may have been sent and is still in the dead-letter queue. Possible duplicate.");
+                    stopped = StoppedAfterAFailure;
                     continue;
                 }
                 if (!confirmed || Volatile.Read(ref returned) == 1)
                 {
                     Fail(position, "Not resubmitted: the broker did not accept the message. It is still in the dead-letter queue.");
+                    stopped = StoppedAfterAFailure;
                     continue;
                 }
 
@@ -885,21 +897,56 @@ public class RabbitMQProvider : IMessagingProvider
                 {
                     channel.BasicAck(message.DeliveryTag, multiple: false);
                     held[(int)position - 1] = null;
-                    result.SuccessCount++;
+                    sent.Add(position);
                 }
                 catch (Exception ex) when (ex is AlreadyClosedException or OperationInterruptedException or IOException)
                 {
                     Fail(position, "Sent, but not removed from the dead-letter queue. Possible duplicate.");
+                    stopped = StoppedAfterAFailure;
                 }
             }
         }
         finally
         {
-            if (held.FindLast(kept => kept != null) is { } last && channel.IsOpen)
-                channel.BasicNack(last.DeliveryTag, multiple: true, requeue: true);
+            try
+            {
+                if (held.FindLast(kept => kept != null) is { } last && channel.IsOpen)
+                    channel.BasicNack(last.DeliveryTag, multiple: true, requeue: true);
+            }
+            catch (Exception ex) when (ex is AlreadyClosedException or OperationInterruptedException or IOException)
+            {
+                // A channel that closes requeues every delivery it still holds.
+            }
         }
 
+        if (RemovalsSettled(channel))
+            result.SuccessCount += sent.Count;
+        else
+            foreach (var position in sent)
+                Fail(position, "Sent, but its removal from the dead-letter queue was not confirmed. Possible duplicate.");
+
         return result;
+    }
+
+    private const string StoppedAfterAFailure = "Not resubmitted: the batch stopped after an earlier message failed. The message is still in the dead-letter queue.";
+
+    /// <summary>
+    /// Whether the broker processed every acknowledgement sent on the channel: a close it answered comes after them, and a
+    /// channel it closed for a refusal processed the frames before the one it refused.
+    /// </summary>
+    private static bool RemovalsSettled(IModel channel)
+    {
+        if (!channel.IsOpen)
+            return channel.CloseReason is { Initiator: ShutdownInitiator.Peer, ReplyCode: 403 or 406 };
+        try
+        {
+            channel.Close();
+            return true;
+        }
+        catch (Exception ex) when (ex is AlreadyClosedException or OperationInterruptedException or IOException)
+        {
+            return false;
+        }
     }
 
     /// <inheritdoc />

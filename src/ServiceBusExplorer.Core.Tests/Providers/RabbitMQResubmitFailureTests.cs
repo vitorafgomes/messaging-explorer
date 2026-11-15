@@ -11,6 +11,10 @@ namespace ServiceBusExplorer.Core.Tests.Providers;
 /// </summary>
 public class RabbitMQResubmitFailureTests
 {
+    private delegate bool Wait(TimeSpan timeout, out bool timedOut);
+
+    private const string Stopped = "Not resubmitted: the batch stopped after an earlier message failed. The message is still in the dead-letter queue.";
+
     private static BasicGetResult Delivery(ulong tag) => new(tag, false, "", "orders.dlq", 0, Mock.Of<IBasicProperties>(), new byte[] { 1 });
 
     private static (RabbitMQProvider Provider, Mock<IModel> Channel) Provider(bool confirmed = true, bool timedOut = false, int messages = 1)
@@ -162,5 +166,76 @@ public class RabbitMQResubmitFailureTests
         var missing = Assert.Single(result.Failures);
         Assert.Equal((3L, "Not resubmitted: no message at this position in the dead-letter queue."), (missing.SequenceNumber, missing.Error));
         channel.Verify(c => c.BasicAck(7, false), Times.Once);
+    }
+
+    [Fact]
+    public async Task After_a_confirm_that_times_out_the_batch_stops_so_a_late_answer_never_lands_on_another_message()
+    {
+        var (provider, channel) = Provider(messages: 2);
+        var waits = 0;
+        channel.Setup(c => c.WaitForConfirms(It.IsAny<TimeSpan>(), out It.Ref<bool>.IsAny))
+            .Returns(new Wait((TimeSpan _, out bool timedOut) => { timedOut = ++waits == 1; return !timedOut; }));
+
+        var result = await provider.ResubmitDeadLetterMessagesAsync("orders", [1, 2]);
+
+        Assert.Equal(0, result.SuccessCount);
+        Assert.Equal([1L, 2L], result.Failures.Select(f => f.SequenceNumber));
+        Assert.EndsWith("Possible duplicate.", result.Failures[0].Error);
+        Assert.Equal(Stopped, result.Failures[1].Error);
+        channel.Verify(c => c.BasicPublish(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<IBasicProperties>(), It.IsAny<ReadOnlyMemory<byte>>()), Times.Once);
+        channel.Verify(c => c.BasicAck(It.IsAny<ulong>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task A_publish_that_fails_on_a_closed_channel_reports_every_position_still_in_the_dead_letter_queue_and_removes_nothing()
+    {
+        var (provider, channel) = Provider(messages: 3);
+        channel.Setup(c => c.BasicPublish(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<IBasicProperties>(), It.IsAny<ReadOnlyMemory<byte>>()))
+            .Throws(Closed(406, "PRECONDITION_FAILED"));
+
+        var result = await provider.ResubmitDeadLetterMessagesAsync("orders", [1, 2, 3]);
+
+        Assert.Equal((0, 3), (result.SuccessCount, result.FailureCount));
+        Assert.Equal([1L, 2L, 3L], result.Failures.Select(f => f.SequenceNumber));
+        Assert.All(result.Failures, f => Assert.EndsWith("The message is still in the dead-letter queue.", f.Error));
+        channel.Verify(c => c.BasicAck(It.IsAny<ulong>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task A_406_for_an_expired_delivery_is_not_a_refusal_of_the_publish_and_reports_a_possible_duplicate()
+    {
+        var (provider, channel) = Provider();
+        var timedOut = false;
+        channel.Setup(c => c.WaitForConfirms(It.IsAny<TimeSpan>(), out timedOut))
+            .Throws(Closed(406, "PRECONDITION_FAILED - delivery acknowledgement on channel 1 timed out"));
+
+        var result = await provider.ResubmitDeadLetterMessagesAsync("orders", [1]);
+
+        Assert.EndsWith("Possible duplicate.", Assert.Single(result.Failures).Error);
+    }
+
+    [Fact]
+    public async Task A_removal_the_broker_never_confirmed_is_reported_as_a_possible_duplicate_never_as_a_success()
+    {
+        var (provider, channel) = Provider();
+        channel.Setup(c => c.Close()).Throws(Closed());
+
+        var result = await provider.ResubmitDeadLetterMessagesAsync("orders", [1]);
+
+        Assert.Equal((0, 1), (result.SuccessCount, result.FailureCount));
+        Assert.Equal("Sent, but its removal from the dead-letter queue was not confirmed. Possible duplicate.", Assert.Single(result.Failures).Error);
+    }
+
+    [Fact]
+    public async Task A_requeue_that_fails_at_the_end_keeps_the_report_of_each_message()
+    {
+        var (provider, channel) = Provider(messages: 2);
+        channel.Setup(c => c.BasicNack(It.IsAny<ulong>(), It.IsAny<bool>(), It.IsAny<bool>())).Throws(Closed());
+
+        var result = await provider.ResubmitDeadLetterMessagesAsync("orders", [2]);
+
+        Assert.Equal((1, 0), (result.SuccessCount, result.FailureCount));
+        channel.Verify(c => c.BasicAck(8, false), Times.Once);
+        channel.Verify(c => c.BasicNack(7, true, true), Times.Once);
     }
 }
