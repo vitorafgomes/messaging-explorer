@@ -316,7 +316,8 @@ public sealed class RabbitMQProviderDefectTests(RabbitMqFixture fixture) : IAsyn
 
         Assert.Equal((0, 1), (result.SuccessCount, result.FailureCount));
         Assert.Equal(1, Assert.Single(result.Failures).SequenceNumber);
-        Assert.EndsWith("The message is still in the dead-letter queue.", result.Failures[0].Error);
+        Assert.StartsWith("Not resubmitted: the broker refused the message", result.Failures[0].Error);
+        Assert.EndsWith("It is still in the dead-letter queue.", result.Failures[0].Error);
         await fixture.WaitForMessageCountAsync(deadLetter, 1);
         Assert.Equal(["from-other"], fixture.Drain(deadLetter));
         Assert.Equal(0u, fixture.MessageCount(queue));

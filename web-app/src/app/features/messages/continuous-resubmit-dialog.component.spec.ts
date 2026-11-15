@@ -470,7 +470,7 @@ describe('ContinuousResubmitDialogComponent', () => {
           'While it runs: The loop lives in this dialog. It stays open for every cycle and cannot be closed; quitting the app ends the run.',
           'If one message fails: The run stops at that batch and names the sequence numbers. Read the dead-letter queue again before another run: what that batch did is not known.'
         ]);
-        expect(text(el.querySelector('.cost .cost-note'))).toBe('This loop does not send first: the broker can take a message out of dead-letter before it is published again, so a failed publish can lose it, and a batch whose call fails has an unknown outcome. Read the dead-letter queue again before you retry.');
+        expect(text(el.querySelector('.cost .cost-note'))).toBe('Each message is sent first and removed from the dead-letter queue only once the broker confirmed it. A batch whose call fails has an unknown outcome, and a message can arrive twice: read the dead-letter queue again before you retry.');
       });
 
       it('configure: a batch size outside 1 to 500 says so, marks the field and keeps Start disabled', () => {

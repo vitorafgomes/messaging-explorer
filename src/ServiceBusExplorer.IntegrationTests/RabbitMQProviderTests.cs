@@ -209,6 +209,25 @@ public sealed class RabbitMQProviderTests(RabbitMqFixture fixture) : IAsyncLifet
     }
 
     [Fact]
+    public async Task A_resubmit_to_a_queue_that_no_longer_exists_is_returned_by_the_broker_and_the_message_stays_in_the_dead_letter_queue()
+    {
+        var queue = Queue("resubmit-gone");
+        var deadLetter = $"{queue}.dlq";
+        _queues.Add(deadLetter);
+        await _provider.CreateQueueAsync(deadLetter);
+        fixture.PublishToQueue(deadLetter, "d1");
+        await fixture.WaitForMessageCountAsync(deadLetter, 1);
+
+        var result = await _provider.ResubmitDeadLetterMessagesAsync(queue, [1]);
+
+        Assert.Equal((0, 1), (result.SuccessCount, result.FailureCount));
+        Assert.Equal("Not resubmitted: the broker did not accept the message. It is still in the dead-letter queue.", Assert.Single(result.Failures).Error);
+        await fixture.WaitForMessageCountAsync(deadLetter, 1);
+        Assert.Equal(["d1"], fixture.Drain(deadLetter));
+        Assert.Null(await _provider.GetQueueAsync(queue));
+    }
+
+    [Fact]
     public async Task A_resubmitted_message_keeps_its_body_its_message_id_its_content_type_and_its_headers()
     {
         var queue = Queue("resubmit-props");

@@ -780,6 +780,18 @@ public class RabbitMQProvider : IMessagingProvider
         return await Task.Run(() => ResubmitConfirmed(queueName, $"{queueName}.dlq", positions, cancellationToken), cancellationToken);
     }
 
+    /// <summary>A channel closed by the broker for access refused (403) or a failed precondition (406): the message was not taken.</summary>
+    private static bool IsBrokerRefusal(Exception ex)
+    {
+        var reason = ex switch
+        {
+            AlreadyClosedException closed => closed.ShutdownReason,
+            OperationInterruptedException interrupted => interrupted.ShutdownReason,
+            _ => null
+        };
+        return reason is { Initiator: ShutdownInitiator.Peer, ReplyCode: 403 or 406 };
+    }
+
     private BatchOperationResult ResubmitConfirmed(string queueName, string deadLetterQueue, long[] positions, CancellationToken cancellationToken)
     {
         var result = new BatchOperationResult();
@@ -807,8 +819,8 @@ public class RabbitMQProvider : IMessagingProvider
         if (consumers > 0)
             return FailAll("Not resubmitted: the dead-letter queue has a consumer, so the position of a message may have changed. Nothing was sent or removed.");
 
-        var returned = false;
-        channel.BasicReturn += (_, _) => returned = true;
+        var returned = 0;
+        channel.BasicReturn += (_, _) => Volatile.Write(ref returned, 1);
         channel.ConfirmSelect();
         var held = new List<BasicGetResult?>();
         try
@@ -837,23 +849,35 @@ public class RabbitMQProvider : IMessagingProvider
                 var message = held[(int)position - 1]!;
                 try
                 {
-                    returned = false;
+                    Volatile.Write(ref returned, 0);
                     channel.BasicPublish("", queueName, mandatory: true, message.BasicProperties, message.Body);
-                    var confirmed = channel.WaitForConfirms(ConfirmTimeout, out var timedOut);
-                    if (timedOut)
-                    {
-                        Fail(position, "The broker did not confirm in time: the message may have been sent and is still in the dead-letter queue. Possible duplicate.");
-                        continue;
-                    }
-                    if (!confirmed || returned)
-                    {
-                        Fail(position, "Not resubmitted: the broker did not accept the message. It is still in the dead-letter queue.");
-                        continue;
-                    }
                 }
                 catch (Exception ex) when (ex is AlreadyClosedException or OperationInterruptedException or IOException)
                 {
                     Fail(position, $"Not resubmitted: {ex.Message}. The message is still in the dead-letter queue.");
+                    continue;
+                }
+
+                bool confirmed, timedOut;
+                try
+                {
+                    confirmed = channel.WaitForConfirms(ConfirmTimeout, out timedOut);
+                }
+                catch (Exception ex) when (ex is AlreadyClosedException or OperationInterruptedException or IOException)
+                {
+                    Fail(position, IsBrokerRefusal(ex)
+                        ? $"Not resubmitted: the broker refused the message ({ex.Message}). It is still in the dead-letter queue."
+                        : "The connection failed before the broker confirmed: the message may have been sent and is still in the dead-letter queue. Possible duplicate.");
+                    continue;
+                }
+                if (timedOut)
+                {
+                    Fail(position, "The broker did not confirm in time: the message may have been sent and is still in the dead-letter queue. Possible duplicate.");
+                    continue;
+                }
+                if (!confirmed || Volatile.Read(ref returned) == 1)
+                {
+                    Fail(position, "Not resubmitted: the broker did not accept the message. It is still in the dead-letter queue.");
                     continue;
                 }
 

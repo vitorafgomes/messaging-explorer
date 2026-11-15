@@ -1405,6 +1405,23 @@ describe('ViewMessagesDialogComponent: transfer dead-letter queue, message state
       expect(queue['peekDeadLetterMessages'], 'the dead-letter tab is read again after the run').toHaveBeenCalledTimes(reads + 1);
     });
 
+    it('on RabbitMQ the detail pane resubmits its message as a batch of one and shows the reason a message was not resubmitted, a possible duplicate included', () => {
+      const component = create({ initialTab: 1 }, { deadLetter: messages(2) }, DEFAULT_RABBITMQ_CAPABILITIES);
+      const duplicate = 'Sent, but not removed from the dead-letter queue. Possible duplicate.';
+      queue['resubmitDeadLetterMessages'] = vi.fn()
+        .mockReturnValueOnce(of({ success: false, successCount: 0, failureCount: 1, failures: [{ sequenceNumber: 2, error: duplicate }] }))
+        .mockReturnValueOnce(of(ok(1)));
+      queue['resubmitDeadLetterMessage'] = vi.fn();
+
+      component.resubmit(messages(2)[1]);
+      expect(queue['resubmitDeadLetterMessages']).toHaveBeenLastCalledWith('orders', [2], false);
+      expect(snackBar.open.mock.calls.at(-1)?.[0]).toBe(duplicate);
+
+      component.resubmit(messages(2)[1]);
+      expect(snackBar.open.mock.calls.at(-1)?.[0]).toBe('Message resubmitted');
+      expect(queue['resubmitDeadLetterMessage'], 'the single route answers a failure without its reason').not.toHaveBeenCalled();
+    });
+
     function runAutoResubmit(counts: () => unknown) {
       lists({});
       providers({ activeMessageCount: 4, deadLetterMessageCount: 3, initialTab: 1 }, withTransfer);

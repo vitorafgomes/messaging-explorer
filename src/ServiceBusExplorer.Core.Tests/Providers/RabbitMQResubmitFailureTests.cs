@@ -11,14 +11,16 @@ namespace ServiceBusExplorer.Core.Tests.Providers;
 /// </summary>
 public class RabbitMQResubmitFailureTests
 {
-    private static (RabbitMQProvider Provider, Mock<IModel> Channel) Provider(bool confirmed = true, bool timedOut = false)
+    private static BasicGetResult Delivery(ulong tag) => new(tag, false, "", "orders.dlq", 0, Mock.Of<IBasicProperties>(), new byte[] { 1 });
+
+    private static (RabbitMQProvider Provider, Mock<IModel> Channel) Provider(bool confirmed = true, bool timedOut = false, int messages = 1)
     {
         var channel = new Mock<IModel>();
         channel.Setup(c => c.IsOpen).Returns(true);
-        channel.Setup(c => c.QueueDeclarePassive("orders.dlq")).Returns(new QueueDeclareOk("orders.dlq", 1, 0));
-        channel.SetupSequence(c => c.BasicGet("orders.dlq", false))
-            .Returns(new BasicGetResult(7, false, "", "orders.dlq", 0, Mock.Of<IBasicProperties>(), new byte[] { 1 }))
-            .Returns((BasicGetResult)null!);
+        channel.Setup(c => c.QueueDeclarePassive("orders.dlq")).Returns(new QueueDeclareOk("orders.dlq", (uint)messages, 0));
+        var gets = channel.SetupSequence(c => c.BasicGet("orders.dlq", false));
+        for (var i = 0; i < messages; i++) gets = gets.Returns(Delivery((ulong)(7 + i)));
+        gets.Returns((BasicGetResult)null!);
         channel.Setup(c => c.WaitForConfirms(It.IsAny<TimeSpan>(), out timedOut)).Returns(confirmed);
         var connection = new Mock<IConnection>();
         connection.Setup(c => c.IsOpen).Returns(true);
@@ -27,7 +29,7 @@ public class RabbitMQResubmitFailureTests
         return (new RabbitMQProvider(connection.Object, management, channel.Object), channel);
     }
 
-    private static AlreadyClosedException Closed() => new(new ShutdownEventArgs(ShutdownInitiator.Peer, 320, "CONNECTION_FORCED"));
+    private static AlreadyClosedException Closed(ushort code = 320, string text = "CONNECTION_FORCED") => new(new ShutdownEventArgs(ShutdownInitiator.Peer, code, text));
 
     [Fact]
     public async Task A_message_the_broker_does_not_confirm_is_not_removed_from_the_dead_letter_queue_and_is_reported()
@@ -89,5 +91,76 @@ public class RabbitMQResubmitFailureTests
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => provider.ResubmitDeadLetterMessageAsync("orders", 1));
 
         Assert.Equal("Not resubmitted: the broker did not accept the message. It is still in the dead-letter queue.", error.Message);
+    }
+
+    [Fact]
+    public async Task A_confirm_the_broker_breaks_with_a_406_refusal_keeps_the_message_and_says_it_was_not_resubmitted()
+    {
+        var (provider, channel) = Provider();
+        var timedOut = false;
+        channel.Setup(c => c.WaitForConfirms(It.IsAny<TimeSpan>(), out timedOut)).Throws(Closed(406, "PRECONDITION_FAILED"));
+
+        var result = await provider.ResubmitDeadLetterMessagesAsync("orders", [1]);
+
+        Assert.Equal((0, 1), (result.SuccessCount, result.FailureCount));
+        Assert.StartsWith("Not resubmitted: the broker refused the message", Assert.Single(result.Failures).Error);
+        Assert.EndsWith("It is still in the dead-letter queue.", result.Failures[0].Error);
+        channel.Verify(c => c.BasicAck(It.IsAny<ulong>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task A_connection_that_drops_while_waiting_for_the_confirm_reports_a_possible_duplicate_never_not_resubmitted()
+    {
+        var (provider, channel) = Provider();
+        var timedOut = false;
+        channel.Setup(c => c.WaitForConfirms(It.IsAny<TimeSpan>(), out timedOut)).Throws(Closed());
+
+        var result = await provider.ResubmitDeadLetterMessagesAsync("orders", [1]);
+
+        Assert.Equal((0, 1), (result.SuccessCount, result.FailureCount));
+        Assert.Equal("The connection failed before the broker confirmed: the message may have been sent and is still in the dead-letter queue. Possible duplicate.", Assert.Single(result.Failures).Error);
+        channel.Verify(c => c.BasicAck(It.IsAny<ulong>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task A_cancel_during_the_batch_stops_it_the_positions_left_are_reported_and_only_the_confirmed_one_is_removed()
+    {
+        var (provider, channel) = Provider(messages: 2);
+        using var cancel = new CancellationTokenSource();
+        channel.Setup(c => c.BasicAck(7, false)).Callback(cancel.Cancel);
+
+        var result = await provider.ResubmitDeadLetterMessagesAsync("orders", [1, 2], cancellationToken: cancel.Token);
+
+        Assert.Equal(1, result.SuccessCount);
+        var left = Assert.Single(result.Failures);
+        Assert.Equal((2L, "Not resubmitted: the operation was cancelled. The message is still in the dead-letter queue."), (left.SequenceNumber, left.Error));
+        channel.Verify(c => c.BasicPublish(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<IBasicProperties>(), It.IsAny<ReadOnlyMemory<byte>>()), Times.Once);
+        channel.Verify(c => c.BasicAck(8, It.IsAny<bool>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task A_cancel_before_the_batch_starts_sends_nothing_and_removes_nothing()
+    {
+        var (provider, channel) = Provider();
+        using var cancel = new CancellationTokenSource();
+        cancel.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => provider.ResubmitDeadLetterMessagesAsync("orders", [1], cancellationToken: cancel.Token));
+
+        channel.Verify(c => c.BasicPublish(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<IBasicProperties>(), It.IsAny<ReadOnlyMemory<byte>>()), Times.Never);
+        channel.Verify(c => c.BasicAck(It.IsAny<ulong>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task A_position_beyond_the_messages_in_the_dead_letter_queue_is_reported_and_the_one_that_exists_is_resubmitted()
+    {
+        var (provider, channel) = Provider(messages: 1);
+
+        var result = await provider.ResubmitDeadLetterMessagesAsync("orders", [1, 3]);
+
+        Assert.Equal(1, result.SuccessCount);
+        var missing = Assert.Single(result.Failures);
+        Assert.Equal((3L, "Not resubmitted: no message at this position in the dead-letter queue."), (missing.SequenceNumber, missing.Error));
+        channel.Verify(c => c.BasicAck(7, false), Times.Once);
     }
 }
