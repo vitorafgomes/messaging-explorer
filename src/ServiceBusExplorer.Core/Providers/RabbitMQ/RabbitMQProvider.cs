@@ -553,7 +553,9 @@ public class RabbitMQProvider : IMessagingProvider
                     break;
 
                 lastTag = result.DeliveryTag;
-                messages.Add(MapBasicGetToMessageInfo(result, isDeadLetter, includeBody));
+                var message = MapBasicGetToMessageInfo(result, isDeadLetter, includeBody);
+                message.SequenceNumber = messages.Count + 1;
+                messages.Add(message);
             }
         }
         finally

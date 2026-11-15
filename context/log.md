@@ -1,3 +1,6 @@
+## [2026-11-15] fix | RabbitMQ peek numbers each message by its position
+Found in the hand test: ticking one message ticked them all. [[pages/services/core/rabbitmq-and-legacy]]
+
 ## [2026-11-15] fix | The entity form says every field error where it can be read
 Found in the hand test: a lock duration of 5 hours showed a cut message. [[pages/services/web-app/features-entities-main]]
 
