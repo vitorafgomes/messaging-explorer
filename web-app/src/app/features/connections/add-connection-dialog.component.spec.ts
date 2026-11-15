@@ -463,6 +463,14 @@ describe('AddConnectionDialogComponent - edit', () => {
     expect(norm(element.querySelector('.environment-line .where b')?.textContent), 'the name is bold').toBe('conn');
   });
 
+  it('Test of a stored connection sends its id with the stored secret as the mask, so the API tests with the stored one', () => {
+    const { component } = open(rabbit);
+
+    component.testConnection();
+
+    expect(connectionServiceMock.testConnection.mock.calls[0][0]).toEqual(expect.objectContaining({ id: 'c1', password: '***' }));
+  });
+
   it('shows Provider Type and Authentication as read-only text, not as selects', () => {
     const { element } = open(rabbit);
     const facts = Array.from(element.querySelectorAll('.fact')).map(f =>
