@@ -69,10 +69,37 @@ public class AzureConnectionConfig : IConnectionConfig
     /// </summary>
     public string? ClientSecret { get; set; }
 
+    /// <summary>
+    /// AMQP over WebSockets on port 443 instead of AMQP on port 5671.
+    /// </summary>
+    public bool UseWebSockets { get; set; }
+
+    /// <summary>
+    /// The address of an HTTP proxy, http://host:port; null or empty for none. See <see cref="IsProxyAllowed"/>.
+    /// </summary>
+    public string? ProxyAddress { get; set; }
+
+    /// <summary>
+    /// Whether a proxy address may be stored and used: none, or an absolute http or https address with no user name or
+    /// password in it, on a connection that uses WebSockets, since AMQP over TCP does not go through an HTTP proxy.
+    /// </summary>
+    public static bool IsProxyAllowed(string? proxyAddress, bool useWebSockets)
+    {
+        if (string.IsNullOrEmpty(proxyAddress))
+        {
+            return true;
+        }
+
+        return useWebSockets
+            && Uri.TryCreate(proxyAddress, UriKind.Absolute, out var uri)
+            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+            && string.IsNullOrEmpty(uri.UserInfo);
+    }
+
     /// <inheritdoc />
     public bool IsValid()
     {
-        if (string.IsNullOrWhiteSpace(Name))
+        if (string.IsNullOrWhiteSpace(Name) || !IsProxyAllowed(ProxyAddress, UseWebSockets))
         {
             return false;
         }
@@ -134,6 +161,22 @@ public class AzureConnectionConfig : IConnectionConfig
         return fqn;
     }
 
+    /// <summary>The characters that end the host of an endpoint: the first label, a port, a path or the next key.</summary>
+    private static readonly char[] HostEnd = ['.', ':', '/', ';'];
+
+    /// <summary>
+    /// The host of the Endpoint of a Service Bus connection string, such as sample-ns.servicebus.windows.net;
+    /// never the key, the key name or user info. Null when the string holds no endpoint that parses as a URI.
+    /// </summary>
+    public static string? EndpointHost(string? connectionString)
+    {
+        var endpoint = (connectionString ?? string.Empty).Split(';')
+            .FirstOrDefault(part => part.TrimStart().StartsWith("Endpoint=", StringComparison.OrdinalIgnoreCase));
+        if (endpoint is null) return null;
+        var value = endpoint.TrimStart()["Endpoint=".Length..].Trim();
+        return Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Host.Length > 0 ? uri.Host : null;
+    }
+
     /// <summary>
     /// Attempts to extract the namespace from the connection string.
     /// Azure Service Bus connection strings have the format:
@@ -157,7 +200,7 @@ public class AzureConnectionConfig : IConnectionConfig
             }
 
             startIndex += endpointPrefix.Length;
-            var endIndex = ConnectionString.IndexOf('.', startIndex);
+            var endIndex = ConnectionString.IndexOfAny(HostEnd, startIndex);
 
             if (endIndex < 0)
             {
@@ -191,7 +234,9 @@ public class AzureConnectionConfig : IConnectionConfig
             FullyQualifiedNamespace = connection.FullyQualifiedNamespace,
             TenantId = connection.TenantId,
             ServicePrincipalClientId = connection.ServicePrincipalClientId,
-            ClientSecret = connection.ClientSecret
+            ClientSecret = connection.ClientSecret,
+            UseWebSockets = connection.UseWebSockets,
+            ProxyAddress = connection.ProxyAddress
         };
     }
 
@@ -214,7 +259,9 @@ public class AzureConnectionConfig : IConnectionConfig
             FullyQualifiedNamespace = FullyQualifiedNamespace,
             TenantId = TenantId,
             ServicePrincipalClientId = ServicePrincipalClientId,
-            ClientSecret = ClientSecret
+            ClientSecret = ClientSecret,
+            UseWebSockets = UseWebSockets,
+            ProxyAddress = ProxyAddress
         };
     }
 }

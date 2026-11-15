@@ -59,7 +59,7 @@ describe('QueuesComponent', () => {
 describe('QueuesComponent purges from the More actions menu', () => {
   const text = (e: Element | null) => (e?.textContent ?? '').replace(/\s+/g, ' ').trim();
 
-  it('each purge is disabled at a count of 0, asks the same confirmation, purges nothing when cancelled and purges the queue when confirmed', async () => {
+  it('each purge is disabled at a count of 0, is confirmed by typing the entity name, purges nothing when cancelled and purges the queue when confirmed', async () => {
     const queueService = {
       getQueues: vi.fn().mockReturnValue(of([
         { ...queue('orders'), activeMessageCount: 3, deadLetterMessageCount: 0 },
@@ -108,7 +108,10 @@ describe('QueuesComponent purges from the More actions menu', () => {
     expect(open).toHaveBeenLastCalledWith(ConfirmDialogComponent, { data: expect.objectContaining({
       title: 'Purge Messages',
       message: 'Are you sure you want to delete all 3 active messages from queue "orders"? This action cannot be undone.',
-      confirmText: 'Purge'
+      confirmText: 'Purge 3 messages',
+      typedName: 'orders',
+      typedLabel: 'Type the queue name to confirm',
+      context: { subject: 'orders' }
     }) });
     expect(queueService.purgeMessages).not.toHaveBeenCalled();
 
@@ -119,7 +122,10 @@ describe('QueuesComponent purges from the More actions menu', () => {
     expect(open).toHaveBeenLastCalledWith(ConfirmDialogComponent, { data: expect.objectContaining({
       title: 'Purge Dead Letter Queue',
       message: 'Are you sure you want to delete all 2 dead letter messages from queue "billing"? This action cannot be undone.',
-      confirmText: 'Purge'
+      confirmText: 'Purge 2 messages',
+      typedName: 'billing',
+      typedLabel: 'Type the queue name to confirm',
+      context: { subject: 'billing' }
     }) });
     expect(queueService.purgeDeadLetterMessages).not.toHaveBeenCalled();
 

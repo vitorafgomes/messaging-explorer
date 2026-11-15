@@ -1,8 +1,17 @@
-import { Component, signal } from '@angular/core';
-import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { Component, inject, signal } from '@angular/core';
+import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatCheckboxModule } from '@angular/material/checkbox';
+import { ConnectionGroup, ServiceBusConnection } from '../../core/models';
+
+/** What the export dialog counts: the saved connections and the clients and environments that group them. */
+export interface ExportConnectionsDialogData {
+  connections: ServiceBusConnection[];
+  groups: ConnectionGroup[];
+}
+
+const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
 
 /**
  * Result returned by the export connections dialog when the user confirms.
@@ -24,6 +33,7 @@ export interface ExportConnectionsDialogResult {
     <h2 mat-dialog-title>Export connections</h2>
 
     <mat-dialog-content>
+      <p class="summary">{{ summary }}</p>
       <p>
         By default, exports are <strong>masked</strong>: connection strings,
         passwords and client secrets are replaced with <code>***</code>.
@@ -42,7 +52,8 @@ export interface ExportConnectionsDialogResult {
           <span>
             <strong>The file will hold real secrets.</strong>
             The exported file will contain real connection strings, passwords,
-            and client secrets, unencrypted. Store it securely.
+            and client secrets, unencrypted. Anyone who opens it can connect to these brokers{{ productionClause }}.
+            Store it securely and delete it when it has served.
           </span>
         </div>
       }
@@ -61,10 +72,15 @@ export interface ExportConnectionsDialogResult {
   `,
   styles: [`
     mat-dialog-content {
-      max-width: 520px;
+      overflow: visible;
 
       p {
         margin: 0 0 12px;
+      }
+
+      .summary {
+        color: var(--mat-sys-on-surface-variant);
+        font-variant-numeric: tabular-nums;
       }
 
       code {
@@ -98,6 +114,20 @@ export interface ExportConnectionsDialogResult {
 export class ExportConnectionsDialogComponent {
   // Opt-in flag driven by a signal, as required by project conventions.
   readonly includeSecrets = signal(false);
+  private readonly data = inject<ExportConnectionsDialogData>(MAT_DIALOG_DATA);
+
+  /** How many connections, clients and environments the file holds. */
+  readonly summary = `${plural(this.data.connections.length, 'connection', 'connections')}, `
+    + `${plural(this.data.groups.filter(g => g.type === 'client').length, 'client', 'clients')} and `
+    + `${plural(this.data.groups.filter(g => g.type === 'environment').length, 'environment', 'environments')} `
+    + 'go into one JSON file that you choose where to save.';
+
+  /** Names the connections in an environment marked production, when there are any. */
+  readonly productionClause = (() => {
+    const production = new Set(this.data.groups.filter(g => g.isProduction).map(g => g.id));
+    const count = this.data.connections.filter(c => c.environmentId && production.has(c.environmentId)).length;
+    return count === 0 ? '' : count === 1 ? ', the one marked Production included' : `, the ${count} marked Production included`;
+  })();
 
   constructor(private dialogRef: MatDialogRef<ExportConnectionsDialogComponent, ExportConnectionsDialogResult>) {}
 

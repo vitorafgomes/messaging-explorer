@@ -302,7 +302,7 @@ public class AzureMonitorMetricsService : IMetricsService
     /// <summary>
     /// Calculates the time range parameters based on the specified MetricsTimeRange.
     /// </summary>
-    private (DateTimeOffset StartTime, DateTimeOffset EndTime, TimeSpan? Granularity) GetTimeRangeParameters(
+    internal static (DateTimeOffset StartTime, DateTimeOffset EndTime, TimeSpan? Granularity) GetTimeRangeParameters(
         MetricsTimeRange timeRange)
     {
         var endTime = DateTimeOffset.UtcNow;

@@ -5,48 +5,54 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { connectionContext } from '../entities/connection-context';
+import { EnvironmentLineComponent } from '../../shared/environment-line.component';
 
 export interface CancelScheduledDialogData {
+  /** The name of the queue, or of the topic when entityKind is topic. */
   queueName: string;
+  /** Which entity holds the messages; a queue when not given. */
+  entityKind?: 'queue' | 'topic';
   /** Exactly the sequence numbers the cancel will send. */
   sequenceNumbers: number[];
 }
 
 /**
  * Confirms cancelling scheduled messages: they are deleted before they are ever delivered. Names the
- * queue, the connection, the environment and the count; more than one message needs the queue name typed.
+ * queue or topic, the connection, the environment and the count; more than one message needs its name typed.
  * Closes with true when confirmed.
  */
 @Component({
   selector: 'app-cancel-scheduled-dialog',
   standalone: true,
-  imports: [MatDialogTitle, MatDialogContent, MatDialogActions, MatDialogClose, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule],
+  imports: [MatDialogTitle, MatDialogContent, MatDialogActions, MatDialogClose, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, EnvironmentLineComponent],
   template: `
     <h2 mat-dialog-title class="title">
       <mat-icon class="warn" aria-hidden="true">warning</mat-icon>
       <span class="title-text">Cancel {{ count }} scheduled {{ noun }}?</span>
     </h2>
     <mat-dialog-content>
+      <app-environment-line [mark]="context().mark"><b>{{ data.queueName }}</b> on {{ context().where }}</app-environment-line>
       <p class="consequence">
         The {{ noun }} {{ count === 1 ? 'is' : 'are' }} deleted before {{ count === 1 ? 'it is' : 'they are' }} ever delivered.
-        This cannot be undone; export {{ count === 1 ? 'it' : 'them' }} first to keep a copy.
+        This cannot be undone@if (kind === 'queue') {; export {{ count === 1 ? 'it' : 'them' }} first to keep a copy}.
       </p>
       <dl class="facts">
-        <div class="fact"><dt>Queue</dt><dd>{{ data.queueName }}</dd></div>
+        <div class="fact"><dt>{{ kindLabel }}</dt><dd>{{ data.queueName }}</dd></div>
         <div class="fact"><dt>Connection</dt><dd>{{ context().connection }}</dd></div>
         <div class="fact"><dt>Environment</dt><dd>{{ context().environment }}</dd></div>
         <div class="fact"><dt>Messages</dt><dd>{{ count }} scheduled{{ count === 1 ? ': ' + data.sequenceNumbers[0] : '' }}</dd></div>
       </dl>
       @if (needsTypedName) {
         <mat-form-field class="typed">
-          <mat-label>Type the queue name to confirm</mat-label>
+          <mat-label>Type the {{ kind }} name to confirm</mat-label>
           <input matInput autocomplete="off" [placeholder]="data.queueName" [value]="typed()" (input)="typed.set($any($event.target).value)">
+          <mat-hint>The button stays disabled until the name matches exactly.</mat-hint>
         </mat-form-field>
       }
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button mat-button mat-dialog-close>Keep {{ count === 1 ? 'it' : 'them' }}</button>
-      <button mat-flat-button class="danger" [disabled]="!canConfirm()" (click)="confirm()">Cancel {{ count }} scheduled {{ noun }}</button>
+      <button mat-flat-button class="danger" [disabled]="!canConfirm()" (click)="confirm()"><mat-icon fontIcon="delete" aria-hidden="true"></mat-icon>Cancel {{ count }} scheduled {{ noun }}</button>
     </mat-dialog-actions>
   `,
   styles: [`
@@ -70,6 +76,8 @@ export class CancelScheduledDialogComponent {
   private readonly dialogRef = inject(MatDialogRef<CancelScheduledDialogComponent>);
 
   readonly context = connectionContext();
+  readonly kind = this.data.entityKind ?? 'queue';
+  readonly kindLabel = this.kind === 'topic' ? 'Topic' : 'Queue';
   readonly count = this.data.sequenceNumbers.length;
   readonly noun = this.count === 1 ? 'message' : 'messages';
   readonly needsTypedName = this.count > 1;

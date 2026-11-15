@@ -10,6 +10,8 @@ on:
   pull_request:
     branches: [main]
     paths: ['web-app/**', 'src/**']
+  schedule:
+    - cron: '0 3 * * *'
 
 concurrency:
   group: ${{ github.workflow }}-e2e-${{ github.ref }}

@@ -6,6 +6,7 @@ import { QueueService } from './queue.service';
 import { TopicService } from './topic.service';
 import { ConnectionStatus, TreeNode } from '../models';
 import { QueueInfo } from '../models/queue.model';
+import { SubscriptionInfo } from '../models/topic.model';
 
 describe('EntitySelectionService', () => {
   let status$: BehaviorSubject<ConnectionStatus>;
@@ -93,5 +94,30 @@ describe('EntitySelectionService', () => {
     expect((service.currentSelection?.entity as QueueInfo).lockDuration).toBe('00:05:00');
     expect(service.isLoading).toBe(false);
   });
-});
 
+  it('while an entity loads, the state names the node being read', () => {
+    service.select(queueNode('orders'));
+
+    expect(service['stateSubject'].value.loadingNode?.name, 'the panel can say which entity it is reading').toBe('orders');
+  });
+
+  it('showEntity leaves the panel alone when the change is for another entity, as from the Queues screen while the tree shows another', () => {
+    service.select(queueNode('orders'));
+    respond('orders');
+
+    service.showEntity({ name: 'invoices', lockDuration: '00:05:00' } as QueueInfo);
+
+    expect(service.currentSelection?.node.name).toBe('orders');
+    expect((service.currentSelection?.entity as QueueInfo).name, 'the panel of orders never shows invoices').toBe('orders');
+  });
+
+  it('showEntity leaves the panel alone for a subscription of the same name under another topic', () => {
+    service.select(queueNode('audit'));
+    pending.get('audit')!.next({ name: 'audit', topicName: 'orders' } as unknown as QueueInfo);
+    pending.get('audit')!.complete();
+
+    service.showEntity({ name: 'audit', topicName: 'invoices' } as SubscriptionInfo);
+
+    expect((service.currentSelection?.entity as SubscriptionInfo).topicName, 'audit of orders never shows audit of invoices').toBe('orders');
+  });
+});

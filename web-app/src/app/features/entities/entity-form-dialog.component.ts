@@ -8,7 +8,6 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatChipsModule } from '@angular/material/chips';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { ErrorStateMatcher } from '@angular/material/core';
 import { Observable, finalize } from 'rxjs';
@@ -18,6 +17,7 @@ import { DURATION_UNITS, DurationInput, describeSeconds, durationInput, inputSec
 import { fieldError, forwardTargetError, nameError } from './entity-validation';
 import { connectionContext } from './connection-context';
 import { EntityChange, EntityReviewDialogComponent, EntityReviewDialogData } from './entity-review-dialog.component';
+import { EnvironmentLineComponent } from '../../shared/environment-line.component';
 
 type Entity = QueueInfo | TopicInfo | SubscriptionInfo;
 
@@ -95,7 +95,7 @@ const EMPTY_REQUIRED = 'Enter a value; an empty field cannot be saved.';
   standalone: true,
   imports: [
     ReactiveFormsModule, MatDialogTitle, MatDialogContent, MatDialogActions, MatDialogClose, MatFormFieldModule, MatInputModule,
-    MatSelectModule, MatButtonModule, MatIconModule, MatChipsModule, MatProgressBarModule
+    MatSelectModule, MatButtonModule, MatIconModule, EnvironmentLineComponent, MatProgressBarModule
   ],
   templateUrl: './entity-form-dialog.component.html',
   styleUrl: './entity-form-dialog.component.scss'
@@ -241,7 +241,7 @@ export class EntityFormDialogComponent {
       return;
     }
     if (error.status === 400) {
-      this.errorMessage.set(error.error?.message ?? 'The API refused this configuration.');
+      this.errorMessage.set(error.error?.message ?? 'The broker refused this configuration.');
     } else if (error.status === 404 && (!this.creating || this.kind === 'subscription')) {
       this.notFound.set(true);
       const gone = this.creating ? `The topic ${this.topicName} no longer exists.` : `This ${this.kind} no longer exists.`;

@@ -13,16 +13,26 @@ import { finalize } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { QueueService, TopicService, MessageTemplateService } from '../../core/services';
 import { ProviderService } from '../../core/services/provider.service';
-import { SendMessageRequest, MessageTemplate } from '../../core/models';
+import { SendMessageRequest, MessageTemplate, BodyEncoding } from '../../core/models';
+import { isBase64 } from '../../shared/message-body';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { messageCallFailure } from './message-call-failure';
+import { connectionContext } from '../entities/connection-context';
+import { EnvironmentLineComponent } from '../../shared/environment-line.component';
 
 export interface SendMessageDialogData {
   entityType: 'queue' | 'topic';
   entityName: string;
   topicName?: string;
   mode?: 'send' | 'resubmit';
+  /** The dead-letter message a resubmit is filled from. */
+  sourceSequenceNumber?: number;
+  /** The entity's default time to live, already formatted, named in the hint under Time to Live. */
+  defaultTimeToLive?: string;
   prefill?: {
     body: string;
+    /** 'base64' for a binary body: the dialog sends the bytes it encodes. */
+    bodyEncoding?: BodyEncoding;
     contentType?: string;
     messageId?: string;
     correlationId?: string;
@@ -37,8 +47,9 @@ export interface SendMessageDialogData {
 @Component({
   selector: 'app-send-message-dialog',
   standalone: true,
-  imports: [
+  imports: [EnvironmentLineComponent, 
     CommonModule,
+    MatCheckboxModule,
     FormsModule,
     MatButtonModule,
     MatDialogModule,
@@ -56,10 +67,11 @@ export interface SendMessageDialogData {
     </h2>
 
     <mat-dialog-content class="content">
+      <app-environment-line [mark]="context().mark"><b>{{ data.entityName }}</b> on {{ context().where }}</app-environment-line>
       @if (isResubmitMode) {
         <p class="note" role="note">
           <mat-icon fontIcon="info" aria-hidden="true"></mat-icon>
-          <span>This sends a new message to {{ data.entityName }} with the fields below. The original is not removed: it stays in the dead-letter queue until it is deleted.</span>
+          <span>This sends a new message to {{ data.entityName }} with the fields below@if (data.sourceSequenceNumber != null) {, filled from dead-letter message {{ data.sourceSequenceNumber }}}. The original is not removed: it stays in dead-letter until it is deleted.</span>
         </p>
       }
 
@@ -75,29 +87,38 @@ export interface SendMessageDialogData {
             </select>
           </mat-form-field>
           @if (selectedTemplateId) {
-            <button mat-icon-button type="button" class="danger" (click)="deleteSelectedTemplate()" aria-label="Delete template" matTooltip="Delete template">
+            <button mat-icon-button type="button" class="danger" (click)="deleteAsked.set(true)" aria-label="Delete template" matTooltip="Delete template">
               <mat-icon fontIcon="delete" aria-hidden="true"></mat-icon>
             </button>
           }
         </div>
+        @if (deleteAsked() && selectedTemplateId) {
+          <div class="inline-panel danger-panel" role="alert" data-testid="delete-template">
+            <span class="grow">Delete template "{{ selectedTemplateName() }}"?</span>
+            <button mat-button type="button" (click)="deleteAsked.set(false)">Keep</button>
+            <button mat-flat-button type="button" class="danger-button" (click)="deleteSelectedTemplate()"><mat-icon aria-hidden="true">delete</mat-icon>Delete template</button>
+          </div>
+        }
       }
 
-      <nav class="sections" aria-label="Message sections">
-        <button mat-button type="button" class="section-tab" [class.current]="activeTab === 0" [attr.aria-current]="activeTab === 0 ? 'true' : null" (click)="activeTab = 0">Message Body</button>
-        <button mat-button type="button" class="section-tab" [class.current]="activeTab === 1" [attr.aria-current]="activeTab === 1 ? 'true' : null" (click)="activeTab = 1">Properties</button>
-        <button mat-button type="button" class="section-tab" [class.current]="activeTab === 2" [attr.aria-current]="activeTab === 2 ? 'true' : null" (click)="activeTab = 2">Custom Properties</button>
-      </nav>
-
-      @if (activeTab === 0) {
-        <div class="section">
+      <div class="columns">
+        <section class="section" aria-labelledby="col-body">
+          <h3 id="col-body" class="group-title">Message Body</h3>
           <mat-form-field appearance="outline" subscriptSizing="dynamic" class="content-type">
             <mat-label>Content Type</mat-label>
             <select matNativeControl [(ngModel)]="message.contentType">
               <option value="application/json">application/json</option>
               <option value="text/plain">text/plain</option>
               <option value="application/xml">application/xml</option>
+              <option value="application/octet-stream">application/octet-stream</option>
             </select>
           </mat-form-field>
+
+          @if (capabilities()?.supportsBinaryBody === true) {
+            <mat-checkbox [checked]="message.bodyEncoding === 'base64'" (change)="message.bodyEncoding = $event.checked ? 'base64' : 'text'" data-testid="body-is-base64">
+              The body is base64 of binary bytes: send the bytes, not the text
+            </mat-checkbox>
+          }
 
           <mat-form-field appearance="outline" subscriptSizing="dynamic">
             <mat-label>Message Body</mat-label>
@@ -106,16 +127,21 @@ export interface SendMessageDialogData {
           </mat-form-field>
 
           <div>
-            <button mat-stroked-button type="button" (click)="formatJson()" [disabled]="!message.body">
-              <mat-icon fontIcon="data_object" aria-hidden="true"></mat-icon>
+            <button mat-button type="button" (click)="formatJson()" [disabled]="!message.body">
+              <mat-icon fontIcon="code" aria-hidden="true"></mat-icon>
               Format JSON
             </button>
+            @if (jsonError()) {
+              <span class="inline-error" aria-live="polite">Invalid JSON</span>
+            }
+            @if (base64Invalid()) {
+              <span class="inline-error" aria-live="polite" data-testid="base64-error">The body is not valid base64</span>
+            }
           </div>
-        </div>
-      }
+        </section>
 
-      @if (activeTab === 1) {
-        <div class="section">
+        <section class="section" aria-labelledby="col-props">
+          <h3 id="col-props" class="group-title">Properties</h3>
           <div class="fields">
             <mat-form-field appearance="outline" subscriptSizing="dynamic">
               <mat-label>Message ID</mat-label>
@@ -149,7 +175,10 @@ export interface SendMessageDialogData {
             </mat-form-field>
           </div>
 
-          <h3 class="group-title">
+        </section>
+
+        <section class="section" aria-labelledby="col-delivery">
+          <h3 id="col-delivery" class="group-title">
             <mat-icon fontIcon="schedule" aria-hidden="true"></mat-icon>Delivery Options
           </h3>
 
@@ -161,6 +190,7 @@ export interface SendMessageDialogData {
                   data-testid="scheduled-enqueue-time"
                   [(ngModel)]="scheduledEnqueueTimeLocal"
                   [min]="minDateTimeLocal">
+                <mat-hint>{{ scheduledEnqueueTimeLocal ? 'Held by the ' + data.entityType + ' until then, as a scheduled message.' : 'Empty: delivered as soon as it is sent.' }}</mat-hint>
               </mat-form-field>
             }
             <mat-form-field appearance="outline" subscriptSizing="dynamic">
@@ -169,26 +199,24 @@ export interface SendMessageDialogData {
                 data-testid="time-to-live"
                 [(ngModel)]="message.timeToLive"
                 placeholder="HH:mm:ss">
+              <mat-hint>Empty: the default of the {{ data.entityType }}{{ data.defaultTimeToLive ? ', ' + data.defaultTimeToLive : '' }}.</mat-hint>
             </mat-form-field>
           </div>
-        </div>
-      }
 
-      @if (activeTab === 2) {
-        <div class="section">
+          <h3 class="group-title">Custom Properties</h3>
           <p class="hint">Add custom application properties to the message</p>
 
           @for (prop of customProperties; track $index) {
             <div class="property-row">
               <mat-form-field appearance="outline" subscriptSizing="dynamic" class="grow">
-                <mat-label>Key</mat-label>
+                <mat-label>Key of property {{ $index + 1 }}</mat-label>
                 <input matInput class="mono" [(ngModel)]="prop.key" placeholder="Key">
               </mat-form-field>
               <mat-form-field appearance="outline" subscriptSizing="dynamic" class="grow">
-                <mat-label>Value</mat-label>
+                <mat-label>Value of property {{ $index + 1 }}</mat-label>
                 <input matInput class="mono" [(ngModel)]="prop.value" placeholder="Value">
               </mat-form-field>
-              <button mat-icon-button type="button" (click)="removeProperty($index)" [attr.aria-label]="'Remove property ' + ($index + 1)" matTooltip="Remove property">
+              <button mat-icon-button type="button" (click)="removeProperty($index)" [attr.aria-label]="'Remove property ' + (prop.key || $index + 1)" title="Remove property">
                 <mat-icon fontIcon="close" aria-hidden="true"></mat-icon>
               </button>
             </div>
@@ -200,18 +228,30 @@ export interface SendMessageDialogData {
               Add Property
             </button>
           </div>
+        </section>
+      </div>
+
+      @if (savingTemplate()) {
+        <div class="inline-panel" data-testid="save-template">
+          <mat-form-field appearance="outline" subscriptSizing="dynamic" class="grow">
+            <mat-label>Enter a name for this template</mat-label>
+            <input matInput [(ngModel)]="templateName" (keydown.enter)="confirmSaveTemplate()">
+          </mat-form-field>
+          <button mat-button type="button" (click)="savingTemplate.set(false)">Cancel</button>
+          <button mat-flat-button type="button" class="tonal" (click)="confirmSaveTemplate()" [disabled]="!templateName.trim()"><mat-icon aria-hidden="true">bookmark</mat-icon>Save template</button>
         </div>
       }
     </mat-dialog-content>
 
     <mat-dialog-actions class="actions">
-      <button mat-stroked-button type="button" (click)="saveAsTemplate()" [disabled]="!message.body">
+      <button mat-stroked-button type="button" (click)="saveAsTemplate()" [disabled]="!message.body || savingTemplate()">
         <mat-icon fontIcon="bookmark" aria-hidden="true"></mat-icon>
         Save as Template
       </button>
       <span class="spacer"></span>
       <button mat-button type="button" mat-dialog-close>Cancel</button>
-      <button mat-flat-button type="button" class="send-button" (click)="send()" [disabled]="sending() || !message.body">
+      <button mat-flat-button type="button" class="send-button" (click)="send()" [disabled]="sending() || !message.body || base64Invalid()"
+        [attr.title]="message.body ? null : 'The message body is empty'">
         @if (sending()) {
           <mat-progress-spinner mode="indeterminate" diameter="18" aria-hidden="true"></mat-progress-spinner>
         } @else {
@@ -231,15 +271,11 @@ export interface SendMessageDialogData {
     .template-picker { display: flex; align-items: center; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--mat-sys-outline-variant); }
     .grow { flex: 1; min-width: 0; }
     .danger { color: var(--mat-sys-error); }
-    .sections { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--mat-sys-outline-variant); }
-    .section-tab {
-      --mat-button-text-container-shape: 0;
-      --mat-button-text-container-height: 44px;
-      --mat-button-text-label-text-color: var(--mat-sys-on-surface-variant);
-      margin-bottom: -1px;
-      border-bottom: 3px solid transparent;
-    }
-    .section-tab.current { --mat-button-text-label-text-color: var(--mat-sys-primary); border-bottom-color: var(--mat-sys-primary); }
+    .columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px; align-items: start; }
+    .inline-error { margin-left: 8px; color: var(--mat-sys-error); font: var(--mat-sys-body-small); }
+    .inline-panel { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 12px; border-radius: 8px; background: var(--mat-sys-surface-container); }
+    .danger-panel { background: var(--mat-sys-error-container); color: var(--mat-sys-on-error-container); }
+    .danger-button { background: var(--mat-sys-error); color: var(--mat-sys-on-error); }
     .section { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
     .content-type { max-width: 280px; }
     .mono { font-family: ui-monospace, monospace; }
@@ -252,6 +288,8 @@ export interface SendMessageDialogData {
   `]
 })
 export class SendMessageDialogComponent {
+  /** The active connection and its environment, for the line under the title. */
+  readonly context = connectionContext();
   data = inject<SendMessageDialogData>(MAT_DIALOG_DATA);
   private dialogRef = inject(MatDialogRef<SendMessageDialogComponent>);
   private queueService = inject(QueueService);
@@ -267,7 +305,10 @@ export class SendMessageDialogComponent {
   };
 
   customProperties: { key: string; value: string }[] = [];
-  activeTab = 0;
+  readonly jsonError = signal(false);
+  readonly savingTemplate = signal(false);
+  readonly deleteAsked = signal(false);
+  templateName = '';
   sending = signal(false);
   templates = signal<MessageTemplate[]>([]);
   selectedTemplateId = '';
@@ -294,6 +335,7 @@ export class SendMessageDialogComponent {
     if (this.isResubmitMode && this.data.prefill) {
       const prefill = this.data.prefill;
       this.message.body = prefill.body ?? '';
+      this.message.bodyEncoding = prefill.bodyEncoding === 'base64' ? 'base64' : undefined;
       this.message.contentType = prefill.contentType ?? 'application/json';
       this.message.messageId = prefill.messageId;
       this.message.correlationId = prefill.correlationId;
@@ -313,6 +355,7 @@ export class SendMessageDialogComponent {
   }
 
   onTemplateSelected(templateId: string) {
+    this.deleteAsked.set(false);
     if (!templateId) {
       return;
     }
@@ -334,8 +377,13 @@ export class SendMessageDialogComponent {
   }
 
   saveAsTemplate() {
-    const name = prompt('Enter a name for this template:');
-    if (!name || !name.trim()) {
+    this.templateName = '';
+    this.savingTemplate.set(true);
+  }
+
+  confirmSaveTemplate() {
+    const name = this.templateName;
+    if (!name.trim()) {
       return;
     }
     const applicationProperties: Record<string, any> = {};
@@ -353,6 +401,7 @@ export class SendMessageDialogComponent {
       to: this.message.to,
       replyTo: this.message.replyTo,
     });
+    this.savingTemplate.set(false);
     this.refreshTemplates();
     this.snackBar.open(`Template "${name.trim()}" saved`, 'Close', { duration: 3000 });
   }
@@ -361,15 +410,15 @@ export class SendMessageDialogComponent {
     if (!this.selectedTemplateId) {
       return;
     }
-    const template = this.templates().find((t) => t.id === this.selectedTemplateId);
-    const confirmed = confirm(`Delete template "${template?.name}"?`);
-    if (!confirmed) {
-      return;
-    }
     this.templateService.deleteTemplate(this.selectedTemplateId);
     this.selectedTemplateId = '';
+    this.deleteAsked.set(false);
     this.refreshTemplates();
     this.snackBar.open('Template deleted', 'Close', { duration: 2000 });
+  }
+
+  selectedTemplateName(): string {
+    return this.templates().find(t => t.id === this.selectedTemplateId)?.name ?? '';
   }
 
   private refreshTemplates() {
@@ -380,8 +429,9 @@ export class SendMessageDialogComponent {
     try {
       const parsed = JSON.parse(this.message.body);
       this.message.body = JSON.stringify(parsed, null, 2);
+      this.jsonError.set(false);
     } catch {
-      this.snackBar.open('Invalid JSON', 'Close', { duration: 2000 });
+      this.jsonError.set(true);
     }
   }
 
@@ -399,7 +449,15 @@ export class SendMessageDialogComponent {
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
   }
 
+  /** A body flagged base64 that does not decode is never sent: the bytes would not be the ones meant. */
+  base64Invalid(): boolean {
+    return this.message.bodyEncoding === 'base64' && !isBase64(this.message.body);
+  }
+
   send() {
+    if (this.base64Invalid()) {
+      return;
+    }
     const applicationProperties: Record<string, any> = {};
     for (const prop of this.customProperties) {
       if (prop.key) {
@@ -419,8 +477,12 @@ export class SendMessageDialogComponent {
       finalize(() => this.sending.set(false)),
       takeUntilDestroyed(this.destroyRef)
     ).subscribe({
-      next: () => {
-        this.snackBar.open('Message sent successfully!', 'Close', { duration: 3000 });
+      next: (answer) => {
+        if (answer?.sequenceNumber != null) {
+          this.snackBar.open(`Scheduled as sequence number ${answer.sequenceNumber}. Keep it: a scheduled message is cancelled by this number.`, 'Close');
+        } else {
+          this.snackBar.open('Message sent successfully!', 'Close', { duration: 3000 });
+        }
         this.dialogRef.close(true);
       },
       error: (err) => {

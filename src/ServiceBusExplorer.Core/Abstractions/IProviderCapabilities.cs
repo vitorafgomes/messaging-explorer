@@ -64,15 +64,15 @@ public interface IProviderCapabilities
     bool SupportsMessageBatching { get; }
 
     /// <summary>
-    /// Indicates whether the provider supports transactional messaging.
-    /// For Azure Service Bus: true.
-    /// For RabbitMQ: true (TX mode or publisher confirms).
+    /// Indicates whether the provider runs messaging operations in a transaction.
+    /// For Azure Service Bus: false (the broker offers them; no code here runs one).
+    /// For RabbitMQ: false (no TX channel, no publisher confirms).
     /// </summary>
     bool SupportsTransactions { get; }
 
     /// <summary>
-    /// Indicates whether the provider supports message deferral.
-    /// For Azure Service Bus: true (Defer operation).
+    /// Indicates whether the provider can delete, resubmit and dead-letter a deferred message by its sequence number.
+    /// For Azure Service Bus: true.
     /// For RabbitMQ: false (not natively supported).
     /// </summary>
     bool SupportsDeferral { get; }
@@ -122,6 +122,13 @@ public interface IProviderCapabilities
     bool SupportsDefinitions { get; }
 
     /// <summary>
+    /// Indicates whether the provider can read the properties of the connected namespace.
+    /// For Azure Service Bus: true (the administration client; it needs the Manage right).
+    /// For RabbitMQ: false (a broker has no namespace).
+    /// </summary>
+    bool SupportsNamespaceProperties { get; }
+
+    /// <summary>
     /// Gets the supported exchange types for the provider.
     /// For Azure Service Bus: empty (not applicable).
     /// For RabbitMQ: ["direct", "fanout", "topic", "headers"].
@@ -130,7 +137,8 @@ public interface IProviderCapabilities
 
     /// <summary>
     /// Gets the maximum message size in bytes supported by the provider.
-    /// For Azure Service Bus: varies by tier (256KB to 100MB).
+    /// For Azure Service Bus: 256 KB, the default used while the tier is not known; the tier's own limit is
+    /// <see cref="Models.NamespaceInfo.MaxMessageSizeInBytes"/>.
     /// For RabbitMQ: configurable, default ~128MB.
     /// </summary>
     long MaxMessageSizeInBytes { get; }
@@ -158,4 +166,17 @@ public interface IProviderCapabilities
     /// For RabbitMQ: false (a queue is read from its head only).
     /// </summary>
     bool SupportsPeekFromSequenceNumber { get; }
+
+    /// <summary>
+    /// Indicates whether an active message named by its sequence number can be dead-lettered, with a reason and a
+    /// description. For Azure Service Bus: true. For RabbitMQ: false.
+    /// </summary>
+    bool SupportsManualDeadLetter { get; }
+
+    /// <summary>
+    /// Indicates whether a body that is not valid UTF-8 is read as base64 with its flag and a base64 body can be sent
+    /// byte for byte. For Azure Service Bus: true. For RabbitMQ: false; a body is read as UTF-8 text and a base64 send
+    /// is refused.
+    /// </summary>
+    bool SupportsBinaryBody { get; }
 }

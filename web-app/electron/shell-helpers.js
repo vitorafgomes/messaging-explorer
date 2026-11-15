@@ -1,4 +1,37 @@
+const path = require('node:path');
+
 const UPDATE_CHANNELS = ['latest', 'beta'];
+
+/** The file the API keeps connections, clients and environments in, under the user data folder of the app. */
+function dataFilePath(userDataPath) {
+  return path.join(userDataPath, 'data', 'workspace.json');
+}
+
+/**
+ * Shows the data file in the file manager of the system. Says why when it cannot: nothing saved yet,
+ * or the file manager refused; never throws to the renderer.
+ */
+function showDataFile(filePath, fileExists, showItemInFolder) {
+  if (!fileExists(filePath)) {
+    return { status: 'error', message: 'Nothing is saved yet, so there is no file to show.' };
+  }
+  try {
+    showItemInFolder(filePath);
+    return { status: 'ok' };
+  } catch {
+    return { status: 'error', message: 'The file manager of this computer could not be opened.' };
+  }
+}
+
+/**
+ * Opens the developer tools of the main window, only when the main window's own page asked;
+ * does nothing when the window is gone or destroyed, or when any other sender asked.
+ */
+function openDevTools(sender, win) {
+  if (!win || win.isDestroyed()) return;
+  if (sender !== win.webContents) return;
+  win.webContents.openDevTools();
+}
 
 /** True only for a parseable http: or https: URL. */
 function isSafeExternalUrl(url) {
@@ -87,12 +120,15 @@ function applicationMenuTemplate(platform) {
 
 /**
  * The shortcut the shell handles for a before-input-event input, with no menu: 'toggleFullScreen'
- * for F11 off macOS; 'toggleDevTools' for F12 and Ctrl+Shift+I (Cmd+Alt+I on macOS) in a
- * development build only; otherwise null, and the key goes to the page.
+ * for F11 off macOS; 'openConnections' for Ctrl+N (Cmd+N on macOS) in every build;
+ * 'toggleDevTools' for F12 and Ctrl+Shift+I (Cmd+Alt+I on macOS) in a development build only;
+ * otherwise null, and the key goes to the page.
  */
 function shellShortcut(input, { platform, isDev }) {
   if (input.type !== 'keyDown' || input.isAutoRepeat) return null;
   if (input.code === 'F11' && platform !== 'darwin') return 'toggleFullScreen';
+  const command = platform === 'darwin' ? input.meta : input.control;
+  if (input.code === 'KeyN' && command && !input.shift && !input.alt) return 'openConnections';
   if (!isDev) return null;
   if (input.code === 'F12') return 'toggleDevTools';
   const inspect = platform === 'darwin'
@@ -138,6 +174,9 @@ function selfUpdateBlocker(platform, env) {
 }
 
 module.exports = {
+  dataFilePath,
+  showDataFile,
+  openDevTools,
   isSafeExternalUrl,
   normalizeUpdateChannel,
   applyUpdateChannel,

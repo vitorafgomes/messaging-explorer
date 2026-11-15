@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { requireConnection } from './core/services/require-connection.guard';
 
 export const routes: Routes = [
   {
@@ -12,18 +13,22 @@ export const routes: Routes = [
   },
   {
     path: 'entities',
+    canActivate: [requireConnection],
     loadComponent: () => import('./features/entities/entities-container.component').then(m => m.EntitiesContainerComponent)
   },
   {
     path: 'queues',
+    canActivate: [requireConnection],
     loadComponent: () => import('./features/queues/queues.component').then(m => m.QueuesComponent)
   },
   {
     path: 'topics',
+    canActivate: [requireConnection],
     loadComponent: () => import('./features/topics/topics.component').then(m => m.TopicsComponent)
   },
   {
     path: 'monitoring',
+    canActivate: [requireConnection],
     loadComponent: () => import('./features/monitoring/monitoring.component').then(m => m.MonitoringComponent)
   },
   {

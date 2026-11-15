@@ -95,15 +95,18 @@ public class RabbitMQExchangeInfo : ITopicEntity
     /// </summary>
     public List<RabbitMQBindingInfo> Bindings { get; set; } = new();
 
+    private List<SubscriptionInfo>? _subscriptions;
+
     /// <summary>
-    /// Subscriptions mapped from bindings for frontend compatibility.
-    /// Each binding is converted to a SubscriptionInfo for the UI tree view.
+    /// The subscriptions of the exchange. The topic read sets them from the queues it binds, with each queue's state
+    /// and counts; otherwise each binding is projected with placeholder values.
     /// </summary>
     public List<SubscriptionInfo> Subscriptions
     {
+        set => _subscriptions = value;
         get
         {
-            return Bindings.Select(binding => new SubscriptionInfo
+            return _subscriptions ?? Bindings.Select(binding => new SubscriptionInfo
             {
                 TopicName = Name,
                 Name = binding.Destination,

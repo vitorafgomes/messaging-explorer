@@ -43,6 +43,8 @@ const GITHUB_ISSUES_NEW_URL = 'https://github.com/vitorafgomes/messaging-explore
         </h2>
 
         <mat-dialog-content>
+          <p class="intro">Nothing is sent from the app. Submit opens a new GitHub issue in your browser with the text below filled in; you read it, change it and submit it there.</p>
+
           <mat-form-field appearance="outline" class="full-width">
             <mat-label>Title</mat-label>
             <input matInput [(ngModel)]="title" [placeholder]="data.type === 'bug' ? 'Brief description of the issue' : 'Feature name or summary'" required>
@@ -50,7 +52,7 @@ const GITHUB_ISSUES_NEW_URL = 'https://github.com/vitorafgomes/messaging-explore
 
           <mat-form-field appearance="outline" class="full-width">
             <mat-label>Description</mat-label>
-            <textarea matInput [(ngModel)]="description" rows="6"
+            <textarea matInput [(ngModel)]="description" rows="4"
               [placeholder]="data.type === 'bug' ? 'What happened? What did you expect? Steps to reproduce...' : 'Describe the feature and why you need it...'"
               required></textarea>
           </mat-form-field>
@@ -58,30 +60,28 @@ const GITHUB_ISSUES_NEW_URL = 'https://github.com/vitorafgomes/messaging-explore
           <mat-form-field appearance="outline" class="full-width">
             <mat-label>Your name (optional)</mat-label>
             <input matInput [(ngModel)]="reporter" placeholder="Anonymous">
+            <mat-hint>Published with the issue. Leave it empty to add no name.</mat-hint>
           </mat-form-field>
 
-          @if (data.errors.length > 0) {
-            <div class="error-preview">
-              <div class="error-header">
-                <mat-icon color="warn">error_outline</mat-icon>
-                <span>{{ data.errors.length }} error(s) captured — will be included automatically</span>
-              </div>
-              <pre class="error-log">{{ data.errors.join('\\n') }}</pre>
-            </div>
-          }
-
-          <div class="meta-info">
-            <span><mat-icon>info</mat-icon> v{{ data.version }} · {{ data.platform }}</span>
+          <div class="included" data-testid="included">
+            <h3>What is included, besides what you type</h3>
+            <pre class="preview">{{ issueBody() }}</pre>
+            <span class="caption">The version, the platform and the errors the app caught in this session ({{ data.errors.length }}). No connection, no namespace, no message body.</span>
           </div>
+
+          <p class="public" role="note">
+            <mat-icon aria-hidden="true">warning</mat-icon>
+            <span><strong>The issue is public.</strong> Do not paste a connection string, a password or a message body into it.</span>
+          </p>
         </mat-dialog-content>
 
         <mat-dialog-actions align="end">
-          <button mat-stroked-button mat-dialog-close>Cancel</button>
-          <button mat-flat-button [color]="data.type === 'bug' ? 'warn' : 'primary'"
+          <button mat-button mat-dialog-close>Cancel</button>
+          <button mat-flat-button
             [disabled]="!title.trim() || !description.trim()"
             (click)="submit()">
-            <mat-icon>send</mat-icon>
             Submit {{ data.type === 'bug' ? 'Bug Report' : 'Feature Request' }}
+            <mat-icon iconPositionEnd aria-hidden="true">open_in_new</mat-icon>
           </button>
         </mat-dialog-actions>
       }
@@ -131,46 +131,52 @@ const GITHUB_ISSUES_NEW_URL = 'https://github.com/vitorafgomes/messaging-explore
       min-width: 400px;
     }
 
-    .error-preview {
-      background: rgba(244, 67, 54, 0.08);
-      border: 1px solid rgba(244, 67, 54, 0.2);
-      border-radius: 8px;
-      padding: 12px;
-      margin-bottom: 16px;
+    .intro {
+      margin: 0 0 16px;
+      color: var(--mat-sys-on-surface-variant);
     }
 
-    .error-header {
+    .included {
       display: flex;
-      align-items: center;
+      flex-direction: column;
       gap: 8px;
-      font-size: 0.85rem;
-      margin-bottom: 8px;
-    }
+      margin: 8px 0 16px;
 
-    .error-log {
-      font-family: monospace;
-      font-size: 0.75rem;
-      max-height: 100px;
-      overflow-y: auto;
-      margin: 0;
-      opacity: 0.7;
-      white-space: pre-wrap;
-      word-break: break-all;
-    }
-
-    .meta-info {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 0.8rem;
-      opacity: 0.5;
-      margin-bottom: 8px;
-
-      mat-icon {
-        font-size: 16px;
-        width: 16px;
-        height: 16px;
+      h3 {
+        margin: 0;
+        font: var(--mat-sys-label-medium);
+        color: var(--mat-sys-on-surface-variant);
       }
+    }
+
+    .preview {
+      margin: 0;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: var(--mat-sys-surface-container);
+      color: var(--mat-sys-on-surface);
+      font: var(--mat-sys-body-small);
+      font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace;
+      max-height: 160px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .caption {
+      font: var(--mat-sys-body-small);
+      color: var(--mat-sys-on-surface-variant);
+    }
+
+    .public {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin: 0;
+      padding: 10px 14px;
+      border-radius: 8px;
+      background: var(--app-warning-container);
+      color: var(--app-on-warning-container);
     }
 
     .center-content {
@@ -186,30 +192,27 @@ const GITHUB_ISSUES_NEW_URL = 'https://github.com/vitorafgomes/messaging-explore
       font-size: 64px;
       width: 64px;
       height: 64px;
-      color: #4caf50;
+      color: var(--app-success);
     }
 
     .error-icon {
       font-size: 64px;
       width: 64px;
       height: 64px;
-      color: #f44336;
+      color: var(--mat-sys-error);
     }
 
     .issue-link {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      color: inherit;
+      color: var(--mat-sys-primary);
       text-decoration: none;
-      opacity: 0.8;
-
-      &:hover { opacity: 1; }
     }
 
     .hint {
-      font-size: 0.85rem;
-      opacity: 0.6;
+      font: var(--mat-sys-body-medium);
+      color: var(--mat-sys-on-surface-variant);
     }
   `]
 })
@@ -224,9 +227,8 @@ export class BugReportDialogComponent {
   description = '';
   reporter = '';
 
-  async submit() {
-    const labels = this.data.type === 'bug' ? 'bug' : 'enhancement';
-
+  /** The body of the issue exactly as it is posted: the description, then what the app adds. */
+  issueBody(): string {
     const bodyParts = [
       this.description.trim(),
       '',
@@ -243,9 +245,15 @@ export class BugReportDialogComponent {
       bodyParts.push('', '**Errors:**', '```', ...this.data.errors, '```');
     }
 
+    return bodyParts.join('\n');
+  }
+
+  async submit() {
+    const labels = this.data.type === 'bug' ? 'bug' : 'enhancement';
+
     const params = new URLSearchParams({
       title: this.title.trim(),
-      body: bodyParts.join('\n'),
+      body: this.issueBody(),
       labels,
     });
 

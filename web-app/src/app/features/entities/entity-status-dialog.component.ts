@@ -3,15 +3,16 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { MAT_DIALOG_DATA, MatDialogActions, MatDialogClose, MatDialogContent, MatDialogRef, MatDialogTitle } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
-import { MatChipsModule } from '@angular/material/chips';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { Observable, finalize } from 'rxjs';
 import { ENTITY_STATUSES, EntityKind, EntityStatus, QueueInfo, SubscriptionInfo, TopicInfo } from '../../core/models';
 import { EntitySelectionService, QueueService, TopicService } from '../../core/services';
 import { connectionContext } from './connection-context';
+import { EnvironmentLineComponent } from '../../shared/environment-line.component';
 
 export interface EntityStatusDialogData {
   kind: EntityKind;
@@ -51,27 +52,29 @@ export const STATUS_TEXT: Record<EntityStatus, { label: string; icon: string; ef
   standalone: true,
   imports: [
     MatDialogTitle, MatDialogContent, MatDialogActions, MatDialogClose, MatButtonModule, MatIconModule, MatRadioModule,
-    MatFormFieldModule, MatInputModule, MatChipsModule, MatProgressBarModule
+    MatFormFieldModule, MatInputModule, EnvironmentLineComponent, MatProgressBarModule, MatTooltipModule
   ],
   template: `
     @if (step() === 'choose') {
       <h2 mat-dialog-title>Change status</h2>
       <mat-dialog-content>
-        <p class="context">
-          <mat-chip-set aria-label="Environment"><mat-chip [disableRipple]="true">{{ context().environment }}</mat-chip></mat-chip-set>
-          <span>{{ kindLabel }} <b>{{ data.entityName }}</b>, now {{ currentLabel }}</span>
-        </p>
-        <mat-radio-group class="options" aria-label="Status" [value]="choice()" (change)="choice.set($event.value)">
+        <app-environment-line [mark]="context().mark">{{ kindLabel }} <b>{{ data.entityName }}</b> on {{ context().where }}, now {{ currentLabel }}</app-environment-line>
+        <fieldset>
+        <legend class="visually-hidden">Status</legend>
+        <mat-radio-group class="options" [value]="choice()" (change)="choice.set($event.value)">
           @for (status of statuses; track status) {
             <mat-radio-button [value]="status">
-              <span class="option"><b>{{ text[status].label }}</b><span class="effect">{{ text[status].effect }}</span></span>
+              <span class="option"><span class="option-head"><b>{{ text[status].label }}</b>@if (status === current) {<span class="current-tag">Current</span>}</span><span class="effect">{{ text[status].effect }}</span></span>
             </mat-radio-button>
           }
         </mat-radio-group>
+        </fieldset>
       </mat-dialog-content>
       <mat-dialog-actions align="end">
         <button mat-button mat-dialog-close>Cancel</button>
-        <button mat-flat-button [disabled]="!choice() || choice() === current" (click)="toConfirm()">Continue</button>
+        <span class="continue-wrap" [matTooltip]="continueReason()">
+          <button mat-flat-button [disabled]="!!continueReason()" (click)="toConfirm()">Continue</button>
+        </span>
       </mat-dialog-actions>
     } @else {
       <h2 mat-dialog-title class="title">
@@ -79,6 +82,7 @@ export const STATUS_TEXT: Record<EntityStatus, { label: string; icon: string; ef
         {{ chosen().question(data.entityName) }}
       </h2>
       <mat-dialog-content>
+        <app-environment-line [mark]="context().mark"><b>{{ data.entityName }}</b> on {{ context().where }}</app-environment-line>
         <p class="consequence">{{ consequence() }}</p>
         <dl class="facts">
           <div class="fact"><dt>{{ kindLabel }}</dt><dd>{{ data.entityName }}</dd></div>
@@ -93,6 +97,7 @@ export const STATUS_TEXT: Record<EntityStatus, { label: string; icon: string; ef
           <mat-form-field class="typed">
             <mat-label>Type the {{ data.kind }} name to confirm</mat-label>
             <input #typedInput matInput autocomplete="off" [placeholder]="data.entityName" [value]="typed()" (input)="typed.set($any($event.target).value)">
+            <mat-hint>The button stays disabled until the name matches exactly.</mat-hint>
           </mat-form-field>
         }
         @if (errorMessage()) {
@@ -110,7 +115,7 @@ export const STATUS_TEXT: Record<EntityStatus, { label: string; icon: string; ef
       </mat-dialog-content>
       <mat-dialog-actions align="end">
         <button #backButton mat-button (click)="back()">Back</button>
-        <button mat-flat-button [class.danger]="needsTypedName()" [disabled]="!canApply()" (click)="apply()">{{ chosen().action }}</button>
+        <button mat-flat-button class="danger" [disabled]="!canApply()" (click)="apply()">{{ chosen().action }}</button>
       </mat-dialog-actions>
     }
   `,
@@ -119,6 +124,8 @@ export const STATUS_TEXT: Record<EntityStatus, { label: string; icon: string; ef
     .options { display: flex; flex-direction: column; gap: 8px; }
     .option { display: flex; flex-direction: column; }
     .effect { color: var(--mat-sys-on-surface-variant); }
+    .option-head { display: flex; align-items: center; gap: 8px; }
+    .current-tag { padding: 0 8px; border-radius: 999px; background: var(--mat-sys-secondary-container); color: var(--mat-sys-on-secondary-container); font: var(--mat-sys-label-small); }
     .title { display: flex; align-items: center; gap: 8px; }
     .warn { color: var(--mat-sys-error); }
     .consequence { margin: 0 0 12px; }
@@ -164,6 +171,8 @@ export class EntityStatusDialogComponent {
   readonly notFound = signal(false);
 
   readonly chosen = computed(() => STATUS_TEXT[this.choice() ?? 'Active']);
+  /** Why Continue is disabled, shown as its tooltip; empty once another status is chosen. */
+  readonly continueReason = computed(() => !this.choice() || this.choice() === this.current ? 'Choose a status other than the current one' : '');
   readonly needsTypedName = computed(() => this.choice() !== 'Active');
   readonly consequence = computed(() => this.choice() === 'Active'
     ? 'Senders and receivers work again at once.'

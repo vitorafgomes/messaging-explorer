@@ -208,19 +208,6 @@ public class AzureEntityDefinitionsTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ExportAsync(Source(), cancelled.Token));
     }
 
-    /// <summary>Pages that hold the enumeration open for a moment and count how many are open at once.</summary>
-    private sealed class CountingPages<T>(T[] values, int[] open, int[] mostOpen) : AsyncPageable<T> where T : notnull
-    {
-        public override async IAsyncEnumerable<Page<T>> AsPages(string? continuationToken = null, int? pageSizeHint = null)
-        {
-            var now = Interlocked.Increment(ref open[0]);
-            lock (mostOpen) mostOpen[0] = Math.Max(mostOpen[0], now);
-            await Task.Delay(20);
-            Interlocked.Decrement(ref open[0]);
-            yield return Page<T>.FromValues(values, null, Mock.Of<Response>());
-        }
-    }
-
     [Fact]
     public async Task The_export_reads_the_rules_of_at_most_eight_subscriptions_at_once()
     {
@@ -260,6 +247,50 @@ public class AzureEntityDefinitionsTests
             "Subscription events/email: Create"
         ], result.Items.Select(Row));
         Assert.Empty(target.Writes);
+    }
+
+    [Fact]
+    public async Task A_dry_run_gives_each_differing_setting_its_value_on_the_broker_and_in_the_file_beside_the_field_names()
+    {
+        var document = await ExportAsync(Source());
+        var target = Source();
+        target.Queues[1] = Queue("billing", maxDeliveryCount: 5, forwardTo: "sb://example.servicebus.windows.net/orders", status: EntityStatus.Active);
+        target.Rules["events/audit"] = [SqlRule("high-value", "total > 500")];
+
+        var result = await ImportAsync(target, document, dryRun: true);
+
+        string Values(DefinitionImportItem item) => string.Join("; ", (item.Differences ?? []).Select(d => $"{d.Field}: {d.Current ?? "none"} here, {d.InFile ?? "none"} in the file"));
+        var billing = result.Items.Single(i => i.Name == "billing");
+        var audit = result.Items.Single(i => i.Name == "audit");
+        Assert.Equal(
+            ("maxDeliveryCount: 5 here, 10 in the file; status: Active here, SendDisabled in the file", "rules: none here, none in the file"),
+            (Values(billing), Values(audit)));
+        Assert.True(billing.DifferingFields!.SequenceEqual(billing.Differences!.Select(d => d.Field)),
+            "The differing field names stay, in the same order as the differences that carry the values");
+        Assert.True(result.Items.Where(i => i.Outcome != DefinitionImportOutcome.Differs).All(i => i.Differences is null),
+            "Only an entity that differs carries differences");
+        Assert.Empty(target.Writes);
+    }
+
+    [Theory]
+    [InlineData("queues")]
+    [InlineData("subscriptions")]
+    public async Task When_the_namespace_cannot_be_read_the_dry_run_fails_with_the_broker_error_and_writes_nothing(string failing)
+    {
+        var document = await ExportAsync(Source());
+        var target = Source();
+        var admin = target.Admin();
+        var error = new ServiceBusException(BrokerText, ServiceBusFailureReason.ServiceBusy);
+        if (failing == "queues")
+            admin.Setup(a => a.GetQueuesAsync(It.IsAny<CancellationToken>())).Returns(AsyncPageable<QueueProperties>.FromPages(FailingPages<QueueProperties>(error)));
+        else
+            admin.Setup(a => a.GetSubscriptionsAsync("events", It.IsAny<CancellationToken>())).Returns(AsyncPageable<SubscriptionProperties>.FromPages(FailingPages<SubscriptionProperties>(error)));
+
+        var thrown = await Assert.ThrowsAsync<ServiceBusException>(() =>
+            AzureEntityDefinitions.ImportCoreAsync(admin.Object, document, dryRun: true, NullLogger.Instance, CancellationToken.None));
+
+        Assert.Equal(ServiceBusFailureReason.ServiceBusy, thrown.Reason);
+        Assert.True(target.Writes.Count == 0, "A dry run whose read of the namespace fails answers no partial result and writes nothing");
     }
 
     [Fact]

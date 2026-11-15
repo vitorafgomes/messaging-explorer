@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable, forkJoin, of } from 'rxjs';
-import { map, catchError, switchMap } from 'rxjs/operators';
+import { map, catchError, switchMap, tap } from 'rxjs/operators';
 import { TreeNode, QueueNodeData, TopicNodeData, SubscriptionNodeData } from '../models';
 import { QueueService } from './queue.service';
 import { TopicService } from './topic.service';
@@ -18,6 +18,8 @@ export class TreeDataBuilderService {
   private readonly logger = inject(LoggerService);
   private readonly notificationService = inject(DeadLetterNotificationService);
   private lastTree: TreeNode[] = [];
+  /** Whether the latest build succeeded and read the subscriptions of every topic. */
+  private lastBuildWhole = false;
 
   /** Queue and topic names of the tree built last. */
   loadedNames(): { queues: string[]; topics: string[] } {
@@ -25,7 +27,25 @@ export class TreeDataBuilderService {
     return { queues: names('category-queues'), topics: names('category-topics') };
   }
 
+  /** How many queues, topics and subscriptions the tree built last holds. */
+  loadedCounts(): { queues: number; topics: number; subscriptions: number } {
+    const category = (id: string) => this.lastTree.find(c => c.id === id)?.children ?? [];
+    const topics = category('category-topics');
+    return {
+      queues: category('category-queues').length,
+      topics: topics.length,
+      subscriptions: topics.reduce((sum, topic) => sum + (topic.children?.length ?? 0), 0),
+    };
+  }
+
+  /** The counts of the tree built last, or null when the latest build failed or missed a topic's subscriptions. */
+  wholeCounts(): { queues: number; topics: number; subscriptions: number } | null {
+    return this.lastBuildWhole ? this.loadedCounts() : null;
+  }
+
   buildTree(): Observable<TreeNode[]> {
+    this.lastBuildWhole = false;
+    let whole = true;
     this.logger.log('[TreeDataBuilder] Building tree...');
     return forkJoin({
       queues: this.queueService.getQueues(),
@@ -33,7 +53,7 @@ export class TreeDataBuilderService {
     }).pipe(
       switchMap(({ queues, topics }) => {
         this.logger.log('[TreeDataBuilder] Got topics:', topics.length, topics.map(t => ({ name: t.name, subscriptionCount: t.subscriptionCount })));
-        return this.loadSubscriptionsForTopics(topics).pipe(
+        return this.loadSubscriptionsForTopics(topics, () => whole = false).pipe(
           map(topicsWithSubs => {
             this.logger.log('[TreeDataBuilder] Topics with subs loaded:', topicsWithSubs.map(t => ({ name: t.name, subs: t.subscriptions?.length || 0 })));
             const allSubscriptions = topicsWithSubs.flatMap(t => t.subscriptions || []);
@@ -42,11 +62,12 @@ export class TreeDataBuilderService {
             return this.lastTree;
           })
         );
-      })
+      }),
+      tap(() => this.lastBuildWhole = whole)
     );
   }
 
-  private loadSubscriptionsForTopics(topics: TopicInfo[]): Observable<TopicInfo[]> {
+  private loadSubscriptionsForTopics(topics: TopicInfo[], missed: () => void): Observable<TopicInfo[]> {
     this.logger.log('[TreeDataBuilder] loadSubscriptionsForTopics called with', topics.length, 'topics');
 
     if (topics.length === 0) {
@@ -72,6 +93,7 @@ export class TreeDataBuilderService {
         }),
         catchError(err => {
           this.logger.error(`[TreeDataBuilder] Error loading subscriptions for ${topic.name}:`, err);
+          missed();
           return of({ topicName: topic.name, subscriptions: [] as SubscriptionInfo[] });
         })
       );
@@ -133,7 +155,8 @@ export class TreeDataBuilderService {
       activeMessageCount: queue.activeMessageCount,
       deadLetterMessageCount: queue.deadLetterMessageCount,
       sizeInBytes: queue.sizeInBytes,
-      status: queue.status
+      status: queue.status,
+      forwardTo: queue.forwardTo
     };
 
     return {

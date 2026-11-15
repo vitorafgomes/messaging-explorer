@@ -17,18 +17,21 @@
 
 .header-left {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 
-  h2 {
+  h1 {
     margin: 0;
-    font: var(--mat-sys-title-large);
+    font: var(--mat-sys-headline-small);
     color: var(--mat-sys-on-surface);
   }
 }
 
-.header-icon {
-  color: var(--mat-sys-primary);
+.host {
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
+  overflow-wrap: anywhere;
 }
 
 .header-right {
@@ -52,14 +55,62 @@
   text-align: center;
   color: var(--mat-sys-on-surface-variant);
 
-  h3 {
+  h2 {
     margin: 8px 0 0;
-    font: var(--mat-sys-title-medium);
+    font: var(--mat-sys-title-large);
     color: var(--mat-sys-on-surface);
   }
 
   p {
     margin: 0;
+  }
+}
+
+.monitoring-loading {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+
+  p {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0;
+    color: var(--mat-sys-on-surface-variant);
+  }
+}
+
+.skeleton-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+
+  div {
+    flex: 1 1 0;
+    min-width: 132px;
+    height: 88px;
+    border-radius: 8px;
+    background: var(--mat-sys-surface-container);
+  }
+}
+
+.skeleton-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  div {
+    height: 16px;
+    border-radius: 4px;
+    background: var(--mat-sys-surface-container);
+  }
+
+  div:nth-child(2) {
+    width: 80%;
+  }
+
+  div:nth-child(3) {
+    width: 60%;
   }
 }
 
@@ -80,7 +131,7 @@
   background: var(--mat-sys-error-container);
   color: var(--mat-sys-on-error-container);
 
-  h3 {
+  h2 {
     margin: 0;
     font: var(--mat-sys-title-medium);
   }
@@ -131,8 +182,8 @@
   background: var(--mat-sys-surface-container-low);
 
   &.attention {
-    background: var(--mat-sys-error-container);
-    color: var(--mat-sys-on-error-container);
+    background: var(--app-warning-container);
+    color: var(--app-on-warning-container);
 
     .card-label,
     .card-note {
@@ -279,8 +330,8 @@ table {
   gap: 4px;
   padding: 0 8px 0 6px;
   border-radius: 999px;
-  background: var(--mat-sys-error-container);
-  color: var(--mat-sys-on-error-container);
+  background: var(--app-warning-container);
+  color: var(--app-on-warning-container);
   font: var(--mat-sys-label-medium);
   font-weight: 700;
 

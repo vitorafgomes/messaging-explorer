@@ -38,16 +38,19 @@ export async function open(page: Page, route: string): Promise<void> {
   await page.goto(`${process.env['E2E_BASE_URL']}/#/${route}`);
 }
 
-const themeToggle = (page: Page) =>
-  page.locator('mat-toolbar button', { has: page.locator('mat-icon', { hasText: /^(light|dark)_mode$/ }) });
-
+/**
+ * Switches the theme the way ThemeService applies and stores it, without a reload, so an open
+ * dialog stays open for the screenshot.
+ */
 async function setDark(page: Page, dark: boolean): Promise<void> {
-  const isDark = await page.evaluate(() => document.documentElement.classList.contains('dark-theme'));
-  if (isDark !== dark) await themeToggle(page).dispatchEvent('click');
+  await page.evaluate((d) => {
+    document.documentElement.classList.toggle('dark-theme', d);
+    localStorage.setItem('app-theme', d ? 'dark' : 'light');
+  }, dark);
   await page.waitForFunction((d) => document.documentElement.classList.contains('dark-theme') === d, dark);
 }
 
-/** Saves the screen as it is now, in the light and in the dark theme, through the toolbar's theme toggle. */
+/** Saves the screen as it is now, in the light and in the dark theme. */
 export async function shoot(page: Page, name: string): Promise<void> {
   for (const theme of ['light', 'dark'] as const) {
     await setDark(page, theme === 'dark');
@@ -56,14 +59,19 @@ export async function shoot(page: Page, name: string): Promise<void> {
   await setDark(page, false);
 }
 
-/** A queue or topic row of the entities tree, by its exact name. */
+/** A queue or topic row of the entities tree, by its exact name; a subscription row under a topic is not one. */
 export const treeNode = (page: Page, name: string) =>
-  page.locator('.tree-node', { has: page.locator('.node-name', { hasText: new RegExp(`^${name.replace(/\./g, '\\.')}$`) }) });
+  page.locator('xpath=//*[contains(@class, "tree-node")][not(ancestor::*[contains(@class, "tree-children")])]',
+    { has: page.locator('.node-name', { hasText: new RegExp(`^${name.replace(/\./g, '\\.')}$`) }) });
 
-/** Expands a topic in the entities tree and selects one of its subscriptions. */
+/** Selects a subscription of a topic in the entities tree, opening the topic first when it is closed. */
 export async function openSubscription(page: Page, topic: string, subscription: string): Promise<void> {
-  await treeNode(page, topic).locator('.node-icon-expandable').click();
-  await page.locator('.node-subscription', { hasText: subscription }).click();
+  if ((await treeNode(page, topic).getAttribute('aria-expanded')) !== 'true') {
+    await treeNode(page, topic).click();
+  }
+  await treeNode(page, topic).locator('xpath=ancestor::div[contains(@class, "tree-row")][1]/following-sibling::div[contains(@class, "tree-children")][1]')
+    .locator('.tree-node', { has: page.locator('.node-name', { hasText: new RegExp(`^${subscription.replace(/\./g, '\\.')}$`) }) })
+    .click();
 }
 
 /** The open dialog of the messages of an entity; its rows are the messages it peeked. */

@@ -2,8 +2,8 @@
 title: "Api"
 version: "2.0"
 date: 2026-11-12
-updated: 2026-11-13
-changes: "v2.0: a map of topic pages; the old version notes moved to history"
+updated: 2026-11-14
+changes: "v2.0: a map of topic pages; the old version notes moved to history; a topic for the single-message actions and binary bodies"
 page_type: service
 status: active
 description: "ASP.NET Core host that exposes the Core library to the desktop UI as a loopback-only, API-key-guarded REST API over one process-wide active broker connection."
@@ -42,6 +42,8 @@ Read the page your change touches, not all of them.
 | [[pages/services/api/controllers\|Controllers]] | which controller owns a route, the static active-provider slot and its lock, or how an entity name travels in the path |
 | [[pages/services/api/cancellation-and-errors\|Cancellation and error mapping]] | the request token a bulk or destructive action passes on, a status code or error body, the 500 body, a clamp on a count |
 | [[pages/services/api/routes-entities-and-messages\|Entity and message routes]] | creating or editing a queue, topic or subscription, the active, dead-letter and transfer dead-letter routes, scheduled messages, a disabled entity, a peek from a sequence number or without bodies |
+| [[pages/services/api/routes-single-message-actions\|Single-message actions and binary bodies]] | the `messages/deadletter-batch` and `messages/defer-batch` routes of active messages, the `bodyEncoding` checks of a send, or `supportsManualDeadLetter` and `supportsBinaryBody` |
+| [[pages/services/api/routes-batch-send\|Batch send]] | the `POST .../messages/batch` of a queue or a topic: limits, the partial result, the token, the import dialog |
 | [[pages/services/api/routes-sessions-and-definitions\|Session and definition routes]] | the session routes of a queue or a subscription and their status codes, or the namespace export and import of entity definitions |
 | [[pages/services/api/connections-and-secrets\|Connections and secrets]] | the connections routes: masking, save with the *** placeholder, an unreadable workspace.json, export, export-full, import, clear-all |
 | [[pages/services/api/monitoring\|Monitoring]] | MonitoringBackgroundService, its poll period and failures, MonitoringStore, or the monitoring routes |

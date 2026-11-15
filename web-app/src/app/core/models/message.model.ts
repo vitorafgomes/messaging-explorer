@@ -10,6 +10,8 @@ export interface MessageInfo {
   contentType?: string;
   body: string;
   bodyType: string;
+  /** 'base64' when the bytes of the body are not valid UTF-8 and `body` is their base64; 'text' otherwise. An older API does not send it. */
+  bodyEncoding?: BodyEncoding;
   sequenceNumber: number;
   deliveryCount: number;
   enqueuedTime: Date;
@@ -24,8 +26,13 @@ export interface MessageInfo {
   sizeInBytes?: number;
 }
 
+/** How a body travels as a string: its UTF-8 text, or the base64 of its bytes. */
+export type BodyEncoding = 'text' | 'base64';
+
 export interface SendMessageRequest {
   body: string;
+  /** 'base64' to send the bytes `body` encodes, on a provider that declares supportsBinaryBody; text when absent. */
+  bodyEncoding?: BodyEncoding;
   contentType?: string;
   messageId?: string;
   correlationId?: string;
@@ -54,6 +61,23 @@ export interface CancelScheduledRequest {
   sequenceNumbers: number[];
 }
 
+/** What a single-message call does to an active message named by its sequence number. */
+export type ActiveAction = 'deadletter' | 'defer';
+
+/** What a deferred-message call does to each message it names. */
+export type DeferredAction = 'delete' | 'resubmit' | 'deadletter';
+
+/** Body of a deferred-message call: 1 to 1000 sequence numbers of deferred messages, and what the action reads. */
+export interface DeferredBatchRequest {
+  sequenceNumbers: number[];
+  /** Resubmit only: send each copy with a new message id into a target that detects duplicates. */
+  newMessageIdOnDuplicateDetection?: boolean;
+  /** Dead-letter only: the reason written on each message; absent, the API writes its own. */
+  reason?: string;
+  /** Dead-letter only: the description written on each message; absent, the API writes its own. */
+  description?: string;
+}
+
 export interface DeleteBatchRequest {
   sequenceNumbers: number[];
   /**
@@ -66,11 +90,15 @@ export interface DeleteBatchRequest {
 
 export interface ResubmitBatchRequest {
   sequenceNumbers: number[];
+  /** Into a target that detects duplicates, send each copy with a new message id; without it such a target refuses the call. */
+  newMessageIdOnDuplicateDetection?: boolean;
 }
 
 export interface MoveBatchRequest {
   sequenceNumbers: number[];
   targetQueueName: string;
+  /** Into a target that detects duplicates, send each copy with a new message id; without it such a target refuses the call. */
+  newMessageIdOnDuplicateDetection?: boolean;
 }
 
 export interface BatchOperationFailure {
@@ -83,6 +111,12 @@ export interface BatchOperationResult {
   failureCount: number;
   failures: BatchOperationFailure[];
   success: boolean;
+  /** The new message id of each copy sent with one, by sequence number; the copy keeps its original id in x-original-message-id. */
+  newMessageIds?: Record<number, string>;
+  /** How many unselected messages the scan received and released, a lower bound. */
+  unselectedDeliveryCountRaised?: number;
+  /** Unselected messages the scan sent to the dead-letter queue, a lower bound. */
+  unselectedDeadLettered?: number[];
 }
 
 export interface MessageTemplate {

@@ -7,9 +7,10 @@ function loadPreload() {
   const exposed = {};
   const listened = [];
   const invoked = [];
+  const invokedArgs = [];
   const fakeElectron = {
     contextBridge: { exposeInMainWorld: (name, api) => { exposed[name] = api; } },
-    ipcRenderer: { invoke: (channel) => { invoked.push(channel); return Promise.resolve(); }, on: (channel) => { listened.push(channel); } }
+    ipcRenderer: { invoke: (channel, ...args) => { invoked.push(channel); invokedArgs.push(args); return Promise.resolve(); }, on: (channel) => { listened.push(channel); } }
   };
   const originalLoad = Module._load;
   Module._load = function (request, ...rest) {
@@ -25,7 +26,7 @@ function loadPreload() {
     Module._load = originalLoad;
     console.log = originalLog;
   }
-  return { exposed, listened, invoked };
+  return { exposed, listened, invoked, invokedArgs };
 }
 
 test('the preload exposes only window.electronAPI, with no generic channel listener', () => {
@@ -49,4 +50,19 @@ test('getSelfUpdateBlocker reads the get-self-update-blocker channel and sends n
   const { exposed, invoked } = loadPreload();
   exposed.electronAPI.getSelfUpdateBlocker();
   assert.deepEqual(invoked, ['get-self-update-blocker']);
+});
+
+test('getDataFile and showDataFile read their channels and send no argument, so the renderer cannot name a path', () => {
+  const { exposed, invoked, invokedArgs } = loadPreload();
+  exposed.electronAPI.getDataFile('/etc/passwd');
+  exposed.electronAPI.showDataFile('/etc/passwd');
+  assert.deepEqual(invoked, ['get-data-file', 'show-data-file']);
+  assert.deepEqual(invokedArgs, [[], []]);
+});
+
+test('openDevTools reads the open-dev-tools channel and sends no argument, so the renderer cannot choose which window', () => {
+  const { exposed, invoked, invokedArgs } = loadPreload();
+  exposed.electronAPI.openDevTools('another-window');
+  assert.deepEqual(invoked, ['open-dev-tools'], 'openDevTools must invoke open-dev-tools');
+  assert.deepEqual(invokedArgs, [[]], 'openDevTools must send no argument');
 });

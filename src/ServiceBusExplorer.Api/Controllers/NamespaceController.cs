@@ -7,8 +7,8 @@ using ServiceBusExplorer.Core.Models;
 namespace ServiceBusExplorer.Api.Controllers;
 
 /// <summary>
-/// The definitions of every entity of the connected namespace: an export to one document, and an import of such a
-/// document that creates only what does not exist, after a dry run. Every failure is <c>{ "message": ... }</c> with
+/// The connected namespace: its properties, read-only; the definitions of every entity, as an export to one document,
+/// and an import of such a document that creates only what does not exist, after a dry run. Every failure is <c>{ "message": ... }</c> with
 /// text this application authored.
 /// </summary>
 [ApiController]
@@ -27,6 +27,10 @@ public class NamespaceController : ControllerBase
         _json = json.Value.JsonSerializerOptions;
     }
 
+    /// <summary>
+    /// The provider's document, its <see cref="EntityDefinitionsDocument.Source"/> set to the connection target the
+    /// app shows: a namespace or a host, never the connection string or a credential.
+    /// </summary>
     [HttpPost("export")]
     public async Task<ActionResult<EntityDefinitionsDocument>> Export()
     {
@@ -34,7 +38,9 @@ public class NamespaceController : ControllerBase
 
         try
         {
-            return Ok(await provider.ExportDefinitionsAsync(HttpContext.RequestAborted));
+            var document = await provider.ExportDefinitionsAsync(HttpContext.RequestAborted);
+            document.Source = provider.CurrentTarget;
+            return Ok(document);
         }
         catch (InvalidEntityConfigurationException ex)
         {
@@ -43,6 +49,35 @@ public class NamespaceController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Export of the entity definitions failed");
+            return InternalError();
+        }
+    }
+
+    /// <summary>
+    /// The connected namespace's name, tier, messaging units, alias, times and the tier's largest message. Read-only. A
+    /// provider without namespace properties answers 400 and is never called; a failed read, a missing Manage right
+    /// included, answers the constant 500, never a value that was not read.
+    /// </summary>
+    [HttpGet("properties")]
+    public async Task<ActionResult<NamespaceInfo>> Properties()
+    {
+        var provider = ConnectionsController.GetCurrentProvider();
+        if (provider is null)
+            return BadRequest(new { message = "No messaging provider connected. Please connect to a provider first." });
+        if (!provider.Capabilities.SupportsNamespaceProperties)
+            return BadRequest(new { message = "This provider has no namespace properties." });
+
+        try
+        {
+            return Ok(await provider.GetNamespacePropertiesAsync(HttpContext.RequestAborted));
+        }
+        catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
+        {
+            return new EmptyResult();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Read of the namespace properties failed");
             return InternalError();
         }
     }

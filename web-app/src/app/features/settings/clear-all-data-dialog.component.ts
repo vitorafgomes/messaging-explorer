@@ -1,5 +1,6 @@
 import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { AsyncPipe } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { forkJoin } from 'rxjs';
 import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -9,8 +10,14 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { ConnectionService, ConnectionGroupService } from '../../core/services';
+import { connectionContext } from '../entities/connection-context';
+import { EnvironmentLineComponent } from '../../shared/environment-line.component';
 
 export const CLEAR_ALL_WORDS = 'clear all data';
+
+function plural(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? '' : 's'}`;
+}
 
 export interface ClearAllDataResult {
   message: string;
@@ -22,7 +29,7 @@ export interface ClearAllDataResult {
 @Component({
   selector: 'app-clear-all-data-dialog',
   standalone: true,
-  imports: [AsyncPipe, MatDialogModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, MatProgressSpinnerModule],
+  imports: [EnvironmentLineComponent, AsyncPipe, RouterLink, MatDialogModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, MatProgressSpinnerModule],
   template: `
     <h2 mat-dialog-title class="title">
       <mat-icon class="danger" aria-hidden="true">warning</mat-icon>
@@ -31,7 +38,7 @@ export interface ClearAllDataResult {
     <mat-dialog-content class="content">
       @if (connectionService.connectionStatus$ | async; as status) {
         @if (status.connected) {
-          <p class="muted">Connected now to <strong>{{ status.namespace }}</strong>; the app disconnects first.</p>
+          <app-environment-line [mark]="context().mark">Connected now to <strong>{{ status.namespace }}</strong>; the app disconnects first.</app-environment-line>
         }
       }
       <p>This deletes every saved connection, client and environment from this computer, with the secrets stored in them. No broker is touched. It cannot be undone.</p>
@@ -49,15 +56,16 @@ export interface ClearAllDataResult {
         @case ('ready') {
           <dl class="facts">
             <div><dt>Connections</dt><dd>{{ connectionCount() }}, read now</dd></div>
-            <div><dt>Clients and environments</dt><dd>{{ groupCount() }}</dd></div>
+            <div><dt>Clients and environments</dt><dd>{{ groupSummary() }}</dd></div>
             <div><dt>File</dt><dd class="mono">data/workspace.json</dd></div>
           </dl>
         }
       }
+      <p>To keep a copy, <a routerLink="/connections">export the connections first</a>.</p>
 
       <mat-form-field appearance="outline" class="typed">
         <mat-label>Type {{ words }} to confirm</mat-label>
-        <input matInput autocomplete="off" spellcheck="false" [value]="typed()"
+        <input matInput class="mono" autocomplete="off" spellcheck="false" [placeholder]="words" [value]="typed()"
                (input)="typed.set($any($event.target).value)" [disabled]="clearing()">
         <mat-hint>The button stays disabled until the words match exactly.</mat-hint>
       </mat-form-field>
@@ -93,6 +101,8 @@ export interface ClearAllDataResult {
   `]
 })
 export class ClearAllDataDialogComponent implements OnInit {
+  /** The active connection and its environment, for the line under the title. */
+  readonly context = connectionContext();
   readonly dialogRef = inject(MatDialogRef<ClearAllDataDialogComponent, ClearAllDataResult>);
   readonly connectionService = inject(ConnectionService);
   private readonly groupService = inject(ConnectionGroupService);
@@ -102,7 +112,10 @@ export class ClearAllDataDialogComponent implements OnInit {
   readonly typed = signal('');
   readonly countsState = signal<'loading' | 'error' | 'ready'>('loading');
   readonly connectionCount = signal(0);
-  readonly groupCount = signal(0);
+  readonly clientCount = signal(0);
+  readonly environmentCount = signal(0);
+  readonly groupSummary = computed(() =>
+    `${plural(this.clientCount(), 'client')}, ${plural(this.environmentCount(), 'environment')}`);
   readonly clearing = signal(false);
   readonly clearError = signal('');
   readonly canClear = computed(() =>
@@ -119,7 +132,8 @@ export class ClearAllDataDialogComponent implements OnInit {
       .subscribe({
         next: ({ connections, groups }) => {
           this.connectionCount.set(connections.length);
-          this.groupCount.set(groups.length);
+          this.clientCount.set(groups.filter(g => g.type === 'client').length);
+          this.environmentCount.set(groups.filter(g => g.type === 'environment').length);
           this.countsState.set('ready');
         },
         error: () => this.countsState.set('error'),

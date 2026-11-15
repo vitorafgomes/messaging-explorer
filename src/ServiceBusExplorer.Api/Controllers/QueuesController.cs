@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using ServiceBusExplorer.Core.Abstractions;
 using ServiceBusExplorer.Core.Models;
 
@@ -149,8 +150,8 @@ public class QueuesController : ControllerBase
     }
 
     [HttpGet("{name}/messages")]
-    public Task<ActionResult<IEnumerable<IMessage>>> PeekMessages(string name, [FromQuery] int count = 10) =>
-        Peek(name, count, MessageSubQueue.Active, null, null);
+    public Task<ActionResult<IEnumerable<IMessage>>> PeekMessages(string name, [FromQuery] int count = 10, [FromQuery] string? fromSequenceNumber = null) =>
+        Peek(name, count, MessageSubQueue.Active, fromSequenceNumber, null);
 
     [HttpGet("{name}/deadletter")]
     public Task<ActionResult<IEnumerable<IMessage>>> PeekDeadLetterMessages(string name, [FromQuery] int count = 10, [FromQuery] string? fromSequenceNumber = null, [FromQuery] string? includeBody = null) =>
@@ -166,7 +167,7 @@ public class QueuesController : ControllerBase
 
         var provider = GetProvider();
         if (provider == null) return NoProviderConnected();
-        if (EntityAdministrationResults.PeekPosition(provider, fromSequenceNumber, out var from) is { } refused) return refused;
+        if (EntityAdministrationResults.PeekPosition(provider, subQueue, fromSequenceNumber, out var from) is { } refused) return refused;
         if (EntityAdministrationResults.IncludeBody(includeBody, out var withBody) is { } badBody) return badBody;
         if (EntityAdministrationResults.SubQueueNotSupported(provider, subQueue) is { } notSupported) return notSupported;
 
@@ -187,11 +188,13 @@ public class QueuesController : ControllerBase
         var provider = GetProvider();
         if (provider == null)
             return NoProviderConnected();
+        if (EntityAdministrationResults.BodyNotAccepted(provider, [message]) is { } refused)
+            return refused;
 
         try
         {
-            await provider.SendMessageAsync(name, message);
-            return Ok(new { success = true });
+            var sequenceNumber = await provider.SendMessageAsync(name, message);
+            return Ok(new { success = true, sequenceNumber });
         }
         catch (EntityDisabledException)
         {
@@ -199,17 +202,34 @@ public class QueuesController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// The most messages one batch send accepts. A request is one HTTP body the user picked from a file; the cap bounds
+    /// how long one request holds the sender and how much a mistaken file can put on a broker.
+    /// </summary>
+    internal const int MaxSendBatch = 1000;
+
     [HttpPost("{name}/messages/batch")]
-    public async Task<ActionResult> SendMessages(string name, [FromBody] IEnumerable<SendMessageRequest> messages)
+    public Task<ActionResult> SendMessages(string name, [FromBody] List<SendMessageRequest> messages) =>
+        SendBatch(this, name, messages, HttpContext.RequestAborted);
+
+    /// <summary>
+    /// The batch send of a queue and of a topic: 1 to <see cref="MaxSendBatch"/> messages or 400 before the provider is
+    /// called, 409 for a disabled entity, and the count sent with one failure per message not sent.
+    /// </summary>
+    internal static async Task<ActionResult> SendBatch(ControllerBase controller, string name, List<SendMessageRequest> messages, CancellationToken cancellationToken)
     {
         var provider = GetProvider();
         if (provider == null)
-            return NoProviderConnected();
+            return controller.BadRequest(new { message = "No messaging provider connected. Please connect to a provider first." });
+        if (messages.Count is < 1 or > MaxSendBatch)
+            return controller.BadRequest(new { message = $"A batch send holds 1 to {MaxSendBatch} messages." });
+        if (EntityAdministrationResults.BodyNotAccepted(provider, messages) is { } refused)
+            return refused;
 
         try
         {
-            await provider.SendMessagesAsync(name, messages);
-            return Ok(new { success = true, count = messages.Count() });
+            var result = await provider.SendMessagesAsync(name, messages, cancellationToken);
+            return controller.Ok(new { success = result.Success, count = result.SentCount, failures = result.Failures });
         }
         catch (EntityDisabledException)
         {
@@ -239,22 +259,30 @@ public class QueuesController : ControllerBase
     }
 
     [HttpPost("{name}/messages/cancel-scheduled")]
-    public async Task<ActionResult> CancelScheduledMessages(string name, [FromBody] CancelScheduledRequest request)
+    public Task<ActionResult> CancelScheduledMessages(string name, [FromBody] CancelScheduledRequest request) =>
+        CancelScheduled(this, _logger, name, request, HttpContext.RequestAborted);
+
+    /// <summary>
+    /// The cancel of scheduled messages of a queue and of a topic: 400 when the provider declares no scheduled messages
+    /// or refuses the sequence numbers, 409 for a disabled entity, the constant 500 for any other failure, and the
+    /// result per sequence number otherwise.
+    /// </summary>
+    internal static async Task<ActionResult> CancelScheduled(ControllerBase controller, ILogger logger, string name, CancelScheduledRequest request, CancellationToken cancellationToken)
     {
         var provider = GetProvider();
         if (provider == null)
-            return NoProviderConnected();
+            return controller.BadRequest(new { message = "No messaging provider connected. Please connect to a provider first." });
         if (!provider.Capabilities.SupportsScheduledMessages)
             return EntityAdministrationResults.ScheduledMessagesNotSupported();
 
         try
         {
-            var result = await provider.CancelScheduledMessagesAsync(name, request.SequenceNumbers, HttpContext.RequestAborted);
-            return Ok(result);
+            var result = await provider.CancelScheduledMessagesAsync(name, request.SequenceNumbers, cancellationToken);
+            return controller.Ok(result);
         }
         catch (InvalidEntityConfigurationException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return controller.BadRequest(new { message = ex.Message });
         }
         catch (EntityDisabledException)
         {
@@ -262,13 +290,103 @@ public class QueuesController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Cancel scheduled messages failed for queue {QueueName}", name);
-            return StatusCode(500, new { message = "An internal error occurred." });
+            logger.LogError(ex, "Cancel scheduled messages failed for {EntityName}", name);
+            return controller.StatusCode(500, new { message = "An internal error occurred." });
+        }
+    }
+
+    [HttpPost("{name}/deferred/delete-batch")]
+    public Task<ActionResult> DeleteDeferredMessages(string name, [FromBody] DeferredBatchRequest request) =>
+        DeferredBatch(this, _logger, name, request, p => p.DeleteDeferredMessagesAsync(name, request.SequenceNumbers, cancellationToken: HttpContext.RequestAborted));
+
+    [HttpPost("{name}/deferred/resubmit-batch")]
+    public Task<ActionResult> ResubmitDeferredMessages(string name, [FromBody] DeferredBatchRequest request) =>
+        DeferredBatch(this, _logger, name, request, p => p.ResubmitDeferredMessagesAsync(name, request.SequenceNumbers, newMessageIdOnDuplicateDetection: request.NewMessageIdOnDuplicateDetection, cancellationToken: HttpContext.RequestAborted));
+
+    [HttpPost("{name}/deferred/deadletter-batch")]
+    public Task<ActionResult> DeadLetterDeferredMessages(string name, [FromBody] DeferredBatchRequest request) =>
+        DeferredBatch(this, _logger, name, request, p => p.DeadLetterDeferredMessagesAsync(name, request.SequenceNumbers, reason: request.Reason, description: request.Description, cancellationToken: HttpContext.RequestAborted));
+
+    /// <summary>
+    /// The delete, resubmit and dead-letter of deferred messages of a queue and of a subscription: 400 when the provider
+    /// declares no deferral or the request holds no sequence number or more than
+    /// <see cref="DeferredBatchRequest.MaxSequenceNumbers"/>, both before the provider is called; 400 with the
+    /// provider's text when it refuses the numbers, 409 for a disabled entity, the constant 500 for anything else, and
+    /// the result per sequence number otherwise.
+    /// </summary>
+    internal static async Task<ActionResult> DeferredBatch(ControllerBase controller, ILogger logger, string entityPath, DeferredBatchRequest request, Func<IMessagingProvider, Task<BatchOperationResult>> operation)
+    {
+        var provider = GetProvider();
+        if (provider == null)
+            return controller.BadRequest(new { message = "No messaging provider connected. Please connect to a provider first." });
+        if (!provider.Capabilities.SupportsDeferral)
+            return EntityAdministrationResults.DeferralNotSupported();
+        if (request.SequenceNumbers is not { Length: >= 1 and <= DeferredBatchRequest.MaxSequenceNumbers })
+            return controller.BadRequest(new { message = $"sequenceNumbers must hold 1 to {DeferredBatchRequest.MaxSequenceNumbers} sequence numbers." });
+
+        try
+        {
+            return controller.Ok(await operation(provider));
+        }
+        catch (InvalidEntityConfigurationException ex)
+        {
+            return controller.BadRequest(new { message = ex.Message });
+        }
+        catch (EntityDisabledException)
+        {
+            return EntityAdministrationResults.EntityDisabled();
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Deferred messages batch failed for {EntityPath}", entityPath);
+            return controller.StatusCode(500, new { message = EntityAdministrationResults.InternalError });
+        }
+    }
+
+    [HttpPost("{name}/messages/deadletter-batch")]
+    public Task<ActionResult> DeadLetterMessages(string name, [FromBody] DeferredBatchRequest request) =>
+        ActiveBatch(this, _logger, name, request, c => c.SupportsManualDeadLetter ? null : EntityAdministrationResults.ManualDeadLetterNotSupported(),
+            p => p.DeadLetterMessagesAsync(name, request.SequenceNumbers, reason: request.Reason, description: request.Description, cancellationToken: HttpContext.RequestAborted));
+
+    [HttpPost("{name}/messages/defer-batch")]
+    public Task<ActionResult> DeferMessages(string name, [FromBody] DeferredBatchRequest request) =>
+        ActiveBatch(this, _logger, name, request, c => c.SupportsDeferral ? null : EntityAdministrationResults.DeferralNotSupported(),
+            p => p.DeferMessagesAsync(name, request.SequenceNumbers, cancellationToken: HttpContext.RequestAborted));
+
+    /// <summary>
+    /// The dead-letter and the defer of active messages of a queue and of a subscription, each named by its sequence
+    /// number: 400 when <paramref name="notSupported"/> answers for the provider's capabilities or the request holds no
+    /// sequence number or more than <see cref="DeferredBatchRequest.MaxSequenceNumbers"/>, both before the provider is
+    /// called; 409 for a disabled entity, the constant 500 for anything else, and the result per sequence number,
+    /// refusals included, otherwise.
+    /// </summary>
+    internal static async Task<ActionResult> ActiveBatch(ControllerBase controller, ILogger logger, string entityPath, DeferredBatchRequest request, Func<IProviderCapabilities, ActionResult?> notSupported, Func<IMessagingProvider, Task<BatchOperationResult>> operation)
+    {
+        var provider = GetProvider();
+        if (provider == null)
+            return controller.BadRequest(new { message = "No messaging provider connected. Please connect to a provider first." });
+        if (notSupported(provider.Capabilities) is { } refused)
+            return refused;
+        if (request.SequenceNumbers is not { Length: >= 1 and <= DeferredBatchRequest.MaxSequenceNumbers })
+            return controller.BadRequest(new { message = $"sequenceNumbers must hold 1 to {DeferredBatchRequest.MaxSequenceNumbers} sequence numbers." });
+
+        try
+        {
+            return controller.Ok(await operation(provider));
+        }
+        catch (EntityDisabledException)
+        {
+            return EntityAdministrationResults.EntityDisabled();
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Active messages batch failed for {EntityPath}", entityPath);
+            return controller.StatusCode(500, new { message = EntityAdministrationResults.InternalError });
         }
     }
 
     [HttpPost("{name}/deadletter/{sequenceNumber}/resubmit")]
-    public async Task<ActionResult> ResubmitDeadLetterMessage(string name, long sequenceNumber)
+    public async Task<ActionResult> ResubmitDeadLetterMessage(string name, long sequenceNumber, [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] ResubmitMessageRequest? request = null)
     {
         var provider = GetProvider();
         if (provider == null)
@@ -276,12 +394,17 @@ public class QueuesController : ControllerBase
 
         try
         {
-            await provider.ResubmitDeadLetterMessageAsync(name, sequenceNumber);
+            await provider.ResubmitDeadLetterMessageAsync(name, sequenceNumber, newMessageIdOnDuplicateDetection: request?.NewMessageIdOnDuplicateDetection ?? false);
             return Ok(new { success = true });
         }
         catch (EntityDisabledException)
         {
             return EntityAdministrationResults.EntityDisabled();
+        }
+        catch (InvalidEntityConfigurationException ex)
+        {
+            _logger.LogWarning(ex, "Resubmit dead-letter message was refused for queue {QueueName} seq {SequenceNumber}", name, sequenceNumber);
+            return BadRequest(new { message = ex.Message });
         }
         catch (Exception ex)
         {
@@ -307,7 +430,7 @@ public class QueuesController : ControllerBase
 
         try
         {
-            var result = await provider.ResubmitDeadLetterMessagesAsync(name, request.SequenceNumbers, subQueue, cancellationToken: HttpContext.RequestAborted);
+            var result = await provider.ResubmitDeadLetterMessagesAsync(name, request.SequenceNumbers, subQueue, newMessageIdOnDuplicateDetection: request.NewMessageIdOnDuplicateDetection, cancellationToken: HttpContext.RequestAborted);
             return Ok(result);
         }
         catch (EntityDisabledException)
@@ -402,7 +525,7 @@ public class QueuesController : ControllerBase
 
         try
         {
-            var result = await provider.MoveMessagesAsync(name, request.TargetQueueName, request.SequenceNumbers, subQueue, cancellationToken: HttpContext.RequestAborted);
+            var result = await provider.MoveMessagesAsync(name, request.TargetQueueName, request.SequenceNumbers, subQueue, newMessageIdOnDuplicateDetection: request.NewMessageIdOnDuplicateDetection, cancellationToken: HttpContext.RequestAborted);
             return Ok(result);
         }
         catch (EntityDisabledException)

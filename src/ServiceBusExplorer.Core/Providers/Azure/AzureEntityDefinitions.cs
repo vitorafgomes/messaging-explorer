@@ -225,7 +225,7 @@ internal static class AzureEntityDefinitions
     private static IEnumerable<string> ForwardTargets(QueueDefinition queue) =>
         new[] { queue.Options?.ForwardTo, queue.Options?.ForwardDeadLetteredMessagesTo }.Where(t => !string.IsNullOrEmpty(t))!;
 
-    private static DefinitionImportItem Classify(DefinitionEntityKind kind, string name, string? topic, List<string>? differences) => new()
+    private static DefinitionImportItem Classify(DefinitionEntityKind kind, string name, string? topic, List<DefinitionFieldDifference>? differences) => new()
     {
         Kind = kind,
         Name = name,
@@ -233,12 +233,13 @@ internal static class AzureEntityDefinitions
         Outcome = differences is null ? DefinitionImportOutcome.Create
             : differences.Count == 0 ? DefinitionImportOutcome.Exists
             : DefinitionImportOutcome.Differs,
-        DifferingFields = differences is { Count: > 0 } ? differences : null
+        DifferingFields = differences is { Count: > 0 } ? differences.Select(d => d.Field).ToList() : null,
+        Differences = differences is { Count: > 0 } ? differences : null
     };
 
-    private static List<string> QueueDifferences(QueueCreateOptions? wanted, QueueCreateOptions actual)
+    private static List<DefinitionFieldDifference> QueueDifferences(QueueCreateOptions? wanted, QueueCreateOptions actual)
     {
-        var fields = new List<string>();
+        var fields = new List<DefinitionFieldDifference>();
         if (wanted is null) return fields;
         Compare(fields, "defaultMessageTimeToLive", wanted.DefaultMessageTimeToLive, actual.DefaultMessageTimeToLive);
         Compare(fields, "lockDuration", wanted.LockDuration, actual.LockDuration);
@@ -258,9 +259,9 @@ internal static class AzureEntityDefinitions
         return fields;
     }
 
-    private static List<string> TopicDifferences(TopicCreateOptions? wanted, TopicCreateOptions actual)
+    private static List<DefinitionFieldDifference> TopicDifferences(TopicCreateOptions? wanted, TopicCreateOptions actual)
     {
-        var fields = new List<string>();
+        var fields = new List<DefinitionFieldDifference>();
         if (wanted is null) return fields;
         Compare(fields, "defaultMessageTimeToLive", wanted.DefaultMessageTimeToLive, actual.DefaultMessageTimeToLive);
         Compare(fields, "enablePartitioning", wanted.EnablePartitioning, actual.EnablePartitioning);
@@ -275,9 +276,9 @@ internal static class AzureEntityDefinitions
         return fields;
     }
 
-    private static List<string> SubscriptionDifferences(SubscriptionDefinition wanted, SubscriptionDefinition actual)
+    private static List<DefinitionFieldDifference> SubscriptionDifferences(SubscriptionDefinition wanted, SubscriptionDefinition actual)
     {
-        var fields = new List<string>();
+        var fields = new List<DefinitionFieldDifference>();
         if (wanted.Options is { } options)
         {
             var current = actual.Options!;
@@ -296,25 +297,26 @@ internal static class AzureEntityDefinitions
         }
 
         if (wanted.Rules is not null && CanonicalRules(wanted.Rules) != CanonicalRules(actual.Rules!))
-            fields.Add("rules");
+            fields.Add(new DefinitionFieldDifference { Field = "rules" });
         return fields;
     }
 
     /// <summary>A setting the document gives that differs; a setting it leaves out is not compared.</summary>
-    private static void Compare<T>(List<string> fields, string field, T? wanted, T? actual) where T : struct
+    private static void Compare<T>(List<DefinitionFieldDifference> fields, string field, T? wanted, T? actual) where T : struct
     {
-        if (wanted.HasValue && !wanted.Equals(actual)) fields.Add(field);
+        if (wanted.HasValue && !wanted.Equals(actual)) fields.Add(new DefinitionFieldDifference { Field = field, Current = actual, InFile = wanted.Value });
     }
 
-    private static void Compare(List<string> fields, string field, bool wanted, bool actual)
+    private static void Compare(List<DefinitionFieldDifference> fields, string field, bool wanted, bool actual)
     {
-        if (wanted != actual) fields.Add(field);
+        if (wanted != actual) fields.Add(new DefinitionFieldDifference { Field = field, Current = actual, InFile = wanted });
     }
 
     /// <summary>An empty text and no text are the same setting: no forward target, no metadata.</summary>
-    private static void Compare(List<string> fields, string field, string? wanted, string? actual, StringComparison comparison)
+    private static void Compare(List<DefinitionFieldDifference> fields, string field, string? wanted, string? actual, StringComparison comparison)
     {
-        if (wanted is not null && !string.Equals(NullIfEmpty(wanted), NullIfEmpty(actual), comparison)) fields.Add(field);
+        if (wanted is not null && !string.Equals(NullIfEmpty(wanted), NullIfEmpty(actual), comparison))
+            fields.Add(new DefinitionFieldDifference { Field = field, Current = NullIfEmpty(actual), InFile = NullIfEmpty(wanted) });
     }
 
     private static string? NullIfEmpty(string? value) => string.IsNullOrEmpty(value) ? null : value;

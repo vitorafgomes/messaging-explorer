@@ -64,16 +64,16 @@ public class AzureProviderCapabilities : IProviderCapabilities
 
     /// <inheritdoc />
     /// <remarks>
-    /// Azure Service Bus supports transactional messaging operations.
+    /// False: the broker offers transactions, but no code of this provider runs one.
     /// </remarks>
-    public bool SupportsTransactions => true;
+    public bool SupportsTransactions => false;
 
     /// <inheritdoc />
     /// <remarks>
-    /// The broker can defer a message, but nothing in this provider defers one or receives a deferred one; a
-    /// deferred message already in a queue is still listed with its state.
+    /// A deferred message is listed with its state and can be deleted, resubmitted or dead-lettered by its sequence
+    /// number; nothing in this provider defers one.
     /// </remarks>
-    public bool SupportsDeferral => false;
+    public bool SupportsDeferral => true;
 
     /// <inheritdoc />
     /// <remarks>
@@ -103,6 +103,9 @@ public class AzureProviderCapabilities : IProviderCapabilities
     public bool SupportsDefinitions => true;
 
     /// <inheritdoc />
+    public bool SupportsNamespaceProperties => true;
+
+    /// <inheritdoc />
     /// <remarks>
     /// Azure Service Bus does not use exchange types - this is a RabbitMQ concept.
     /// </remarks>
@@ -110,12 +113,10 @@ public class AzureProviderCapabilities : IProviderCapabilities
 
     /// <inheritdoc />
     /// <remarks>
-    /// Maximum message size varies by tier:
-    /// - Basic/Standard tier: 256 KB (262,144 bytes)
-    /// - Premium tier: up to 100 MB
-    /// This returns the Standard tier limit as a conservative default.
+    /// The Basic and Standard limit, the default while the tier is not known: capabilities are per provider, not per
+    /// namespace. The limit of the connected namespace's tier is <see cref="Models.NamespaceInfo.MaxMessageSizeInBytes"/>.
     /// </remarks>
-    public long MaxMessageSizeInBytes => 256 * 1024; // 256 KB (Standard tier)
+    public long MaxMessageSizeInBytes => AzureServiceBusProvider.StandardMaxMessageSizeInBytes;
 
     /// <inheritdoc />
     /// <remarks>
@@ -136,4 +137,10 @@ public class AzureProviderCapabilities : IProviderCapabilities
 
     /// <inheritdoc />
     public bool SupportsPeekFromSequenceNumber => true;
+
+    /// <inheritdoc />
+    public bool SupportsManualDeadLetter => true;
+
+    /// <inheritdoc />
+    public bool SupportsBinaryBody => true;
 }

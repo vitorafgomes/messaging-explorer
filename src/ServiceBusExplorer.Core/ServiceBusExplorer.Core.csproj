@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="ServiceBusExplorer.Core.Tests" />
+    <InternalsVisibleTo Include="ServiceBusExplorer.IntegrationTests" />
   </ItemGroup>
 
   <ItemGroup>

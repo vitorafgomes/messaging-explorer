@@ -229,7 +229,7 @@ export class TopicsComponent implements OnInit {
 
   sendMessage(topic: TopicInfo) {
     const dialogRef = this.dialog.open(SendMessageDialogComponent, {
-      width: '700px',
+      width: '1100px', maxWidth: '95vw',
       data: {
         entityType: 'topic',
         entityName: topic.name
@@ -256,6 +256,7 @@ export class TopicsComponent implements OnInit {
         topicName: topic.name,
         activeMessageCount: subscription.activeMessageCount,
         deadLetterMessageCount: subscription.deadLetterMessageCount,
+        targetDetectsDuplicates: topic.requiresDuplicateDetection,
         initialTab
       }
     });
@@ -266,9 +267,12 @@ export class TopicsComponent implements OnInit {
       data: {
         title: 'Purge Messages',
         message: `Are you sure you want to delete all ${subscription.activeMessageCount} active messages from subscription "${subscription.name}"? This action cannot be undone.`,
-        confirmText: 'Purge',
+        confirmText: `Purge ${subscription.activeMessageCount.toLocaleString()} messages`,
         confirmColor: 'warn',
-        icon: 'delete_sweep'
+        icon: 'delete_sweep',
+        typedName: subscription.name,
+        typedLabel: 'Type the subscription name to confirm',
+        context: { subject: subscription.name }
       }
     });
 
@@ -296,9 +300,12 @@ export class TopicsComponent implements OnInit {
       data: {
         title: 'Purge Dead Letter Queue',
         message: `Are you sure you want to delete all ${subscription.deadLetterMessageCount} dead letter messages from subscription "${subscription.name}"? This action cannot be undone.`,
-        confirmText: 'Purge',
+        confirmText: `Purge ${subscription.deadLetterMessageCount.toLocaleString()} messages`,
         confirmColor: 'warn',
-        icon: 'delete_forever'
+        icon: 'delete_forever',
+        typedName: subscription.name,
+        typedLabel: 'Type the subscription name to confirm',
+        context: { subject: subscription.name }
       }
     });
 

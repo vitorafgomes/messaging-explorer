@@ -6,7 +6,7 @@ changes: "The prototype is also a design canvas, one artboard per screen"
 page_type: convention
 status: active
 description: "How a screen is built in the web app: Angular Material components and theme tokens only, one icon set, named destructive actions, distinct empty, loading and error states, and a name on every control."
-updated: 2026-11-12
+updated: 2026-11-14
 source:
   - "web-app/src/styles.scss"
   - "web-app/src/app/"
@@ -20,7 +20,7 @@ reliability: high
 
 ## Where the app is today
 
-Measured on 2026-11-12. The move from Bootstrap to Angular Material stopped halfway (`web-app/src/styles.scss#@use 'bootstrap/scss/bootstrap';` still imports Bootstrap as "temporary"):
+Measured on 2026-11-12. The move from Bootstrap to Angular Material stopped halfway then; since 2026-11-14 Bootstrap, Font Awesome and ng-bootstrap are gone (`web-app/package.json`), and the table below is the 2026-11-12 measurement:
 
 | | Bootstrap side | Material side |
 |---|---|---|
@@ -37,7 +37,7 @@ They apply to every new screen and to every screen a change touches. A change is
 1. **Components.** Buttons, inputs, selects, menus, tabs, tables, cards, dialogs, tooltips, progress and chips are Angular Material. No new `class="btn"`, `form-control`, `nav-tabs`, `card` or `badge` from Bootstrap.
 2. **Colour.** Only theme tokens: `var(--mat-sys-surface)`, `--mat-sys-on-surface`, `--mat-sys-primary`, `--mat-sys-error`, `--mat-sys-outline-variant` and their family. No hex, `rgb()` or named colour in a component, and no new `--bs-*`. A status colour the theme lacks (warning, success) is defined once in `styles.scss` for light and dark, never in a component.
 3. **Icons.** `mat-icon` with the bundled Material Icons font. No new Font Awesome.
-4. **Type and spacing.** The Material typography tokens (`--mat-sys-title-medium`, `--mat-sys-body-medium`) and a 4 px spacing scale. No font size in pixels in a component.
+4. **Type and spacing.** The Material typography tokens (`--mat-sys-title-medium`, `--mat-sys-body-medium`) and a 4 px spacing scale. No font size in pixels in a component. Shapes and targets as the Components sheet draws them, set once in `web-app/src/styles.scss` through Material's overrides: an outlined field and a menu at `--mat-sys-corner-small` (8 px), a button at 40 px; a small button inside a tab or a row sets 32 px itself.
 5. **Layout.** Flex and grid with `min-width: 0` on what must shrink; a fixed pixel width only for an icon or an avatar. A screen works at 1024 px wide without horizontal scroll.
 6. **Destructive actions.** Delete and purge are never beside a routine action at the same weight: they sit in a menu or apart, in the error colour. Every confirmation names the entity, its parent and the connection, shows the live count, and a purge asks for a typed acknowledgement.
 7. **The same thing looks the same.** A queue and a subscription hold messages the same way, so they share one panel: the same cards, tabs and actions, minus rules, which only a subscription has.
@@ -59,7 +59,7 @@ The prototype is the spec. Where the application and an artboard differ, the art
 
 - By reading, in the review gate: a diff under `web-app/src/app` that adds a Bootstrap class, a Font Awesome icon, a literal colour or an icon button with no name is a finding against this page.
 - By looking: the end-to-end run captures a screenshot of each screen in light and in dark ([[pages/roadmap/ui-material-migration]], Phase 0). A layout change is judged on those, not on the diff.
-- Nothing enforces these rules mechanically yet; a lint for the countable ones (hex colours, `class="btn"`, `fa fa-`) is on the initiative.
+- By a script: `tools/checks/check-ui-tokens.sh` fails on a literal hex colour, `btn` in a class list or a Font Awesome icon in `web-app/src/app`, specs left out, and runs in the harness job of CI. Its one exception is the provider entity-details components under `providers/*/components/`, which nothing renders.
 
 ## Related
 

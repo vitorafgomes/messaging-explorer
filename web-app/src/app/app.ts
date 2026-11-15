@@ -1,4 +1,6 @@
-import { Component, inject, OnInit, NgZone, HostListener } from '@angular/core';
+import { Component, computed, inject, OnInit, NgZone, HostListener } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { map, merge, of, switchMap } from 'rxjs';
 import { Router, RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { AsyncPipe } from '@angular/common';
 import { MatToolbarModule } from '@angular/material/toolbar';
@@ -9,18 +11,23 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatBadgeModule } from '@angular/material/badge';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatDialogModule } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { ConnectionService, ThemeService, EntitySelectionService, DevSettingsService } from './core/services';
+import { ConnectionService, ConnectionGroupService, ThemeService, EntitySelectionService, DevSettingsService, ResubmitRunService } from './core/services';
 import { DeadLetterNotificationService, DeadLetterAlert } from './core/services/dead-letter-notification.service';
 import { BugReportService } from './shared/bug-report.service';
 import { AppUpdateService } from './features/settings/app-update.service';
-import { ResubmitRunIndicatorComponent } from './features/messages/resubmit-run-indicator.component';
+import { ResubmitRunIndicatorComponent, runPercent, runSummary } from './features/messages/resubmit-run-indicator.component';
+import { EnvironmentChipComponent } from './shared/environment-chip.component';
+import { readConnectionContext } from './features/entities/connection-context';
 
 interface NavItem {
   label: string;
   route: string;
+  /** The screen shows a broker, so it opens only while a connection is active. */
+  needsConnection?: boolean;
 }
 
 @Component({
@@ -38,16 +45,19 @@ interface NavItem {
     MatBadgeModule,
     MatTooltipModule,
     MatProgressBarModule,
+    MatProgressSpinnerModule,
     MatDividerModule,
     MatDialogModule,
     MatSnackBarModule,
     ResubmitRunIndicatorComponent,
+    EnvironmentChipComponent,
   ],
   templateUrl: './app.html',
   styleUrl: './app.scss'
 })
 export class App implements OnInit {
   private connectionService = inject(ConnectionService);
+  private groupService = inject(ConnectionGroupService);
   private router = inject(Router);
   private selectionService = inject(EntitySelectionService);
   private ngZone = inject(NgZone);
@@ -56,8 +66,19 @@ export class App implements OnInit {
   readonly devSettingsService = inject(DevSettingsService);
   private snackBar = inject(MatSnackBar);
   readonly dlqService = inject(DeadLetterNotificationService);
+  readonly runs = inject(ResubmitRunService);
+  readonly runPercent = runPercent;
 
   connectionStatus$ = this.connectionService.connectionStatus$;
+  /** Whether a connection is active, for the links that need one. */
+  readonly connected = toSignal(this.connectionStatus$.pipe(map(status => status.connected)), { initialValue: false });
+
+  /**
+   * The active connection's environment for the toolbar chip, read again on every connect and
+   * disconnect and after a connection or a group is saved; null while disconnected.
+   */
+  readonly environment = toSignal(merge(this.connectionStatus$, this.groupService.changed$, this.connectionService.saved$).pipe(
+    switchMap(() => this.connectionService.isConnected ? readConnectionContext(this.connectionService, this.groupService) : of(null))));
 
   isElectron = typeof window !== 'undefined' && !!(window as any).electronAPI;
 
@@ -66,11 +87,19 @@ export class App implements OnInit {
 
   navItems: NavItem[] = [
     { label: 'Connections', route: '/connections' },
-    { label: 'Entities', route: '/entities' },
-    { label: 'Queues', route: '/queues' },
-    { label: 'Topics', route: '/topics' },
-    { label: 'Monitoring', route: '/monitoring' },
+    { label: 'Entities', route: '/entities', needsConnection: true },
+    { label: 'Monitoring', route: '/monitoring', needsConnection: true },
   ];
+
+  /** The name of the Notifications button: the resubmit run while one is active, else how many subscriptions hold dead-letter messages. */
+  readonly notificationsLabel = computed(() => {
+    const active = this.runs.activeRuns();
+    if (active.length === 1) return `Notifications: ${runSummary(active[0])}`;
+    if (active.length > 1) return `Notifications: ${active.length} resubmit runs`;
+    const count = this.dlqService.alertCount();
+    if (count === 0) return 'Notifications';
+    return `Notifications: ${count} subscription${count === 1 ? '' : 's'} with dead-letter messages`;
+  });
 
   ngOnInit() {
     this.themeService.initialize();

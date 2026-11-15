@@ -36,7 +36,7 @@ test.describe('Settings', () => {
 
     await expect(page.getByTestId('current-version')).toHaveText(SAMPLE_VERSION);
     await expect(page.getByTestId('about')).toContainText(`${SAMPLE_VERSION}, Stable channel`);
-    await expect(page.getByTestId('about')).toContainText('Local, on this computer');
+    await expect(page.getByTestId('about')).not.toContainText('API');
     await expect(page.getByTestId('update-state')).toContainText('Not checked yet in this session');
     await shoot(page, 'settings-not-checked');
 

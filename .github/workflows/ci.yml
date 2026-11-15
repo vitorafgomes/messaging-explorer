@@ -41,6 +41,7 @@ jobs:
           bash tools/checks/check-hidden-text.sh
           bash tools/checks/check-harness-requirements.sh
           bash tools/checks/check-doc-sizes.sh
+          bash tools/checks/check-ui-tokens.sh
 
       - name: Site script tests
         run: node --test docs/app.test.js

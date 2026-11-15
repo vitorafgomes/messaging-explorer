@@ -1,4 +1,4 @@
-import { Component, inject, signal, DestroyRef } from '@angular/core';
+import { Component, computed, inject, signal, DestroyRef } from '@angular/core';
 import { CommonModule, formatDate as formatDateText } from '@angular/common';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
@@ -12,8 +12,8 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { delay } from 'rxjs/operators';
 import { EntitySelection, QueueInfo, TopicInfo, SubscriptionInfo, TreeNode, SubscriptionNodeData } from '../../core/models';
-import { EntitySelectionService, QueueService, TopicService, ConnectionService, ResubmitRun, ResubmitRunService } from '../../core/services';
-import { SendMessageDialogComponent } from '../messages/send-message-dialog.component';
+import { EntitySelectionService, QueueService, TopicService, ConnectionService, ResubmitRun, ResubmitRunService, TreeDataBuilderService } from '../../core/services';
+import { SendMessageDialogComponent, SendMessageDialogData } from '../messages/send-message-dialog.component';
 import { ImportMessagesDialogComponent } from '../messages/import-messages-dialog.component';
 import { ViewMessagesDialogComponent } from '../messages/view-messages-dialog.component';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog.component';
@@ -25,6 +25,14 @@ import { MAX_TIMESPAN_DAYS, parseDuration } from './duration';
 import { EntityAdminActionsComponent } from './entity-admin-actions.component';
 import { SubscriptionRulesComponent } from './subscription-rules.component';
 import { EntitySessionsComponent } from './entity-sessions.component';
+import { NamespacePropertiesComponent } from './namespace-properties.component';
+import { MatTableModule } from '@angular/material/table';
+import { HttpErrorResponse } from '@angular/common/http';
+import { EntityFormDialogComponent, EntityFormDialogData } from './entity-form-dialog.component';
+import { TopicCancelScheduledDialogComponent, TopicCancelScheduledDialogData } from './topic-cancel-scheduled-dialog.component';
+import { CancelScheduledDialogComponent, CancelScheduledDialogData } from '../messages/cancel-scheduled-dialog.component';
+import { BulkOperationResultsDialogComponent, BulkOperationResultsDialogData } from '../../shared/components/bulk-operation-results-dialog/bulk-operation-results-dialog.component';
+import { messageCallFailure } from '../messages/message-call-failure';
 
 const NOT_SET = 'Not set';
 
@@ -48,7 +56,9 @@ type PropertyRow = [label: string, value: string];
     TransferMonitorComponent,
     EntityAdminActionsComponent,
     SubscriptionRulesComponent,
-    EntitySessionsComponent
+    EntitySessionsComponent,
+    NamespacePropertiesComponent,
+    MatTableModule
   ],
   template: `
     <ng-template #propertyTable let-rows>
@@ -71,15 +81,39 @@ type PropertyRow = [label: string, value: string];
     <div class="details-container">
       @if (state$ | async; as state) {
         @if (state.loading) {
+          @if (state.loadingNode; as loadingNode) {
+            <header class="entity-header">
+              <div class="entity-title">
+                <span class="entity-kind">{{ kindLabel(loadingNode.type) }}</span>
+                <h2>{{ loadingNode.name }}</h2>
+              </div>
+            </header>
+          }
           <div class="details-state" role="status">
             <mat-progress-spinner mode="indeterminate" diameter="32" aria-hidden="true" />
-            <p>Loading the entity</p>
+            <p>Loading the {{ state.loadingNode?.type ?? 'entity' }} from {{ connectionTarget }}</p>
           </div>
+          <div class="placeholder-cards" aria-hidden="true"><div></div><div></div><div></div><div></div></div>
+          <div class="placeholder-lines" aria-hidden="true"><div></div><div></div><div></div></div>
         } @else if (!state.selection) {
           <div class="details-state">
             <mat-icon class="state-icon" fontIcon="touch_app" aria-hidden="true" />
             <h3>Select an entity</h3>
             <p>Choose a queue, topic or subscription from the tree to see its counts, its properties and its messages.</p>
+            <p class="namespace-counts" data-testid="namespace-counts">{{ namespaceCounts() }}</p>
+            @if (providerService.capabilities(); as capabilities) {
+              @if (capabilities.supportsNamespaceProperties === true) {
+                <app-namespace-properties />
+              } @else {
+                <p data-testid="namespace-properties-none">No namespace properties: {{ capabilities.providerDisplayName }} does not declare them.</p>
+              }
+            }
+            @if (canAdminister()) {
+              <div class="state-actions">
+                <button matButton="tonal" type="button" (click)="create('queue')"><mat-icon fontIcon="add" />Create queue</button>
+                <button mat-button type="button" (click)="create('topic')">Create topic</button>
+              </div>
+            }
           </div>
         } @else if (state.selection.type === 'category') {
           <div class="details-state">
@@ -111,131 +145,206 @@ type PropertyRow = [label: string, value: string];
             <header class="entity-header">
               <div class="entity-title">
                 <span class="entity-kind">Topic</span>
-                <h2>{{ topicEntity.name }}</h2>
+                <div class="name-row">
+                  <h2>{{ topicEntity.name }}</h2>
+                  <app-entity-admin-actions part="status" kind="topic" [entity]="topicEntity" />
+                </div>
               </div>
               <div class="entity-actions">
+                <button mat-flat-button type="button" (click)="sendMessage()"><mat-icon fontIcon="send" />Send</button>
+                @if (canAdminister()) {
+                  <button matButton="tonal" type="button" (click)="create('subscription', topicEntity.name)"><mat-icon fontIcon="add" />Create subscription</button>
+                }
                 <app-entity-admin-actions kind="topic" [entity]="topicEntity" />
+                @if (canAdminister() || supports('supportsScheduledMessages')) {
+                  <button mat-icon-button type="button" [matMenuTriggerFor]="topicMenu" aria-label="More actions" matTooltip="More actions">
+                    <mat-icon fontIcon="more_vert" />
+                  </button>
+                  <mat-menu #topicMenu="matMenu" xPosition="before" class="entity-more-menu">
+                    <div class="menu-caption">Cannot be undone</div>
+                    @if (supports('supportsScheduledMessages')) {
+                      <button mat-menu-item type="button" class="danger" (click)="cancelTopicScheduled()"><mat-icon fontIcon="event_busy" />Cancel scheduled messages</button>
+                    }
+                    @if (canAdminister()) {
+                      <button mat-menu-item type="button" class="danger" (click)="deleteEntity()"><mat-icon fontIcon="delete" />Delete topic</button>
+                    }
+                  </mat-menu>
+                }
               </div>
             </header>
-            <section class="entity-properties" aria-labelledby="topic-properties-title">
-              <h3 id="topic-properties-title">Properties</h3>
-              <ng-container *ngTemplateOutlet="propertyTable; context: { $implicit: topicProperties(topicEntity) }" />
-            </section>
+            <mat-tab-group animationDuration="0ms" [preserveContent]="true" mat-stretch-tabs="false" mat-align-tabs="start">
+              <mat-tab [label]="'Subscriptions (' + (topicEntity.subscriptions?.length ?? 0) + ')'">
+                <table mat-table [dataSource]="topicEntity.subscriptions ?? []" class="subscriptions">
+                  <ng-container matColumnDef="name">
+                    <th mat-header-cell *matHeaderCellDef>Subscription</th>
+                    <td mat-cell *matCellDef="let sub"><button type="button" class="link" (click)="openSubscription(topicEntity.name, sub.name)">{{ sub.name }}</button></td>
+                  </ng-container>
+                  <ng-container matColumnDef="active">
+                    <th mat-header-cell *matHeaderCellDef class="number">Active</th>
+                    <td mat-cell *matCellDef="let sub" class="number">{{ sub.activeMessageCount | number }}</td>
+                  </ng-container>
+                  <ng-container matColumnDef="deadLetter">
+                    <th mat-header-cell *matHeaderCellDef class="number">Dead-letter</th>
+                    <td mat-cell *matCellDef="let sub" class="number">
+                      @if (sub.deadLetterMessageCount > 0) {
+                        <span class="count-chip dead-letter"><mat-icon class="chip-icon" fontIcon="warning" aria-hidden="true" />{{ sub.deadLetterMessageCount | number }}</span>
+                      } @else {
+                        {{ sub.deadLetterMessageCount | number }}
+                      }
+                    </td>
+                  </ng-container>
+                  <ng-container matColumnDef="rules">
+                    <th mat-header-cell *matHeaderCellDef class="number">Rules</th>
+                    <td mat-cell *matCellDef="let sub" class="number">{{ sub.ruleCount == null ? 'Not counted' : (sub.ruleCount | number) }}</td>
+                  </ng-container>
+                  <ng-container matColumnDef="status">
+                    <th mat-header-cell *matHeaderCellDef>Status</th>
+                    <td mat-cell *matCellDef="let sub">{{ sub.status || 'Not known' }}</td>
+                  </ng-container>
+                  <tr mat-header-row *matHeaderRowDef="subscriptionColumns()"></tr>
+                  <tr mat-row *matRowDef="let sub; columns: subscriptionColumns()"></tr>
+                </table>
+              </mat-tab>
+              <mat-tab label="Properties">
+                <ng-container *ngTemplateOutlet="propertyTable; context: { $implicit: topicProperties(topicEntity) }" />
+              </mat-tab>
+            </mat-tab-group>
           </div>
         } @else if (state.selection.type === 'queue' || state.selection.type === 'subscription') {
           @let isQueue = state.selection.type === 'queue';
           @let holder = $any(state.selection.entity);
           @if (holder) {
+            @let active = liveActiveCount() ?? holder.activeMessageCount;
+            @let deadLetter = liveDeadLetterCount() ?? holder.deadLetterMessageCount;
             <div class="panel">
               <header class="entity-header">
                 <div class="entity-title">
-                  <span class="entity-kind">@if (isQueue) {Queue} @else {Subscription in topic {{ holder.topicName }}}</span>
-                  <h2>{{ holder.name || state.selection.node.name }}</h2>
+                  <span class="entity-kind">@if (isQueue) {Queue} @else {Subscription in topic <button type="button" class="link" (click)="openTopic(holder.topicName)">{{ holder.topicName }}</button>}</span>
+                  <div class="name-row">
+                    <h2>{{ holder.name || state.selection.node.name }}</h2>
+                    <app-entity-admin-actions part="status" [kind]="isQueue ? 'queue' : 'subscription'" [entity]="holder" />
+                  </div>
                 </div>
                 <div class="entity-actions">
+                  <button mat-flat-button type="button" (click)="viewMessages()"><mat-icon fontIcon="visibility" />View messages</button>
+                  <button matButton="tonal" type="button" (click)="sendMessage()"><mat-icon fontIcon="send" />{{ isQueue ? 'Send' : 'Send to topic' }}</button>
                   <app-entity-admin-actions [kind]="isQueue ? 'queue' : 'subscription'" [entity]="holder" />
-                  <button mat-flat-button type="button" (click)="viewMessages()"><mat-icon fontIcon="visibility" />View Messages</button>
-                  @if (isQueue) {
-                    <button matButton="tonal" type="button" (click)="sendMessage()"><mat-icon fontIcon="send" />Send Message</button>
-                  }
                   <button mat-icon-button type="button" [matMenuTriggerFor]="moreMenu" aria-label="More actions" matTooltip="More actions">
                     <mat-icon fontIcon="more_vert" />
                   </button>
                   <mat-menu #moreMenu="matMenu" xPosition="before" class="entity-more-menu">
                     @if (isQueue) {
                       <button mat-menu-item type="button" (click)="importMessages()">Import messages</button>
-                      <mat-divider />
                     }
+                    @if (supports('supportsDeadLetterQueue')) {
+                      <button mat-menu-item type="button" (click)="openAutoResubmit()" [disabled]="deadLetter === 0">
+                        Resubmit dead-letter <span class="menu-count">{{ deadLetter | number }}</span>
+                      </button>
+                    }
+                    <mat-divider />
                     <div class="menu-caption">Cannot be undone</div>
-                    @if (isQueue) {
-                      <button mat-menu-item type="button" class="danger" (click)="purgeMessages('active')" [disabled]="holder.activeMessageCount === 0">
-                        Purge active messages <span class="menu-count">{{ liveActiveCount() ?? holder.activeMessageCount | number }}</span>
+                    <button mat-menu-item type="button" class="danger" (click)="purgeMessages('active')" [disabled]="active === 0">
+                      <mat-icon fontIcon="delete" />Purge active messages <span class="menu-count">{{ active | number }}</span>
+                    </button>
+                    @if (supports('supportsDeadLetterQueue')) {
+                      <button mat-menu-item type="button" class="danger" (click)="purgeMessages('deadletter')" [disabled]="deadLetter === 0">
+                        <mat-icon fontIcon="delete" />Purge dead-letter <span class="menu-count">{{ deadLetter | number }}</span>
                       </button>
-                    } @else {
-                      <button mat-menu-item type="button" class="danger" (click)="purgeMessages('active')" [disabled]="holder.activeMessageCount === 0">
-                        Purge Active Messages <span class="menu-count">{{ liveActiveCount() ?? holder.activeMessageCount | number }}</span>
-                      </button>
-                      <button mat-menu-item type="button" class="danger" (click)="purgeMessages('deadletter')" [disabled]="holder.deadLetterMessageCount === 0">
-                        Purge Dead-letter Messages <span class="menu-count">{{ liveDeadLetterCount() ?? holder.deadLetterMessageCount | number }}</span>
-                      </button>
-                      <button mat-menu-item type="button" class="danger" (click)="purgeMessages('all')" [disabled]="holder.activeMessageCount === 0 && holder.deadLetterMessageCount === 0">
-                        Purge All Messages <span class="menu-count">{{ (liveActiveCount() ?? holder.activeMessageCount) + (liveDeadLetterCount() ?? holder.deadLetterMessageCount) | number }}</span>
-                      </button>
+                    }
+                    @if (canAdminister()) {
+                      <button mat-menu-item type="button" class="danger" (click)="deleteEntity()"><mat-icon fontIcon="delete" />Delete {{ isQueue ? 'queue' : 'subscription' }}</button>
                     }
                   </mat-menu>
                 </div>
               </header>
 
               <div class="entity-stats">
-                @if (isQueue) {
-                  <div class="stat-card metric-card clickable" role="button" tabindex="0"
-                    [attr.aria-label]="'View the ' + holder.activeMessageCount + ' active messages'"
-                    (click)="viewMessages(0)"
-                    (keydown.enter)="viewMessages(0)"
-                    (keydown.space)="$event.preventDefault(); viewMessages(0)">
-                    <span class="stat-label">Active Messages</span>
-                    <span class="stat-value metric-value">{{ holder.activeMessageCount | number }}</span>
-                    <span class="stat-note">Open the active messages</span>
-                  </div>
-                } @else {
-                  <app-transfer-monitor class="live-card"
+                <div class="stat-card metric-card clickable" role="button" tabindex="0"
+                  [attr.aria-label]="'View the ' + active + ' active messages'"
+                  (click)="viewMessages(0)"
+                  (keydown.enter)="viewMessages(0)"
+                  (keydown.space)="$event.preventDefault(); viewMessages(0)">
+                  <span class="stat-label">Active</span>
+                  <span class="stat-value metric-value">{{ active | number }}</span>
+                  <span class="stat-note">Open the active messages</span>
+                </div>
+                @if (!isQueue) {
+                  <app-transfer-monitor
                     [topicName]="holder.topicName"
                     [subscriptionName]="holder.name"
-                    (subscriptionUpdated)="onSubscriptionUpdated($event)"
-                    (clicked)="viewMessages(0)" />
+                    (subscriptionUpdated)="onSubscriptionUpdated($event)" />
                 }
                 @if (supports('supportsDeadLetterQueue')) {
-                  @let deadLetter = liveDeadLetterCount() ?? holder.deadLetterMessageCount;
                   <div class="dead-letter-card" [class.warning]="deadLetter > 0">
                     <div class="stat-card metric-card clickable" role="button" tabindex="0"
                       [attr.aria-label]="'View the ' + deadLetter + ' dead-letter messages'"
                       (click)="viewMessages(1)"
                       (keydown.enter)="viewMessages(1)"
                       (keydown.space)="$event.preventDefault(); viewMessages(1)">
-                      <span class="stat-label">@if (deadLetter > 0) {<mat-icon class="label-icon" fontIcon="warning" aria-hidden="true" />}Dead Letter</span>
+                      <span class="stat-label">@if (deadLetter > 0) {<mat-icon class="label-icon" fontIcon="warning" aria-hidden="true" />}Dead-letter</span>
                       <span class="stat-value metric-value">{{ deadLetter | number }}</span>
                       <span class="stat-note">{{ deadLetter > 0 ? 'Open to resubmit or delete' : 'None waiting' }}</span>
                     </div>
-                    @if (holder.deadLetterMessageCount > 0 || autoResubmitRun()) {
+                    @if (autoResubmitRun(); as run) {
+                      <div class="run-line">
+                        <mat-progress-spinner mode="indeterminate" diameter="14" aria-hidden="true" />
+                        <span class="run-progress">Resubmit {{ run.progress().status }}: {{ run.progress().read | number }} of {{ run.progress().total | number }}</span>
+                        <button mat-button type="button" (click)="openAutoResubmit()">Open run</button>
+                        <button mat-button type="button" (click)="run.stop()"><mat-icon fontIcon="stop" />Stop</button>
+                      </div>
+                    } @else if (holder.deadLetterMessageCount > 0) {
                       <button mat-stroked-button type="button" class="auto-resubmit" (click)="openAutoResubmit()">
-                        <mat-icon fontIcon="replay" />@if (autoResubmitRun(); as run) {Resubmit {{ run.progress().status }}: {{ run.progress().read }} of {{ run.progress().total }}} @else {Auto Resubmit ({{ holder.deadLetterMessageCount }})}
+                        <mat-icon fontIcon="replay" />Auto resubmit
                       </button>
                     }
                   </div>
-                  @if (holder.transferDeadLetterMessageCount > 0) {
-                    <div class="stat-card metric-card"
-                      [class.clickable]="transferDeadLetterReachable()"
-                      [attr.role]="transferDeadLetterReachable() ? 'button' : null"
-                      [attr.tabindex]="transferDeadLetterReachable() ? 0 : null"
-                      [attr.aria-label]="transferDeadLetterReachable() ? 'View the ' + holder.transferDeadLetterMessageCount + ' transfer dead-letter messages' : null"
-                      (click)="openTransferDeadLetter()"
-                      (keydown.enter)="openTransferDeadLetter()"
-                      (keydown.space)="$event.preventDefault(); openTransferDeadLetter()">
-                      <span class="stat-label">Transfer Dead Letter</span>
-                      <span class="stat-value metric-value">{{ holder.transferDeadLetterMessageCount }}</span>
-                      <span class="stat-note">Could not be forwarded</span>
-                    </div>
-                  }
+                }
+                @if (isQueue && supports('supportsScheduledMessages')) {
+                  <div class="stat-card metric-card clickable" role="button" tabindex="0"
+                    [attr.aria-label]="'View the ' + holder.scheduledMessageCount + ' scheduled messages'"
+                    (click)="viewMessages(0, 'Scheduled')"
+                    (keydown.enter)="viewMessages(0, 'Scheduled')"
+                    (keydown.space)="$event.preventDefault(); viewMessages(0, 'Scheduled')">
+                    <span class="stat-label">Scheduled</span>
+                    <span class="stat-value metric-value">{{ holder.scheduledMessageCount | number }}</span>
+                    <span class="stat-note">Not yet deliverable</span>
+                  </div>
+                }
+                @if (supports('supportsAutoForwarding')) {
+                  <div class="stat-card metric-card">
+                    <span class="stat-label">Transfer</span>
+                    <span class="stat-value metric-value">{{ (holder.transferMessageCount ?? 0) | number }}</span>
+                    <span class="stat-note">Waiting to be forwarded</span>
+                  </div>
+                }
+                @if (supports('supportsAutoForwarding') && supports('supportsDeadLetterQueue')) {
+                  <div class="stat-card metric-card"
+                    [class.clickable]="transferDeadLetterReachable()"
+                    [attr.role]="transferDeadLetterReachable() ? 'button' : null"
+                    [attr.tabindex]="transferDeadLetterReachable() ? 0 : null"
+                    [attr.aria-label]="transferDeadLetterReachable() ? 'View the ' + (holder.transferDeadLetterMessageCount ?? 0) + ' transfer dead-letter messages' : null"
+                    (click)="openTransferDeadLetter()"
+                    (keydown.enter)="openTransferDeadLetter()"
+                    (keydown.space)="$event.preventDefault(); openTransferDeadLetter()">
+                    <span class="stat-label">Transfer dead-letter</span>
+                    <span class="stat-value metric-value">{{ (holder.transferDeadLetterMessageCount ?? 0) | number }}</span>
+                    <span class="stat-note">Could not be forwarded</span>
+                  </div>
                 }
                 @if (isQueue) {
-                  @if (supports('supportsScheduledMessages')) {
-                    <div class="stat-card metric-card clickable" role="button" tabindex="0"
-                      [attr.aria-label]="'View the ' + holder.scheduledMessageCount + ' scheduled messages'"
-                      (click)="viewMessages(0, 'Scheduled')"
-                      (keydown.enter)="viewMessages(0, 'Scheduled')"
-                      (keydown.space)="$event.preventDefault(); viewMessages(0, 'Scheduled')">
-                      <span class="stat-label">Scheduled</span>
-                      <span class="stat-value metric-value">{{ holder.scheduledMessageCount | number }}</span>
-                      <span class="stat-note">Not yet deliverable</span>
-                    </div>
-                  }
                   <div class="stat-card metric-card">
                     <span class="stat-label">Size</span>
                     <span class="stat-value metric-value">{{ formatSize(holder.sizeInBytes) }}</span>
-                    <span class="stat-note">{{ holder.maxSizeInMegabytes != null ? 'Max Size ' + holder.maxSizeInMegabytes + ' MB' : '' }}</span>
+                    <span class="stat-note">{{ holder.maxSizeInMegabytes != null ? 'Max Size ' + megabytes(holder.maxSizeInMegabytes) : '' }}</span>
                   </div>
                 }
               </div>
+              @if (!isQueue) {
+                <p class="resubmit-notice" role="note">
+                  <mat-icon fontIcon="warning" aria-hidden="true" />
+                  <span><strong>A resubmit from this subscription publishes to the topic.</strong> The message goes to {{ holder.topicName }}, so every subscription of the topic receives it again.</span>
+                </p>
+              }
 
               @if (isQueue) {
                 <mat-tab-group [selectedIndex]="queueTab()" (selectedIndexChange)="setQueueTab($event)" animationDuration="0ms" [preserveContent]="true" mat-stretch-tabs="false" mat-align-tabs="start">
@@ -250,23 +359,29 @@ type PropertyRow = [label: string, value: string];
                         }
                       </ng-template>
                     </mat-tab>
+                  } @else if (holder.requiresSession) {
+                    <mat-tab [disabled]="true">
+                      <ng-template mat-tab-label><span class="sessions-off" [title]="noSessions()">Sessions</span></ng-template>
+                    </mat-tab>
                   }
                 </mat-tab-group>
               } @else {
                 @let hasSessions = holder.requiresSession && supports('supportsSessions');
                 <nav mat-tab-nav-bar [tabPanel]="subscriptionPanel" animationDuration="0ms" aria-label="Sections of the subscription" mat-stretch-tabs="false" mat-align-tabs="start">
-                  <button mat-tab-link type="button" [active]="activeSubscriptionTab() === 'description'" (click)="setSubscriptionTab('description')">Description</button>
+                  <button mat-tab-link type="button" [active]="activeSubscriptionTab() === 'description'" (click)="setSubscriptionTab('description')">Properties</button>
                   @if (hasSessions) {
                     <button mat-tab-link type="button" [active]="activeSubscriptionTab() === 'sessions'" (click)="setSubscriptionTab('sessions')">Sessions</button>
+                  } @else if (holder.requiresSession) {
+                    <button mat-tab-link type="button" class="sessions-off" [disabled]="true" [title]="noSessions()">Sessions</button>
                   }
-                  <button mat-tab-link type="button" [active]="activeSubscriptionTab() === 'rules'" (click)="setSubscriptionTab('rules')">Rules</button>
+                  <button mat-tab-link type="button" [active]="activeSubscriptionTab() === 'rules'" (click)="setSubscriptionTab('rules')">{{ rulesLabel() }}</button>
                 </nav>
                 <mat-tab-nav-panel #subscriptionPanel>
                   <div [hidden]="activeSubscriptionTab() !== 'description'" id="subscription-description-tab">
                     <ng-container *ngTemplateOutlet="propertyTable; context: { $implicit: subscriptionProperties(holder) }" />
                   </div>
                   <div [hidden]="activeSubscriptionTab() !== 'rules'" id="subscription-rules-tab">
-                    <app-subscription-rules [subscription]="holder" />
+                    <app-subscription-rules [subscription]="holder" (rulesRead)="rulesCount.set($event)" />
                   </div>
                   @if (hasSessions && sessionsOpened()) {
                     <div [hidden]="activeSubscriptionTab() !== 'sessions'">
@@ -291,15 +406,41 @@ type PropertyRow = [label: string, value: string];
 export class EntityDetailsComponent {
   private selectionService = inject(EntitySelectionService);
   private connectionService = inject(ConnectionService);
+  private readonly treeData = inject(TreeDataBuilderService);
   private queueService = inject(QueueService);
   private topicService = inject(TopicService);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
   private readonly destroyRef = inject(DestroyRef);
-  private readonly providerService = inject(ProviderService);
+  protected readonly providerService = inject(ProviderService);
   private readonly resubmitRuns = inject(ResubmitRunService);
 
   readonly notSet = NOT_SET;
+  /** What the connection holds, as the empty state of the Main artboard says it. */
+  namespaceCounts(): string {
+    const { queues, topics, subscriptions } = this.treeData.loadedCounts();
+    const plural = (n: number, noun: string) => `${n.toLocaleString()} ${noun}${n === 1 ? '' : 's'}`;
+    return `${this.connectionService.currentTarget ?? 'This connection'} holds ${plural(queues, 'queue')} and ${plural(topics, 'topic')} with ${plural(subscriptions, 'subscription')}.`;
+  }
+
+  /** The columns of a topic's Subscriptions table, as the Main artboard draws them; Rules only where the provider has rules. */
+  readonly subscriptionColumns = computed(() => [
+    'name', 'active', 'deadLetter',
+    ...(this.providerService.capabilities()?.supportsSubscriptionRules ? ['rules'] : []),
+    'status',
+  ]);
+
+  /** Create and delete are offered only when the connected broker's API explicitly declares entity administration. */
+  readonly canAdminister = computed(() => this.providerService.capabilities()?.supportsEntityUpdate === true);
+
+  /** How many rules the subscription shown has, as last read; null when they could not be read. */
+  readonly rulesCount = signal<number | null>(null);
+
+  /** "Rules (n)" once the rules were read; "Rules" when they could not be. */
+  readonly rulesLabel = computed(() => {
+    const count = this.rulesCount();
+    return count === null ? 'Rules' : `Rules (${count})`;
+  });
 
   // Live subscription counts (updated by TransferMonitorComponent polling)
   liveActiveCount = signal<number | null>(null);
@@ -330,12 +471,19 @@ export class EntityDetailsComponent {
       this.queueTab.set(0);
       this.liveActiveCount.set(null);
       this.liveDeadLetterCount.set(null);
+      const rules = state.selection?.type === 'subscription' ? (state.selection.entity as SubscriptionInfo | undefined)?.rules : undefined;
+      this.rulesCount.set(Array.isArray(rules) ? rules.length : null);
     });
   }
 
   /** False only when the connected broker declares it lacks the feature. */
   supports(feature: keyof ProviderCapabilities): boolean {
     return this.providerService.capabilities()?.[feature] !== false;
+  }
+
+  /** Why a session entity has no Sessions tab to open, in the words of the provider. */
+  noSessions(): string {
+    return `${this.providerService.getSelectedProviderDisplayName()} does not offer sessions`;
   }
 
   /** The transfer dead-letter queue opens only when the API itself said it supports it. */
@@ -370,6 +518,11 @@ export class EntityDetailsComponent {
   get subscription(): SubscriptionInfo | null {
     const sel = this.selectionService.currentSelection;
     return sel?.type === 'subscription' ? sel.entity as SubscriptionInfo : null;
+  }
+
+  /** A size in megabytes with its thousands grouped: "1,024 MB". */
+  megabytes(value: number): string {
+    return `${value.toLocaleString('en-US')} MB`;
   }
 
   formatSize(bytes: number): string {
@@ -423,6 +576,11 @@ export class EntityDetailsComponent {
       : 'Disabled';
   }
 
+  /** The host or namespace the panel reads from, as the toolbar names it. */
+  get connectionTarget(): string {
+    return this.connectionService.currentTarget ?? 'this connection';
+  }
+
   kindLabel(type: string): string {
     return type.charAt(0).toUpperCase() + type.slice(1);
   }
@@ -438,7 +596,7 @@ export class EntityDetailsComponent {
       ['Max Delivery Count', queue.maxDeliveryCount != null ? String(queue.maxDeliveryCount) : NOT_SET],
       ['Lock Duration', this.formatDuration(queue.lockDuration)],
       ['Message TTL', this.formatDuration(queue.defaultMessageTimeToLive)],
-      ['Max Size', queue.maxSizeInMegabytes != null ? `${queue.maxSizeInMegabytes} MB` : NOT_SET],
+      ['Max Size', queue.maxSizeInMegabytes != null ? `${this.megabytes(queue.maxSizeInMegabytes)}` : NOT_SET],
       ['Requires Session', queue.requiresSession ? 'Yes' : 'No'],
       ['Partitioning', queue.enablePartitioning ? 'Enabled' : 'Disabled'],
       ['Status', queue.status || NOT_SET],
@@ -457,7 +615,7 @@ export class EntityDetailsComponent {
   topicProperties(topic: TopicInfo): PropertyRow[] {
     return [
       ['Status', topic.status || NOT_SET],
-      ['Max Size', topic.maxSizeInMegabytes != null ? `${topic.maxSizeInMegabytes} MB` : NOT_SET],
+      ['Max Size', topic.maxSizeInMegabytes != null ? `${this.megabytes(topic.maxSizeInMegabytes)}` : NOT_SET],
       ['Message Time To Live', this.formatDuration(topic.defaultMessageTimeToLive)],
       ['Auto Delete On Idle', this.formatDuration(topic.autoDeleteOnIdle)],
       ['Duplicate Detection', this.duplicateDetectionText(topic)],
@@ -502,15 +660,23 @@ export class EntityDetailsComponent {
     this.selectionService.refreshCurrentSelection();
   }
 
+  /** Sends to the queue, to the topic, or for a subscription to the topic it belongs to. */
   sendMessage() {
     if (!this.selection) return;
 
     const entityType = this.selection.type === 'queue' ? 'queue' : 'topic';
-    const entityName = this.selection.node.name;
+    const entityName = this.selection.type === 'subscription'
+      ? this.subscription?.topicName ?? (this.selection.node.data as SubscriptionNodeData).topicName
+      : this.selection.node.name;
 
+    const timeToLive = this.queue?.defaultMessageTimeToLive ?? this.topic?.defaultMessageTimeToLive;
+    const data: SendMessageDialogData = { entityType, entityName };
+    if (timeToLive) {
+      data.defaultTimeToLive = this.formatDuration(timeToLive);
+    }
     const dialogRef = this.dialog.open(SendMessageDialogComponent, {
-      width: '700px',
-      data: { entityType, entityName }
+      width: '1100px', maxWidth: '95vw',
+      data
     });
 
     dialogRef.afterClosed().pipe(
@@ -530,6 +696,7 @@ export class EntityDetailsComponent {
 
     const dialogRef = this.dialog.open(ImportMessagesDialogComponent, {
       width: '750px',
+      maxWidth: '95vw',
       data: { entityType, entityName }
     });
 
@@ -549,6 +716,7 @@ export class EntityDetailsComponent {
     let activeMessageCount: number | undefined;
     let deadLetterMessageCount: number | undefined;
     let transferDeadLetterMessageCount: number | undefined;
+    let targetDetectsDuplicates: boolean | undefined;
 
     if (this.selection.type === 'queue') {
       entityType = 'queue';
@@ -557,6 +725,7 @@ export class EntityDetailsComponent {
       activeMessageCount = queueEntity?.activeMessageCount;
       deadLetterMessageCount = queueEntity?.deadLetterMessageCount;
       transferDeadLetterMessageCount = queueEntity?.transferDeadLetterMessageCount;
+      targetDetectsDuplicates = queueEntity?.requiresDuplicateDetection;
     } else if (this.selection.type === 'subscription') {
       entityType = 'subscription';
       entityName = this.selection.node.name;
@@ -573,7 +742,7 @@ export class EntityDetailsComponent {
       width: '95vw',
       maxWidth: '1400px',
       height: '90vh',
-      data: { entityType, entityName, topicName, activeMessageCount, deadLetterMessageCount, transferDeadLetterMessageCount, initialTab, initialStateFilter }
+      data: { entityType, entityName, topicName, activeMessageCount, deadLetterMessageCount, transferDeadLetterMessageCount, initialTab, initialStateFilter, targetDetectsDuplicates }
     });
   }
 
@@ -600,6 +769,7 @@ export class EntityDetailsComponent {
       deadLetterMessageCount: this.selection.type === 'queue'
         ? this.queue?.deadLetterMessageCount
         : this.subscription?.deadLetterMessageCount,
+      targetDetectsDuplicates: this.selection.type === 'queue' ? this.queue?.requiresDuplicateDetection : undefined,
     };
 
     const dialogRef = this.dialog.open(ContinuousResubmitDialogComponent, {
@@ -621,7 +791,7 @@ export class EntityDetailsComponent {
    * target and the count: the live one when the panel has it, otherwise the one read
    * when the entity was loaded.
    */
-  purgeMessages(type: string = 'active') {
+  purgeMessages(type: 'active' | 'deadletter' = 'active') {
     if (!this.selection) return;
 
     const name = this.selection.node.name;
@@ -629,13 +799,10 @@ export class EntityDetailsComponent {
     const entity = this.queue ?? this.subscription;
     const topicName = this.subscription?.topicName ?? (this.selection.node.data as SubscriptionNodeData | undefined)?.topicName;
     const where = kind === 'subscription' ? `subscription "${name}" of topic "${topicName}"` : `queue "${name}"`;
-    const messageType = type === 'all' ? 'active and dead-letter' : type === 'deadletter' ? 'dead-letter' : 'active';
-    const live = type === 'all'
-      ? (this.liveActiveCount() !== null && this.liveDeadLetterCount() !== null)
-      : (type === 'deadletter' ? this.liveDeadLetterCount() : this.liveActiveCount()) !== null;
-    const active = this.liveActiveCount() ?? entity?.activeMessageCount ?? 0;
-    const deadLetter = this.liveDeadLetterCount() ?? entity?.deadLetterMessageCount ?? 0;
-    const count = type === 'all' ? active + deadLetter : type === 'deadletter' ? deadLetter : active;
+    const messageType = type === 'deadletter' ? 'dead-letter' : 'active';
+    const liveCount = type === 'deadletter' ? this.liveDeadLetterCount() : this.liveActiveCount();
+    const live = liveCount !== null;
+    const count = liveCount ?? (type === 'deadletter' ? entity?.deadLetterMessageCount : entity?.activeMessageCount) ?? 0;
     const countText = live ? `${count.toLocaleString()} now` : `${count.toLocaleString()} when the ${kind} was loaded`;
 
     const confirmData: ConfirmDialogData = {
@@ -644,8 +811,9 @@ export class EntityDetailsComponent {
       confirmText: `Purge ${count.toLocaleString()} messages`,
       confirmColor: 'warn',
       icon: 'delete_sweep',
-      requireAcknowledgement: true,
-      acknowledgementText: `I understand this deletes every ${messageType} message in ${name}`
+      typedName: name,
+      typedLabel: `Type the ${kind} name to confirm`,
+      context: { subject: name }
     };
     const dialogRef = this.dialog.open(ConfirmDialogComponent, { data: confirmData });
 
@@ -658,7 +826,111 @@ export class EntityDetailsComponent {
     });
   }
 
-  private executePurge(type: string = 'active') {
+  /**
+   * Asks before a delete through the same typed-name confirmation as a purge: the entity, its
+   * topic for a subscription, the connection target and what goes with it. Deletes only once confirmed.
+   */
+  deleteEntity() {
+    const selection = this.selection;
+    if (!selection || (selection.type !== 'queue' && selection.type !== 'topic' && selection.type !== 'subscription')) return;
+
+    const kind = selection.type;
+    const name = selection.node.name;
+    const topicName = this.subscription?.topicName ?? (selection.node.data as SubscriptionNodeData | undefined)?.topicName;
+    const where = kind === 'subscription' ? `subscription "${name}" of topic "${topicName}"` : `${kind} "${name}"`;
+    let holds: string;
+    if (kind === 'topic') {
+      const subscriptions = this.topic?.subscriptions?.length ?? this.topic?.subscriptionCount ?? 0;
+      holds = `its ${subscriptions.toLocaleString()} subscriptions and their messages`;
+    } else {
+      const entity = this.queue ?? this.subscription;
+      const live = this.liveActiveCount() !== null && this.liveDeadLetterCount() !== null;
+      const count = (this.liveActiveCount() ?? entity?.activeMessageCount ?? 0) + (this.liveDeadLetterCount() ?? entity?.deadLetterMessageCount ?? 0);
+      holds = `its ${count.toLocaleString()} messages ${live ? 'now' : `when the ${kind} was loaded`}`;
+    }
+
+    const confirmData: ConfirmDialogData = {
+      title: `Delete ${kind} ${name}?`,
+      message: `This deletes ${where} on ${this.connectionService.currentTarget} with ${holds}. It cannot be undone.`,
+      confirmText: `Delete ${kind}`,
+      confirmColor: 'warn',
+      icon: 'delete',
+      typedName: name,
+      typedLabel: `Type the ${kind} name to confirm`,
+      context: { subject: name }
+    };
+    this.dialog.open(ConfirmDialogComponent, { data: confirmData }).afterClosed().pipe(
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe(result => {
+      if (!result) return;
+      const call = kind === 'queue' ? this.queueService.deleteQueue(name)
+        : kind === 'topic' ? this.topicService.deleteTopic(name)
+        : this.topicService.deleteSubscription(topicName!, name);
+      call.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+        next: () => {
+          this.snackBar.open(`Deleted the ${kind} ${name}`, 'Close', { duration: 3000 });
+          this.selectionService.clearSelection();
+          this.selectionService.refreshTree();
+        },
+        error: (error: HttpErrorResponse) => {
+          this.snackBar.open(`Could not delete the ${kind} ${name}: ${error?.error?.message ?? 'the API did not answer'}`, 'Close');
+        }
+      });
+    });
+  }
+
+  /**
+   * Cancels scheduled messages of the selected topic: asks for their sequence numbers, confirms naming the topic and
+   * the count with the typed name for more than one, then shows the result per sequence number.
+   */
+  cancelTopicScheduled() {
+    if (this.selection?.type !== 'topic') return;
+    const topicName = this.selection.node.name;
+    const input: TopicCancelScheduledDialogData = { topicName };
+    this.dialog.open(TopicCancelScheduledDialogComponent, { data: input, width: '520px', maxWidth: '95vw' }).afterClosed().pipe(
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe((sequenceNumbers?: number[]) => {
+      if (!sequenceNumbers?.length) return;
+      const confirm: CancelScheduledDialogData = { queueName: topicName, entityKind: 'topic', sequenceNumbers };
+      this.dialog.open(CancelScheduledDialogComponent, { data: confirm }).afterClosed().pipe(
+        takeUntilDestroyed(this.destroyRef)
+      ).subscribe(confirmed => {
+        if (!confirmed) return;
+        this.topicService.cancelScheduledMessages(topicName, sequenceNumbers).pipe(
+          takeUntilDestroyed(this.destroyRef)
+        ).subscribe({
+          next: result => {
+            const data: BulkOperationResultsDialogData = {
+              operation: 'cancel-scheduled', result, entityName: topicName, entityType: 'topic', subQueue: 'active', allowRetry: false
+            };
+            this.dialog.open(BulkOperationResultsDialogComponent, { data });
+          },
+          error: err => this.snackBar.open(messageCallFailure(err, 'Failed to cancel the scheduled messages'), 'Close', { duration: 5000 })
+        });
+      });
+    });
+  }
+
+  /** Opens the create form for a queue, a topic, or a subscription of the given topic. */
+  create(kind: 'queue' | 'topic' | 'subscription', topicName?: string) {
+    const data: EntityFormDialogData = { mode: 'create', kind, topicName };
+    this.dialog.open(EntityFormDialogComponent, { data, width: '720px', maxWidth: '95vw' });
+  }
+
+  /** Selects a topic as the tree builds its node, so the tree marks it. */
+  openTopic(topicName: string) {
+    this.selectionService.select({ id: `topic-${topicName}`, name: topicName, type: 'topic', icon: 'topic', expandable: true, level: 1 });
+  }
+
+  /** Selects a subscription as the tree builds its node, so the tree marks it. */
+  openSubscription(topicName: string, subscriptionName: string) {
+    this.selectionService.select({
+      id: `subscription-${topicName}-${subscriptionName}`, name: subscriptionName, type: 'subscription', icon: 'subscriptions',
+      expandable: false, level: 2, data: { topicName } as SubscriptionNodeData
+    });
+  }
+
+  private executePurge(type: 'active' | 'deadletter') {
     if (this.selection?.type === 'queue') {
       this.queueService.purgeMessages(this.selection.node.name, type).pipe(
         delay(500),

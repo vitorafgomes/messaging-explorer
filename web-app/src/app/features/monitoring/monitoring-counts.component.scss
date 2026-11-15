@@ -22,9 +22,12 @@
   flex: 0 0 200px;
 }
 
+.refresh-every {
+  flex: 0 0 160px;
+}
+
 .summary,
-.footnote,
-.refresh-failure {
+.footnote {
   margin: 0;
   font: var(--mat-sys-body-medium);
   color: var(--mat-sys-on-surface-variant);
@@ -32,13 +35,6 @@
 
 .footnote {
   font: var(--mat-sys-body-small);
-}
-
-.refresh-failure {
-  padding: 8px 12px;
-  border-radius: 8px;
-  background: var(--mat-sys-error-container);
-  color: var(--mat-sys-on-error-container);
 }
 
 .counts {
@@ -66,8 +62,8 @@
   gap: 4px;
   padding: 0 8px 0 6px;
   border-radius: 999px;
-  background: var(--mat-sys-error-container);
-  color: var(--mat-sys-on-error-container);
+  background: var(--app-warning-container);
+  color: var(--app-on-warning-container);
   font: var(--mat-sys-label-medium);
   font-weight: 700;
 

@@ -1,3 +1,4 @@
+import { SendBatchResult, SendMessageResult } from './queue.service';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
@@ -5,7 +6,8 @@ import { ApiService } from './api.service';
 import { apiPath } from './api-path';
 import {
   TopicInfo, SubscriptionInfo, MessageInfo, SendMessageRequest, BatchOperationResult, DeleteBatchRequest, ResubmitBatchRequest,
-  TopicCreateOptions, TopicUpdate, SubscriptionCreateOptions, SubscriptionUpdate, SubscriptionRuleInfo, SubscriptionRuleWrite
+  TopicCreateOptions, TopicUpdate, SubscriptionCreateOptions, SubscriptionUpdate, SubscriptionRuleInfo, SubscriptionRuleWrite,
+  DeferredAction, DeferredBatchRequest, CancelScheduledRequest, ActiveAction
 } from '../models';
 
 /**
@@ -76,8 +78,17 @@ export class TopicService {
    * @param message - The message to send
    * @returns Observable with success status
    */
-  sendMessage(topicName: string, message: SendMessageRequest): Observable<{ success: boolean }> {
-    return this.api.post<{ success: boolean }>(apiPath`topics/${topicName}/messages`, message);
+  sendMessage(topicName: string, message: SendMessageRequest): Observable<SendMessageResult> {
+    return this.api.post<SendMessageResult>(apiPath`topics/${topicName}/messages`, message);
+  }
+
+  /**
+   * Cancels scheduled messages of a topic by their sequence numbers: they are deleted before they are delivered.
+   * The answer holds one failure per number that could not be cancelled.
+   */
+  cancelScheduledMessages(topicName: string, sequenceNumbers: number[]): Observable<BatchOperationResult> {
+    const request: CancelScheduledRequest = { sequenceNumbers };
+    return this.api.post<BatchOperationResult>(apiPath`topics/${topicName}/messages/cancel-scheduled`, request);
   }
 
   /**
@@ -86,8 +97,8 @@ export class TopicService {
    * @param messages - Array of messages to send
    * @returns Observable with success status and count of sent messages
    */
-  sendMessages(topicName: string, messages: SendMessageRequest[]): Observable<{ success: boolean; count: number }> {
-    return this.api.post<{ success: boolean; count: number }>(apiPath`topics/${topicName}/messages/batch`, messages);
+  sendMessages(topicName: string, messages: SendMessageRequest[]): Observable<SendBatchResult> {
+    return this.api.post<SendBatchResult>(apiPath`topics/${topicName}/messages/batch`, messages);
   }
 
   // =========================================================================
@@ -178,10 +189,22 @@ export class TopicService {
    * @param topicName - The topic/exchange name
    * @param subscriptionName - The subscription/binding name
    * @param count - Maximum number of messages to peek (default: 10)
+   * @param fromSequenceNumber - First sequence number to read; absent reads from the head
    * @returns Observable array of messages
    */
-  peekMessages(topicName: string, subscriptionName: string, count: number = 10): Observable<MessageInfo[]> {
-    return this.api.get<MessageInfo[]>(apiPath`topics/${topicName}/subscriptions/${subscriptionName}/messages?count=${count}`);
+  peekMessages(topicName: string, subscriptionName: string, count: number = 10, fromSequenceNumber?: number): Observable<MessageInfo[]> {
+    const from = fromSequenceNumber === undefined ? '' : apiPath`&fromSequenceNumber=${fromSequenceNumber}`;
+    return this.api.get<MessageInfo[]>(apiPath`topics/${topicName}/subscriptions/${subscriptionName}/messages?count=${count}` + from);
+  }
+
+  /** Dead-letters or defers active messages of a subscription, each named by its sequence number; the API scans for them. */
+  settleActiveMessages(topicName: string, subscriptionName: string, action: ActiveAction, request: DeferredBatchRequest): Observable<BatchOperationResult> {
+    return this.api.post<BatchOperationResult>(apiPath`topics/${topicName}/subscriptions/${subscriptionName}/messages/${action}-batch`, request);
+  }
+
+  /** Deletes, resubmits or dead-letters deferred messages of a subscription, each named by its sequence number. */
+  settleDeferredMessages(topicName: string, subscriptionName: string, action: DeferredAction, request: DeferredBatchRequest): Observable<BatchOperationResult> {
+    return this.api.post<BatchOperationResult>(apiPath`topics/${topicName}/subscriptions/${subscriptionName}/deferred/${action}-batch`, request);
   }
 
   /**
@@ -221,9 +244,9 @@ export class TopicService {
    * @param sequenceNumber - The sequence number of the dead letter message
    * @returns Observable with success status
    */
-  resubmitDeadLetterMessage(topicName: string, subscriptionName: string, sequenceNumber: number): Observable<{ success: boolean }> {
+  resubmitDeadLetterMessage(topicName: string, subscriptionName: string, sequenceNumber: number, newMessageIdOnDuplicateDetection = false): Observable<{ success: boolean }> {
     const url = apiPath`topics/${topicName}/subscriptions/${subscriptionName}/deadletter/${sequenceNumber}/resubmit`;
-    return this.api.post<{ success: boolean }>(url, {});
+    return this.api.post<{ success: boolean }>(url, { newMessageIdOnDuplicateDetection });
   }
 
   /**
@@ -235,8 +258,8 @@ export class TopicService {
    * @param sequenceNumbers - Array of sequence numbers to resubmit
    * @returns Observable with batch operation result containing success/failure counts and details
    */
-  resubmitDeadLetterMessages(topicName: string, subscriptionName: string, sequenceNumbers: number[]): Observable<BatchOperationResult> {
-    const request: ResubmitBatchRequest = { sequenceNumbers };
+  resubmitDeadLetterMessages(topicName: string, subscriptionName: string, sequenceNumbers: number[], newMessageIdOnDuplicateDetection = false): Observable<BatchOperationResult> {
+    const request: ResubmitBatchRequest = { sequenceNumbers, newMessageIdOnDuplicateDetection };
     return this.api.post<BatchOperationResult>(apiPath`topics/${topicName}/subscriptions/${subscriptionName}/deadletter/resubmit-batch`, request);
   }
 
@@ -269,8 +292,8 @@ export class TopicService {
   }
 
   /** Resubmits the given transfer dead-letter messages of a subscription to its topic. */
-  resubmitTransferDeadLetterMessages(topicName: string, subscriptionName: string, sequenceNumbers: number[]): Observable<BatchOperationResult> {
-    const request: ResubmitBatchRequest = { sequenceNumbers };
+  resubmitTransferDeadLetterMessages(topicName: string, subscriptionName: string, sequenceNumbers: number[], newMessageIdOnDuplicateDetection = false): Observable<BatchOperationResult> {
+    const request: ResubmitBatchRequest = { sequenceNumbers, newMessageIdOnDuplicateDetection };
     return this.api.post<BatchOperationResult>(apiPath`topics/${topicName}/subscriptions/${subscriptionName}/transferdeadletter/resubmit-batch`, request);
   }
 

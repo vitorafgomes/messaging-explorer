@@ -1,16 +1,13 @@
 <h2 mat-dialog-title>{{ creating ? 'Create' : 'Edit' }} {{ kind }}</h2>
 
 <mat-dialog-content>
-  <p class="context">
-    <mat-chip-set aria-label="Environment">
-      <mat-chip [disableRipple]="true">{{ context().environment }}</mat-chip>
-    </mat-chip-set>
+  <app-environment-line [mark]="context().mark">
     @if (creating) {
-      <span>{{ context().connection }}</span>
+      {{ context().where }}
     } @else {
-      <span><b>{{ entityName }}</b> on {{ context().connection }}</span>
+      <b>{{ entityName }}</b> on {{ context().where }}
     }
-  </p>
+  </app-environment-line>
 
   @if (kind === 'subscription') {
     <dl class="facts">
@@ -28,7 +25,7 @@
             ? 'Letters, digits, dot, dash and underscore. 50 characters at most.'
             : 'Letters, digits, dot, dash, underscore and slash. 260 characters at most.' }}
         </mat-hint>
-        <mat-error>{{ errorOf('name') }}</mat-error>
+        <mat-error><mat-icon aria-hidden="true">error_outline</mat-icon>{{ errorOf('name') }}</mat-error>
       </mat-form-field>
       <h3>Options</h3>
       <p class="note">Leave a field empty to keep the broker's default.</p>
@@ -45,11 +42,11 @@
                 @if (neverHint(f.key)) {
                   <mat-hint>Now: never. Leave empty to keep it.</mat-hint>
                 }
-                <mat-error>{{ errorOf(f.key + '.amount') }}</mat-error>
+                <mat-error><mat-icon aria-hidden="true">error_outline</mat-icon>{{ errorOf(f.key + '.amount') }}</mat-error>
               </mat-form-field>
               <mat-form-field class="unit">
                 <mat-label>Unit</mat-label>
-                <mat-select formControlName="unit" [aria-label]="f.label + ' unit'">
+                <mat-select formControlName="unit" [aria-label]="'Unit of ' + f.label">
                   @for (unit of units; track unit) {
                     <mat-option [value]="unit">{{ unit }}</mat-option>
                   }
@@ -61,7 +58,7 @@
             <mat-form-field>
               <mat-label>{{ f.label }}</mat-label>
               <input matInput type="number" min="1" step="1" [formControlName]="f.key" [errorStateMatcher]="showErrors">
-              <mat-error>{{ errorOf(f.key) }}</mat-error>
+              <mat-error><mat-icon aria-hidden="true">error_outline</mat-icon>{{ errorOf(f.key) }}</mat-error>
             </mat-form-field>
           }
           @case ('target') {
@@ -74,14 +71,14 @@
                 }
               </mat-select>
               <mat-hint>A queue or topic of this namespace.</mat-hint>
-              <mat-error>{{ errorOf(f.key) }}</mat-error>
+              <mat-error><mat-icon aria-hidden="true">error_outline</mat-icon>{{ errorOf(f.key) }}</mat-error>
             </mat-form-field>
           }
           @default {
             <mat-form-field class="wide">
               <mat-label>{{ f.label }}</mat-label>
               <textarea matInput rows="2" [formControlName]="f.key" [errorStateMatcher]="showErrors"></textarea>
-              <mat-error>{{ errorOf(f.key) }}</mat-error>
+              <mat-error><mat-icon aria-hidden="true">error_outline</mat-icon>{{ errorOf(f.key) }}</mat-error>
             </mat-form-field>
           }
         }
@@ -117,7 +114,7 @@
   }
 
   @if (!creating && changes().length) {
-    <section class="summary" aria-live="polite">
+    <section class="summary" aria-live="polite" aria-label="Summary of changes">
       <div>
         <b>{{ changes().length }} {{ changes().length === 1 ? 'change' : 'changes' }}</b>
         @for (change of changes(); track change.key) {
@@ -137,10 +134,10 @@
 
   @if (errorMessage()) {
     <div class="error" role="alert">
-      <mat-icon aria-hidden="true">error</mat-icon>
+      <mat-icon fontIcon="report" aria-hidden="true" />
       <span class="grow">{{ errorMessage() }}</span>
       @if (notFound()) {
-        <button mat-button type="button" (click)="refresh()">Refresh</button>
+        <button mat-stroked-button type="button" class="refresh" (click)="refresh()"><mat-icon fontIcon="refresh" />Refresh</button>
       }
     </div>
   }

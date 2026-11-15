@@ -6,7 +6,8 @@ import { MatIconModule } from '@angular/material/icon';
  * Bulk action type enumeration
  * Represents all available bulk operations
  */
-export type BulkActionType = 'delete' | 'resubmit' | 'move' | 'export' | 'compare' | 'cancel-scheduled';
+export type BulkActionType = 'delete' | 'resubmit' | 'move' | 'export' | 'compare' | 'cancel-scheduled'
+  | 'resubmit-deferred' | 'deadletter-deferred' | 'delete-deferred';
 
 /**
  * Bulk action event payload
@@ -37,24 +38,6 @@ export interface BulkActionEvent {
 
       @if (selectedCount > 0) {
         <div class="actions">
-          <button matButton="outlined" type="button" class="delete"
-                  (click)="onActionClick('delete')" [disabled]="disabled" title="Delete selected messages">
-            <mat-icon fontIcon="delete" aria-hidden="true"></mat-icon>
-            Delete
-          </button>
-          <span class="divider" aria-hidden="true"></span>
-
-          @if (showCancelScheduled) {
-            <button matButton="outlined" type="button" class="delete" disabledInteractive
-                    (click)="cancelScheduledBlockedReason ? null : onActionClick('cancel-scheduled')"
-                    [disabled]="disabled || !!cancelScheduledBlockedReason"
-                    [attr.aria-describedby]="cancelScheduledBlockedReason ? 'cancel-scheduled-reason' : null"
-                    [title]="cancelScheduledBlockedReason || 'Delete the selected scheduled messages before they are delivered'">Cancel scheduled</button>
-            @if (cancelScheduledBlockedReason) {
-              <span id="cancel-scheduled-reason" class="blocked-reason">{{ cancelScheduledBlockedReason }}</span>
-            }
-          }
-
           @if (showResubmit) {
             <button matButton="outlined" type="button" (click)="onActionClick('resubmit')" [disabled]="disabled"
                     title="Resubmit selected messages to main queue">
@@ -85,11 +68,45 @@ export interface BulkActionEvent {
             Export
           </button>
 
-          <button matButton type="button" (click)="onClearClick()" [disabled]="disabled" title="Clear selection">
-            <mat-icon fontIcon="close" aria-hidden="true"></mat-icon>
-            Clear
+          @if (showCancelScheduled) {
+            <button matButton="outlined" type="button" class="delete" disabledInteractive
+                    (click)="cancelScheduledBlockedReason ? null : onActionClick('cancel-scheduled')"
+                    [disabled]="disabled || !!cancelScheduledBlockedReason"
+                    [attr.aria-describedby]="cancelScheduledBlockedReason ? 'cancel-scheduled-reason' : null"
+                    [title]="cancelScheduledBlockedReason || 'Delete the selected scheduled messages before they are delivered'">Cancel scheduled</button>
+          }
+
+          @if (deferredCount > 0) {
+            <button matButton="outlined" type="button" (click)="onActionClick('resubmit-deferred')" [disabled]="disabled"
+                    title="Resubmit the selected deferred messages as active copies">
+              <mat-icon fontIcon="replay" aria-hidden="true"></mat-icon>
+              Resubmit deferred
+            </button>
+            <button matButton="outlined" type="button" (click)="onActionClick('deadletter-deferred')" [disabled]="disabled"
+                    title="Send the selected deferred messages to the dead-letter queue">Dead-letter deferred</button>
+          }
+
+          <button matButton type="button" (click)="onClearClick()" [disabled]="disabled" title="Clear selection">Clear</button>
+
+          <span class="divider" aria-hidden="true"></span>
+          <button matButton type="button" class="delete"
+                  (click)="onActionClick('delete')" [disabled]="disabled" title="Delete selected messages">
+            <mat-icon fontIcon="delete" aria-hidden="true"></mat-icon>
+            Delete {{ selectedCount }}
           </button>
+          @if (deferredCount > 0) {
+            <button matButton type="button" class="delete"
+                    (click)="onActionClick('delete-deferred')" [disabled]="disabled" title="Delete the selected deferred messages">
+              Delete {{ deferredCount }} deferred
+            </button>
+          }
         </div>
+        @if (showCancelScheduled && cancelScheduledBlockedReason) {
+          <p id="cancel-scheduled-reason" class="blocked-reason">Cancel scheduled is off: {{ cancelScheduledBlockedReason }}</p>
+        }
+        @if (deferredNote) {
+          <p class="blocked-reason deferred-note">{{ deferredNote }}</p>
+        }
       }
     </div>
   `,
@@ -131,6 +148,16 @@ export class BulkActionsToolbarComponent {
    * Why Cancel scheduled cannot run for the current selection; empty when it can
    */
   @Input() cancelScheduledBlockedReason = '';
+
+  /**
+   * How many selected messages are deferred and reachable by the deferred actions; 0 hides them
+   */
+  @Input() deferredCount = 0;
+
+  /**
+   * What the deferred actions leave out of the selection, and what the other actions cannot reach; empty says nothing
+   */
+  @Input() deferredNote = '';
 
   /**
    * Whether all action buttons should be disabled

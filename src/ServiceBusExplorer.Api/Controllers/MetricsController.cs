@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using ServiceBusExplorer.Core.Models;
+using ServiceBusExplorer.Core.Providers.Azure;
 using ServiceBusExplorer.Core.Services;
 
 namespace ServiceBusExplorer.Api.Controllers;
@@ -12,13 +13,81 @@ namespace ServiceBusExplorer.Api.Controllers;
 public class MetricsController : ControllerBase
 {
     private readonly IMetricsService _metricsService;
+    private readonly IConnectionManager _connectionManager;
+    private readonly AzureNamespaceMetricsReader _namespaceMetrics;
     private readonly ILogger<MetricsController> _logger;
 
-    public MetricsController(IMetricsService metricsService, ILogger<MetricsController> logger)
+    public MetricsController(
+        IMetricsService metricsService,
+        IConnectionManager connectionManager,
+        AzureNamespaceMetricsReader namespaceMetrics,
+        ILogger<MetricsController> logger)
     {
         _metricsService = metricsService;
+        _connectionManager = connectionManager;
+        _namespaceMetrics = namespaceMetrics;
         _logger = logger;
     }
+
+    /// <summary>The body of the 500 the namespace metrics route answers on an unexpected failure; always the same text.</summary>
+    internal const string NamespaceMetricsInternalError = "Failed to fetch namespace metrics.";
+
+    /// <summary>
+    /// Gets the Azure Monitor metrics of the namespace of a stored connection: incoming, outgoing, active and
+    /// dead-lettered messages, server errors and throttled requests, read with the connection's Entra ID credential
+    /// from its Azure resource ID. A connection that cannot be read answers 409 and a failed read 502, both with a
+    /// fixed <c>message</c> and a <c>code</c>; never the text of Azure Monitor, never made-up data.
+    /// </summary>
+    /// <param name="connectionId">Id of the stored connection.</param>
+    /// <param name="timeRange">Time range for the query (default: 1 hour).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    [HttpGet("connections/{connectionId}")]
+    public async Task<ActionResult<MetricsData>> GetNamespaceMetrics(
+        string connectionId,
+        [FromQuery] MetricsTimeRange timeRange = MetricsTimeRange.OneHour,
+        CancellationToken cancellationToken = default)
+    {
+        if (!Enum.IsDefined(timeRange))
+        {
+            return BadRequest(new { message = "Unknown time range." });
+        }
+
+        try
+        {
+            var connection = await _connectionManager.GetConnectionWithSecretAsync(connectionId);
+            if (connection == null)
+            {
+                return NotFound(new { message = "No connection with this id." });
+            }
+
+            return Ok(await _namespaceMetrics.ReadAsync(connection, timeRange, cancellationToken));
+        }
+        catch (NamespaceMetricsException ex)
+        {
+            _logger.LogWarning("Namespace metrics of connection {ConnectionId} not read: {Reason}", connectionId, ex.Reason);
+            var refused = ex.Reason is NamespaceMetricsFailure.NotAzure or NamespaceMetricsFailure.ConnectionString or NamespaceMetricsFailure.NoResourceId;
+            return StatusCode(refused ? 409 : 502, new { message = ex.Message, code = CodeOf(ex.Reason) });
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError("Namespace metrics of connection {ConnectionId} failed ({ExceptionType})", connectionId, ex.GetType().Name);
+            return StatusCode(500, new { message = NamespaceMetricsInternalError });
+        }
+    }
+
+    private static string CodeOf(NamespaceMetricsFailure reason) => reason switch
+    {
+        NamespaceMetricsFailure.NotAzure => "not-azure",
+        NamespaceMetricsFailure.ConnectionString => "connection-string",
+        NamespaceMetricsFailure.NoResourceId => "no-resource-id",
+        NamespaceMetricsFailure.SignIn => "sign-in",
+        NamespaceMetricsFailure.Forbidden => "forbidden",
+        _ => "failed"
+    };
 
     /// <summary>
     /// Gets Azure Monitor metrics for a specific queue.

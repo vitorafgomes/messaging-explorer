@@ -29,5 +29,29 @@
 }
 
 .needs-one {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   color: var(--mat-sys-error);
+}
+
+.name-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+
+  .label,
+  .hint {
+    font: var(--mat-sys-body-small);
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  .value {
+    font: var(--mat-sys-body-large);
+  }
+}
+
+.small {
+  --mat-button-outlined-container-height: 32px;
 }

@@ -3,6 +3,18 @@ import { BehaviorSubject, Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { BatchOperationFailure, MessageInfo, SubQueue } from '../models';
 
+/** The option that sends a copy with a new message id into a target that detects duplicates, as every dialog words it. */
+export const NEW_MESSAGE_ID_OPTION = {
+  label: 'Send with a new message ID',
+  hint: 'The copy gets a new message ID and keeps the original in the x-original-message-id property. Without it the target would drop the copy as a duplicate, so it is refused.'
+} as const;
+
+/** True when the server refused a message because its target detects duplicates and no new message id was asked for. */
+export function isDuplicateRefusal(failure: Pick<BatchOperationFailure, 'error'>): boolean {
+  // ponytail: matches the fixed refusal text of the Azure provider; replace with a field once the API carries one.
+  return /^The target detects duplicates/.test(failure.error ?? '');
+}
+
 /**
  * True when the failure is a message that was sent and could not be removed from its
  * source: resending it would deliver a second copy, so it is never retried.

@@ -17,7 +17,7 @@ describe('ImportDefinitionsDialogComponent: a dry run first, then create only wh
   const DOCUMENT = {
     version: 1,
     entities: {
-      queues: [{ name: 'orders' }, { name: 'billing' }, { name: 'orders-archive' }],
+      queues: [{ name: 'orders' }, { name: 'billing', options: { maxDeliveryCount: 10 } }, { name: 'orders-archive' }],
       topics: [{ name: 'events', subscriptions: [{ name: 'warehouse', rules: [{ name: 'a' }, { name: 'b' }] }] }]
     }
   };
@@ -26,7 +26,14 @@ describe('ImportDefinitionsDialogComponent: a dry run first, then create only wh
     dryRun: true,
     items: [
       { kind: 'Queue', name: 'orders', topic: null, outcome: 'Exists', differingFields: null, reason: null },
-      { kind: 'Queue', name: 'billing', topic: null, outcome: 'Differs', differingFields: ['maxDeliveryCount', 'lockDuration'], reason: null },
+      {
+        kind: 'Queue', name: 'billing', topic: null, outcome: 'Differs', differingFields: ['maxDeliveryCount', 'lockDuration', 'forwardTo'], reason: null,
+        differences: [
+          { field: 'maxDeliveryCount', current: 5, inFile: 10 },
+          { field: 'lockDuration', current: '00:01:00', inFile: '00:00:30' },
+          { field: 'forwardTo', current: '', inFile: 'orders' }
+        ]
+      },
       { kind: 'Queue', name: 'orders-archive', topic: null, outcome: 'Create', differingFields: null, reason: null },
       { kind: 'Topic', name: 'events', topic: null, outcome: 'Exists', differingFields: null, reason: null },
       { kind: 'Subscription', name: 'warehouse', topic: 'events', outcome: 'Create', differingFields: null, reason: null }
@@ -37,7 +44,7 @@ describe('ImportDefinitionsDialogComponent: a dry run first, then create only wh
     dryRun: false,
     items: [
       { kind: 'Queue', name: 'orders', topic: null, outcome: 'Exists', differingFields: null, reason: null },
-      { kind: 'Queue', name: 'billing', topic: null, outcome: 'Differs', differingFields: ['maxDeliveryCount'], reason: null },
+      { kind: 'Queue', name: 'billing', topic: null, outcome: 'Differs', differingFields: ['maxDeliveryCount', 'lockDuration'], reason: null },
       { kind: 'Queue', name: 'orders-archive', topic: null, outcome: 'Created', differingFields: null, reason: null },
       { kind: 'Topic', name: 'events', topic: null, outcome: 'Exists', differingFields: null, reason: null },
       { kind: 'Subscription', name: 'warehouse', topic: 'events', outcome: 'Failed', differingFields: null, reason: 'The broker did not create it.' }
@@ -61,7 +68,7 @@ describe('ImportDefinitionsDialogComponent: a dry run first, then create only wh
         },
         {
           provide: ConnectionGroupService,
-          useValue: { getGroups: () => of([{ id: 'g-client', name: 'Contoso', type: 'client' }, { id: 'g-env', name: 'Production', type: 'environment' }]) }
+          useValue: { getGroups: () => of([{ id: 'g-client', name: 'Contoso', type: 'client' }, { id: 'g-env', name: 'Production', type: 'environment', isProduction: true }]) }
         }
       ]
     });
@@ -86,29 +93,99 @@ describe('ImportDefinitionsDialogComponent: a dry run first, then create only wh
     fixture.detectChanges();
   };
   const row = (li: Element) => Array.from(li.children).map(text).join(' ');
-  const group = (label: string) => Array.from(el.querySelectorAll(`section[aria-label="${label}"] li`)).map(row);
+  const cells = (tr: Element) => Array.from(tr.children).map(text).join(' | ');
+  const table = () => Array.from(el.querySelectorAll('table.dry-run tr')).map(cells);
   const facts = () => Array.from(el.querySelectorAll('.fact')).map(f => `${text(f.querySelector('dt'))}: ${text(f.querySelector('dd'))}`);
 
-  it('runs the dry run on the file as read and shows what would be created, what exists and what differs, with the fields', async () => {
+  it('as Monitoring.dc.html draws it: the PRODUCTION chip, then "Into <connection>"', () => {
+    open();
+    const chip = el.querySelector('.environment-line .environment-chip') as HTMLElement;
+
+    expect(chip?.textContent?.replace('warning', '').trim(), 'the import opens with the PRODUCTION chip').toBe('PRODUCTION');
+    expect(chip.classList.contains('production'), 'a production environment takes the error container').toBe(true);
+    expect(text(el.querySelector('.environment-line .where'))).toBe('Into Contoso (contoso-prod)');
+  });
+
+  it('as Monitoring.dc.html draws it: the dry run as a table of Entity, Kind, Result and Detail, in the order of the file', async () => {
     open();
 
     await choose(JSON.stringify(DOCUMENT));
 
     expect(dryRun).toHaveBeenCalledExactlyOnceWith(DOCUMENT);
     expect(importFn).not.toHaveBeenCalled();
-    expect(text(el.querySelector('.file .grow'))).toBe('contoso-dev.definitions.json: 3 queues, 1 topic, 1 subscription, 2 rules');
-    expect(group('Would be created')).toStrictEqual(['orders-archive queue', 'warehouse subscription in events']);
-    expect(group('Already exist')).toStrictEqual(['orders queue', 'events topic']);
-    expect(group('Exist and differ')).toStrictEqual(['billing queue Differs in: maxDeliveryCount, lockDuration']);
+    expect(text(el.querySelector('.file .grow')), 'the file records no source, so the line names the file and its counts').toBe(
+      'contoso-dev.definitions.json: 3 queues, 1 topic, 1 subscription, 2 rules');
+    expect(table(), 'each entity with its result chip and the detail the artboard draws; a difference gives its value here and in the file').toStrictEqual([
+      'Entity | Kind | Result | Detail',
+      'orders | Queue | check_circle Already exists | Same definition. Left as it is.',
+      'billing | Queue | warning Exists and differs | Max delivery count is 5 here and 10 in the file. Lock duration is 00:01:00 here and 00:00:30 in the file. Forward to is not set here and orders in the file. Left as it is.',
+      'orders-archive | Queue | add Would be created | With the configuration in the file.',
+      'events | Topic | check_circle Already exists | Same definition. Left as it is.',
+      'warehouse in events | Subscription | add Would be created | With its 2 rules.'
+    ]);
+    expect(text(el.querySelector('.notice span')), 'the drawn sentence counts what exists and what differs apart').toBe(
+      'Import only creates. 2 entities would be created. 2 already exist and 1 exists and differs: these 3 stay exactly as they are. Nothing is updated and nothing is deleted.');
+  });
+
+  it('as Monitoring.dc.html draws it: a file that names its source reads "exported from <source>" before its counts', async () => {
+    open();
+
+    await choose(JSON.stringify({ ...DOCUMENT, source: 'contoso-dev' }));
+
+    expect(text(el.querySelector('.file .grow')), 'the file line names the namespace the file was exported from').toBe(
+      'contoso-dev.definitions.json exported from contoso-dev: 3 queues, 1 topic, 1 subscription, 2 rules');
+  });
+
+  it('a source that is not a text, or is blank, is not shown: the file line stays as for a file without one', async () => {
+    for (const source of [42, '  ', { host: 'x' }, null]) {
+      TestBed.resetTestingModule();
+      open();
+
+      await choose(JSON.stringify({ ...DOCUMENT, source }));
+
+      expect(text(el.querySelector('.file .grow')), `source ${JSON.stringify(source)} is not shown`).toBe(
+        'contoso-dev.definitions.json: 3 queues, 1 topic, 1 subscription, 2 rules');
+    }
+  });
+
+  it('a subscription that exists says its rule is the same, one whose rules differ says so, and the fact names what would be created', async () => {
+    const document = { version: 1, entities: { queues: [{ name: 'orders-archive' }], topics: [{ name: 'events', subscriptions: [{ name: 'email', rules: [{ name: '$Default' }] }] }] } };
+    open(() => of({
+      dryRun: true,
+      items: [
+        { kind: 'Queue', name: 'orders-archive', topic: null, outcome: 'Create', differingFields: null, reason: null },
+        { kind: 'Subscription', name: 'email', topic: 'events', outcome: 'Exists', differingFields: null, reason: null },
+        { kind: 'Subscription', name: 'audit', topic: 'events', outcome: 'Differs', differingFields: ['rules'], reason: null, differences: [{ field: 'rules', current: null, inFile: null }] }
+      ]
+    }));
+
+    await choose(JSON.stringify(document));
+
+    expect(table().slice(1)).toStrictEqual([
+      'orders-archive | Queue | add Would be created | With the configuration in the file.',
+      'email in events | Subscription | check_circle Already exists | Same definition and the same rule. Left as it is.',
+      'audit in events | Subscription | warning Exists and differs | The rules differ here. Left as it is.'
+    ]);
     expect(text(el.querySelector('.notice span'))).toBe(
-      'Import only creates. 2 entities would be created. 3 already exist and stay exactly as they are. Nothing is updated and nothing is deleted.');
+      'Import only creates. 1 entity would be created. 1 already exists and 1 exists and differs: these 2 stay exactly as they are. Nothing is updated and nothing is deleted.');
+    expect(facts()[2], 'the names that would be created').toBe('Would be created: Queue orders-archive');
+  });
+
+  it('one entity left as it is, and none that differs, reads "1 already exists: it stays exactly as it is."', async () => {
+    open(() => of({ dryRun: true, items: PLAN.items.filter(i => i.name === 'orders' || i.name === 'orders-archive') }));
+
+    await choose(JSON.stringify(DOCUMENT));
+
+    expect(text(el.querySelector('.notice span'))).toBe(
+      'Import only creates. 1 entity would be created. 1 already exists: it stays exactly as it is. Nothing is updated and nothing is deleted.');
   });
 
   it('the confirmation names the target connection and environment, and Create stays disabled until the namespace is typed exactly', async () => {
     open();
     await choose(JSON.stringify(DOCUMENT));
 
-    expect(facts()).toStrictEqual(['Connection: contoso (contoso-prod)', 'Environment: Contoso / Production', 'Would be created: 2']);
+    expect(facts(), 'the "Would be created" fact lists the names as drawn').toStrictEqual([
+      'Connection: contoso (contoso-prod)', 'Environment: Contoso / Production', 'Would be created: Queue orders-archive, subscription warehouse in events with 2 rules']);
     expect(text(create())).toBe('upload Create 2 entities');
     expect(create()!.disabled).toBe(true);
 
@@ -135,7 +212,7 @@ describe('ImportDefinitionsDialogComponent: a dry run first, then create only wh
     expect(text(el.querySelector('[role="status"]'))).toBe('1 created, 3 left as they are, 1 failed.');
     expect(Array.from(el.querySelectorAll('.results li')).map(row)).toStrictEqual([
       'orders queue Already existed. Left as it is.',
-      'billing queue Exists with another configuration (maxDeliveryCount). Left as it is.',
+      'billing queue Exists with another configuration (Max delivery count, Lock duration). Left as it is.',
       'orders-archive queue Created',
       'events topic Already existed. Left as it is.',
       'warehouse subscription in events Failed: The broker did not create it.'

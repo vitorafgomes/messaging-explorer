@@ -6,6 +6,8 @@ export interface ConnectionGroup {
   description?: string;
   createdAt: Date;
   order?: number;
+  /** An environment marked production in Manage Groups. Absent or false for a client and for older files. */
+  isProduction?: boolean;
 }
 
 export interface ConnectionGroupHierarchy {

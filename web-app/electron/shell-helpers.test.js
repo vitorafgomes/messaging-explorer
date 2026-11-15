@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const path = require('node:path');
 const {
   isSafeExternalUrl,
   normalizeUpdateChannel,
@@ -301,4 +302,82 @@ test('the portable Windows build cannot update itself; the installed one can', (
 test('on Linux the AppImage can update itself; the deb package cannot', () => {
   assert.equal(selfUpdateBlocker('linux', { APPIMAGE: '/home/user/Messaging-Explorer.AppImage' }), null);
   assert.equal(selfUpdateBlocker('linux', {}), 'linux-package');
+});
+
+test('the data file is data/workspace.json under the user data folder', () => {
+  const { dataFilePath } = require('./shell-helpers');
+  assert.equal(dataFilePath('/home/u/.config/Messaging Explorer'), path.join('/home/u/.config/Messaging Explorer', 'data', 'workspace.json'));
+});
+
+test('Show in folder shows the file when it exists', () => {
+  const { showDataFile } = require('./shell-helpers');
+  const shown = [];
+  assert.deepEqual(showDataFile('/d/workspace.json', () => true, (f) => shown.push(f)), { status: 'ok' });
+  assert.deepEqual(shown, ['/d/workspace.json']);
+});
+
+test('Show in folder says nothing is saved yet when the file does not exist, and opens nothing', () => {
+  const { showDataFile } = require('./shell-helpers');
+  const shown = [];
+  assert.deepEqual(showDataFile('/d/workspace.json', () => false, (f) => shown.push(f)),
+    { status: 'error', message: 'Nothing is saved yet, so there is no file to show.' });
+  assert.deepEqual(shown, []);
+});
+
+test('Show in folder says the file manager could not be opened when the system call throws, never throws itself', () => {
+  const { showDataFile } = require('./shell-helpers');
+  assert.deepEqual(showDataFile('/d/workspace.json', () => true, () => { throw new Error('no desktop'); }),
+    { status: 'error', message: 'The file manager of this computer could not be opened.' });
+});
+
+test('Ctrl+N, or Cmd+N on darwin, opens the Connections screen, in packaged and development builds', () => {
+  const newConnection = { win32: key('KeyN', { control: true }), linux: key('KeyN', { control: true }), darwin: key('KeyN', { meta: true }) };
+  for (const [platform, input] of Object.entries(newConnection)) {
+    for (const isDev of [false, true]) {
+      assert.equal(shellShortcut(input, { platform, isDev }), 'openConnections', `${platform}, isDev ${isDev}: Ctrl N or Cmd N must open the Connections screen`);
+    }
+  }
+});
+
+test('Ctrl+N on darwin, Ctrl+Shift+N and Ctrl+Alt+N are left to the page', () => {
+  assert.equal(shellShortcut(key('KeyN', { control: true }), { platform: 'darwin', isDev: false }), null, 'on darwin the shortcut is Cmd N, not Ctrl N');
+  assert.equal(shellShortcut(key('KeyN', { control: true, shift: true }), { platform: 'linux', isDev: false }), null, 'Ctrl Shift N is not the new connection shortcut');
+  assert.equal(shellShortcut(key('KeyN', { control: true, alt: true }), { platform: 'win32', isDev: false }), null, 'Ctrl Alt N is not the new connection shortcut');
+});
+
+function fakeWindow({ destroyed = false } = {}) {
+  const opened = [];
+  const webContents = { openDevTools: () => opened.push('open') };
+  const win = {
+    isDestroyed: () => destroyed,
+    get webContents() {
+      if (destroyed) throw new TypeError('Object has been destroyed');
+      return webContents;
+    }
+  };
+  return { win, webContents, opened };
+}
+
+test('Open developer tools opens them for the main window when the main window asks', () => {
+  const { openDevTools } = require('./shell-helpers');
+  const { win, webContents, opened } = fakeWindow();
+  openDevTools(webContents, win);
+  assert.deepEqual(opened, ['open'], 'the main window asking must open its own developer tools, once');
+});
+
+test('Open developer tools does nothing when another page asks, so no sender can choose a target', () => {
+  const { openDevTools } = require('./shell-helpers');
+  const { win, opened } = fakeWindow();
+  const otherPage = { openDevTools: () => opened.push('other') };
+  openDevTools(otherPage, win);
+  assert.deepEqual(opened, [], 'a sender other than the main window webContents must open no developer tools');
+});
+
+test('Open developer tools does nothing and does not throw when the window is gone or destroyed', () => {
+  const { openDevTools } = require('./shell-helpers');
+  const { win, webContents, opened } = fakeWindow({ destroyed: true });
+  assert.doesNotThrow(() => openDevTools(webContents, null), 'a closed main window must not make the handler throw');
+  assert.doesNotThrow(() => openDevTools(webContents, undefined), 'a main window never created must not make the handler throw');
+  assert.doesNotThrow(() => openDevTools(webContents, win), 'a destroyed main window must not make the handler throw');
+  assert.deepEqual(opened, [], 'no developer tools open when the window is gone');
 });

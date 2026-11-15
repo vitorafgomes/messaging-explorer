@@ -5,6 +5,7 @@ import {
   MessageDiffDialogData,
 } from './message-diff-dialog.component';
 import { MessageInfo } from '../../core/models';
+import { ConnectionGroupService, ConnectionService } from '../../core/services';
 
 function makeMessage(overrides: Partial<MessageInfo> = {}): MessageInfo {
   return {
@@ -29,6 +30,9 @@ describe('MessageDiffDialogComponent', () => {
     TestBed.configureTestingModule({
       imports: [MessageDiffDialogComponent],
       providers: [
+        // The environment line reads the active connection; none is known here, so nothing is requested.
+        { provide: ConnectionService, useValue: { currentTarget: 'sample.example.net', currentConnectionId: null } },
+        { provide: ConnectionGroupService, useValue: {} },
         { provide: MAT_DIALOG_DATA, useValue: data },
         { provide: MatDialogRef, useValue: dialogRefMock },
       ],
@@ -144,5 +148,54 @@ describe('MessageDiffDialogComponent', () => {
     const messageIdProp = component.propertyComparisons.find(p => p.name === 'Message ID');
     expect(messageIdProp).toBeDefined();
     expect(messageIdProp!.status).toBe('same');
+  });
+
+  const text = (e: Element | null | undefined) => (e?.textContent ?? '').replace(/\s+/g, ' ').trim();
+
+  it('as Send.dc.html draws it: each body line carries a "-" or "+" mark and says ", removed" or ", added" to a screen reader', () => {
+    const { fixture } = setup({
+      left: makeMessage({ body: 'one\ntwo\nthree' }),
+      right: makeMessage({ body: 'one\nTWO\nthree' }),
+      entityName: 'test-queue',
+    });
+    const el = fixture.nativeElement as HTMLElement;
+    const lines = (side: number) => Array.from(el.querySelectorAll('.diff-panel')[side].querySelectorAll('.diff-line')).map(line => [
+      text(line.querySelector('.mark')), text(line.querySelector('.line-text')), text(line.querySelector('.visually-hidden'))
+    ]);
+
+    expect(lines(0), 'the left side marks the removed line "-" and says ", removed"').toStrictEqual([
+      ['', 'one', ''], ['-', 'two', ', removed'], ['', 'three', '']
+    ]);
+    expect(lines(1), 'the right side marks the added line "+" and says ", added"').toStrictEqual([
+      ['', 'one', ''], ['+', 'TWO', ', added'], ['', 'three', '']
+    ]);
+  });
+
+  it('as Send.dc.html draws it: a missing value reads "Empty" in the properties and the application properties', () => {
+    const { fixture } = setup({
+      left: makeMessage({ partitionKey: 'customer-1042', applicationProperties: {} }),
+      right: makeMessage({ applicationProperties: { carrier: 'SAMPLE-CARRIER' } }),
+      entityName: 'test-queue',
+    });
+    const el = fixture.nativeElement as HTMLElement;
+    const tab = (label: string) => {
+      (Array.from(el.querySelectorAll('.section-tab')).find(b => text(b) === label) as HTMLButtonElement).click();
+      fixture.detectChanges();
+    };
+    const row = (name: string) => Array.from(el.querySelectorAll('tbody tr')).map(tr => Array.from(tr.children).map(text)).find(cells => cells[0] === name);
+
+    tab('Properties');
+    expect(row('Partition Key'), 'a property only one message has reads "Empty" on the other side').toStrictEqual(['Partition Key', 'customer-1042', 'Empty', 'Only Left']);
+
+    tab('App Properties');
+    expect(row('carrier'), 'an application property only one message has reads "Empty" on the other side').toStrictEqual(['carrier', 'Empty', 'SAMPLE-CARRIER', 'Only Right']);
+  });
+
+  it('as Send.dc.html draws it: the list of Body, Properties and App Properties is named "What to compare"', () => {
+    const { fixture } = setup({ left: makeMessage(), right: makeMessage(), entityName: 'test-queue' });
+    const nav = (fixture.nativeElement as HTMLElement).querySelector('nav.sections')!;
+
+    expect(nav.getAttribute('aria-label'), 'the section list of the diff is named "What to compare"').toBe('What to compare');
+    expect(Array.from(nav.querySelectorAll('button')).map(text), 'the sections compared').toStrictEqual(['Body', 'Properties', 'App Properties']);
   });
 });

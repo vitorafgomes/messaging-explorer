@@ -4,7 +4,7 @@ const { spawn } = require('child_process');
 const { autoUpdater } = require('electron-updater');
 const crypto = require('crypto');
 const Store = require('electron-store');
-const { isSafeExternalUrl, normalizeUpdateChannel, applyUpdateChannel, waitForHealth, stopProcess, applicationMenuTemplate, mainWindowOptions, shellShortcut, selfUpdateBlocker } = require('./shell-helpers');
+const { dataFilePath, showDataFile, openDevTools, isSafeExternalUrl, normalizeUpdateChannel, applyUpdateChannel, waitForHealth, stopProcess, applicationMenuTemplate, mainWindowOptions, shellShortcut, selfUpdateBlocker } = require('./shell-helpers');
 
 // Generate a per-session API secret for Electron <-> .NET API authentication
 const API_SECRET = crypto.randomBytes(32).toString('hex');
@@ -495,7 +495,9 @@ function createWindow() {
     event.preventDefault();
     if (action === 'toggleFullScreen') {
       mainWindow.setFullScreen(!mainWindow.isFullScreen());
-    } else {
+    } else if (action === 'openConnections') {
+      mainWindow.webContents.send('navigate', '/connections');
+    } else if (action === 'toggleDevTools') {
       mainWindow.webContents.toggleDevTools();
     }
   });
@@ -617,8 +619,7 @@ function getApiPath() {
 
 function startApi() {
   const fs = require('fs');
-  const userDataPath = app.getPath('userData');
-  const serviceBusDataPath = path.join(userDataPath, 'data');
+  const serviceBusDataPath = path.dirname(dataFilePath(app.getPath('userData')));
   if (!fs.existsSync(serviceBusDataPath)) {
     fs.mkdirSync(serviceBusDataPath, { recursive: true });
   }
@@ -951,3 +952,10 @@ ipcMain.on('connections-updated', () => {
 
 // IPC: why this package cannot update itself, or null
 ipcMain.handle('get-self-update-blocker', () => selfUpdateBlocker(process.platform, process.env));
+
+ipcMain.handle('get-data-file', () => dataFilePath(app.getPath('userData')));
+
+ipcMain.handle('show-data-file', () =>
+  showDataFile(dataFilePath(app.getPath('userData')), (file) => require('fs').existsSync(file), (file) => shell.showItemInFolder(file)));
+
+ipcMain.handle('open-dev-tools', (event) => openDevTools(event.sender, mainWindow));

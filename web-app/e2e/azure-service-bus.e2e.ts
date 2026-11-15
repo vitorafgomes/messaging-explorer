@@ -23,9 +23,8 @@ test.describe('Azure Service Bus emulator', () => {
 
     await page.getByRole('button', { name: 'Add Connection' }).click();
     await page.getByLabel('Connection Name').fill('orders-servicebus');
-    await page.getByLabel('Authentication').click();
-    await page.getByRole('option', { name: 'Connection string' }).click();
-    await page.getByLabel('Connection String').fill(process.env['E2E_AZURE_CONNECTION_STRING'] ?? '');
+    await page.getByRole('radio', { name: 'Connection string' }).check();
+    await page.getByLabel('Connection String', { exact: true }).fill(process.env['E2E_AZURE_CONNECTION_STRING'] ?? '');
     await shoot(page, 'connection-dialog-servicebus');
     await page.getByRole('button', { name: 'Save' }).click();
 
@@ -33,7 +32,7 @@ test.describe('Azure Service Bus emulator', () => {
     await expect(card.getByRole('heading', { name: 'orders-servicebus' })).toBeVisible();
     await card.getByRole('button', { name: 'Connect' }).click();
     await expect(page).toHaveURL(/#\/entities$/);
-    await expect(page.locator('.connection-badge.connected')).toBeVisible();
+    await expect(page.locator('mat-toolbar .broker', { hasText: 'Connected to' })).toBeVisible();
     await expect(treeNode(page, SEED.queue)).toBeVisible();
     await expect(treeNode(page, SEED.topic)).toBeVisible();
     await shoot(page, 'entities-servicebus');
@@ -76,7 +75,7 @@ test.describe('Azure Service Bus emulator', () => {
     const body = '{"orderId":"order-3001"}';
     await open(page, 'entities');
     await treeNode(page, SEED.queue).click();
-    await page.getByRole('button', { name: 'Send Message' }).click();
+    await page.getByRole('button', { name: 'Send', exact: true }).click();
     await page.getByPlaceholder('{"key": "value"}').fill(body);
     await shoot(page, 'send-message-dialog-servicebus');
     await page.locator('mat-dialog-container').getByRole('button', { name: 'Send', exact: true }).click();
@@ -86,5 +85,49 @@ test.describe('Azure Service Bus emulator', () => {
     await expect(messageBodies(page)).toHaveText([...SEED.activeBodies, body]);
     await messageBodies(page).last().scrollIntoViewIfNeeded();
     await shoot(page, 'messages-after-send-servicebus');
+  });
+
+  test('resubmits one message of the dead-letter queue to the queue, and the results name it', async ({ page }) => {
+    await open(page, 'entities');
+    await treeNode(page, SEED.queue).click();
+    await page.getByRole('button', { name: 'View messages' }).click();
+    await messagesDialog(page).getByRole('button', { name: /Dead Letter/ }).click();
+    await expect(messageBodies(page)).toHaveText(SEED.deadLetterBodies);
+
+    await messagesDialog(page).locator('.message-card input[type="checkbox"]').first().check();
+    await messagesDialog(page).locator('app-bulk-actions-toolbar').getByRole('button', { name: 'Resubmit' }).click();
+    const results = page.locator('mat-dialog-container', { hasText: 'Successful' });
+    await expect(results).toBeVisible();
+    await expect(results.locator('.stat-card.success .stat-value')).toHaveText('1');
+    await shoot(page, 'resubmit-results-servicebus');
+    await results.getByRole('button', { name: 'Close' }).click();
+
+    await expect(messageBodies(page)).toHaveText([SEED.deadLetterBodies[1]]);
+    await messagesDialog(page).getByRole('button', { name: /Active Messages/ }).click();
+    await messagesDialog(page).locator('button.refresh').first().click();
+    await expect(messageBodies(page).filter({ hasText: 'order-0901' })).toHaveCount(1);
+  });
+
+  test('deletes a selection of active messages after its confirmation, and only those', async ({ page }) => {
+    await open(page, 'entities');
+    await treeNode(page, SEED.queue).click();
+    await page.getByRole('button', { name: 'View messages' }).click();
+    const [deleted, ...kept] = SEED.activeBodies;
+    await expect(messageBodies(page).filter({ hasText: 'order-1001' })).toHaveCount(1);
+
+    await messagesDialog(page).locator('.message-card', { hasText: 'order-1001' }).locator('input[type="checkbox"]').check();
+    await messagesDialog(page).locator('app-bulk-actions-toolbar').getByRole('button', { name: 'Delete 1' }).click();
+    const confirm = page.locator('mat-dialog-container', { hasText: 'Delete Messages' });
+    await expect(confirm).toBeVisible();
+    await shoot(page, 'delete-confirm-servicebus');
+    await confirm.getByRole('button', { name: 'Delete', exact: true }).click();
+    const results = page.locator('mat-dialog-container', { hasText: 'Successful' });
+    await expect(results.locator('.stat-card.success .stat-value')).toHaveText('1');
+    await results.getByRole('button', { name: 'Close' }).click();
+
+    for (const body of kept) {
+      await expect(messageBodies(page).filter({ hasText: JSON.parse(body).orderId }), `${body} is kept, read again after the delete`).toHaveCount(1);
+    }
+    await expect(messageBodies(page).filter({ hasText: 'order-1001' }), `${deleted} is gone from the list read again`).toHaveCount(0);
   });
 });

@@ -57,6 +57,19 @@ public sealed class AzureServiceBusProviderTests(AzureServiceBusFixture fixture)
         Assert.True(await new AzureServiceBusProvider().TestConnectionAsync(fixture.CreateManagementConfig()));
     }
 
+    /// <summary>The emulator speaks AMQP on 5672 and no WebSockets, so this pins that a connection with no transport set keeps AMQP.</summary>
+    [Fact]
+    public async Task A_connection_with_no_transport_set_sends_and_peeks_over_AMQP_as_before()
+    {
+        var queue = await CreateQueueAsync("amqp");
+
+        await _messaging.SendMessageAsync(queue, new SendMessageRequest { Body = "over amqp" });
+
+        Assert.Equal(ServiceBusTransportType.AmqpTcp, AzureServiceBusProvider.BuildClientOptions(fixture.CreateMessagingConfig()).TransportType);
+        Assert.Null(AzureServiceBusProvider.BuildClientOptions(fixture.CreateMessagingConfig()).WebProxy);
+        Assert.Equal("over amqp", Assert.Single(await _messaging.PeekMessagesAsync(queue, 1)).Body);
+    }
+
     [Fact]
     public async Task TestConnection_is_false_for_a_closed_port()
     {
@@ -104,13 +117,13 @@ public sealed class AzureServiceBusProviderTests(AzureServiceBusFixture fixture)
     }
 
     [Fact]
-    public async Task Queue_details_show_the_configured_values_and_the_status_instead_of_zeros()
+    public async Task A_queue_created_with_a_2_minute_lock_7_deliveries_and_sessions_shows_exactly_those_values_and_its_status()
     {
         var queue = Name(_queues, "details");
         await _management.CreateQueueAsync(queue, new QueueCreateOptions
         {
-            LockDuration = TimeSpan.FromSeconds(45),
-            MaxDeliveryCount = 3,
+            LockDuration = TimeSpan.FromMinutes(2),
+            MaxDeliveryCount = 7,
             RequiresSession = true,
             DefaultMessageTimeToLive = TimeSpan.FromMinutes(30),
             DeadLetteringOnMessageExpiration = true
@@ -121,7 +134,7 @@ public sealed class AzureServiceBusProviderTests(AzureServiceBusFixture fixture)
         Assert.NotNull(shown);
         Assert.Equal(queue, shown.Name);
         Assert.Equal(
-            (TimeSpan.FromSeconds(45), 3, true, TimeSpan.FromMinutes(30), true, 100L, "Active"),
+            (TimeSpan.FromMinutes(2), 7, true, TimeSpan.FromMinutes(30), true, 100L, "Active"),
             (shown.LockDuration, shown.MaxDeliveryCount, shown.RequiresSession, shown.DefaultMessageTimeToLive, shown.DeadLetteringOnMessageExpiration, shown.MaxSizeInMegabytes, shown.Status));
     }
 
@@ -163,6 +176,31 @@ public sealed class AzureServiceBusProviderTests(AzureServiceBusFixture fixture)
 
     private async Task<List<string?>> RuleNamesAsync(string topic) =>
         (await _management.GetRulesAsync(topic, "audit")).Select(r => r.Name).ToList();
+
+    [Fact]
+    public async Task The_emulator_namespace_reads_as_a_Standard_namespace_with_no_units_no_alias_and_the_256_KB_limit()
+    {
+        var read = await _management.GetNamespacePropertiesAsync(CancellationToken.None);
+
+        Assert.False(string.IsNullOrEmpty(read.Name), "The namespace read names the namespace");
+        Assert.Equal(("Standard", (int?)null, (string?)null, 256L * 1024), (read.Tier, read.MessagingUnits, read.Alias, read.MaxMessageSizeInBytes));
+        Assert.True(read.CreatedTime > DateTimeOffset.MinValue && read.ModifiedTime >= read.CreatedTime,
+            $"The times are the broker's: created {read.CreatedTime:o}, modified {read.ModifiedTime:o}");
+    }
+
+    [Fact]
+    public async Task A_topic_read_shows_each_subscriptions_status_and_rule_count()
+    {
+        var topic = await TopicWithSubscriptionAsync("rule-count");
+        await _management.CreateSubscriptionAsync(topic, "billing");
+        await _management.CreateRuleAsync(topic, "billing", new SubscriptionRuleInfo { Name = "high", FilterType = RuleFilterType.Sql, SqlExpression = "priority > 5" });
+
+        var read = Assert.IsType<TopicInfo>(await _management.GetTopicAsync(topic));
+
+        Assert.Equal(
+            [("audit", "Active", (int?)1), ("billing", "Active", (int?)2)],
+            read.Subscriptions.OrderBy(s => s.Name).Select(s => (s.Name, s.Status, s.RuleCount)));
+    }
 
     [Fact]
     public async Task The_default_rule_of_a_subscription_is_listed_and_read_as_a_true_filter()
@@ -379,6 +417,29 @@ public sealed class AzureServiceBusProviderTests(AzureServiceBusFixture fixture)
         Assert.Equal("broadcast", Assert.Single(await PeekSubscriptionWhenForwardedAsync(topic, "second")).Body);
     }
 
+    [Fact]
+    public async Task A_topic_batch_larger_than_one_sdk_batch_arrives_whole_at_a_subscription()
+    {
+        var topic = Name(_topics, "big-batch");
+        await fixture.Admin.CreateTopicAsync(topic);
+        await fixture.Admin.CreateSubscriptionAsync(topic, "audit");
+        var bodies = Enumerable.Range(0, 40).Select(i => $"m{i:D2}-" + new string('x', 10_000)).ToList();
+
+        var result = await _messaging.SendMessagesAsync(topic, bodies.Select(b => new SendMessageRequest { Body = b }));
+
+        var arrived = new List<string>();
+        var deadline = DateTime.UtcNow.AddSeconds(15);
+        while (arrived.Count < bodies.Count && DateTime.UtcNow < deadline)
+        {
+            arrived.AddRange(await fixture.DrainAsync($"{topic}/subscriptions/audit"));
+            if (arrived.Count < bodies.Count) await Task.Delay(100);
+        }
+
+        Assert.True(result.SentCount == 40 && result.Success,
+            $"A topic batch of 400 KB, more than one SDK batch holds, must be sent whole; sent {result.SentCount} with {result.Failures.Count} failures.");
+        Assert.Equal(bodies, arrived);
+    }
+
     private async Task<List<IMessage>> PeekSubscriptionWhenForwardedAsync(string topic, string subscription)
     {
         var deadline = DateTime.UtcNow.AddSeconds(10);
@@ -462,6 +523,129 @@ public sealed class AzureServiceBusProviderTests(AzureServiceBusFixture fixture)
         Assert.Equal((1, 0), (result.SuccessCount, result.FailureCount));
         Assert.Equal(["m2"], await fixture.DrainAsync(target));
         Assert.Equal(["m1"], await fixture.DrainAsync(AzureServiceBusFixture.DeadLetterOf(source)));
+    }
+
+    /// <summary>Sends <paramref name="bodies"/> and defers each with a receiver of the test; answers their sequence numbers by body.</summary>
+    private async Task<Dictionary<string, long>> DeferAsync(string queue, params string[] bodies)
+    {
+        await fixture.SendAsync(queue, bodies);
+        var deferred = new Dictionary<string, long>();
+        await using var receiver = fixture.Client.CreateReceiver(queue);
+        while (deferred.Count < bodies.Length)
+        {
+            var message = await receiver.ReceiveMessageAsync(TimeSpan.FromSeconds(5));
+            Assert.NotNull(message);
+            await receiver.DeferMessageAsync(message);
+            deferred[message.Body.ToString()] = message.SequenceNumber;
+        }
+
+        return deferred;
+    }
+
+    private async Task<List<(string? Body, string State)>> PeekAllAsync(string queue, MessageSubQueue subQueue = MessageSubQueue.Active) =>
+        (await _messaging.PeekMessagesAsync(queue, 50, subQueue)).Select(m => (m.Body, m.State)).ToList();
+
+    [Fact]
+    public async Task A_deferred_message_deleted_by_its_sequence_number_is_gone_and_the_other_stays_deferred()
+    {
+        var queue = await CreateQueueAsync("deferred-delete");
+        var deferred = await DeferAsync(queue, "m1", "m2");
+
+        var result = await _messaging.DeleteDeferredMessagesAsync(queue, [deferred["m1"]]);
+
+        Assert.True((result.SuccessCount, result.FailureCount) == (1, 0), $"The deferred message must be deleted; failures: {string.Join("; ", result.Failures.Select(f => $"{f.SequenceNumber}: {f.Error}"))}");
+        Assert.Equal([("m2", "Deferred")], await PeekAllAsync(queue));
+        Assert.Empty(await PeekAllAsync(queue, MessageSubQueue.DeadLetter));
+    }
+
+    [Fact]
+    public async Task A_deferred_message_resubmitted_by_its_sequence_number_is_active_again_once_and_no_longer_deferred()
+    {
+        var queue = await CreateQueueAsync("deferred-resubmit");
+        var deferred = await DeferAsync(queue, "m1");
+
+        var result = await _messaging.ResubmitDeferredMessagesAsync(queue, [deferred["m1"]]);
+
+        Assert.True((result.SuccessCount, result.FailureCount) == (1, 0), $"The deferred message must be resubmitted; failures: {string.Join("; ", result.Failures.Select(f => $"{f.SequenceNumber}: {f.Error}"))}");
+        Assert.Equal([("m1", "Active")], await PeekAllAsync(queue));
+        Assert.Equal(["m1"], await fixture.DrainAsync(queue));
+    }
+
+    [Fact]
+    public async Task A_deferred_message_dead_lettered_by_its_sequence_number_is_in_the_dead_letter_queue_with_the_reason()
+    {
+        var queue = await CreateQueueAsync("deferred-deadletter");
+        var deferred = await DeferAsync(queue, "m1");
+
+        var result = await _messaging.DeadLetterDeferredMessagesAsync(queue, [deferred["m1"]], reason: "bad-data", description: "rejected by the operator");
+
+        Assert.True((result.SuccessCount, result.FailureCount) == (1, 0), $"The deferred message must be dead-lettered; failures: {string.Join("; ", result.Failures.Select(f => $"{f.SequenceNumber}: {f.Error}"))}");
+        Assert.Empty(await PeekAllAsync(queue));
+        var deadLetter = Assert.Single(await _messaging.PeekMessagesAsync(queue, 10, MessageSubQueue.DeadLetter));
+        Assert.Equal(("m1", "bad-data"), (deadLetter.Body, deadLetter.DeadLetterReason));
+    }
+
+    [Fact]
+    public async Task An_active_message_deferred_by_its_sequence_number_is_found_deferred_and_the_other_stays_active()
+    {
+        var queue = await CreateQueueAsync("active-defer");
+        await fixture.SendAsync(queue, "m1");
+        await fixture.SendAsync(queue, "m2");
+        var target = (await _messaging.PeekMessagesAsync(queue, 10)).Single(m => m.Body == "m1").SequenceNumber!.Value;
+
+        var result = await _messaging.DeferMessagesAsync(queue, [target]);
+
+        Assert.True((result.SuccessCount, result.FailureCount) == (1, 0), $"The active message must be deferred; failures: {string.Join("; ", result.Failures.Select(f => $"{f.SequenceNumber}: {f.Error}"))}");
+        Assert.Equal([("m1", "Deferred"), ("m2", "Active")], (await PeekAllAsync(queue)).OrderBy(m => m.Body).ToList());
+        Assert.Empty(await PeekAllAsync(queue, MessageSubQueue.DeadLetter));
+    }
+
+    [Fact]
+    public async Task An_active_message_dead_lettered_by_its_sequence_number_is_in_the_dead_letter_queue_with_the_reason_and_the_other_stays_active()
+    {
+        var queue = await CreateQueueAsync("active-deadletter");
+        await fixture.SendAsync(queue, "m1");
+        await fixture.SendAsync(queue, "m2");
+        var target = (await _messaging.PeekMessagesAsync(queue, 10)).Single(m => m.Body == "m1").SequenceNumber!.Value;
+
+        var result = await _messaging.DeadLetterMessagesAsync(queue, [target], reason: "bad-data", description: "rejected by the operator");
+
+        Assert.True((result.SuccessCount, result.FailureCount) == (1, 0), $"The active message must be dead-lettered; failures: {string.Join("; ", result.Failures.Select(f => $"{f.SequenceNumber}: {f.Error}"))}");
+        Assert.Equal([("m2", "Active")], await PeekAllAsync(queue));
+        var deadLetter = Assert.Single(await _messaging.PeekMessagesAsync(queue, 10, MessageSubQueue.DeadLetter));
+        Assert.Equal(("m1", "bad-data", "rejected by the operator"), (deadLetter.Body, deadLetter.DeadLetterReason, deadLetter.DeadLetterErrorDescription));
+    }
+
+    [Fact]
+    public async Task A_binary_body_sent_as_base64_is_read_back_as_the_same_bytes_with_the_base64_flag()
+    {
+        var queue = await CreateQueueAsync("binary-body");
+        byte[] bytes = [0x1F, 0x8B, 0x08, 0x00, 0xFF, 0xFE, 0x80, 0x00];
+
+        await _messaging.SendMessageAsync(queue, new SendMessageRequest { Body = Convert.ToBase64String(bytes), BodyEncoding = MessageBodyEncoding.Base64, ContentType = "application/octet-stream" });
+
+        var read = Assert.Single(await _messaging.PeekMessagesAsync(queue, 10));
+        Assert.True(read.BodyEncoding == MessageBodyEncoding.Base64 && Convert.FromBase64String(read.Body!).SequenceEqual(bytes),
+            $"A binary body must round trip byte for byte; read {read.BodyEncoding} {read.Body}");
+        Assert.Equal(("application/octet-stream", (long)bytes.Length), (read.ContentType, ((MessageInfo)read).SizeInBytes));
+    }
+
+    [Fact]
+    public async Task A_deferred_call_naming_an_active_message_and_a_missing_number_reports_both_not_found_as_deferred_and_handles_the_deferred_one()
+    {
+        var queue = await CreateQueueAsync("deferred-mixed");
+        var deferred = await DeferAsync(queue, "m1");
+        await fixture.SendAsync(queue, "m2");
+        var active = (await _messaging.PeekMessagesAsync(queue, 10)).Single(m => m.Body == "m2").SequenceNumber!.Value;
+        const long missing = 999_999;
+
+        var result = await _messaging.DeleteDeferredMessagesAsync(queue, [deferred["m1"], active, missing]);
+
+        Assert.Equal(1, result.SuccessCount);
+        Assert.Equal(
+            [(active, "Not found as a deferred message."), (missing, "Not found as a deferred message.")],
+            result.Failures.Select(f => (f.SequenceNumber, f.Error)).OrderBy(f => f.SequenceNumber).ToList());
+        Assert.Equal([("m2", "Active")], await PeekAllAsync(queue));
     }
 
     [Fact]
@@ -558,6 +742,26 @@ public sealed class AzureServiceBusProviderTests(AzureServiceBusFixture fixture)
 
         Assert.Equal(target, forwarding);
         Assert.True(string.IsNullOrEmpty(read.ForwardTo), $"ForwardTo is still '{read.ForwardTo}'");
+    }
+
+    [Fact]
+    public async Task The_queue_and_topic_lists_carry_each_entitys_status_and_a_queues_forward_target()
+    {
+        var target = await CreateQueueAsync("list-target");
+        var forwarding = Name(_queues, "list-fwd");
+        await _management.CreateQueueAsync(forwarding, new QueueCreateOptions { ForwardTo = target });
+        var paused = await CreateQueueAsync("list-paused");
+        await _management.UpdateQueueAsync(paused, new QueueUpdateOptions { Status = "SendDisabled" });
+        var topic = Name(_topics, "list-topic");
+        await _management.CreateTopicAsync(topic);
+        await _management.UpdateTopicAsync(topic, new TopicUpdateOptions { Status = "Disabled" });
+
+        var queues = (await _management.GetQueuesAsync()).Cast<QueueInfo>().ToDictionary(q => q.Name);
+        var topics = (await _management.GetTopicsAsync()).ToDictionary(t => t.Name);
+
+        Assert.Equal(("Active", target), (queues[forwarding].Status, queues[forwarding].ForwardTo));
+        Assert.Equal(("SendDisabled", (string?)null), (queues[paused].Status, queues[paused].ForwardTo));
+        Assert.Equal("Disabled", topics[topic].Status);
     }
 
     [Fact]
@@ -734,6 +938,39 @@ public sealed class AzureServiceBusProviderTests(AzureServiceBusFixture fixture)
 
         Assert.Equal((2, 0), (result.SuccessCount, result.FailureCount));
         Assert.Equal([("active", "Active")], await PeekBodiesAndStatesAsync(queue));
+    }
+
+    [Fact]
+    public async Task A_message_scheduled_on_a_topic_and_cancelled_by_the_returned_sequence_number_never_reaches_the_subscription()
+    {
+        var topic = Name(_topics, "cancel-topic");
+        await fixture.Admin.CreateTopicAsync(topic);
+        await fixture.Admin.CreateSubscriptionAsync(topic, "audit");
+        var due = DateTimeOffset.UtcNow.AddSeconds(5);
+
+        var cancelled = await _messaging.SendMessageAsync(topic, new SendMessageRequest { Body = "cancelled", ScheduledEnqueueTime = due });
+        var kept = await _messaging.SendMessageAsync(topic, new SendMessageRequest { Body = "kept", ScheduledEnqueueTime = due });
+        var result = await _messaging.CancelScheduledMessagesAsync(topic, [cancelled!.Value]);
+
+        Assert.True(kept is > 0 && kept != cancelled, $"Each scheduled send returns its own sequence number; got {cancelled} and {kept}.");
+        Assert.Equal((1, 0), (result.SuccessCount, result.FailureCount));
+        Assert.Empty(await _messaging.PeekMessagesAsync(topic, 10, subscriptionName: "audit"));
+        Assert.Equal("kept", Assert.Single(await PeekSubscriptionWhenForwardedAsync(topic, "audit")).Body);
+        await Task.Delay(TimeSpan.FromSeconds(1));
+        Assert.Equal(["kept"], (await _messaging.PeekMessagesAsync(topic, 10, subscriptionName: "audit")).Select(m => m.Body));
+    }
+
+    [Fact]
+    public async Task On_the_emulator_a_peek_on_the_topic_path_returns_its_scheduled_messages()
+    {
+        var topic = Name(_topics, "peek-topic");
+        await fixture.Admin.CreateTopicAsync(topic);
+        await fixture.Admin.CreateSubscriptionAsync(topic, "audit");
+        await _messaging.SendMessageAsync(topic, new SendMessageRequest { Body = "later", ScheduledEnqueueTime = DateTimeOffset.UtcNow.AddHours(1) });
+
+        var peeked = Assert.Single(await _messaging.PeekMessagesAsync(topic, 10));
+
+        Assert.Equal(("later", "Scheduled"), (peeked.Body, peeked.State));
     }
 
     [Fact]

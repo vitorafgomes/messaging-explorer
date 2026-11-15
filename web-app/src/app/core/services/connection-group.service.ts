@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Observable, map } from 'rxjs';
+import { Observable, Subject, map, tap } from 'rxjs';
 import { ApiService } from './api.service';
 import { apiPath } from './api-path';
 import { ConnectionGroup, ConnectionGroupTree, ServiceBusConnection } from '../models';
@@ -10,6 +10,9 @@ import { ConnectionGroup, ConnectionGroupTree, ServiceBusConnection } from '../m
 export class ConnectionGroupService {
   constructor(private api: ApiService) {}
 
+  /** Emits after a client or an environment is created, changed or deleted, so what shows an environment can read it again. */
+  readonly changed$ = new Subject<void>();
+
   getGroups(): Observable<ConnectionGroup[]> {
     return this.api.get<ConnectionGroup[]>('connectiongroups');
   }
@@ -19,15 +22,15 @@ export class ConnectionGroupService {
   }
 
   createGroup(group: Partial<ConnectionGroup>): Observable<ConnectionGroup> {
-    return this.api.post<ConnectionGroup>('connectiongroups', group);
+    return this.api.post<ConnectionGroup>('connectiongroups', group).pipe(tap(() => this.changed$.next()));
   }
 
   updateGroup(id: string, group: Partial<ConnectionGroup>): Observable<ConnectionGroup> {
-    return this.api.put<ConnectionGroup>(apiPath`connectiongroups/${id}`, group);
+    return this.api.put<ConnectionGroup>(apiPath`connectiongroups/${id}`, group).pipe(tap(() => this.changed$.next()));
   }
 
   deleteGroup(id: string): Observable<void> {
-    return this.api.delete<void>(apiPath`connectiongroups/${id}`);
+    return this.api.delete<void>(apiPath`connectiongroups/${id}`).pipe(tap(() => this.changed$.next()));
   }
 
   buildGroupTree(groups: ConnectionGroup[], connections: ServiceBusConnection[]): ConnectionGroupTree[] {

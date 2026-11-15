@@ -2,8 +2,8 @@
 title: "Web App"
 version: "2.0"
 date: 2026-11-12
-updated: 2026-11-13
-changes: "v2.0: a map of topic pages; the old version notes moved to history"
+updated: 2026-11-14
+changes: "v2.0: a map of topic pages; the old version notes moved to history; a topic for the message detail, binary bodies and single-message actions"
 page_type: service
 status: active
 description: "Angular 21 single-page UI that talks to the local .NET API through one ApiService, in a plain browser or inside the Electron shell."
@@ -68,10 +68,17 @@ Read the page your change touches, not all of them.
 | [[pages/services/web-app/how-the-rules-are-kept\|How the rules are kept]] | ApiService and the X-Api-Key, encoding a name in a path, HighlightPipe escaping, or a review of a change that could break a rule of the app |
 | [[pages/services/web-app/stack-and-bootstrap\|Stack, bootstrap and core]] | a package version, the build or dev server, bootstrap and routing, the toolbar navigation, the developer-mode shortcut, or the core/ models and services |
 | [[pages/services/web-app/bulk-operations\|Bulk operations]] | BulkOperationsService, delete, resubmit and move in ViewMessagesDialogComponent, "all" against the page, possible duplicates, continuous resubmit, send and export, cancel and progress |
+| [[pages/services/web-app/bulk-new-message-id\|New message IDs and unselected messages]] | the option "Send with a new message ID" in any dialog, a duplicate refusal, or the new ids and unselected-message lines of the results dialog |
+| [[pages/services/web-app/bulk-deferred-messages\|Deferred messages and Load more]] | the deferred actions of the selection bar, the dead-letter dialog of deferred messages, or Load more on the Active and Dead Letter tabs |
 | [[pages/services/web-app/bulk-automatic-resubmit\|Automatic resubmit]] | the automatic resubmit of a dead-letter queue: ResubmitRunService, its batches, filter, pause and stop, a change of connection, its report and indicator |
+| [[pages/services/web-app/bulk-automatic-resubmit-dialog\|Automatic resubmit dialog]] | what the automatic resubmit dialog shows: configure, the run, the report, the head-of-queue loop |
+| [[pages/services/web-app/bulk-automatic-resubmit-progress\|Automatic resubmit progress]] | the count before a run, batch numbers, progress and report, the toolbar card, the queue panel line and the tree spinner |
 | [[pages/services/web-app/features-messages-and-sessions\|Entity administration, sub-queues and sessions]] | the entity form dialog, the sub-queue tabs and scheduled messages of the message dialog, a disabled entity, or the sessions tab and its state editor |
+| [[pages/services/web-app/features-message-detail-actions\|Message detail and single-message actions]] | the detail pane of one message: a binary body as hex and Copy base64, Defer, Dead-letter and Delete of one message with their confirmation, the base64 choice of the send dialog, `bodyEncoding` in export and import |
 | [[pages/services/web-app/features-entities-panel-and-definitions\|Entity panel, tree and definitions]] | the entity panel or the tree on Material, the export and import of definitions, EntitySelectionService, or the purge confirmation |
+| [[pages/services/web-app/features-entities-main\|Entities as drawn]] | the tree filter and rows, the panel header and actions, the More menu, delete of an entity, the cards and tabs, as the Main artboard draws them |
 | [[pages/services/web-app/features-settings-and-folders\|Settings and the feature folders]] | the Settings screen (updates, data, developer, about), AppUpdateService, or the connections, entities, messages, queues, topics and monitoring folders |
+| [[pages/services/web-app/features-connections\|Connections]] | the Connections screen: list and columns, add and edit, a stored secret, Manage Groups and the Production mark, import with its preview |
 | [[pages/services/web-app/features-monitoring\|Monitoring screen]] | the Monitoring screen: the snapshot, the counts table of every entity, its sort, filter, threshold and refresh, the Overview |
 | [[pages/services/web-app/providers-and-shared\|Providers and shared]] | ProviderRegistryService, ProviderShellComponent, ProviderService and capabilities, docs/ADDING_PROVIDERS.md, or a shared component |
 | [[pages/services/web-app/tests\|Tests]] | a spec, how the web tests run, the end-to-end suite, or the web job of CI |

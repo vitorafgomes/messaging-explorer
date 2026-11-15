@@ -98,3 +98,7 @@ Prints the next version from the last `vX.Y.Z` tag and the conventional commits 
 
 - [[pages/conventions/tooling]]
 - [[pages/conventions/testing]]
+
+## `tools/checks/check-ui-tokens.sh`
+
+Fails on a literal hex colour, `btn` in a `class` list or a Font Awesome icon (`fa fa-`, `fa-solid fa-`) in the templates, styles and components of `web-app/src/app`, specs left out; the provider entity-details components, which nothing renders, are its one exception. Prints `path:line: what`; exit 1 on a finding, 2 on nothing to check. It runs in the harness job of CI. Case matrix: `tools/checks/check-ui-tokens.test.sh`.

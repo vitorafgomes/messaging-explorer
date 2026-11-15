@@ -380,4 +380,171 @@ public class ConnectionFailureLogTests
         AssertLoggedFailure(entries, category, LogLevel.Error);
         AssertNoSecret(entries, console);
     }
+
+    private const string ProxyPassword = "proxy-sentinel-pass";
+
+    private static ServiceBusConnection ProxiedConnection(string proxyAddress) => new()
+    {
+        Id = Guid.NewGuid().ToString(),
+        Name = "proxied",
+        ProviderType = ProviderType.AzureServiceBus,
+        ConnectionString = "Endpoint=sb://proxied.invalid/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=" + SharedAccessKey,
+        UseWebSockets = true,
+        ProxyAddress = proxyAddress,
+    };
+
+    [Fact]
+    public async Task A_test_and_a_save_over_WebSockets_through_a_proxy_that_refuses_fail_like_any_other_and_never_log_the_key()
+    {
+        var port = ClosedLoopbackPort();
+        var connection = ProxiedConnection($"http://127.0.0.1:{port}");
+
+        var (entries, console) = await CaptureAsync(async (factory, services, client) =>
+        {
+            await PostTestAsync(client, connection);
+            using var save = await client.PostAsJsonAsync("/api/connections", connection);
+            Assert.Equal(HttpStatusCode.BadRequest, save.StatusCode);
+            Assert.Equal("Invalid connection string or unable to connect to Service Bus",
+                (await save.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("message").GetString());
+            Assert.Null(await services.GetRequiredService<ServiceBusExplorer.Core.Services.IConnectionManager>().GetConnectionAsync(connection.Id));
+        });
+
+        var failure = AssertLoggedFailure(entries, typeof(AzureServiceBusProvider).FullName!, LogLevel.Warning);
+        Assert.Equal(typeof(AggregateException).FullName, failure.ExceptionType);
+        Assert.Contains($"Connection refused (127.0.0.1:{port})", failure.Text, StringComparison.Ordinal);
+        AssertNoSecret(entries, console);
+    }
+
+    [Fact]
+    public async Task A_connect_over_WebSockets_through_a_proxy_answers_connected_like_any_Azure_connect()
+    {
+        var connection = ProxiedConnection($"http://127.0.0.1:{ClosedLoopbackPort()}");
+
+        var (entries, console) = await CaptureAsync(async (factory, _, client) =>
+        {
+            await factory.SeedConnectionAsync(connection);
+            using var response = await client.PostAsync($"/api/connections/{connection.Id}/connect", null);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.True((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("connected").GetBoolean(),
+                "Azure clients connect lazily, so a WebSockets connection through a proxy connects as AMQP does");
+            using var disconnect = await client.PostAsync("/api/connections/disconnect", null);
+        });
+
+        AssertNoSecret(entries, console);
+    }
+
+    [Fact]
+    public async Task A_save_whose_proxy_address_carries_a_user_name_and_password_is_refused_never_stored_and_never_logged()
+    {
+        var connection = ProxiedConnection($"http://proxy-user:{ProxyPassword}@127.0.0.1:{ClosedLoopbackPort()}");
+        string? body = null;
+
+        var (entries, console) = await CaptureAsync(async (_, services, client) =>
+        {
+            using var save = await client.PostAsJsonAsync("/api/connections", connection);
+            body = await save.Content.ReadAsStringAsync();
+            Assert.Equal(HttpStatusCode.BadRequest, save.StatusCode);
+            Assert.Null(await services.GetRequiredService<ServiceBusExplorer.Core.Services.IConnectionManager>().GetConnectionAsync(connection.Id));
+        });
+
+        Assert.True(!body!.Contains(ProxyPassword, StringComparison.Ordinal), "The refusal never echoes the proxy password");
+        var leaked = entries.FirstOrDefault(e => e.Text.Contains(ProxyPassword, StringComparison.Ordinal));
+        Assert.True(leaked == null, $"The proxy password reached the log at {leaked?.Category}: {leaked?.Text}");
+        Assert.DoesNotContain(ProxyPassword, console, StringComparison.Ordinal);
+        Assert.Equal(ServiceBusConnection.ProxyRefusal, JsonDocument.Parse(body).RootElement.GetProperty("message").GetString());
+        Assert.True(!entries.Any(e => e.Category == typeof(AzureServiceBusProvider).FullName),
+            "A proxy address with a user name and password is refused before the connection test, so no call reaches the proxy");
+    }
+
+    private static ServiceBusConnection ProxiedRabbitConnection() => new()
+    {
+        Id = Guid.NewGuid().ToString(),
+        Name = "proxied-rabbit",
+        ProviderType = ProviderType.RabbitMQ,
+        HostName = "127.0.0.1",
+        Port = ClosedLoopbackPort(),
+        ManagementPort = ClosedLoopbackPort(),
+        UserName = RabbitUser,
+        Password = RabbitPassword,
+        ProxyAddress = $"http://proxy-user:{ProxyPassword}@127.0.0.1:{ClosedLoopbackPort()}",
+    };
+
+    private static void AssertProxyPasswordAbsent(string body, List<Entry> entries, string console)
+    {
+        Assert.True(!body.Contains(ProxyPassword, StringComparison.Ordinal), "The refusal never echoes the proxy password");
+        var leaked = entries.FirstOrDefault(e => e.Text.Contains(ProxyPassword, StringComparison.Ordinal));
+        Assert.True(leaked == null, $"The proxy password reached the log at {leaked?.Category}: {leaked?.Text}");
+        Assert.DoesNotContain(ProxyPassword, console, StringComparison.Ordinal);
+        AssertNoSecret(entries, console);
+    }
+
+    [Fact]
+    public async Task A_save_of_a_RabbitMQ_connection_with_a_proxy_is_refused_with_the_fixed_text_never_stored_and_never_logged()
+    {
+        var connection = ProxiedRabbitConnection();
+        string? body = null;
+
+        var (entries, console) = await CaptureAsync(async (_, services, client) =>
+        {
+            using var save = await client.PostAsJsonAsync("/api/connections", connection);
+            body = await save.Content.ReadAsStringAsync();
+            Assert.Equal(HttpStatusCode.BadRequest, save.StatusCode);
+            Assert.Null(await services.GetRequiredService<ServiceBusExplorer.Core.Services.IConnectionManager>().GetConnectionAsync(connection.Id));
+        });
+
+        Assert.True(ServiceBusConnection.ProxyRefusal == JsonDocument.Parse(body!).RootElement.GetProperty("message").GetString(),
+            $"RabbitMQ has no proxy, so a save that carries one is refused with the fixed text before anything is tried; the body was {body}");
+        AssertProxyPasswordAbsent(body!, entries, console);
+    }
+
+    [Fact]
+    public async Task An_import_full_with_one_disallowed_proxy_is_refused_with_the_fixed_text_and_imports_no_group_and_no_connection()
+    {
+        var allowed = ProxiedConnection("http://proxy.example:8080");
+        var refused = ProxiedRabbitConnection();
+        var file = JsonSerializer.Serialize(new
+        {
+            Connections = new[] { allowed, refused },
+            Groups = new[] { new ConnectionGroup { Id = "imported-client", Name = "Imported client", Type = "client" } },
+        });
+        string? body = null;
+
+        var (entries, console) = await CaptureAsync(async (_, services, client) =>
+        {
+            using var import = await client.PostAsJsonAsync("/api/connections/import-full", new { configurationJson = file });
+            body = await import.Content.ReadAsStringAsync();
+            Assert.Equal(HttpStatusCode.BadRequest, import.StatusCode);
+            Assert.True(!(await services.GetRequiredService<ServiceBusExplorer.Core.Services.IConnectionGroupManager>().GetGroupsAsync()).Any(),
+                "A refused import-full stores no group: the proxy is checked before the first group is saved");
+            Assert.Empty(await services.GetRequiredService<ServiceBusExplorer.Core.Services.IConnectionManager>().GetConnectionsAsync());
+        });
+
+        Assert.Equal(ServiceBusConnection.ProxyRefusal, JsonDocument.Parse(body!).RootElement.GetProperty("message").GetString());
+        AssertProxyPasswordAbsent(body!, entries, console);
+    }
+
+    [Fact]
+    public async Task An_import_full_with_one_resource_id_out_of_format_is_refused_with_the_fixed_text_and_imports_no_group_and_no_connection()
+    {
+        var connection = ProxiedConnection("http://proxy.example:8080");
+        connection.AzureResourceId = "/subscriptions/not-a-namespace";
+        var file = JsonSerializer.Serialize(new
+        {
+            Connections = new[] { connection },
+            Groups = new[] { new ConnectionGroup { Id = "imported-client", Name = "Imported client", Type = "client" } },
+        });
+        string? body = null;
+
+        await CaptureAsync(async (_, services, client) =>
+        {
+            using var import = await client.PostAsJsonAsync("/api/connections/import-full", new { configurationJson = file });
+            body = await import.Content.ReadAsStringAsync();
+            Assert.Equal(HttpStatusCode.BadRequest, import.StatusCode);
+            Assert.True(!(await services.GetRequiredService<ServiceBusExplorer.Core.Services.IConnectionGroupManager>().GetGroupsAsync()).Any(),
+                "A refused import-full stores no group: the resource ID is checked before the first group is saved");
+            Assert.Empty(await services.GetRequiredService<ServiceBusExplorer.Core.Services.IConnectionManager>().GetConnectionsAsync());
+        });
+
+        Assert.Equal(ServiceBusConnection.ResourceIdRefusal, JsonDocument.Parse(body!).RootElement.GetProperty("message").GetString());
+    }
 }

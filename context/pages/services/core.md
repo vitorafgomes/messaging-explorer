@@ -2,8 +2,8 @@
 title: "Core"
 version: "2.0"
 date: 2026-11-12
-updated: 2026-11-13
-changes: "v2.0: a map of topic pages; the old version notes moved to history"
+updated: 2026-11-14
+changes: "v2.0: a map of topic pages; the old version notes moved to history; topics for the single-message actions and message bodies"
 page_type: service
 status: active
 description: "The messaging library behind the API: a provider abstraction over Azure Service Bus and RabbitMQ, bulk DLQ operations, the workspace file with its connections, and the Azure Monitor metrics service."
@@ -38,10 +38,15 @@ Read the page your change touches, not all of them.
 | [[pages/services/core/how-the-rules-are-kept\|How the rules are kept]] | an invariant this project keeps, or a review of a change that could break one; each rule in full with the code and tests that keep it |
 | [[pages/services/core/public-contract\|Public contract and flow]] | IMessagingProvider, IProviderCapabilities, IConnectionConfig and the entities, ProviderFactory, the workspace and metrics interfaces, or how the API reaches a provider |
 | [[pages/services/core/azure-provider\|Azure provider]] | AzureServiceBusProvider and its clients, the Azure auth types and AzureCredentialFactory, search, entity administration, or the counts of one entity |
+| [[pages/services/core/azure-connection-and-namespace\|Azure transport and namespace]] | AMQP or AMQP over WebSockets, a proxy, and the namespace properties (tier, units, alias, message size) |
 | [[pages/services/core/azure-sub-queues\|Azure sub-queues and scheduled messages]] | CreateReceiver and the sub-queues, the transfer dead-letter queue, scheduled messages and their cancel, or a disabled entity on Azure |
+| [[pages/services/core/azure-deferred\|Azure deferred messages]] | the delete, resubmit or dead-letter of a deferred message by sequence number, `SupportsDeferral`, and their routes |
+| [[pages/services/core/azure-single-message-actions\|Azure single-message actions]] | the dead-letter or defer of an active message by its sequence number, its bounded scan, `SupportsManualDeadLetter`, or the delete of one message |
+| [[pages/services/core/message-bodies\|Message bodies]] | how a body is read or sent as a string: the strict UTF-8 decode, base64 with `BodyEncoding`, `SupportsBinaryBody` |
 | [[pages/services/core/azure-sessions\|Azure sessions]] | listing, opening, the state or the lock of an Azure session |
 | [[pages/services/core/azure-definitions\|Azure entity definitions]] | ExportDefinitionsAsync or the import of entity definitions: validation, dry run, the order of creation |
 | [[pages/services/core/azure-bulk-operations\|Azure bulk operations]] | purge and delete all, bulk delete, resubmit and move on Azure, their scan loops, cancellation, the safety timeout and possible duplicates |
+| [[pages/services/core/azure-bulk-safety-checks\|Azure bulk safety checks]] | what a delete, resubmit or move on Azure reads before it receives: duplicate detection, the delivery limit, new message ids, the refusals and the Manage right |
 | [[pages/services/core/rabbitmq-and-legacy\|RabbitMQ provider and the legacy service]] | RabbitMQProvider: AMQP, RabbitMQManagementClient, the topic and subscription mapping, RabbitMQPatternDetector, RabbitMQ bulk operations; or the legacy ServiceBusService |
 | [[pages/services/core/workspace-and-metrics\|Workspace and metrics]] | FileWorkspaceManager: migration, locking, the atomic write, an unreadable file, masking, the merge on update and import; or the metrics services |
 | [[pages/services/core/tests-unit-azure\|Unit tests of the Azure provider]] | a Core.Tests test of the Azure batch, sub-queue, credential, read, metrics or session code |

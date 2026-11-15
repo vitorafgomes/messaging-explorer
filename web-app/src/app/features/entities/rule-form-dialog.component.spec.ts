@@ -43,7 +43,7 @@ describe('RuleFormDialogComponent: add and edit a subscription rule', () => {
           provide: ConnectionService,
           useValue: { currentTarget: 'ns.example.net', currentConnectionId: 'c-1', getConnections: () => of([{ id: 'c-1', name: 'contoso-prod', environmentId: 'g-env' }]) }
         },
-        { provide: ConnectionGroupService, useValue: { getGroups: () => of([{ id: 'g-env', name: 'Production', type: 'environment' }]) } }
+        { provide: ConnectionGroupService, useValue: { getGroups: () => of([{ id: 'g-env', name: 'Production', type: 'environment', isProduction: true }]) } }
       ]
     });
     fixture = TestBed.createComponent(RuleFormDialogComponent);
@@ -62,7 +62,11 @@ describe('RuleFormDialogComponent: add and edit a subscription rule', () => {
     input.dispatchEvent(new Event('blur'));
     fixture.detectChanges();
   };
-  const errorOf = (label: string, root: ParentNode = el) => text(field(label, root)?.querySelector('mat-error'));
+  const errorIcon = (e: Element | null | undefined) => e?.firstElementChild?.tagName === 'MAT-ICON' ? e.firstElementChild : null;
+  const errorOf = (label: string, root: ParentNode = el) => {
+    const error = field(label, root)?.querySelector('mat-error');
+    return text(error).slice(text(errorIcon(error)).length).trim();
+  };
   const button = (label: string) => Array.from(el.querySelectorAll('button')).find(b => text(b).endsWith(label) || b.getAttribute('aria-label') === label) as HTMLButtonElement | undefined;
   const click = (label: string) => {
     button(label)!.click();
@@ -181,6 +185,24 @@ describe('RuleFormDialogComponent: add and edit a subscription rule', () => {
       expect(button('Add rule')!.disabled).toBe(false);
     });
 
+    it('as Rules.dc.html draws it: the filter kinds sit in a fieldset whose legend "Filter type" a screen reader reads and the screen does not show', () => {
+      open({ mode: 'create' });
+      const legend = el.querySelector('fieldset > legend');
+
+      expect(text(legend), 'the fieldset of the filter kinds has the legend Filter type').toBe('Filter type');
+      expect(legend?.classList.contains('visually-hidden'), 'the legend is visually hidden, as drawn').toBe(true);
+      expect(legend?.parentElement?.querySelector('mat-button-toggle-group'), 'the filter kinds sit in that fieldset').not.toBeNull();
+    });
+
+    it('as Rules.dc.html draws it: a field error opens with the error icon, hidden from a screen reader', () => {
+      open({ mode: 'create' });
+      type('Rule name', 'a/b');
+
+      const icon = errorIcon(field('Rule name')?.querySelector('mat-error'));
+      expect(text(icon), 'the field error starts with the error_outline icon').toBe('error_outline');
+      expect(icon?.getAttribute('aria-hidden'), 'the icon is decoration; the words carry the error').toBe('true');
+    });
+
     it('an error is tied to its field: the input is aria-invalid and described by the error', () => {
       open({ mode: 'create' });
       type('Rule name', 'a/b');
@@ -238,8 +260,8 @@ describe('RuleFormDialogComponent: add and edit a subscription rule', () => {
       open({ mode: 'edit', rule: SQL });
 
       expect(field('Rule name'), 'an input for the name').toBeUndefined();
-      expect(text(el.querySelector('.name-fact dd'))).toBe('physical-goods');
-      expect(text(el.querySelector('.name-note'))).toBe('A rule cannot be renamed. Saving replaces it under the same name.');
+      expect(text(el.querySelector('.name-field .value'))).toBe('physical-goods');
+      expect(text(el.querySelector('.name-field .hint'))).toBe('A rule cannot be renamed. Saving replaces it under the same name.');
       expect((field('SQL filter')!.querySelector('textarea') as HTMLTextAreaElement).value).toBe("category = 'physical' AND total > 0");
       expect((field('Action (optional)')!.querySelector('textarea') as HTMLTextAreaElement).value).toBe("SET priority = 'normal'");
       expect(button('Save rule')!.disabled, 'Save before any change').toBe(true);
@@ -400,7 +422,59 @@ describe('RuleFormDialogComponent: add and edit a subscription rule', () => {
     open({ mode: 'create' });
 
     expect(text(el.querySelector('h2'))).toBe('Add rule');
-    expect(text(el.querySelector('.context mat-chip'))).toBe('Production');
-    expect(text(el.querySelector('.context > span'))).toBe('Subscription warehouse in topic order-events on contoso-prod (ns.example.net)');
+    expect(text(el.querySelector('.environment-line .environment-chip')), 'the warning icon, then PRODUCTION').toBe('warning PRODUCTION');
+    expect(text(el.querySelector('.environment-line .where'))).toBe('Subscription warehouse in topic order-events on contoso-prod (ns.example.net)');
+    const chip = el.querySelector('.environment-line .environment-chip') as HTMLElement;
+    expect(chip.textContent?.replace('warning', '').trim(), 'the rule dialog opens with the PRODUCTION chip').toBe('PRODUCTION');
+    expect(chip.classList.contains('production'), 'a production environment takes the error container').toBe(true);
+  });
+
+  describe('as Rules.dc.html draws the form', () => {
+    it('the chosen filter type shows its check mark', () => {
+      open({ mode: 'create' });
+
+      const checked = el.querySelector('mat-button-toggle.mat-button-toggle-checked')!;
+      expect(text(checked)).toBe('SQL filter');
+      expect(checked.querySelector('.mat-pseudo-checkbox'), 'the check mark of the chosen type').not.toBeNull();
+    });
+
+    it('"Add property" is a small outlined button with the plus icon', () => {
+      open({ mode: 'create' });
+      kind('Correlation filter');
+
+      const add = button('Add property')!;
+      expect(add.hasAttribute('mat-stroked-button'), 'an outlined button').toBe(true);
+      expect(add.classList.contains('small')).toBe(true);
+    });
+
+    it('"A correlation filter needs at least one field or property." carries the error icon and is announced', () => {
+      open({ mode: 'create' });
+      kind('Correlation filter');
+
+      const needsOne = el.querySelector('#correlation-needs-one')!;
+      expect(needsOne.getAttribute('aria-live')).toBe('polite');
+      expect(needsOne.querySelector('mat-icon')?.getAttribute('fontIcon')).toBe('error');
+      expect(text(needsOne)).toBe('A correlation filter needs at least one field or property.');
+    });
+
+    it('on edit, "Rule name" is a label over the name as plain text with the hint under it, not a box of facts', () => {
+      open({ mode: 'edit', rule: SQL });
+
+      expect(el.querySelector('.facts'), 'a facts box on the edit form').toBeNull();
+      expect(text(el.querySelector('.name-field .label'))).toBe('Rule name');
+      expect(text(el.querySelector('.name-field .value'))).toBe('physical-goods');
+      expect(text(el.querySelector('.name-field .hint'))).toBe('A rule cannot be renamed. Saving replaces it under the same name.');
+    });
+
+    it('a 400 with no message says "The broker refused this rule. Check the expression." under the octagon icon', () => {
+      open({ mode: 'create' });
+      type('Rule name', 'physical-goods');
+      type('SQL filter', 'total >');
+      createRule.mockImplementation(() => throwError(() => new HttpErrorResponse({ status: 400 })));
+      click('Add rule');
+
+      expect(text(el.querySelector('[role="alert"] .grow'))).toBe('The broker refused this rule. Check the expression.');
+      expect(el.querySelector('[role="alert"] mat-icon')?.getAttribute('fontIcon')).toBe('report');
+    });
   });
 });

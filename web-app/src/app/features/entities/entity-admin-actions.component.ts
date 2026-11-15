@@ -2,41 +2,45 @@ import { Component, computed, inject, input } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatChipsModule } from '@angular/material/chips';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { EntityKind, EntityStatus, QueueInfo, SubscriptionInfo, TopicInfo } from '../../core/models';
 import { ProviderService } from '../../core/services/provider.service';
 import { EntityFormDialogComponent, EntityFormDialogData } from './entity-form-dialog.component';
 import { EntityStatusDialogComponent, EntityStatusDialogData, STATUS_TEXT } from './entity-status-dialog.component';
 
 /**
- * The administration actions of an entity panel: its status as a chip, Edit and Status. Shown only
- * when the connected broker's API explicitly declares `supportsEntityUpdate`.
+ * One administration action of an entity panel: with `part="status"` its status as a chip that opens
+ * Change status, otherwise Edit. Shown only when the connected broker's API explicitly declares
+ * `supportsEntityUpdate`.
  */
 @Component({
   selector: 'app-entity-admin-actions',
   standalone: true,
-  imports: [MatButtonModule, MatIconModule, MatChipsModule],
+  imports: [MatButtonModule, MatIconModule, MatTooltipModule],
   template: `
     @if (enabled() && entity(); as current) {
-      <div class="admin">
-        <mat-chip-set aria-label="Status">
-          <mat-chip [disableRipple]="true" [class.inactive]="!active()">
-            <mat-icon matChipAvatar aria-hidden="true">{{ statusIcon() }}</mat-icon>
-            <span class="label">{{ statusLabel() }}</span>
-          </mat-chip>
-        </mat-chip-set>
-        <button mat-stroked-button type="button" (click)="edit(current)"><mat-icon>edit</mat-icon>Edit</button>
-        <button mat-stroked-button type="button" (click)="changeStatus(current)"><mat-icon>toggle_on</mat-icon>Status</button>
-      </div>
+      @if (part() === 'status') {
+        <button mat-stroked-button type="button" class="status-chip" [class]="tone()"
+                [attr.aria-label]="'Status: ' + statusLabel() + '. Change status'" matTooltip="Change status"
+                (click)="changeStatus(current)">
+          <mat-icon aria-hidden="true" [fontIcon]="statusIcon()" />{{ statusLabel() }}
+        </button>
+      } @else {
+        <button mat-stroked-button type="button" (click)="edit(current)"><mat-icon fontIcon="edit" />Edit</button>
+      }
     }
   `,
   styles: [`
-    :host { margin-inline-start: auto; min-width: 0; }
-    .admin { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; min-width: 0; }
-    .inactive {
-      --mat-chip-elevated-container-color: var(--mat-sys-error-container);
-      --mat-chip-label-text-color: var(--mat-sys-on-error-container);
-      --mat-chip-with-avatar-avatar-color: var(--mat-sys-on-error-container);
+    :host { display: contents; }
+    .status-chip { --mat-button-outlined-container-height: 28px; }
+    .success mat-icon { color: var(--app-success); }
+    .partial {
+      --mat-button-outlined-label-text-color: var(--app-on-warning-container);
+      background: var(--app-warning-container);
+    }
+    .stopped {
+      --mat-button-outlined-label-text-color: var(--mat-sys-on-error-container);
+      background: var(--mat-sys-error-container);
     }
   `]
 })
@@ -46,12 +50,16 @@ export class EntityAdminActionsComponent {
 
   readonly kind = input.required<EntityKind>();
   readonly entity = input<QueueInfo | TopicInfo | SubscriptionInfo | null | undefined>();
+  /** Which action this instance shows: the status chip beside the name, or Edit among the actions. */
+  readonly part = input<'status' | 'edit'>('edit');
 
   readonly enabled = computed(() => this.providerService.capabilities()?.supportsEntityUpdate === true);
   private readonly status = computed(() => STATUS_TEXT[this.entity()?.status as EntityStatus] ?? null);
   readonly active = computed(() => this.entity()?.status === 'Active');
   readonly statusLabel = computed(() => this.status()?.label ?? (this.entity()?.status || 'Status not known'));
   readonly statusIcon = computed(() => this.status()?.icon ?? 'help');
+  /** Active reads as success, Disabled as error, a status that stops one side as a warning. */
+  readonly tone = computed(() => this.active() ? 'success' : this.entity()?.status === 'Disabled' ? 'stopped' : 'partial');
 
   edit(entity: QueueInfo | TopicInfo | SubscriptionInfo): void {
     const data: EntityFormDialogData = { mode: 'edit', kind: this.kind(), entity, topicName: (entity as SubscriptionInfo).topicName };

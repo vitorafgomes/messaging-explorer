@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using ServiceBusExplorer.Api.Monitoring;
 using ServiceBusExplorer.Core.Providers;
+using ServiceBusExplorer.Core.Providers.Azure;
 using ServiceBusExplorer.Core.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -137,6 +138,7 @@ var azureMonitorOptions = new AzureMonitorOptions();
 builder.Configuration.GetSection(AzureMonitorOptions.SectionName).Bind(azureMonitorOptions);
 
 builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<AzureNamespaceMetricsReader>();
 if (azureMonitorOptions.IsConfigured)
 {
     bootstrapLogger.LogInformation(

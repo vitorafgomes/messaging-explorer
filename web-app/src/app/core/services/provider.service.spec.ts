@@ -250,6 +250,31 @@ describe('ProviderService holds the capabilities of the connected provider', () 
     });
   });
 
+  describe('the namespace properties are read only when the API explicitly says supportsNamespaceProperties is true', () => {
+    const azureConnected = { connected: true, namespace: 'ns.example.net', providerType: 'AzureServiceBus' } as unknown as ConnectionStatus;
+
+    it('an Azure API that answers supportsNamespaceProperties: true enables it', () => {
+      capabilitiesResponse = () => of({ supportsNamespaceProperties: true });
+      status$.next(azureConnected);
+      expect(service.capabilities()?.supportsNamespaceProperties, 'the API said true').toBe(true);
+    });
+
+    it('an Azure API that does not send the flag, one still loading and one that fails with a 500 leave it off', () => {
+      capabilitiesResponse = () => of({ supportsSessions: true });
+      status$.next(azureConnected);
+      expect(service.capabilities()?.supportsNamespaceProperties, 'the API did not send the flag').toBe(false);
+
+      const pending = new Subject<ProviderCapabilities>();
+      capabilitiesResponse = () => pending;
+      status$.next({ connected: false } as ConnectionStatus);
+      status$.next(azureConnected);
+      expect(service.capabilities()?.supportsNamespaceProperties, 'while the capabilities load').toBe(false);
+
+      pending.error(new HttpErrorResponse({ status: 500, statusText: 'Internal Server Error' }));
+      expect(service.capabilities()?.supportsNamespaceProperties, 'after a 500').toBe(false);
+    });
+  });
+
   describe('deferral is not declared for Azure', () => {
     it('an Azure connection whose API leaves the flag out, and one whose call fails, does not declare deferral', () => {
       const azureConnected = { connected: true, namespace: 'ns.example.net', providerType: 'AzureServiceBus' } as unknown as ConnectionStatus;

@@ -8,20 +8,25 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { finalize } from 'rxjs';
+import { concatMap, finalize, from, takeWhile } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { QueueService, TopicService, MessageImportService } from '../../core/services';
 import { SendMessageRequest } from '../../core/models';
+import { connectionContext } from '../entities/connection-context';
+import { EnvironmentLineComponent } from '../../shared/environment-line.component';
 
 export interface ImportMessagesDialogData {
   entityType: 'queue' | 'topic';
   entityName: string;
 }
 
+/** The most messages one request sends, as the API accepts them. */
+const IMPORT_CHUNK = 1000;
+
 @Component({
   selector: 'app-import-messages-dialog',
   standalone: true,
-  imports: [
+  imports: [EnvironmentLineComponent, 
     CommonModule,
     FormsModule,
     MatButtonModule,
@@ -39,6 +44,7 @@ export interface ImportMessagesDialogData {
     </h2>
 
     <mat-dialog-content class="content">
+      <app-environment-line [mark]="context().mark"><b>{{ data.entityName }}</b> on {{ context().where }}</app-environment-line>
       <div class="file-picker">
         <label for="import-file" class="field-label">Select File</label>
         <input
@@ -122,15 +128,12 @@ export interface ImportMessagesDialogData {
         </div>
       }
 
-      @if (importResult()) {
-        <p class="note" [class.error]="importResult()!.failures > 0" role="status">
-          <mat-icon [fontIcon]="importResult()!.failures === 0 ? 'check_circle' : 'warning'" aria-hidden="true"></mat-icon>
+      @if (importResult()?.failures) {
+        <p class="note result error" role="status">
+          <mat-icon fontIcon="warning" aria-hidden="true"></mat-icon>
           <span>
-            <strong>Import complete:</strong>
-            {{ importResult()!.successes }} sent successfully
-            @if (importResult()!.failures > 0) {
-              , {{ importResult()!.failures }} failed
-            }
+            <strong>Import stopped:</strong>
+            {{ importResult()!.successes }} sent, {{ importResult()!.failures }} not sent. A message the broker did not confirm may have been sent; read the entity before importing again.
           </span>
         </p>
       }
@@ -182,6 +185,8 @@ export interface ImportMessagesDialogData {
   `]
 })
 export class ImportMessagesDialogComponent {
+  /** The active connection and its environment, for the line under the title. */
+  readonly context = connectionContext();
   data = inject<ImportMessagesDialogData>(MAT_DIALOG_DATA);
   private dialogRef = inject(MatDialogRef<ImportMessagesDialogComponent>);
   private queueService = inject(QueueService);
@@ -286,37 +291,37 @@ export class ImportMessagesDialogComponent {
     this.importedCount.set(0);
     this.importProgress.set(0);
 
-    // Use batch send for efficiency
-    const sendObservable = this.data.entityType === 'queue'
-      ? this.queueService.sendMessages(this.data.entityName, messages)
-      : this.topicService.sendMessages(this.data.entityName, messages);
+    const chunks: SendMessageRequest[][] = [];
+    for (let i = 0; i < messages.length; i += IMPORT_CHUNK) chunks.push(messages.slice(i, i + IMPORT_CHUNK));
+    const send = (chunk: SendMessageRequest[]) => this.data.entityType === 'queue'
+      ? this.queueService.sendMessages(this.data.entityName, chunk)
+      : this.topicService.sendMessages(this.data.entityName, chunk);
+    let sent = 0;
 
-    sendObservable.pipe(
+    from(chunks).pipe(
+      concatMap(chunk => send(chunk)),
+      takeWhile(result => result.success !== false, true),
       finalize(() => this.importing.set(false)),
       takeUntilDestroyed(this.destroyRef)
     ).subscribe({
-      next: (result) => {
-        this.importedCount.set(result.count ?? messages.length);
-        this.importProgress.set(100);
-        this.importResult.set({
-          successes: result.count ?? messages.length,
-          failures: 0
-        });
-        this.snackBar.open(
-          `Successfully imported ${result.count ?? messages.length} messages`,
-          'Close',
-          { duration: 5000 }
-        );
+      next: result => {
+        sent += result.count ?? 0;
+        this.importedCount.set(sent);
+        this.importProgress.set(Math.round(sent / messages.length * 100));
       },
-      error: (err) => {
-        this.importResult.set({
-          successes: 0,
-          failures: messages.length
-        });
-        const errorMsg = err?.error?.message || err?.message || 'Unknown error';
-        this.snackBar.open(`Import failed: ${errorMsg}`, 'Close', { duration: 5000 });
-      }
+      error: err => this.finishImport(sent, messages.length, err?.error?.message || err?.message || 'Unknown error'),
+      complete: () => this.finishImport(sent, messages.length)
     });
+  }
+
+  /** Says what the import did: all sent in a snack bar; otherwise how many were sent and not, in the dialog, never as a success. */
+  private finishImport(sent: number, total: number, reason?: string): void {
+    this.importResult.set({ successes: sent, failures: total - sent });
+    if (sent === total) {
+      this.snackBar.open(`Import complete: ${sent} sent successfully`, 'Close', { duration: 5000 });
+    } else {
+      this.snackBar.open(reason ? `Import failed: ${reason}` : `Import stopped: ${total - sent} of ${total} not sent`, 'Close', { duration: 5000 });
+    }
   }
 
   /**

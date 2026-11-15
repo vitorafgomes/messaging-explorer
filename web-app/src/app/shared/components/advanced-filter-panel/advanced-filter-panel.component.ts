@@ -118,8 +118,8 @@ import { AdvancedMessageFilterService } from '../../../core/services';
           @if (filterState.conditions.length === 0) {
             <div class="empty-state">
               <mat-icon fontIcon="filter_alt_off" aria-hidden="true"></mat-icon>
-              <p>No filters applied</p>
-              <p class="hint">Click "Add Filter" to create a new filter condition</p>
+              <p><strong>No filters applied.</strong></p>
+              <p class="hint">Click "Add Filter" to create a new filter condition: a property, an operator and a value.</p>
             </div>
           } @else {
             @for (condition of filterState.conditions; track condition.id) {

@@ -89,13 +89,11 @@ p {
 }
 
 .sub-queue-note,
-.state-count,
-.state-note {
+.state-count {
   color: var(--mat-sys-on-surface-variant);
 }
 
-.state-count,
-.state-note {
+.state-count {
   font: var(--mat-sys-body-small);
 }
 
@@ -160,23 +158,6 @@ p {
   }
 }
 
-.filter-info {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 4px 4px 4px 12px;
-  border-radius: 8px;
-  background: var(--mat-sys-secondary-container);
-  color: var(--mat-sys-on-secondary-container);
-  font: var(--mat-sys-label-large);
-
-  .filter-summary {
-    flex: 1;
-    min-width: 0;
-  }
-}
-
 .list-pane,
 .detail-pane {
   box-sizing: border-box;
@@ -201,6 +182,19 @@ p {
   }
 }
 
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 20px 20px;
+
+  > div {
+    height: 44px;
+    border-radius: 8px;
+    background: var(--mat-sys-surface-container-low);
+  }
+}
+
 .list-state[role='status'] {
   flex-direction: row;
   align-items: center;
@@ -208,6 +202,7 @@ p {
 }
 
 .state-title {
+  margin: 0;
   color: var(--mat-sys-on-surface);
   font: var(--mat-sys-title-small);
 }
@@ -215,10 +210,20 @@ p {
 .select-all-row {
   display: flex;
   align-items: center;
+  gap: 12px;
   min-height: 40px;
   padding: 0 12px;
   border-bottom: 1px solid var(--mat-sys-outline);
   font: var(--mat-sys-label-large);
+
+  .filter-summary {
+    flex: 1;
+    min-width: 0;
+    text-align: end;
+    color: var(--mat-sys-on-surface-variant);
+    font: var(--mat-sys-body-small);
+    font-variant-numeric: tabular-nums;
+  }
 }
 
 .check-label {
@@ -239,6 +244,12 @@ input[type='checkbox'] {
 .messages-list {
   height: clamp(200px, 42vh, 520px);
   width: 100%;
+
+  ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
 }
 
 ::ng-deep .cdk-virtual-scroll-content-wrapper {
@@ -251,9 +262,8 @@ input[type='checkbox'] {
   gap: 12px;
   box-sizing: border-box;
   height: 64px;
-  padding: 0 12px;
+  padding: 0 0 0 12px;
   border-bottom: 1px solid var(--mat-sys-outline-variant);
-  cursor: pointer;
 
   &:hover {
     background: var(--mat-sys-surface-container-high);
@@ -272,9 +282,23 @@ input[type='checkbox'] {
 .message-content {
   display: flex;
   flex-direction: column;
+  justify-content: center;
   gap: 2px;
   flex: 1;
+  align-self: stretch;
   min-width: 0;
+  padding: 0 12px 0 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: -2px;
+  }
 }
 
 .message-header {
@@ -318,9 +342,19 @@ input[type='checkbox'] {
   background: var(--mat-sys-primary-container);
   color: var(--mat-sys-on-primary-container);
   font: var(--mat-sys-label-small);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+
+  mat-icon {
+    width: 12px;
+    height: 12px;
+    font-size: 12px;
+  }
 }
 
 .message-preview {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -378,7 +412,7 @@ input[type='checkbox'] {
   padding: 10px 12px;
   overflow: auto;
   border-radius: 8px;
-  background: var(--mat-sys-surface-container-highest);
+  background: var(--mat-sys-surface-container);
   color: var(--mat-sys-on-surface);
   font-family: ui-monospace, monospace;
   font-size: var(--mat-sys-body-small-size);
@@ -421,6 +455,21 @@ input[type='checkbox'] {
   padding-top: 4px;
 }
 
+.message-actions.apart {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--mat-sys-outline-variant);
+}
+
+.danger-text {
+  --mat-button-text-label-text-color: var(--mat-sys-error);
+}
+
+.body-content.hex {
+  white-space: pre;
+  overflow-x: auto;
+}
+
 .tonal {
   --mat-button-filled-container-color: var(--mat-sys-secondary-container);
   --mat-button-filled-label-text-color: var(--mat-sys-on-secondary-container);
@@ -449,4 +498,94 @@ mark,
   .detail-pane {
     grid-column: 1;
   }
+}
+
+.dialog-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 8px;
+
+  .title {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.load-failure {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 16px;
+  padding: 16px;
+  border-radius: 8px;
+
+  h2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font: var(--mat-sys-title-small);
+  }
+
+  p {
+    margin: 0;
+  }
+
+  .load-failure-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  &.error {
+    background: var(--mat-sys-error-container);
+    color: var(--mat-sys-on-error-container);
+  }
+
+  &.disabled {
+    background: var(--app-warning-container);
+    color: var(--app-on-warning-container);
+  }
+}
+
+.state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.pane-head,
+.body-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.state-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+}
+
+.dialog-head .title app-environment-line {
+  display: block;
+  padding: 0 24px;
+}
+
+.load-more {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
 }

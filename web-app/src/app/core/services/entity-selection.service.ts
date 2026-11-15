@@ -57,7 +57,8 @@ export class EntitySelectionService {
     this.stateSubject.next({
       ...this.stateSubject.value,
       loading: true,
-      error: null
+      error: null,
+      loadingNode: node
     });
 
     this.pendingLoad = this.loadEntityDetails(node).subscribe({
@@ -97,7 +98,7 @@ export class EntitySelectionService {
   /** Shows the entity the API returned after a change to the current selection, without reading it again. */
   showEntity(entity: QueueInfo | TopicInfo | SubscriptionInfo): void {
     const current = this.stateSubject.value.selection;
-    if (!current) return;
+    if (!current || !sameEntity(current.entity, entity)) return;
     this.pendingLoad?.unsubscribe();
     this.stateSubject.next({ selection: { ...current, entity }, loading: false, error: null });
   }
@@ -145,4 +146,11 @@ export class EntitySelectionService {
     };
     this.select(node);
   }
+}
+
+/** Whether two reads name the same queue, topic or subscription: the same name and, for a subscription, the same topic. */
+function sameEntity(shown: unknown, changed: QueueInfo | TopicInfo | SubscriptionInfo): boolean {
+  const a = shown as { name?: string; topicName?: string } | undefined;
+  const b = changed as { name: string; topicName?: string };
+  return !!a && a.name === b.name && a.topicName === b.topicName;
 }

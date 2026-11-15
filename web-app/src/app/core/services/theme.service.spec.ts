@@ -23,7 +23,6 @@ describe('ThemeService', () => {
   beforeEach(() => {
     localStorage.clear();
     document.documentElement.classList.remove('dark-theme');
-    document.documentElement.removeAttribute('data-bs-theme');
 
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({
@@ -35,7 +34,6 @@ describe('ThemeService', () => {
   afterEach(() => {
     localStorage.clear();
     document.documentElement.classList.remove('dark-theme');
-    document.documentElement.removeAttribute('data-bs-theme');
   });
 
   it('should be created', () => {
@@ -54,7 +52,6 @@ describe('ThemeService', () => {
     service.toggle();
     expect(service.isDark()).toBe(true);
     expect(document.documentElement.classList.contains('dark-theme')).toBe(true);
-    expect(document.documentElement.getAttribute('data-bs-theme')).toBe('dark');
   });
 
   it('should persist theme preference', () => {
@@ -75,5 +72,57 @@ describe('ThemeService', () => {
     service.toggle();
     expect(service.isDark()).toBe(false);
     expect(document.documentElement.classList.contains('dark-theme')).toBe(false);
+  });
+
+  it('System follows this computer: dark when it is dark, and it changes when the setting changes', () => {
+    const original = window.matchMedia;
+    let listener: () => void = () => {};
+    const media = { matches: true, addEventListener: (_: string, l: () => void) => { listener = l; } };
+    (window as any).matchMedia = () => media;
+    try {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({ providers: [{ provide: PLATFORM_ID, useValue: 'browser' }] });
+      const system = TestBed.inject(ThemeService);
+      system.initialize();
+      expect(system.mode()).toBe('system');
+      expect(system.isDark()).toBe(true);
+
+      media.matches = false;
+      listener();
+      expect(system.isDark()).toBe(false);
+      expect(document.documentElement.classList.contains('dark-theme')).toBe(false);
+
+      system.setMode('dark');
+      media.matches = false;
+      listener();
+      expect(system.isDark()).toBe(true);
+      expect(localStorage.getItem('app-theme')).toBe('dark');
+    } finally {
+      (window as any).matchMedia = original;
+    }
+  });
+
+  it('a saved System choice is restored as System', () => {
+    localStorage.setItem('app-theme', 'system');
+    service.initialize();
+    expect(service.mode()).toBe('system');
+  });
+  it('an unknown saved value is read as System, never as a fixed theme', () => {
+    localStorage.setItem('app-theme', 'purple');
+    service.initialize();
+    expect(service.mode()).toBe('system');
+  });
+
+  it('a second initialize listens to the computer setting once, not twice', () => {
+    const original = window.matchMedia;
+    const add = vi.fn();
+    (window as any).matchMedia = () => ({ matches: false, addEventListener: add });
+    try {
+      service.initialize();
+      service.initialize();
+      expect(add).toHaveBeenCalledTimes(1);
+    } finally {
+      (window as any).matchMedia = original;
+    }
   });
 });

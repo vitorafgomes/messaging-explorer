@@ -3,12 +3,13 @@ using System.Text;
 using Moq;
 using RabbitMQ.Client;
 using ServiceBusExplorer.Core.Providers.RabbitMQ;
+using ServiceBusExplorer.Core.Providers.RabbitMQ.Models;
 
 namespace ServiceBusExplorer.Core.Tests.Providers;
 
 /// <summary>
 /// Listing the subscriptions of an exchange, as the monitoring poll does every period: the management requests it
-/// costs and the bindings it lists.
+/// costs and the bindings it lists; and the topic read, which shows the same subscriptions from one queue listing.
 /// </summary>
 public class RabbitMQSubscriptionListTests
 {
@@ -47,5 +48,63 @@ public class RabbitMQSubscriptionListTests
         Assert.Equal(
             ["/api/exchanges///events/bindings/source", "/api/queues///orders", "/api/queues///orders.dlq"],
             handler.Paths);
+    }
+
+    private const string Queues = """
+        [
+          {"name":"orders","state":"idle","messages_ready":3},
+          {"name":"orders.dlq","state":"running","messages_ready":2}
+        ]
+        """;
+
+    /// <summary>Answers the topic read: the exchange, its bindings, and the queue listing with the given status code.</summary>
+    private sealed class TopicHandler(HttpStatusCode queuesStatus) : HttpMessageHandler
+    {
+        public List<string> Paths { get; } = [];
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var path = Uri.UnescapeDataString(request.RequestUri!.AbsolutePath);
+            Paths.Add(path);
+            var (status, body) = path switch
+            {
+                _ when path.EndsWith("/bindings/source") => (HttpStatusCode.OK, Bindings),
+                "/api/queues//" => (queuesStatus, Queues),
+                _ => (HttpStatusCode.OK, """{"name":"events","type":"topic"}""")
+            };
+            return Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(body, Encoding.UTF8, "application/json") });
+        }
+    }
+
+    private static (RabbitMQProvider Provider, TopicHandler Handler, RabbitMQManagementClient Client) TopicProvider(HttpStatusCode queuesStatus)
+    {
+        var handler = new TopicHandler(queuesStatus);
+        var connection = new Mock<IConnection>();
+        connection.Setup(c => c.IsOpen).Returns(true);
+        var client = new RabbitMQManagementClient(new HttpClient(handler), "http://127.0.0.1:15672/api", "/", "user", "password");
+        return (new RabbitMQProvider(connection.Object, client), handler, client);
+    }
+
+    [Fact]
+    public async Task A_topic_read_shows_each_bound_queues_state_and_counts_from_the_one_queue_listing_and_no_rule_count()
+    {
+        var (provider, handler, client) = TopicProvider(HttpStatusCode.OK);
+        using var owned = client;
+
+        var topic = Assert.IsType<RabbitMQExchangeInfo>(await provider.GetTopicAsync("events"));
+
+        Assert.Equal([("orders", "idle", 3L, 2L, (int?)null)], topic.Subscriptions.Select(s => (s.Name, s.Status, s.ActiveMessageCount, s.DeadLetterMessageCount, s.RuleCount)));
+        Assert.Equal(1, handler.Paths.Count(p => p.StartsWith("/api/queues")));
+    }
+
+    [Fact]
+    public async Task A_failed_queue_listing_fails_the_topic_read_instead_of_showing_invented_statuses()
+    {
+        var (provider, _, client) = TopicProvider(HttpStatusCode.InternalServerError);
+        using var owned = client;
+
+        var error = await Assert.ThrowsAsync<HttpRequestException>(() => provider.GetTopicAsync("events"));
+
+        Assert.Equal(HttpStatusCode.InternalServerError, error.StatusCode);
     }
 }

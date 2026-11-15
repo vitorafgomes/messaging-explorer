@@ -6,6 +6,7 @@ using ServiceBusExplorer.Api.Controllers;
 using ServiceBusExplorer.Core.Abstractions;
 using ServiceBusExplorer.Core.Models;
 using ServiceBusExplorer.Core.Providers;
+using ServiceBusExplorer.Core.Providers.Azure;
 using static ServiceBusExplorer.Api.Tests.EntityAdministrationTests;
 
 namespace ServiceBusExplorer.Api.Tests;
@@ -41,7 +42,7 @@ public class DefinitionsRouteTests
         }
         """;
 
-    private static readonly EntityDefinitionsDocument Exported = new()
+    private static EntityDefinitionsDocument Exported => new()
     {
         Version = 1,
         ExportedAt = DateTimeOffset.Parse("2026-11-13T10:00:00+00:00"),
@@ -65,7 +66,8 @@ public class DefinitionsRouteTests
         DryRun = true,
         Items =
         [
-            new DefinitionImportItem { Kind = DefinitionEntityKind.Queue, Name = "orders", Outcome = DefinitionImportOutcome.Differs, DifferingFields = ["maxDeliveryCount"] },
+            new DefinitionImportItem { Kind = DefinitionEntityKind.Queue, Name = "orders", Outcome = DefinitionImportOutcome.Differs, DifferingFields = ["maxDeliveryCount"],
+                Differences = [new DefinitionFieldDifference { Field = "maxDeliveryCount", Current = 5, InFile = 10 }] },
             new DefinitionImportItem { Kind = DefinitionEntityKind.Subscription, Name = "audit", Topic = "billing", Outcome = DefinitionImportOutcome.Create }
         ]
     };
@@ -102,6 +104,26 @@ public class DefinitionsRouteTests
         Assert.Equal(("$Default", "True"), (rule.GetProperty("name").GetString(), rule.GetProperty("filterType").GetString()));
     }
 
+    [Fact]
+    public async Task The_exported_document_names_its_source_as_the_connection_target_and_never_carries_the_connection_string()
+    {
+        const string key = "SasKeySentinelxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+        var connection = new AzureConnectionConfig
+        {
+            Name = "fake",
+            AuthType = AzureAuthType.ConnectionString,
+            ConnectionString = $"Endpoint=sb://contoso-test.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey={key}"
+        };
+        var answered = await SendAsync("POST", "/api/namespace/export", null,
+            (m, args) => m.Name == "get_CurrentConnection" ? connection : ProviderAnswers(m, args));
+
+        Assert.Equal(HttpStatusCode.OK, answered.Status);
+        Assert.True(Json(answered.Body).TryGetProperty("source", out var source) && source.GetString() == "fake-target",
+            $"The export names its source as the connection target the app shows; the body was {answered.Body}");
+        Assert.False(answered.Body.Contains(key) || answered.Body.Contains("SharedAccessKey") || answered.Body.Contains("Endpoint="),
+            "The exported source never carries the connection string or its key");
+    }
+
     [Theory]
     [InlineData("durable")]
     [InlineData("autoDelete")]
@@ -132,7 +154,7 @@ public class DefinitionsRouteTests
         Assert.Equal((1, "orders", TimeSpan.FromSeconds(45), 5, "Disabled"), (document.Version, queue.Name, queue.Options!.LockDuration, queue.Options.MaxDeliveryCount, queue.Options.Status));
         var subscription = document.Entities.Topics![0]!.Subscriptions![0]!;
         Assert.Equal(("audit", RuleFilterType.Sql, "total > 100"), (subscription.Name, subscription.Rules![0]!.FilterType, subscription.Rules[0]!.SqlExpression));
-        Assert.Equal("""{"dryRun":true,"items":[{"kind":"Queue","name":"orders","topic":null,"outcome":"Differs","differingFields":["maxDeliveryCount"],"reason":null},{"kind":"Subscription","name":"audit","topic":"billing","outcome":"Create","differingFields":null,"reason":null}]}""", answered.Body);
+        Assert.Equal("""{"dryRun":true,"items":[{"kind":"Queue","name":"orders","topic":null,"outcome":"Differs","differingFields":["maxDeliveryCount"],"differences":[{"field":"maxDeliveryCount","current":5,"inFile":10}],"reason":null},{"kind":"Subscription","name":"audit","topic":"billing","outcome":"Create","differingFields":null,"differences":null,"reason":null}]}""", answered.Body);
     }
 
     [Fact]
@@ -243,6 +265,7 @@ public class DefinitionsRouteTests
     [Theory]
     [InlineData("/api/namespace/export", nameof(IMessagingProvider.ExportDefinitionsAsync))]
     [InlineData("/api/namespace/import?dryRun=false", nameof(IMessagingProvider.ImportDefinitionsAsync))]
+    [InlineData("/api/namespace/import?dryRun=true", nameof(IMessagingProvider.ImportDefinitionsAsync))]
     public async Task Any_other_failure_answers_the_constant_500_without_the_broker_text(string path, string providerMethod)
     {
         var answered = await SendAsync("POST", path, Document, Fails(providerMethod, new InvalidOperationException(Sentinel)));

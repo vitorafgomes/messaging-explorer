@@ -1,6 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { Observable, ReplaySubject, firstValueFrom } from 'rxjs';
-import { map, skip, takeUntil } from 'rxjs/operators';
+import { EMPTY, Observable, ReplaySubject, firstValueFrom } from 'rxjs';
+import { expand, map, skip, takeUntil, takeWhile } from 'rxjs/operators';
 import { BatchOperationResult, MessageInfo } from '../models';
 import { QueueService } from './queue.service';
 import { TopicService } from './topic.service';
@@ -27,6 +27,44 @@ export interface ResubmitRunOptions {
   reason?: string;
   /** Only messages whose subject or body contains this text, ignoring case. */
   text?: string;
+  /** Only messages enqueued at or after this time, in milliseconds since the epoch; not a number is no bound. */
+  enqueuedFrom?: number;
+  /** Only messages enqueued at or before this time, in milliseconds since the epoch; not a number is no bound. */
+  enqueuedTo?: number;
+  /** Every batch sends each copy with a new message id into a target that detects duplicates. */
+  newMessageIdOnDuplicateDetection?: boolean;
+}
+
+/** What a run, and the count before it, select by. */
+export type ResubmitRunFilter = Pick<ResubmitRunOptions, 'reason' | 'text' | 'enqueuedFrom' | 'enqueuedTo'>;
+
+/** A count of the matching dead-letter messages, published after each peek. */
+export interface MatchCount {
+  read: number;
+  matched: number;
+  peeks: number;
+  /** The count stopped at its cap, so the rest of the queue was not read. */
+  capped: boolean;
+  done: boolean;
+}
+
+/** The test a run and the count before it apply to each message, built once: reason equals, text in the subject or body ignoring case, enqueued time inside the range. */
+export function messageFilter(filter: ResubmitRunFilter): (message: MessageInfo) => boolean {
+  const text = filter.text ? new RegExp(filter.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') : null;
+  const from = Number.isFinite(filter.enqueuedFrom) ? filter.enqueuedFrom! : null;
+  const to = Number.isFinite(filter.enqueuedTo) ? filter.enqueuedTo! : null;
+  return message => {
+    if (filter.reason && message.deadLetterReason !== filter.reason) {
+      return false;
+    }
+    if (from !== null || to !== null) {
+      const enqueued = new Date(message.enqueuedTime).getTime();
+      if (!Number.isFinite(enqueued) || (from !== null && enqueued < from) || (to !== null && enqueued > to)) {
+        return false;
+      }
+    }
+    return !text || text.test(message.subject ?? '') || text.test(message.body ?? '');
+  };
 }
 
 export type ResubmitRunStatus = 'running' | 'paused' | 'completed' | 'stopped' | 'failed';
@@ -36,6 +74,8 @@ export interface LeftBehind {
   sequenceNumber: number;
   deadLetterReason: string;
   error: string;
+  /** The batch of the run that read it. */
+  batch?: number;
 }
 
 export interface ReasonTotals {
@@ -56,10 +96,16 @@ export interface ResubmitRunProgress {
   resubmitted: number;
   failed: number;
   possibleDuplicates: number;
+  /** Older than the start but excluded by the filter, so left in dead-letter. */
+  leftByFilter: number;
+  /** The batch read last, from 1; also the cycles done. */
+  batch: number;
+  /** The batches a run of N takes at its batch size. */
+  batches: number;
   /** The next sequence number the run reads from. */
   cursor: number;
   elapsedMs: number;
-  /** Messages read per second over the last minute; null before anything was measured. */
+  /** Messages read per second over the last 5 minutes; null before anything was measured. */
   ratePerSecond: number | null;
   /** Time left to read the rest of N at that rate; null when it cannot be estimated. */
   remainingMs: number | null;
@@ -72,7 +118,7 @@ export interface ResubmitRunReport {
   entity: string;
   subQueue: ResubmitRunTarget['subQueue'];
   connection: string | null;
-  filter: { reason: string | null; text: string | null };
+  filter: { reason: string | null; text: string | null; enqueuedFrom: string | null; enqueuedTo: string | null };
   stopAtFirstFailure: boolean;
   status: ResubmitRunStatus;
   message: string;
@@ -84,6 +130,8 @@ export interface ResubmitRunReport {
   resubmitted: number;
   failed: number;
   possibleDuplicates: number;
+  leftByFilter: number;
+  cycles: number;
   byReason: ReasonTotals[];
   failedMessages: LeftBehind[];
   possibleDuplicateMessages: LeftBehind[];
@@ -100,7 +148,10 @@ const STOPPED = Symbol('stopped');
 const NO_REASON = '(none)';
 const OTHER_REASONS = '(other reasons)';
 const MAX_REASONS = 50;
-const RATE_WINDOW_MS = 60_000;
+const RATE_WINDOW_MS = 300_000;
+const COUNT_PEEK = 500;
+// ponytail: a count before a run reads at most 100,000 messages (200 peeks) and says so; raise the cap if owners count larger queues.
+const MATCH_COUNT_CAP = 100_000;
 const DEFAULT_LOCK_MS = 60_000;
 const MAX_LOCK_WAIT_MS = 300_000;
 const SCAN_WALL = 'The server could not find messages of the last batch even after their locks were released: the head of the dead-letter queue holds messages it cannot scan past, so the run stops here. They stay in the queue and are listed as failed.';
@@ -110,6 +161,17 @@ function lockWait(lockDuration: string | undefined): number {
   const d = parseDuration(lockDuration ?? '');
   const ms = ((((d.days * 24 + d.hours) * 60 + d.minutes) * 60 + d.seconds) * 1000) + d.milliseconds;
   return Math.min(ms > 0 ? ms : DEFAULT_LOCK_MS, MAX_LOCK_WAIT_MS);
+}
+
+/** "2 h 40 min", "3 min 5 s" or "12 s"; with seconds, "3 h 53 min 20 s". */
+export function formatDuration(ms: number, withSeconds = false): string {
+  const seconds = Math.max(0, Math.round(ms / 1000));
+  const h = Math.floor(seconds / 3600);
+  const min = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return withSeconds ? `${h} h ${min} min ${s} s` : `${h} h ${min} min`;
+  if (min > 0) return `${min} min ${s} s`;
+  return `${s} s`;
 }
 
 function keyOf(target: ResubmitRunTarget): string {
@@ -130,7 +192,7 @@ export class ResubmitRun {
   readonly done: Promise<void>;
   readonly progress = signal<ResubmitRunProgress>({
     status: 'running', total: 0, read: 0, matched: 0, resubmitted: 0, failed: 0, possibleDuplicates: 0,
-    cursor: 0, elapsedMs: 0, ratePerSecond: null, remainingMs: null, message: 'Reading the dead-letter count.'
+    leftByFilter: 0, batch: 0, batches: 0, cursor: 0, elapsedMs: 0, ratePerSecond: null, remainingMs: null, message: 'Reading the dead-letter count.'
   });
 
   private status: ResubmitRunStatus = 'running';
@@ -139,6 +201,8 @@ export class ResubmitRun {
   private read = 0;
   private matched = 0;
   private resubmitted = 0;
+  private leftByFilter = 0;
+  private batch = 0;
   private cursor = 0;
   private endedAt: number | null = null;
   private readonly reasons = new Map<string, ReasonTotals>();
@@ -148,9 +212,10 @@ export class ResubmitRun {
   private stopReason = 'Stopped by the user.';
   private pauseRequested = false;
   private wake: (() => void) | null = null;
-  private readonly textPattern: RegExp | null;
+  private readonly matches: (message: MessageInfo) => boolean;
   private readonly stopped = firstValueFrom(this.stop$);
   private lockWaitMs: number | null = null;
+  private readonly retrying: boolean;
 
   constructor(
     readonly target: ResubmitRunTarget,
@@ -164,8 +229,9 @@ export class ResubmitRun {
     retryOf?: LeftBehind[]
   ) {
     this.startedAt = now();
-    this.textPattern = options.text ? new RegExp(options.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') : null;
+    this.matches = messageFilter(options);
     this.samples.push({ t: this.startedAt, read: 0 });
+    this.retrying = !!retryOf;
     this.done = (retryOf ? this.retryList(retryOf) : this.scan())
       .catch(() => this.end('failed', 'The run stopped on an unexpected error.'));
   }
@@ -216,7 +282,12 @@ export class ResubmitRun {
       entity: this.target.entityName,
       subQueue: this.target.subQueue,
       connection: this.connection,
-      filter: { reason: this.options.reason || null, text: this.options.text || null },
+      filter: {
+        reason: this.options.reason || null,
+        text: this.options.text || null,
+        enqueuedFrom: Number.isFinite(this.options.enqueuedFrom) ? new Date(this.options.enqueuedFrom!).toISOString() : null,
+        enqueuedTo: Number.isFinite(this.options.enqueuedTo) ? new Date(this.options.enqueuedTo!).toISOString() : null
+      },
       stopAtFirstFailure: this.options.stopAtFirstFailure,
       status: p.status,
       message: p.message,
@@ -228,6 +299,8 @@ export class ResubmitRun {
       resubmitted: p.resubmitted,
       failed: p.failed,
       possibleDuplicates: p.possibleDuplicates,
+      leftByFilter: p.leftByFilter,
+      cycles: p.batch,
       byReason: this.byReason(),
       failedMessages: this.failed.map(entry => ({ ...entry })),
       possibleDuplicateMessages: this.possibleDuplicates.map(entry => ({ ...entry }))
@@ -259,7 +332,7 @@ export class ResubmitRun {
       const count = Math.min(this.options.batchSize, this.total - this.read);
       let answer: MessageInfo[] | null | typeof STOPPED;
       try {
-        answer = await this.call(this.broker.peek(this.cursor, count, this.textPattern !== null));
+        answer = await this.call(this.broker.peek(this.cursor, count, !!this.options.text));
       } catch (error) {
         return this.end('failed', messageCallFailure(error, 'The dead-letter peek failed'));
       }
@@ -272,6 +345,7 @@ export class ResubmitRun {
       }
 
       const from = this.cursor;
+      this.batch++;
       this.read += batch.length;
       this.cursor = batch.reduce((next, message) => Math.max(next, message.sequenceNumber + 1), from);
       const targets = new Map<number, string>();
@@ -288,6 +362,8 @@ export class ResubmitRun {
         this.totalsOf(reason).read++;
         if (this.matches(message)) {
           targets.set(message.sequenceNumber, reason);
+        } else {
+          this.leftByFilter++;
         }
       }
       this.matched += targets.size;
@@ -308,6 +384,7 @@ export class ResubmitRun {
     this.publish();
     for (let i = 0; i < entries.length; i += this.options.batchSize) {
       const chunk = entries.slice(i, i + this.options.batchSize);
+      this.batch++;
       this.read += chunk.length;
       this.matched += chunk.length;
       chunk.forEach(entry => this.totalsOf(entry.deadLetterReason).read++);
@@ -328,6 +405,8 @@ export class ResubmitRun {
       this.end('stopped', this.stopReason);
       return false;
     }
+    this.message = this.inFlight(targets.size);
+    this.publish();
     let answer: BatchOperationResult | null | typeof STOPPED;
     try {
       answer = await this.call(this.broker.resubmit([...targets.keys()]));
@@ -356,7 +435,7 @@ export class ResubmitRun {
         continue;
       }
       const reason = targets.get(seq)!;
-      const entry = { sequenceNumber: seq, deadLetterReason: reason, error: failure.error };
+      const entry = { sequenceNumber: seq, deadLetterReason: reason, error: failure.error, batch: this.batch };
       if (isPossibleDuplicate(failure)) {
         duplicatesNow.push(seq);
         this.possibleDuplicates.push(entry);
@@ -427,18 +506,26 @@ export class ResubmitRun {
     return false;
   }
 
-  private unknownOutcome(targets: Map<number, string>, error: string): void {
-    for (const [sequenceNumber, reason] of targets) {
-      this.possibleDuplicates.push({ sequenceNumber, deadLetterReason: reason, error });
-      this.totalsOf(reason).possibleDuplicates++;
+  /** "Batch N of M: resubmitting K.", and for a scan where it reads onward from. */
+  private inFlight(size: number): string {
+    const n = (value: number) => value.toLocaleString('en-US');
+    const said = `Batch ${n(this.batch)} of ${n(this.batches())}: resubmitting ${n(size)}.`;
+    if (this.retrying) {
+      return said;
     }
+    const left = this.failed.length + this.possibleDuplicates.length;
+    return `${said} Reading onward from sequence number ${this.cursor}${left > 0 ? `; the ${n(left)} left behind are not read again by this run.` : '.'}`;
   }
 
-  private matches(message: MessageInfo): boolean {
-    if (this.options.reason && message.deadLetterReason !== this.options.reason) {
-      return false;
+  private batches(): number {
+    return Math.ceil(this.total / this.options.batchSize);
+  }
+
+  private unknownOutcome(targets: Map<number, string>, error: string): void {
+    for (const [sequenceNumber, reason] of targets) {
+      this.possibleDuplicates.push({ sequenceNumber, deadLetterReason: reason, error, batch: this.batch });
+      this.totalsOf(reason).possibleDuplicates++;
     }
-    return !this.textPattern || this.textPattern.test(message.subject ?? '') || this.textPattern.test(message.body ?? '');
   }
 
   private totalsOf(reason: string): ReasonTotals {
@@ -496,6 +583,9 @@ export class ResubmitRun {
       resubmitted: this.resubmitted,
       failed: this.failed.length,
       possibleDuplicates: this.possibleDuplicates.length,
+      leftByFilter: this.leftByFilter,
+      batch: this.batch,
+      batches: this.batches(),
       cursor: this.cursor,
       elapsedMs: now - this.startedAt,
       ratePerSecond: rate,
@@ -558,7 +648,7 @@ export class ResubmitRunService {
     if (active?.isActive()) {
       return active;
     }
-    return this.keep(new ResubmitRun(target, options, this.connections.currentTarget ?? null, this.generation, this.brokerFor(target), this.now, this.sleep));
+    return this.keep(new ResubmitRun(target, options, this.connections.currentTarget ?? null, this.generation, this.brokerFor(target, options.newMessageIdOnDuplicateDetection), this.now, this.sleep));
   }
 
   /** A finished run can be retried only under the connection it ran on. */
@@ -569,8 +659,9 @@ export class ResubmitRunService {
   /**
    * Starts a run on exactly the failed messages of a finished run; possible duplicates are never included.
    * A run from an earlier connection is returned as it is, so its sequence numbers never reach another broker.
+   * `newMessageId` asks for new message ids on the retry, as after a refusal by a target that detects duplicates.
    */
-  retry(run: ResubmitRun): ResubmitRun {
+  retry(run: ResubmitRun, newMessageId = run.options.newMessageIdOnDuplicateDetection === true): ResubmitRun {
     const active = this.find(run.target);
     if (active?.isActive()) {
       return active;
@@ -579,7 +670,39 @@ export class ResubmitRunService {
       return run;
     }
     const failed = run.failed.map(entry => ({ ...entry }));
-    return this.keep(new ResubmitRun(run.target, run.options, this.connections.currentTarget ?? null, this.generation, this.brokerFor(run.target), this.now, this.sleep, failed));
+    const options = { ...run.options, newMessageIdOnDuplicateDetection: newMessageId };
+    return this.keep(new ResubmitRun(run.target, options, this.connections.currentTarget ?? null, this.generation, this.brokerFor(run.target, newMessageId), this.now, this.sleep, failed));
+  }
+
+  /**
+   * Counts the dead-letter messages the filter of a run would match by peeking onward from the
+   * start, 500 at a time, at most `cap` messages; nothing is received or changed. Publishes after
+   * each peek; unsubscribing cancels the peek in flight.
+   */
+  countMatching(target: ResubmitRunTarget, filter: ResubmitRunFilter, cap = MATCH_COUNT_CAP): Observable<MatchCount> {
+    const broker = this.brokerFor(target);
+    const matches = messageFilter(filter);
+    const step = (state: MatchCount & { cursor: number }): Observable<MatchCount & { cursor: number }> =>
+      broker.peek(state.cursor, Math.min(COUNT_PEEK, cap - state.read), !!filter.text).pipe(
+        map(answer => {
+          const batch = (answer ?? []).filter(message => message.sequenceNumber >= state.cursor);
+          const read = state.read + batch.length;
+          const capped = read >= cap;
+          return {
+            read,
+            matched: state.matched + batch.filter(matches).length,
+            peeks: state.peeks + 1,
+            capped,
+            done: batch.length === 0 || capped,
+            cursor: batch.reduce((next, message) => Math.max(next, message.sequenceNumber + 1), state.cursor)
+          };
+        })
+      );
+    return step({ read: 0, matched: 0, peeks: 0, capped: false, done: false, cursor: 0 }).pipe(
+      expand(state => state.done ? EMPTY : step(state)),
+      takeWhile(state => !state.done, true),
+      map(({ cursor: _, ...count }) => count)
+    );
   }
 
   find(target: ResubmitRunTarget): ResubmitRun | undefined {
@@ -601,7 +724,7 @@ export class ResubmitRunService {
     return run;
   }
 
-  private brokerFor(target: ResubmitRunTarget): RunBroker {
+  private brokerFor(target: ResubmitRunTarget, newMessageId = false): RunBroker {
     const transfer = target.subQueue === 'transferdeadletter';
     const name = target.entityName;
     if (target.entityType === 'queue') {
@@ -616,8 +739,8 @@ export class ResubmitRunService {
           ? this.queues.peekTransferDeadLetterMessages(name, count, from, includeBody)
           : this.queues.peekDeadLetterMessages(name, count, from, includeBody),
         resubmit: numbers => transfer
-          ? this.queues.resubmitTransferDeadLetterMessages(name, numbers)
-          : this.queues.resubmitDeadLetterMessages(name, numbers)
+          ? this.queues.resubmitTransferDeadLetterMessages(name, numbers, newMessageId)
+          : this.queues.resubmitDeadLetterMessages(name, numbers, newMessageId)
       };
     }
     const topic = target.topicName ?? '';
@@ -632,8 +755,8 @@ export class ResubmitRunService {
         ? this.topics.peekTransferDeadLetterMessages(topic, name, count, from, includeBody)
         : this.topics.peekDeadLetterMessages(topic, name, count, from, includeBody),
       resubmit: numbers => transfer
-        ? this.topics.resubmitTransferDeadLetterMessages(topic, name, numbers)
-        : this.topics.resubmitDeadLetterMessages(topic, name, numbers)
+        ? this.topics.resubmitTransferDeadLetterMessages(topic, name, numbers, newMessageId)
+        : this.topics.resubmitDeadLetterMessages(topic, name, numbers, newMessageId)
     };
   }
 }

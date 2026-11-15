@@ -122,11 +122,13 @@ public interface IMessagingProvider : IAsyncDisposable
     Task<IEnumerable<ITopicEntity>> GetTopicsAsync();
 
     /// <summary>
-    /// Gets a specific topic/exchange by name.
+    /// Gets a specific topic/exchange by name, with each of its subscriptions, their status and, where the provider
+    /// has subscription rules, their rule count. Counting rules costs one listing per subscription, so it is bounded.
     /// </summary>
     /// <param name="topicName">The name of the topic/exchange.</param>
+    /// <param name="cancellationToken">Stops the read, including the rule listings still running.</param>
     /// <returns>The topic entity, or null if not found.</returns>
-    Task<ITopicEntity?> GetTopicAsync(string topicName);
+    Task<ITopicEntity?> GetTopicAsync(string topicName, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Creates a new topic/exchange with the specified name.
@@ -295,18 +297,26 @@ public interface IMessagingProvider : IAsyncDisposable
     Task<IEnumerable<IMessage>> PeekMessagesAsync(string entityName, int count = 10, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, long? fromSequenceNumber = null, bool includeBody = true, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Sends a message to a queue or topic.
+    /// Sends a message to a queue or topic. A message with a scheduled enqueue time is scheduled instead, and the
+    /// sequence number the broker gave it is returned: it is the handle that cancels the message later. Null when the
+    /// message was sent at once or the provider has no scheduled messages.
     /// </summary>
     /// <param name="entityName">The name of the queue or topic.</param>
     /// <param name="message">The message to send.</param>
-    Task SendMessageAsync(string entityName, SendMessageRequest message);
+    /// <returns>The sequence number of the scheduled message, or null.</returns>
+    Task<long?> SendMessageAsync(string entityName, SendMessageRequest message);
 
     /// <summary>
-    /// Sends multiple messages to a queue or topic in a batch.
+    /// Sends multiple messages to a queue or topic, in as many broker calls as their size needs. A failure before any
+    /// message was accepted propagates as it was; once some were accepted, a failure or the caller's token stops the
+    /// send and the result says how many were sent and which were not. A message the broker cannot take alone is
+    /// refused in the result and the others are still sent. At-least-once: what was sent stays sent.
     /// </summary>
     /// <param name="entityName">The name of the queue or topic.</param>
     /// <param name="messages">The messages to send.</param>
-    Task SendMessagesAsync(string entityName, IEnumerable<SendMessageRequest> messages);
+    /// <param name="cancellationToken">Token checked between two broker calls.</param>
+    /// <returns>The count sent and one failure per message not sent, by its position in <paramref name="messages"/>.</returns>
+    Task<SendMessagesResult> SendMessagesAsync(string entityName, IEnumerable<SendMessageRequest> messages, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Receives and removes messages from a queue or subscription.
@@ -331,7 +341,9 @@ public interface IMessagingProvider : IAsyncDisposable
     /// <param name="entityName">The name of the queue or topic.</param>
     /// <param name="sequenceNumber">The sequence number or delivery tag of the message.</param>
     /// <param name="subscriptionName">The subscription name if operating on a topic subscription.</param>
-    Task ResubmitDeadLetterMessageAsync(string entityName, long sequenceNumber, string? subscriptionName = null);
+    /// <param name="newMessageIdOnDuplicateDetection">When the target detects duplicates, send the copy with a new message id and keep the original in <c>x-original-message-id</c>; without it such a target refuses the resubmit and nothing is sent or removed.</param>
+    /// <exception cref="InvalidEntityConfigurationException">The target detects duplicates and no new id was asked for, or its settings could not be read; nothing was sent or removed.</exception>
+    Task ResubmitDeadLetterMessageAsync(string entityName, long sequenceNumber, string? subscriptionName = null, bool newMessageIdOnDuplicateDetection = false);
 
     /// <summary>
     /// Purges all messages from a queue or subscription.
@@ -364,9 +376,10 @@ public interface IMessagingProvider : IAsyncDisposable
     /// <param name="sequenceNumbers">Array of sequence numbers to resubmit.</param>
     /// <param name="subQueue">The dead-letter queue to resubmit from; <see cref="MessageSubQueue.Active"/> is refused.</param>
     /// <param name="subscriptionName">The subscription name if resubmitting from a topic subscription.</param>
+    /// <param name="newMessageIdOnDuplicateDetection">When the target detects duplicates, send each copy with a new message id and keep the original in the application property <c>x-original-message-id</c>; when false, such a target refuses every message and nothing is sent or removed.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>Result containing success count and failure details.</returns>
-    Task<BatchOperationResult> ResubmitDeadLetterMessagesAsync(string entityName, long[] sequenceNumbers, MessageSubQueue subQueue = MessageSubQueue.DeadLetter, string? subscriptionName = null, CancellationToken cancellationToken = default);
+    Task<BatchOperationResult> ResubmitDeadLetterMessagesAsync(string entityName, long[] sequenceNumbers, MessageSubQueue subQueue = MessageSubQueue.DeadLetter, string? subscriptionName = null, bool newMessageIdOnDuplicateDetection = false, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Moves multiple messages from one queue or subscription to another queue.
@@ -376,22 +389,93 @@ public interface IMessagingProvider : IAsyncDisposable
     /// <param name="sequenceNumbers">Array of sequence numbers to move.</param>
     /// <param name="subQueue">The queue of the entity to move from.</param>
     /// <param name="subscriptionName">The subscription name if moving from a topic subscription.</param>
+    /// <param name="newMessageIdOnDuplicateDetection">When the target detects duplicates, send each copy with a new message id and keep the original in the application property <c>x-original-message-id</c>; when false, such a target refuses every message and nothing is sent or removed.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>Result containing success count and failure details.</returns>
-    Task<BatchOperationResult> MoveMessagesAsync(string sourceEntityName, string targetQueueName, long[] sequenceNumbers, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, CancellationToken cancellationToken = default);
+    Task<BatchOperationResult> MoveMessagesAsync(string sourceEntityName, string targetQueueName, long[] sequenceNumbers, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, bool newMessageIdOnDuplicateDetection = false, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Cancels scheduled messages of a queue, deleting each before it is ever delivered. The sequence numbers are
+    /// Cancels scheduled messages of a queue or a topic, deleting each before it is ever delivered. The sequence numbers are
     /// checked before the broker is called: 1 to 500, each positive, none repeated, or
     /// <see cref="InvalidEntityConfigurationException"/>. The result has one failure per sequence number that could not
     /// be cancelled, for example one that is not a scheduled message; one such number does not fail the others. A
     /// provider without scheduled messages throws <see cref="NotSupportedException"/> and declares it in
     /// <see cref="IProviderCapabilities.SupportsScheduledMessages"/>.
     /// </summary>
-    /// <param name="queueName">The name of the queue.</param>
+    /// <param name="entityName">The name of the queue or the topic.</param>
     /// <param name="sequenceNumbers">The sequence numbers of the scheduled messages.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
-    Task<BatchOperationResult> CancelScheduledMessagesAsync(string queueName, long[] sequenceNumbers, CancellationToken cancellationToken = default);
+    Task<BatchOperationResult> CancelScheduledMessagesAsync(string entityName, long[] sequenceNumbers, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes deferred messages of a queue or subscription: each is received by its sequence number, the only way a
+    /// deferred message can be received, and completed. The sequence numbers are checked before the broker is called:
+    /// 1 to <see cref="DeferredBatchRequest.MaxSequenceNumbers"/>, each positive, none repeated, or
+    /// <see cref="InvalidEntityConfigurationException"/>. The result has one failure per sequence number not deleted,
+    /// and a number that is not a deferred message is reported as such, never skipped. The caller's token stops the call
+    /// between two batches. A provider without deferral throws <see cref="NotSupportedException"/> and declares it in
+    /// <see cref="IProviderCapabilities.SupportsDeferral"/>.
+    /// </summary>
+    /// <param name="entityName">The name of the queue or topic.</param>
+    /// <param name="sequenceNumbers">The sequence numbers of the deferred messages.</param>
+    /// <param name="subscriptionName">The subscription name if the messages are deferred in a topic subscription.</param>
+    /// <param name="cancellationToken">Token checked between two batches and handed to the broker.</param>
+    Task<BatchOperationResult> DeleteDeferredMessagesAsync(string entityName, long[] sequenceNumbers, string? subscriptionName = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Resubmits deferred messages: each is received by its sequence number, a copy is sent to the queue, or to the
+    /// topic of a subscription, and only then is the deferred message completed. A message sent and not completed is
+    /// reported as a possible duplicate, never sent again. The checks, the report of a number that is not deferred, the
+    /// token and the refusal of a provider without deferral are those of <see cref="DeleteDeferredMessagesAsync"/>; a
+    /// target that detects duplicates refuses every message unless <paramref name="newMessageIdOnDuplicateDetection"/>.
+    /// </summary>
+    /// <param name="entityName">The name of the queue or topic.</param>
+    /// <param name="sequenceNumbers">The sequence numbers of the deferred messages.</param>
+    /// <param name="subscriptionName">The subscription name if the messages are deferred in a topic subscription.</param>
+    /// <param name="newMessageIdOnDuplicateDetection">When the target detects duplicates, send each copy with a new message id and keep the original in the application property <c>x-original-message-id</c>.</param>
+    /// <param name="cancellationToken">Token checked between two batches and handed to the broker.</param>
+    Task<BatchOperationResult> ResubmitDeferredMessagesAsync(string entityName, long[] sequenceNumbers, string? subscriptionName = null, bool newMessageIdOnDuplicateDetection = false, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Moves deferred messages to the dead-letter queue of their entity: each is received by its sequence number and
+    /// dead-lettered with <paramref name="reason"/> and <paramref name="description"/>. The checks, the report of a
+    /// number that is not deferred, the token and the refusal of a provider without deferral are those of
+    /// <see cref="DeleteDeferredMessagesAsync"/>.
+    /// </summary>
+    /// <param name="entityName">The name of the queue or topic.</param>
+    /// <param name="sequenceNumbers">The sequence numbers of the deferred messages.</param>
+    /// <param name="subscriptionName">The subscription name if the messages are deferred in a topic subscription.</param>
+    /// <param name="reason">The dead-letter reason; a default text when null.</param>
+    /// <param name="description">The dead-letter error description; a default text when null.</param>
+    /// <param name="cancellationToken">Token checked between two batches and handed to the broker.</param>
+    Task<BatchOperationResult> DeadLetterDeferredMessagesAsync(string entityName, long[] sequenceNumbers, string? subscriptionName = null, string? reason = null, string? description = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Dead-letters active messages, each named by its sequence number, with <paramref name="reason"/> and
+    /// <paramref name="description"/>. The broker locks a message only as it hands it out, so the scan and its guards
+    /// are those of the selective delete: a bounded receive in PeekLock, every unselected message abandoned and counted,
+    /// the stop before an unselected message would reach its max delivery count, and a number not found within the scan
+    /// window reported, never skipped. A failed dead-letter is reported with a fixed text. A provider without it throws
+    /// <see cref="NotSupportedException"/> and declares it in <see cref="IProviderCapabilities.SupportsManualDeadLetter"/>.
+    /// </summary>
+    /// <param name="entityName">The name of the queue or topic.</param>
+    /// <param name="sequenceNumbers">The sequence numbers of the active messages.</param>
+    /// <param name="subscriptionName">The subscription name if the messages are in a topic subscription.</param>
+    /// <param name="reason">The dead-letter reason; a default text when null.</param>
+    /// <param name="description">The dead-letter error description; a default text when null.</param>
+    /// <param name="cancellationToken">Token that stops the scan.</param>
+    Task<BatchOperationResult> DeadLetterMessagesAsync(string entityName, long[] sequenceNumbers, string? subscriptionName = null, string? reason = null, string? description = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Defers active messages, each named by its sequence number: the scan and the report are those of
+    /// <see cref="DeadLetterMessagesAsync"/>. A provider without deferral throws <see cref="NotSupportedException"/>
+    /// and declares it in <see cref="IProviderCapabilities.SupportsDeferral"/>.
+    /// </summary>
+    /// <param name="entityName">The name of the queue or topic.</param>
+    /// <param name="sequenceNumbers">The sequence numbers of the active messages.</param>
+    /// <param name="subscriptionName">The subscription name if the messages are in a topic subscription.</param>
+    /// <param name="cancellationToken">Token that stops the scan.</param>
+    Task<BatchOperationResult> DeferMessagesAsync(string entityName, long[] sequenceNumbers, string? subscriptionName = null, CancellationToken cancellationToken = default);
 
     #endregion
 
@@ -449,6 +533,14 @@ public interface IMessagingProvider : IAsyncDisposable
     /// Null when the topic or the subscription does not exist.
     /// </summary>
     Task<SubscriptionInfo?> GetSubscriptionCountsAsync(string topicName, string subscriptionName, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Reads the properties of the connected namespace: its name, tier, messaging units, geo-disaster-recovery alias
+    /// and when it was created and changed. Any failure reaches the caller as it is, so a value that could not be read
+    /// is never made up. A provider without namespace properties throws <see cref="NotSupportedException"/> and
+    /// declares it in <see cref="IProviderCapabilities.SupportsNamespaceProperties"/>.
+    /// </summary>
+    Task<NamespaceInfo> GetNamespacePropertiesAsync(CancellationToken cancellationToken);
 
     #endregion
 }

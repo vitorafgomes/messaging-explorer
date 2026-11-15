@@ -36,6 +36,9 @@ p {
 }
 
 .progress-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font: var(--mat-sys-label-large);
   color: var(--mat-sys-on-surface-variant);
   font-variant-numeric: tabular-nums;

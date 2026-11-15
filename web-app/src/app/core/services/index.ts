@@ -1,5 +1,6 @@
 export * from './api.service';
 export * from './connection.service';
+export * from './require-connection.guard';
 export * from './connection-group.service';
 export * from './queue.service';
 export * from './topic.service';

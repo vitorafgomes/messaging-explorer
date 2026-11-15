@@ -25,6 +25,13 @@ public class SubscriptionInfo
     public string? ForwardTo { get; set; }
     public string? ForwardDeadLetteredMessagesTo { get; set; }
     public List<SubscriptionRuleInfo> Rules { get; set; } = new();
+
+    /// <summary>
+    /// How many rules the subscription has, as the topic read counts them. Null when it was not counted: the
+    /// subscription is past the read's bound, its rule listing failed, the read was a listing that does not count,
+    /// or the provider has no subscription rules (<see cref="Abstractions.IProviderCapabilities.SupportsSubscriptionRules"/>).
+    /// </summary>
+    public int? RuleCount { get; set; }
 }
 
 /// <summary>

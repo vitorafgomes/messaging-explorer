@@ -48,7 +48,7 @@ ul {
   color: var(--mat-sys-on-surface-variant);
 
   &.success mat-icon {
-    color: var(--mat-sys-primary);
+    color: var(--app-success);
   }
 
   &.failure {
@@ -92,11 +92,15 @@ ul {
 
 .status-message {
   &.success {
-    background: var(--mat-sys-primary-container);
-    color: var(--mat-sys-on-primary-container);
+    background: var(--app-success-container);
+    color: var(--app-on-success-container);
   }
 
-  &.partial,
+  &.partial {
+    background: var(--app-warning-container);
+    color: var(--app-on-warning-container);
+  }
+
   &.failed {
     background: var(--mat-sys-error-container);
     color: var(--mat-sys-on-error-container);
@@ -119,36 +123,32 @@ ul {
   color: var(--mat-sys-on-surface);
 }
 
-.failures-list {
+.failures-title {
+  caption-side: top;
+  padding-bottom: 8px;
+  text-align: left;
+}
+
+.failures-table {
+  display: block;
   max-height: 300px;
-  overflow-y: auto;
-  padding: 0;
-  list-style: none;
+  overflow: auto;
+  border-collapse: collapse;
   border: 1px solid var(--mat-sys-outline-variant);
   border-radius: 8px;
-}
 
-.failure-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--mat-sys-outline-variant);
-
-  &:last-child {
-    border-bottom: none;
+  th,
+  td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--mat-sys-outline-variant);
+    text-align: left;
+    vertical-align: top;
   }
-}
 
-.failure-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.failure-seq-label {
-  font: var(--mat-sys-label-medium);
-  color: var(--mat-sys-on-surface-variant);
+  th {
+    font: var(--mat-sys-label-medium);
+    color: var(--mat-sys-on-surface-variant);
+  }
 }
 
 .failure-seq-value {
@@ -157,20 +157,23 @@ ul {
 }
 
 .failure-error {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
   overflow-wrap: anywhere;
+}
+
+.duplicate-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: var(--mat-sys-error-container);
+  color: var(--mat-sys-on-error-container);
+  font: var(--mat-sys-label-medium);
+  white-space: nowrap;
 
   mat-icon {
-    flex: none;
-    width: 18px;
-    height: 18px;
-    font-size: 18px;
-    color: var(--mat-sys-error);
-  }
-
-  .duplicate & {
-    font-weight: 500;
+    width: 16px;
+    height: 16px;
+    font-size: 16px;
   }
 }

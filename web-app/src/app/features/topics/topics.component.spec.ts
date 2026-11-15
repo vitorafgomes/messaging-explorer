@@ -141,7 +141,7 @@ describe('TopicsComponent loads the subscriptions of a topic when it is opened, 
 describe('TopicsComponent purges a subscription from the More actions menu', () => {
   const text = (e: Element | null) => (e?.textContent ?? '').replace(/\s+/g, ' ').trim();
 
-  it('each purge is disabled at a count of 0, asks the same confirmation, purges nothing when cancelled and purges the subscription of its topic when confirmed', async () => {
+  it('each purge is disabled at a count of 0, is confirmed by typing the entity name, purges nothing when cancelled and purges the subscription of its topic when confirmed', async () => {
     const topicService = {
       getTopics: vi.fn().mockReturnValue(of([topic('orders', 2)])),
       getSubscriptions: vi.fn().mockReturnValue(of([
@@ -194,7 +194,10 @@ describe('TopicsComponent purges a subscription from the More actions menu', () 
     expect(open).toHaveBeenLastCalledWith(ConfirmDialogComponent, { data: expect.objectContaining({
       title: 'Purge Messages',
       message: 'Are you sure you want to delete all 3 active messages from subscription "invoice-sub"? This action cannot be undone.',
-      confirmText: 'Purge'
+      confirmText: 'Purge 3 messages',
+      typedName: 'invoice-sub',
+      typedLabel: 'Type the subscription name to confirm',
+      context: { subject: 'invoice-sub' }
     }) });
     expect(topicService.purgeMessages).not.toHaveBeenCalled();
 
@@ -205,7 +208,10 @@ describe('TopicsComponent purges a subscription from the More actions menu', () 
     expect(open).toHaveBeenLastCalledWith(ConfirmDialogComponent, { data: expect.objectContaining({
       title: 'Purge Dead Letter Queue',
       message: 'Are you sure you want to delete all 2 dead letter messages from subscription "audit-sub"? This action cannot be undone.',
-      confirmText: 'Purge'
+      confirmText: 'Purge 2 messages',
+      typedName: 'audit-sub',
+      typedLabel: 'Type the subscription name to confirm',
+      context: { subject: 'audit-sub' }
     }) });
     expect(topicService.purgeDeadLetterMessages).not.toHaveBeenCalled();
 

@@ -36,6 +36,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Why this package cannot update itself, or null
   getSelfUpdateBlocker: () => ipcRenderer.invoke('get-self-update-blocker'),
 
+  // The data file of the app, and showing it in the file manager; neither takes an argument
+  getDataFile: () => ipcRenderer.invoke('get-data-file'),
+  showDataFile: () => ipcRenderer.invoke('show-data-file'),
+
+  // Opens the developer tools of this window; takes no argument, so the page cannot choose another
+  openDevTools: () => ipcRenderer.invoke('open-dev-tools'),
+
   // Platform detection
   platform: process.platform,
 

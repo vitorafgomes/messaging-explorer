@@ -50,7 +50,7 @@ describe('EntityFormDialogComponent', () => {
         },
         {
           provide: ConnectionGroupService,
-          useValue: { getGroups: () => of([{ id: 'g-client', name: 'Contoso', type: 'client' }, { id: 'g-env', name: 'Production', type: 'environment' }]) }
+          useValue: { getGroups: () => of([{ id: 'g-client', name: 'Contoso', type: 'client' }, { id: 'g-env', name: 'Production', type: 'environment', isProduction: true }]) }
         }
       ]
     });
@@ -76,7 +76,11 @@ describe('EntityFormDialogComponent', () => {
     control.markAsDirty();
     fixture.detectChanges();
   };
-  const fieldError = (label: string) => text(field(label)?.querySelector('mat-error'));
+  const errorIcon = (e: Element | null | undefined) => e?.firstElementChild?.tagName === 'MAT-ICON' ? e.firstElementChild : null;
+  const fieldError = (label: string) => {
+    const error = field(label)?.querySelector('mat-error');
+    return text(error).slice(text(errorIcon(error)).length).trim();
+  };
   const button = (label: string) =>
     Array.from(el.querySelectorAll('button')).find(b => text(b).startsWith(label)) as HTMLButtonElement | undefined;
   const alert = () => text(el.querySelector('[role="alert"] .grow'));
@@ -148,8 +152,20 @@ describe('EntityFormDialogComponent', () => {
     it('the dialog says where the entity will be created: the connection and its environment', () => {
       open({ mode: 'create', kind: 'queue' });
 
-      expect(text(el.querySelector('.context mat-chip'))).toBe('Contoso / Production');
-      expect(text(el.querySelector('.context > span'))).toBe('contoso-prod (ns.example.net)');
+      expect(text(el.querySelector('.environment-line .environment-chip')), 'the warning icon, then PRODUCTION').toBe('warning PRODUCTION');
+      expect(text(el.querySelector('.environment-line .where'))).toBe('Contoso (ns.example.net)');
+      const chip = el.querySelector('.environment-line .environment-chip') as HTMLElement;
+      expect(chip.textContent?.replace('warning', '').trim(), 'the dialog header opens with the PRODUCTION chip').toBe('PRODUCTION');
+      expect(chip.classList.contains('production'), 'a production environment takes the error container').toBe(true);
+    });
+
+    it.each([
+      ['queue', 'Queue name', 'Letters, digits, dot, dash, underscore and slash. 260 characters at most.'],
+      ['topic', 'Topic name', 'Letters, digits, dot, dash, underscore and slash. 260 characters at most.'],
+      ['subscription', 'Subscription name', 'Letters, digits, dot, dash and underscore. 50 characters at most.'],
+    ] as const)('as EntityAdmin.dc.html draws it: the %s name field carries its naming hint', (kind, label, hint) => {
+      open({ mode: 'create', kind, topicName: kind === 'subscription' ? 'events' : undefined });
+      expect(text(field(label)?.querySelector('mat-hint')), `the ${kind} name hint, in the drawn words`).toBe(hint);
     });
 
     it('a name the API would refuse shows the rule beside the field and Create stays disabled', () => {
@@ -158,6 +174,15 @@ describe('EntityFormDialogComponent', () => {
 
       expect(fieldError('Queue name')).toBe('Use 1 to 260 letters, digits, ".", "-", "_" or "/", not starting or ending with "/".');
       expect(button('Create queue')!.disabled).toBe(true);
+    });
+
+    it('as EntityAdmin.dc.html draws it: a field error opens with the error icon, hidden from a screen reader', () => {
+      open({ mode: 'create', kind: 'queue' });
+      type('Queue name', 'orders/');
+
+      const icon = errorIcon(field('Queue name')?.querySelector('mat-error'));
+      expect(text(icon), 'the field error starts with the error_outline icon').toBe('error_outline');
+      expect(icon?.getAttribute('aria-hidden'), 'the icon is decoration; the words carry the error').toBe('true');
     });
   });
 
@@ -262,6 +287,17 @@ describe('EntityFormDialogComponent', () => {
       expect(button('Save')!.disabled).toBe(true);
     });
 
+    it('as EntityAdmin.dc.html draws it: a duration unit reads "Unit" and is named "Unit of {label}"; the summary of changes is named "Summary of changes"', () => {
+      editQueue();
+      const unit = field('Lock duration')!.parentElement!.querySelector('mat-form-field.unit') as HTMLElement;
+
+      expect(text(unit.querySelector('mat-label')), 'the visible label of a unit select is "Unit"').toBe('Unit');
+      expect(unit.querySelector('mat-select')!.getAttribute('aria-label'), 'a unit select is named "Unit of {label}"').toBe('Unit of Lock duration');
+
+      set('maxDeliveryCount', 9);
+      expect(el.querySelector('section.summary')!.getAttribute('aria-label'), 'the edit summary is named "Summary of changes"').toBe('Summary of changes');
+    });
+
     it('a duration of never is prefilled empty, says it is never, and is not a change', () => {
       const component = editQueue();
 
@@ -282,7 +318,7 @@ describe('EntityFormDialogComponent', () => {
       const [component, config] = openReview.mock.calls[0];
       expect(component).toBe(EntityReviewDialogComponent);
       expect(config.data.entityName).toBe('orders');
-      expect(config.data.context()).toStrictEqual({ connection: 'contoso-prod (ns.example.net)', environment: 'Contoso / Production' });
+      expect(config.data.context()).toStrictEqual({ connection: 'contoso-prod (ns.example.net)', where: 'Contoso (ns.example.net)', environment: 'Contoso / Production', mark: { name: 'Production', isProduction: true } });
       expect(config.data.changes).toStrictEqual([
         { label: 'Lock duration', from: '2 minutes', to: '5 minutes' },
         { label: 'Max delivery count', from: '7', to: '10' }
@@ -331,6 +367,12 @@ describe('EntityFormDialogComponent', () => {
       click('Save');
 
       expect(queues['updateQueue'].mock.calls).toStrictEqual([['orders', { forwardTo: '' }]]);
+    });
+
+    it('as EntityAdmin.dc.html draws it: each forward target says "A queue or topic of this namespace."', () => {
+      editQueue();
+      expect(['Forward to', 'Forward dead-lettered messages to'].map(label => text(field(label)?.querySelector('mat-hint'))), 'the target hint, in the drawn words')
+        .toEqual(['A queue or topic of this namespace.', 'A queue or topic of this namespace.']);
     });
 
     it('a forward target can only be an existing queue or topic other than the entity', () => {
@@ -428,6 +470,21 @@ describe('EntityFormDialogComponent', () => {
       expect(close).not.toHaveBeenCalled();
       expect(selection['showEntity']).not.toHaveBeenCalled();
       expect(el.querySelector('mat-progress-bar')).toBeNull();
+    });
+
+    it('as EntityAdmin.dc.html draws it: a 400 with no message says "The broker refused this configuration." under the octagon icon', () => {
+      editAndSave(fail(400));
+
+      expect(alert()).toBe('The broker refused this configuration.');
+      expect(el.querySelector('[role="alert"] mat-icon')?.getAttribute('fontIcon')).toBe('report');
+    });
+
+    it('as EntityAdmin.dc.html draws it: Refresh of a gone entity is an outlined button with the refresh icon', () => {
+      editAndSave(fail(404, { message: 'Not found.' }));
+      const refresh = button('Refresh')!;
+
+      expect(refresh.hasAttribute('mat-stroked-button'), 'an outlined Refresh').toBe(true);
+      expect(refresh.querySelector('mat-icon')?.getAttribute('fontIcon')).toBe('refresh');
     });
   });
 });

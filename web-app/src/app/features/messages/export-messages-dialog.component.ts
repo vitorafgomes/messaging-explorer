@@ -6,6 +6,8 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatIconModule } from '@angular/material/icon';
 import { MatRadioModule } from '@angular/material/radio';
+import { connectionContext } from '../entities/connection-context';
+import { EnvironmentLineComponent } from '../../shared/environment-line.component';
 
 export interface ExportMessagesDialogData {
   messageCount: number;
@@ -23,7 +25,7 @@ export interface ExportOptions {
 @Component({
   selector: 'app-export-messages-dialog',
   standalone: true,
-  imports: [
+  imports: [EnvironmentLineComponent, 
     CommonModule,
     FormsModule,
     MatButtonModule,
@@ -39,6 +41,7 @@ export interface ExportOptions {
     </h2>
 
     <mat-dialog-content class="content">
+      <app-environment-line [mark]="context().mark"><b>{{ data.entityName }}</b> on {{ context().where }}</app-environment-line>
       <p>
         Export
         <strong>{{ data.messageCount }}</strong>
@@ -113,6 +116,8 @@ export interface ExportOptions {
   `]
 })
 export class ExportMessagesDialogComponent {
+  /** The active connection and its environment, for the line under the title. */
+  readonly context = connectionContext();
   data = inject<ExportMessagesDialogData>(MAT_DIALOG_DATA);
   private dialogRef = inject(MatDialogRef<ExportMessagesDialogComponent>);
 

@@ -1,28 +1,117 @@
 .app-toolbar {
+  --bar-bg: var(--mat-sys-primary);
+  --bar-fg: var(--mat-sys-on-primary);
+  --bar-separator: color-mix(in srgb, var(--mat-sys-on-primary) 40%, transparent);
+  --bar-current: color-mix(in srgb, var(--mat-sys-on-primary) 18%, transparent);
+  --bar-current-fg: var(--mat-sys-on-primary);
+  --mat-toolbar-container-background-color: var(--bar-bg);
+  --mat-toolbar-container-text-color: var(--bar-fg);
+  --mat-toolbar-standard-height: 56px;
+  --mat-icon-button-icon-color: var(--bar-fg);
+  --mat-icon-button-state-layer-color: var(--bar-fg);
+  --mat-button-text-label-text-color: var(--bar-fg);
+  --mat-button-outlined-label-text-color: var(--bar-fg);
+  --mat-button-outlined-outline-color: var(--bar-separator);
+  --mat-button-filled-container-color: var(--bar-fg);
+  --mat-button-filled-label-text-color: var(--bar-bg);
   flex-shrink: 0;
   z-index: 1030;
-  gap: 8px;
+  gap: 16px;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--mat-sys-primary);
+}
+
+:host-context(.dark-theme) .app-toolbar {
+  --bar-bg: var(--mat-sys-surface-container);
+  --bar-fg: var(--mat-sys-on-surface);
+  --bar-separator: var(--mat-sys-outline-variant);
+  --bar-current: var(--mat-sys-secondary-container);
+  --bar-current-fg: var(--mat-sys-on-secondary-container);
+  border-bottom-color: var(--mat-sys-outline-variant);
+}
+
+.nav-separator {
+  flex: none;
+  width: 1px;
+  height: 24px;
+  background: var(--bar-separator);
+}
+
+.environment {
+  display: inline-flex;
+  flex: none;
+}
+
+.broker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  color: var(--bar-fg);
+  font: var(--mat-sys-label-large);
+
+  .status-icon {
+    flex: none;
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+  }
+
+  .broker-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.notifications {
+  --mat-badge-background-color: var(--app-warning-container);
+  --mat-badge-text-color: var(--app-on-warning-container);
+}
+
+.notifications.running {
+  background-color: var(--bar-current);
+  --mat-button-text-label-text-color: var(--bar-current-fg);
+  color: var(--bar-current-fg);
+  font-variant-numeric: tabular-nums;
+
+  mat-progress-spinner {
+    display: inline-block;
+    margin-right: 6px;
+    --mat-progress-spinner-active-indicator-color: currentColor;
+  }
 }
 
 .main-nav {
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-right: 8px;
 }
 
 .nav-link {
-  color: inherit;
+  color: var(--bar-fg);
 }
 
 .settings-link.active-link {
-  background-color: var(--mat-sys-secondary-container);
-  color: var(--mat-sys-on-secondary-container);
+  background-color: var(--bar-current);
+  --mat-icon-button-icon-color: var(--bar-current-fg);
 }
 
 .nav-link.active-link {
-  background-color: var(--mat-sys-secondary-container);
-  color: var(--mat-sys-on-secondary-container);
+  background-color: var(--bar-current);
+  --mat-button-text-label-text-color: var(--bar-current-fg);
+  color: var(--bar-current-fg);
   font-weight: 700;
   text-decoration: underline;
   text-underline-offset: 6px;
@@ -57,43 +146,6 @@
   right: 0;
   z-index: 1031;
   height: 3px;
-}
-
-.connection-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.75rem;
-  padding: 4px 10px;
-  border-radius: 16px;
-  font-weight: 500;
-  min-width: 0;
-
-  .badge-text {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .status-icon {
-    font-size: 14px;
-    width: 14px;
-    height: 14px;
-  }
-
-  &.connected {
-    background-color: rgba(76, 175, 80, 0.15);
-    color: #4caf50;
-  }
-
-  &.disconnected {
-    background-color: rgba(255, 152, 0, 0.15);
-    color: #ff9800;
-  }
-}
-
-.spacer {
-  flex: 1;
 }
 
 .app-container {

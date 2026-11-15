@@ -56,8 +56,17 @@ public sealed class AzureServiceBusFixture : IAsyncLifetime
     /// <summary>The provider's configuration for the HTTP endpoint.</summary>
     public AzureConnectionConfig CreateManagementConfig() => new() { Name = "integration-management", ConnectionString = ManagementConnectionString };
 
-    /// <summary>A provider connected to the AMQP endpoint through the factory, the way the API connects.</summary>
-    public Task<IMessagingProvider> ConnectMessagingAsync() => ConnectAsync(MessagingConnectionString);
+    /// <summary>
+    /// A provider connected to the AMQP endpoint through the factory, the way the API connects, whose administration
+    /// client is the one on the HTTP endpoint: the bulk calls read entity settings before they receive, as one
+    /// connection string does for both on a real namespace.
+    /// </summary>
+    public async Task<IMessagingProvider> ConnectMessagingAsync()
+    {
+        var provider = await ConnectAsync(MessagingConnectionString);
+        ((AzureServiceBusProvider)provider).UseAdministrationClient(Admin);
+        return provider;
+    }
 
     /// <summary>A provider connected to the HTTP endpoint through the factory, the way the API connects.</summary>
     public Task<IMessagingProvider> ConnectManagementAsync() => ConnectAsync(ManagementConnectionString);

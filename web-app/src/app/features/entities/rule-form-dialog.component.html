@@ -1,12 +1,7 @@
 <h2 mat-dialog-title>{{ creating ? 'Add rule' : readOnly ? 'Rule' : 'Edit rule' }}</h2>
 
 <mat-dialog-content>
-  <p class="context">
-    <mat-chip-set aria-label="Environment">
-      <mat-chip [disableRipple]="true">{{ context().environment }}</mat-chip>
-    </mat-chip-set>
-    <span>Subscription <b>{{ data.subscriptionName }}</b> in topic <b>{{ data.topicName }}</b> on {{ context().connection }}</span>
-  </p>
+  <app-environment-line [mark]="context().mark">Subscription <b>{{ data.subscriptionName }}</b> in topic <b>{{ data.topicName }}</b> on {{ context().where }}</app-environment-line>
 
   @if (readOnly) {
     <p class="banner read-only-note">
@@ -25,20 +20,24 @@
           <mat-label>Rule name</mat-label>
           <input matInput formControlName="name" autocomplete="off" [errorStateMatcher]="matcher('name')">
           <mat-hint>Letters, digits, dot, dash and underscore. 50 characters at most.</mat-hint>
-          <mat-error>{{ errors()['name'] }}</mat-error>
+          <mat-error><mat-icon aria-hidden="true">error_outline</mat-icon>{{ errors()['name'] }}</mat-error>
         </mat-form-field>
       } @else {
-        <dl class="facts">
-          <div class="fact name-fact"><dt>Rule name</dt><dd>{{ data.rule!.name }}</dd></div>
-        </dl>
-        <p class="note name-note">A rule cannot be renamed. Saving replaces it under the same name.</p>
+        <div class="name-field">
+          <span class="label">Rule name</span>
+          <span class="value">{{ data.rule!.name }}</span>
+          <span class="hint">A rule cannot be renamed. Saving replaces it under the same name.</span>
+        </div>
       }
 
-      <mat-button-toggle-group formControlName="filterType" aria-label="Filter type" class="kinds" [hideSingleSelectionIndicator]="true">
-        @for (k of kinds; track k.value) {
-          <mat-button-toggle [value]="k.value">{{ k.label }}</mat-button-toggle>
-        }
-      </mat-button-toggle-group>
+      <fieldset>
+        <legend class="visually-hidden">Filter type</legend>
+        <mat-button-toggle-group formControlName="filterType" class="kinds">
+          @for (k of kinds; track k.value) {
+            <mat-button-toggle [value]="k.value">{{ k.label }}</mat-button-toggle>
+          }
+        </mat-button-toggle-group>
+      </fieldset>
 
       @switch (draft().filterType) {
         @case ('Sql') {
@@ -46,7 +45,7 @@
             <mat-label>SQL filter</mat-label>
             <textarea matInput rows="3" class="mono" formControlName="sqlExpression" [errorStateMatcher]="matcher('sqlExpression')"></textarea>
             <mat-hint>Checked by the broker on save. An invalid expression is refused and nothing changes.</mat-hint>
-            <mat-error>{{ errors()['sqlExpression'] }}</mat-error>
+            <mat-error><mat-icon aria-hidden="true">error_outline</mat-icon>{{ errors()['sqlExpression'] }}</mat-error>
           </mat-form-field>
         }
         @case ('Correlation') {
@@ -56,7 +55,7 @@
               <mat-form-field>
                 <mat-label>{{ f.label }}</mat-label>
                 <input matInput autocomplete="off" [formControlName]="f.key" [errorStateMatcher]="matcher('correlation.' + f.key)">
-                <mat-error>{{ errors()['correlation.' + f.key] }}</mat-error>
+                <mat-error><mat-icon aria-hidden="true">error_outline</mat-icon>{{ errors()['correlation.' + f.key] }}</mat-error>
               </mat-form-field>
             }
           </div>
@@ -68,7 +67,7 @@
                 <mat-form-field>
                   <mat-label>Property name</mat-label>
                   <input matInput class="mono" autocomplete="off" formControlName="name" [errorStateMatcher]="matcher('properties.' + i + '.name')">
-                  <mat-error>{{ errors()['properties.' + i + '.name'] }}</mat-error>
+                  <mat-error><mat-icon aria-hidden="true">error_outline</mat-icon>{{ errors()['properties.' + i + '.name'] }}</mat-error>
                 </mat-form-field>
                 <mat-form-field class="type">
                   <mat-label>Type</mat-label>
@@ -81,7 +80,7 @@
                 <mat-form-field>
                   <mat-label>Value</mat-label>
                   <input matInput class="mono" autocomplete="off" formControlName="value" [errorStateMatcher]="matcher('properties.' + i + '.value')">
-                  <mat-error>{{ errors()['properties.' + i + '.value'] }}</mat-error>
+                  <mat-error><mat-icon aria-hidden="true">error_outline</mat-icon>{{ errors()['properties.' + i + '.value'] }}</mat-error>
                 </mat-form-field>
                 <button mat-icon-button type="button" class="remove"
                   [attr.aria-label]="'Remove property ' + (p.controls.name.value || i + 1)"
@@ -92,10 +91,10 @@
               </div>
             }
           </div>
-          <button mat-button type="button" (click)="addProperty()"><mat-icon>add</mat-icon>Add property</button>
+          <button mat-stroked-button type="button" class="small" (click)="addProperty()"><mat-icon>add</mat-icon>Add property</button>
 
           @if (errors()['correlation']) {
-            <p class="note needs-one" id="correlation-needs-one">{{ errors()['correlation'] }}</p>
+            <p class="note needs-one" id="correlation-needs-one" aria-live="polite"><mat-icon fontIcon="error" aria-hidden="true" />{{ errors()['correlation'] }}</p>
           }
         }
         @case ('True') {
@@ -109,14 +108,14 @@
       <mat-form-field class="wide">
         <mat-label>Action (optional)</mat-label>
         <textarea matInput rows="2" class="mono" formControlName="sqlAction" [errorStateMatcher]="matcher('sqlAction')"></textarea>
-        <mat-error>{{ errors()['sqlAction'] }}</mat-error>
+        <mat-error><mat-icon aria-hidden="true">error_outline</mat-icon>{{ errors()['sqlAction'] }}</mat-error>
       </mat-form-field>
     </form>
   }
 
   @if (errorMessage()) {
     <div class="error" role="alert">
-      <mat-icon aria-hidden="true">error</mat-icon>
+      <mat-icon fontIcon="report" aria-hidden="true" />
       <span class="grow">{{ errorMessage() }}</span>
       @if (notFound()) {
         <button mat-button type="button" (click)="refresh()">Refresh</button>

@@ -256,7 +256,7 @@ public class RabbitMQProvider : IMessagingProvider
     }
 
     /// <inheritdoc />
-    public async Task<ITopicEntity?> GetTopicAsync(string topicName)
+    public async Task<ITopicEntity?> GetTopicAsync(string topicName, CancellationToken cancellationToken = default)
     {
         EnsureConnected();
         var exchange = await _managementClient!.GetExchangeAsync(topicName);
@@ -266,17 +266,19 @@ public class RabbitMQProvider : IMessagingProvider
             return null;
         }
 
-        // Load bindings for this exchange
-        var bindings = await _managementClient.GetExchangeBindingsAsync(topicName);
+        var bindings = await _managementClient.GetExchangeBindingsAsync(topicName, cancellationToken);
         exchange.Bindings = bindings.ToList();
         exchange.SubscriptionCount = exchange.Bindings.Count;
 
+        var queuesList = (await _managementClient.GetQueuesAsync()).ToList();
+        var queuesByName = queuesList.DistinctBy(q => q.Name).ToDictionary(q => q.Name);
+        exchange.Subscriptions = exchange.Bindings
+            .Where(b => b.DestinationType == "queue")
+            .Select(b => MapBindingToSubscriptionInfo(topicName, b, queuesByName.GetValueOrDefault(b.Destination), queuesByName.GetValueOrDefault($"{b.Destination}.dlq")))
+            .ToList();
+
         try
         {
-            // Load all queues for pattern detection
-            var allQueues = await _managementClient.GetQueuesAsync();
-            var queuesList = allQueues.OfType<RabbitMQQueueInfo>().ToList();
-
             // Find queues related to this exchange (bound queues)
             var relatedQueues = queuesList.Where(q =>
                 exchange.Bindings.Any(b => b.Destination == q.Name && b.DestinationType == "queue")
@@ -555,7 +557,7 @@ public class RabbitMQProvider : IMessagingProvider
     }
 
     /// <inheritdoc />
-    public Task SendMessageAsync(string entityName, SendMessageRequest request)
+    public Task<long?> SendMessageAsync(string entityName, SendMessageRequest request)
     {
         EnsureConnected();
 
@@ -585,20 +587,44 @@ public class RabbitMQProvider : IMessagingProvider
             basicProperties: properties,
             body: body);
 
-        return Task.CompletedTask;
+        return Task.FromResult<long?>(null);
     }
 
     /// <inheritdoc />
-    public Task SendMessagesAsync(string entityName, IEnumerable<SendMessageRequest> requests)
+    public async Task<SendMessagesResult> SendMessagesAsync(string entityName, IEnumerable<SendMessageRequest> requests, CancellationToken cancellationToken = default)
     {
         EnsureConnected();
 
-        foreach (var request in requests)
+        var messages = requests.ToList();
+        var result = new SendMessagesResult();
+        for (var i = 0; i < messages.Count; i++)
         {
-            SendMessageAsync(entityName, request).Wait();
+            string? error = null;
+            if (cancellationToken.IsCancellationRequested)
+            {
+                if (result.SentCount == 0) cancellationToken.ThrowIfCancellationRequested();
+                error = SendMessageFailure.NotSent;
+            }
+            else
+            {
+                try
+                {
+                    await SendMessageAsync(entityName, messages[i]);
+                    result.SentCount++;
+                    continue;
+                }
+                catch (Exception) when (result.SentCount > 0)
+                {
+                    error = SendMessageFailure.Unconfirmed;
+                }
+            }
+
+            result.Failures.Add(new SendMessageFailure { Index = i, Error = error });
+            result.Failures.AddRange(Enumerable.Range(i + 1, messages.Count - i - 1).Select(n => new SendMessageFailure { Index = n, Error = SendMessageFailure.NotSent }));
+            break;
         }
 
-        return Task.CompletedTask;
+        return result;
     }
 
     /// <inheritdoc />
@@ -638,7 +664,8 @@ public class RabbitMQProvider : IMessagingProvider
     }
 
     /// <inheritdoc />
-    public async Task ResubmitDeadLetterMessageAsync(string entityName, long sequenceNumber, string? subscriptionName = null)
+    /// <remarks>RabbitMQ has no duplicate detection, so <paramref name="newMessageIdOnDuplicateDetection"/> changes nothing.</remarks>
+    public async Task ResubmitDeadLetterMessageAsync(string entityName, long sequenceNumber, string? subscriptionName = null, bool newMessageIdOnDuplicateDetection = false)
     {
         EnsureConnected();
 
@@ -737,7 +764,8 @@ public class RabbitMQProvider : IMessagingProvider
     }
 
     /// <inheritdoc />
-    public async Task<BatchOperationResult> ResubmitDeadLetterMessagesAsync(string entityName, long[] sequenceNumbers, MessageSubQueue subQueue = MessageSubQueue.DeadLetter, string? subscriptionName = null, CancellationToken cancellationToken = default)
+    /// <remarks>RabbitMQ has no duplicate detection, so <paramref name="newMessageIdOnDuplicateDetection"/> changes nothing.</remarks>
+    public async Task<BatchOperationResult> ResubmitDeadLetterMessagesAsync(string entityName, long[] sequenceNumbers, MessageSubQueue subQueue = MessageSubQueue.DeadLetter, string? subscriptionName = null, bool newMessageIdOnDuplicateDetection = false, CancellationToken cancellationToken = default)
     {
         if (subQueue == MessageSubQueue.TransferDeadLetter)
             throw TransferDeadLetterNotSupported();
@@ -808,7 +836,8 @@ public class RabbitMQProvider : IMessagingProvider
     }
 
     /// <inheritdoc />
-    public async Task<BatchOperationResult> MoveMessagesAsync(string sourceEntityName, string targetQueueName, long[] sequenceNumbers, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, CancellationToken cancellationToken = default)
+    /// <remarks>RabbitMQ has no duplicate detection, so <paramref name="newMessageIdOnDuplicateDetection"/> changes nothing.</remarks>
+    public async Task<BatchOperationResult> MoveMessagesAsync(string sourceEntityName, string targetQueueName, long[] sequenceNumbers, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, bool newMessageIdOnDuplicateDetection = false, CancellationToken cancellationToken = default)
     {
         if (subQueue == MessageSubQueue.TransferDeadLetter)
             throw TransferDeadLetterNotSupported();
@@ -1080,8 +1109,30 @@ public class RabbitMQProvider : IMessagingProvider
             : Task.FromResult(new MessageSearchResult());
 
     /// <inheritdoc />
-    public Task<BatchOperationResult> CancelScheduledMessagesAsync(string queueName, long[] sequenceNumbers, CancellationToken cancellationToken = default) =>
+    public Task<BatchOperationResult> CancelScheduledMessagesAsync(string entityName, long[] sequenceNumbers, CancellationToken cancellationToken = default) =>
         Task.FromException<BatchOperationResult>(new NotSupportedException("RabbitMQ does not support scheduled messages."));
+
+    /// <inheritdoc />
+    public Task<BatchOperationResult> DeleteDeferredMessagesAsync(string entityName, long[] sequenceNumbers, string? subscriptionName = null, CancellationToken cancellationToken = default) =>
+        Task.FromException<BatchOperationResult>(DeferralNotSupported());
+
+    /// <inheritdoc />
+    public Task<BatchOperationResult> ResubmitDeferredMessagesAsync(string entityName, long[] sequenceNumbers, string? subscriptionName = null, bool newMessageIdOnDuplicateDetection = false, CancellationToken cancellationToken = default) =>
+        Task.FromException<BatchOperationResult>(DeferralNotSupported());
+
+    /// <inheritdoc />
+    public Task<BatchOperationResult> DeadLetterDeferredMessagesAsync(string entityName, long[] sequenceNumbers, string? subscriptionName = null, string? reason = null, string? description = null, CancellationToken cancellationToken = default) =>
+        Task.FromException<BatchOperationResult>(DeferralNotSupported());
+
+    /// <inheritdoc />
+    public Task<BatchOperationResult> DeadLetterMessagesAsync(string entityName, long[] sequenceNumbers, string? subscriptionName = null, string? reason = null, string? description = null, CancellationToken cancellationToken = default) =>
+        Task.FromException<BatchOperationResult>(new NotSupportedException("RabbitMQ does not support dead-lettering a message by sequence number."));
+
+    /// <inheritdoc />
+    public Task<BatchOperationResult> DeferMessagesAsync(string entityName, long[] sequenceNumbers, string? subscriptionName = null, CancellationToken cancellationToken = default) =>
+        Task.FromException<BatchOperationResult>(DeferralNotSupported());
+
+    private static NotSupportedException DeferralNotSupported() => new("RabbitMQ does not support deferred messages.");
 
     /// <summary>
     /// The RabbitMQ queue of a sub-queue: the queue itself, or its dead-letter queue, named "{queue}.dlq" by convention.
@@ -1178,10 +1229,11 @@ public class RabbitMQProvider : IMessagingProvider
     /// A provider over a connection and a management client that are already open, for tests that answer the
     /// management API with a handler of their own.
     /// </summary>
-    internal RabbitMQProvider(IConnection connection, RabbitMQManagementClient managementClient)
+    internal RabbitMQProvider(IConnection connection, RabbitMQManagementClient managementClient, IModel? channel = null)
     {
         _connection = connection;
         _managementClient = managementClient;
+        _channel = channel;
     }
 
     #endregion
@@ -1219,6 +1271,10 @@ public class RabbitMQProvider : IMessagingProvider
         var dlqQueue = await _managementClient.GetQueueAsync($"{binding.Destination}.dlq", cancellationToken);
         return MapBindingToSubscriptionInfo(topicName, binding, queue, dlqQueue);
     }
+
+    /// <inheritdoc />
+    public Task<NamespaceInfo> GetNamespacePropertiesAsync(CancellationToken cancellationToken) =>
+        Task.FromException<NamespaceInfo>(new NotSupportedException("RabbitMQ has no namespace properties."));
 
     /// <summary>
     /// Fills each queue's dead-letter count with the ready messages of its <c>&lt;queue&gt;.dlq</c> from the same list,

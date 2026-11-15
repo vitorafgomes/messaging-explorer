@@ -9,6 +9,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { finalize } from 'rxjs';
 import { TopicService } from '../../core/services';
 import { connectionContext } from './connection-context';
+import { EnvironmentLineComponent } from '../../shared/environment-line.component';
 
 export interface RuleDeleteDialogData {
   topicName: string;
@@ -25,7 +26,7 @@ export interface RuleDeleteDialogData {
 @Component({
   selector: 'app-rule-delete-dialog',
   standalone: true,
-  imports: [MatDialogTitle, MatDialogContent, MatDialogActions, MatDialogClose, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, MatProgressBarModule],
+  imports: [MatDialogTitle, MatDialogContent, MatDialogActions, MatDialogClose, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, MatProgressBarModule, EnvironmentLineComponent],
   template: `
     <h2 mat-dialog-title class="title">
       @if (data.isLast) {
@@ -36,6 +37,7 @@ export interface RuleDeleteDialogData {
       }
     </h2>
     <mat-dialog-content>
+      <app-environment-line [mark]="context().mark"><b>{{ data.subscriptionName }}</b> in {{ data.topicName }} on {{ context().where }}</app-environment-line>
       <p class="consequence">
         @if (data.isLast) {
           With no rule, the subscription <b>{{ data.subscriptionName }}</b> receives no message at all until a rule is added. Messages published meanwhile are not kept for it.
@@ -54,6 +56,7 @@ export interface RuleDeleteDialogData {
         <mat-form-field class="typed">
           <mat-label>Type the rule name to confirm</mat-label>
           <input matInput autocomplete="off" [placeholder]="data.ruleName" [value]="typed()" (input)="typed.set($any($event.target).value)">
+          <mat-hint>The button stays disabled until the name matches exactly.</mat-hint>
         </mat-form-field>
       }
       @if (errorMessage()) {
@@ -71,12 +74,13 @@ export interface RuleDeleteDialogData {
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button mat-button mat-dialog-close type="button">Cancel</button>
-      <button mat-flat-button class="danger" type="button" [disabled]="!canDelete()" (click)="delete()">Delete rule</button>
+      <button mat-flat-button class="danger" type="button" [disabled]="!canDelete()" (click)="delete()"><mat-icon fontIcon="delete" />Delete rule</button>
     </mat-dialog-actions>
   `,
   styles: [`
     .title { display: flex; align-items: center; gap: 8px; overflow-wrap: anywhere; }
     .warn { color: var(--mat-sys-error); }
+    .context { margin: 0 0 12px; overflow-wrap: anywhere; }
     .consequence { margin: 0 0 12px; overflow-wrap: anywhere; }
     .facts { margin: 0 0 16px; border: 1px solid var(--mat-sys-outline-variant); border-radius: 12px; }
     .fact { display: flex; justify-content: space-between; gap: 16px; padding: 8px 16px; min-width: 0; }

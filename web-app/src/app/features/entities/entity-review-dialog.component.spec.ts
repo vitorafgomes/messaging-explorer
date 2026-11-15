@@ -21,7 +21,7 @@ describe('EntityReviewDialogComponent', () => {
       kind: 'subscription',
       entityName: 'billing',
       topicName: 'events',
-      context: signal({ connection: 'contoso-prod (ns.example.net)', environment: 'Contoso / Production' }),
+      context: signal({ connection: 'contoso-prod (ns.example.net)', where: 'Contoso (ns.example.net)', environment: 'Contoso / Production', mark: { name: 'Production', isProduction: true } }),
       changes: [
         { label: 'Lock duration', from: '2 minutes', to: '5 minutes' },
         { label: 'Forward to', from: 'orders-retry', to: 'None' }
@@ -41,5 +41,19 @@ describe('EntityReviewDialogComponent', () => {
       ['Forward to', 'orders-retry', 'None']
     ]);
     expect(Array.from(el.querySelectorAll('button')).map(text)).toStrictEqual(['Back', 'Apply 2 changes']);
+  });
+
+  it('as EntityAdmin.dc.html draws it: the line "billing on <connection>" under the title, the entity in bold', () => {
+    const el = render({
+      kind: 'subscription', entityName: 'billing', topicName: 'events',
+      context: signal({ connection: 'contoso-prod (ns.example.net)', where: 'Contoso (ns.example.net)', environment: 'Contoso / Production', mark: { name: 'Production', isProduction: true } }),
+      changes: [{ label: 'Lock duration', from: '2 minutes', to: '5 minutes' }]
+    });
+
+    expect(text(el.querySelector('.environment-line .where'))).toBe('billing on Contoso (ns.example.net)');
+    expect(text(el.querySelector('.environment-line .where b'))).toBe('billing');
+    const chip = el.querySelector('.environment-line .environment-chip') as HTMLElement;
+    expect(chip.textContent?.replace('warning', '').trim(), 'the review opens with the PRODUCTION chip').toBe('PRODUCTION');
+    expect(chip.classList.contains('production'), 'a production environment takes the error container').toBe(true);
   });
 });

@@ -18,6 +18,17 @@ export class MetricsService {
   private api = inject(ApiService);
 
   /**
+   * Gets the Azure Monitor metrics of the namespace of a stored connection, read by the API with the connection's
+   * Entra ID credential from its Azure resource ID. An error is passed on as it came, never replaced by made-up data:
+   * the API answers 409 or 502 with a `code` the caller turns into its own fixed text.
+   */
+  getNamespaceMetrics(connectionId: string, timeRange: MetricsTimeRange): Observable<MetricsData> {
+    return this.api.get<MetricsData>(apiPath`metrics/connections/${connectionId}?timeRange=${timeRange}`).pipe(
+      map(data => this.convertDates(data))
+    );
+  }
+
+  /**
    * Gets Azure Monitor metrics for a specific queue.
    * @param queueName - The name of the queue
    * @param timeRange - The time range for the metrics query (default: OneHour)

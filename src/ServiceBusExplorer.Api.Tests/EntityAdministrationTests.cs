@@ -275,6 +275,31 @@ public class EntityAdministrationTests
     }
 
     [Fact]
+    public async Task A_topic_read_answers_each_subscriptions_status_and_rule_count_and_passes_the_request_token()
+    {
+        var read = new TopicInfo
+        {
+            Name = "events",
+            Subscriptions =
+            [
+                new SubscriptionInfo { Name = "audit", Status = "Active", RuleCount = 2 },
+                new SubscriptionInfo { Name = "billing", Status = "ReceiveDisabled", RuleCount = null }
+            ]
+        };
+
+        var answered = await SendAsync("GET", "/api/topics/events", null,
+            (m, _) => m.Name == nameof(IMessagingProvider.GetTopicAsync) ? Task.FromResult<ITopicEntity?>(read) : null);
+
+        Assert.Equal(HttpStatusCode.OK, answered.Status);
+        var call = Assert.Single(answered.Calls);
+        Assert.True(call.Args.OfType<CancellationToken>().Single().CanBeCanceled, "The topic read is given the request's token, so a closed request stops the rule listings");
+        var subscriptions = Json(answered.Body).GetProperty("subscriptions").EnumerateArray()
+            .Select(s => (s.GetProperty("name").GetString(), s.GetProperty("status").GetString(), s.GetProperty("ruleCount").ValueKind, s.GetProperty("ruleCount").ToString()))
+            .ToList();
+        Assert.Equal([("audit", "Active", JsonValueKind.Number, "2"), ("billing", "ReceiveDisabled", JsonValueKind.Null, "")], subscriptions);
+    }
+
+    [Fact]
     public async Task Editing_a_topic_answers_the_topic_as_read_after_the_edit()
     {
         var reread = new TopicInfo { Name = "events", Status = "Disabled", SupportOrdering = true };

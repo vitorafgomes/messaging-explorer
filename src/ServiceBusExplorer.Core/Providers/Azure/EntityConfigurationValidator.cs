@@ -73,14 +73,15 @@ internal static class EntityConfigurationValidator
     }
 
     /// <summary>
-    /// The sequence numbers of a cancel of scheduled messages: 1 to 500 of them, each positive, none repeated.
+    /// The sequence numbers of a call that names each message: 1 to <paramref name="max"/> of them, by default the 500
+    /// of a cancel of scheduled messages, each positive, none repeated.
     /// </summary>
-    public static IReadOnlyList<string> ValidateScheduledSequenceNumbers(long[]? sequenceNumbers)
+    public static IReadOnlyList<string> ValidateScheduledSequenceNumbers(long[]? sequenceNumbers, int max = MaxScheduledSequenceNumbers)
     {
         var errors = new List<string>();
-        if (sequenceNumbers is null || sequenceNumbers.Length is < 1 or > MaxScheduledSequenceNumbers)
+        if (sequenceNumbers is null || sequenceNumbers.Length < 1 || sequenceNumbers.Length > max)
         {
-            errors.Add($"sequenceNumbers must hold 1 to {MaxScheduledSequenceNumbers} sequence numbers.");
+            errors.Add($"sequenceNumbers must hold 1 to {max} sequence numbers.");
             return errors;
         }
 

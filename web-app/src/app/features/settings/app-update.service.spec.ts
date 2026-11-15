@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { AppUpdateService } from './app-update.service';
+import { AppUpdateService, releaseNoteLines } from './app-update.service';
 
 function fakeShell(overrides: Record<string, unknown> = {}) {
   let listener: (data: unknown) => void = () => {};
@@ -121,5 +121,25 @@ describe('AppUpdateService', () => {
     const updates = TestBed.inject(AppUpdateService);
     await updates.initialize();
     expect(updates.status()).toBe('unavailable');
+  });
+});
+
+describe('releaseNoteLines', () => {
+  it('one note per version gives the lines of every note, and an entry without a note adds none', () => {
+    expect(releaseNoteLines([
+      { version: '2.5.0', note: '<p>Rules tab</p>' },
+      { version: '2.4.9' },
+      { version: '2.4.8', note: '<p>Faster tree</p>' },
+    ])).toEqual(['Rules tab', 'Faster tree']);
+  });
+
+  it('notes without a list give their lines of text, blank lines dropped', () => {
+    expect(releaseNoteLines('<p>First line</p>\n\n<p>Second   line</p>')).toEqual(['First line', 'Second line']);
+  });
+
+  it('no notes, or notes of another type, give no lines', () => {
+    expect(releaseNoteLines(null)).toEqual([]);
+    expect(releaseNoteLines('   ')).toEqual([]);
+    expect(releaseNoteLines(42)).toEqual([]);
   });
 });

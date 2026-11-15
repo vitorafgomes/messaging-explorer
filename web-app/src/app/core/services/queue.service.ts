@@ -5,7 +5,7 @@ import { ApiService } from './api.service';
 import { apiPath } from './api-path';
 import {
   QueueInfo, MessageInfo, SendMessageRequest, BatchOperationResult, DeleteBatchRequest, ResubmitBatchRequest, MoveBatchRequest, QueueCreateOptions, QueueUpdate,
-  CancelScheduledRequest
+  CancelScheduledRequest, DeferredAction, DeferredBatchRequest, ActiveAction
 } from '../models';
 
 /**
@@ -70,10 +70,12 @@ export class QueueService {
    * Peeks messages from a queue without removing them.
    * @param queueName - The queue name
    * @param count - Maximum number of messages to peek (default: 10)
+   * @param fromSequenceNumber - First sequence number to read; absent reads from the head
    * @returns Observable array of messages
    */
-  peekMessages(queueName: string, count: number = 10): Observable<MessageInfo[]> {
-    return this.api.get<MessageInfo[]>(apiPath`queues/${queueName}/messages?count=${count}`);
+  peekMessages(queueName: string, count: number = 10, fromSequenceNumber?: number): Observable<MessageInfo[]> {
+    const from = fromSequenceNumber === undefined ? '' : apiPath`&fromSequenceNumber=${fromSequenceNumber}`;
+    return this.api.get<MessageInfo[]>(apiPath`queues/${queueName}/messages?count=${count}` + from);
   }
 
   /**
@@ -98,8 +100,8 @@ export class QueueService {
    * @param message - The message to send
    * @returns Observable with success status
    */
-  sendMessage(queueName: string, message: SendMessageRequest): Observable<{ success: boolean }> {
-    return this.api.post<{ success: boolean }>(apiPath`queues/${queueName}/messages`, message);
+  sendMessage(queueName: string, message: SendMessageRequest): Observable<SendMessageResult> {
+    return this.api.post<SendMessageResult>(apiPath`queues/${queueName}/messages`, message);
   }
 
   /**
@@ -108,8 +110,8 @@ export class QueueService {
    * @param messages - Array of messages to send
    * @returns Observable with success status and count of sent messages
    */
-  sendMessages(queueName: string, messages: SendMessageRequest[]): Observable<{ success: boolean; count: number }> {
-    return this.api.post<{ success: boolean; count: number }>(apiPath`queues/${queueName}/messages/batch`, messages);
+  sendMessages(queueName: string, messages: SendMessageRequest[]): Observable<SendBatchResult> {
+    return this.api.post<SendBatchResult>(apiPath`queues/${queueName}/messages/batch`, messages);
   }
 
   /**
@@ -130,9 +132,9 @@ export class QueueService {
    * @param sequenceNumber - The sequence number of the dead letter message
    * @returns Observable with success status
    */
-  resubmitDeadLetterMessage(queueName: string, sequenceNumber: number): Observable<{ success: boolean }> {
+  resubmitDeadLetterMessage(queueName: string, sequenceNumber: number, newMessageIdOnDuplicateDetection = false): Observable<{ success: boolean }> {
     const url = apiPath`queues/${queueName}/deadletter/${sequenceNumber}/resubmit`;
-    return this.api.post<{ success: boolean }>(url, {});
+    return this.api.post<{ success: boolean }>(url, { newMessageIdOnDuplicateDetection });
   }
 
   /**
@@ -143,8 +145,8 @@ export class QueueService {
    * @param sequenceNumbers - Array of sequence numbers to resubmit
    * @returns Observable with batch operation result containing success/failure counts and details
    */
-  resubmitDeadLetterMessages(queueName: string, sequenceNumbers: number[]): Observable<BatchOperationResult> {
-    const request: ResubmitBatchRequest = { sequenceNumbers };
+  resubmitDeadLetterMessages(queueName: string, sequenceNumbers: number[], newMessageIdOnDuplicateDetection = false): Observable<BatchOperationResult> {
+    const request: ResubmitBatchRequest = { sequenceNumbers, newMessageIdOnDuplicateDetection };
     return this.api.post<BatchOperationResult>(apiPath`queues/${queueName}/deadletter/resubmit-batch`, request);
   }
 
@@ -170,8 +172,8 @@ export class QueueService {
    * @param isDeadLetter - Whether to move from dead letter queue (default: false)
    * @returns Observable with batch operation result containing success/failure counts and details
    */
-  moveMessages(sourceQueueName: string, targetQueueName: string, sequenceNumbers: number[], isDeadLetter: boolean = false): Observable<BatchOperationResult> {
-    const request: MoveBatchRequest = { sequenceNumbers, targetQueueName };
+  moveMessages(sourceQueueName: string, targetQueueName: string, sequenceNumbers: number[], isDeadLetter: boolean = false, newMessageIdOnDuplicateDetection = false): Observable<BatchOperationResult> {
+    const request: MoveBatchRequest = { sequenceNumbers, targetQueueName, newMessageIdOnDuplicateDetection };
     const path = isDeadLetter ? 'deadletter' : 'messages';
     return this.api.post<BatchOperationResult>(apiPath`queues/${sourceQueueName}/${path}/move-batch`, request);
   }
@@ -190,8 +192,8 @@ export class QueueService {
   }
 
   /** Resubmits the given transfer dead-letter messages to the queue itself. */
-  resubmitTransferDeadLetterMessages(queueName: string, sequenceNumbers: number[]): Observable<BatchOperationResult> {
-    const request: ResubmitBatchRequest = { sequenceNumbers };
+  resubmitTransferDeadLetterMessages(queueName: string, sequenceNumbers: number[], newMessageIdOnDuplicateDetection = false): Observable<BatchOperationResult> {
+    const request: ResubmitBatchRequest = { sequenceNumbers, newMessageIdOnDuplicateDetection };
     return this.api.post<BatchOperationResult>(apiPath`queues/${queueName}/transferdeadletter/resubmit-batch`, request);
   }
 
@@ -199,6 +201,16 @@ export class QueueService {
   cancelScheduledMessages(queueName: string, sequenceNumbers: number[]): Observable<BatchOperationResult> {
     const request: CancelScheduledRequest = { sequenceNumbers };
     return this.api.post<BatchOperationResult>(apiPath`queues/${queueName}/messages/cancel-scheduled`, request);
+  }
+
+  /** Dead-letters or defers active messages of a queue, each named by its sequence number; the API scans for them. */
+  settleActiveMessages(queueName: string, action: ActiveAction, request: DeferredBatchRequest): Observable<BatchOperationResult> {
+    return this.api.post<BatchOperationResult>(apiPath`queues/${queueName}/messages/${action}-batch`, request);
+  }
+
+  /** Deletes, resubmits or dead-letters deferred messages of a queue, each named by its sequence number. */
+  settleDeferredMessages(queueName: string, action: DeferredAction, request: DeferredBatchRequest): Observable<BatchOperationResult> {
+    return this.api.post<BatchOperationResult>(apiPath`queues/${queueName}/deferred/${action}-batch`, request);
   }
 
   /**
@@ -229,4 +241,17 @@ export class QueueService {
   purgeDeadLetterMessages(queueName: string): Observable<{ success: boolean }> {
     return this.api.delete<{ success: boolean }>(apiPath`queues/${queueName}/deadletter`);
   }
+}
+
+/** What a single send answers: the sequence number the broker gave a scheduled message, null when sent at once. */
+export interface SendMessageResult {
+  success: boolean;
+  sequenceNumber?: number | null;
+}
+
+/** What a batch send answers: how many were sent, and each message not sent by its position in the request. */
+export interface SendBatchResult {
+  success: boolean;
+  count: number;
+  failures?: { index: number; error: string }[];
 }

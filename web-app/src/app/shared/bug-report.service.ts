@@ -3,6 +3,16 @@ import { MatDialog } from '@angular/material/dialog';
 import { BugReportDialogComponent } from './bug-report-dialog.component';
 import { AppUpdateService } from '../features/settings/app-update.service';
 
+/**
+ * Takes out of an error line what could name a connection, a namespace or an entity: every
+ * address with a scheme, and every host name with a dot, so the public issue carries none.
+ */
+export function redact(entry: string): string {
+  return entry
+    .replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s)'"]*/gi, '[address]')
+    .replace(/\b(?:[a-z0-9-]+\.)+(?:windows\.net|net|com|org|io|internal|local|cloud)\b(?::\d+)?/gi, '[host]');
+}
+
 /** Keeps the last five errors of the window and opens the bug report with them. */
 @Injectable({ providedIn: 'root' })
 export class BugReportService {
@@ -37,7 +47,7 @@ export class BugReportService {
   }
 
   private remember(entry: string): void {
-    this.lastErrors.push(entry);
+    this.lastErrors.push(redact(entry));
     if (this.lastErrors.length > 5) this.lastErrors.shift();
   }
 

@@ -45,6 +45,22 @@ public class RabbitMQSubQueueTests
         Assert.Equal("RabbitMQ does not support scheduled messages.", error.Message);
     }
 
+    [Fact]
+    public async Task RabbitMQ_declares_no_deferral_and_refuses_each_deferred_operation_with_the_fixed_text()
+    {
+        var provider = new RabbitMQProvider();
+
+        var errors = new[]
+        {
+            await Assert.ThrowsAsync<NotSupportedException>(() => provider.DeleteDeferredMessagesAsync("orders", [1])),
+            await Assert.ThrowsAsync<NotSupportedException>(() => provider.ResubmitDeferredMessagesAsync("orders", [1], "audit")),
+            await Assert.ThrowsAsync<NotSupportedException>(() => provider.DeadLetterDeferredMessagesAsync("orders", [1]))
+        };
+
+        Assert.False(provider.Capabilities.SupportsDeferral, "RabbitMQ has no deferred messages and must say so in its capabilities.");
+        Assert.All(errors, e => Assert.Equal("RabbitMQ does not support deferred messages.", e.Message));
+    }
+
     [Theory]
     [InlineData(MessageSubQueue.Active)]
     [InlineData(MessageSubQueue.DeadLetter)]

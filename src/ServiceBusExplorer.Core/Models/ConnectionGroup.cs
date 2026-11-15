@@ -9,4 +9,9 @@ public class ConnectionGroup
     public string? Description { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public int? Order { get; set; }
+
+    /// <summary>
+    /// Marks an environment as production. False for a client and for files written before the mark existed.
+    /// </summary>
+    public bool IsProduction { get; set; }
 }

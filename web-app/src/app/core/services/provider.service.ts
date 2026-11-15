@@ -5,7 +5,7 @@ import { tap, catchError, map, switchMap } from 'rxjs/operators';
 import { ApiService } from './api.service';
 import { apiPath } from './api-path';
 import { ConnectionService } from './connection.service';
-import { ProviderType, ProviderCapabilities, ProviderInfo, getProviderDisplayName } from '../models/provider.model';
+import { ProviderType, ProviderCapabilities, ProviderInfo, getProviderDisplayName, toProviderType } from '../models/provider.model';
 
 /**
  * Represents the current provider selection state.
@@ -29,7 +29,7 @@ export const DEFAULT_AZURE_CAPABILITIES: ProviderCapabilities = {
   supportsSequenceNumbers: true,
   supportsMessageFiltering: true,
   supportsMessageBatching: true,
-  supportsTransactions: true,
+  supportsTransactions: false,
   supportsDeferral: false,
   supportsDuplicateDetection: true,
   supportsAutoForwarding: true,
@@ -55,7 +55,7 @@ export const DEFAULT_RABBITMQ_CAPABILITIES: ProviderCapabilities = {
   supportsSequenceNumbers: false,
   supportsMessageFiltering: true, // routing keys/headers
   supportsMessageBatching: true,
-  supportsTransactions: true, // TX mode
+  supportsTransactions: false,
   supportsDeferral: false,
   supportsDuplicateDetection: false,
   supportsAutoForwarding: false,
@@ -76,8 +76,8 @@ const DISCONNECTED_STATE: ProviderSelectionState = {
 
 /**
  * The built-in defaults standing in for an API answer: entity administration, the rules editor, the
- * transfer dead-letter queue, the dead-letter peek from a position and the definitions export and import
- * need the API's own explicit true, because an older API that lacks them does not send the flag.
+ * transfer dead-letter queue, the dead-letter peek from a position, the definitions export and import and
+ * the namespace properties need the API's own explicit true, because an older API that lacks them does not send the flag.
  */
 function unconfirmed(capabilities: ProviderCapabilities): ProviderCapabilities {
   return {
@@ -86,16 +86,11 @@ function unconfirmed(capabilities: ProviderCapabilities): ProviderCapabilities {
     supportsSubscriptionRules: false,
     supportsTransferDeadLetter: false,
     supportsPeekFromSequenceNumber: false,
-    supportsDefinitions: false
+    supportsDefinitions: false,
+    supportsNamespaceProperties: false,
+    supportsManualDeadLetter: false,
+    supportsBinaryBody: false
   };
-}
-
-/**
- * Reads the provider type of a connection status, which the API sends as the enum name.
- */
-function toProviderType(value: ProviderType | string | undefined): ProviderType {
-  const parsed = typeof value === 'string' ? ProviderType[value as keyof typeof ProviderType] : value;
-  return typeof parsed === 'number' ? parsed : ProviderType.AzureServiceBus;
 }
 
 @Injectable({
@@ -193,7 +188,10 @@ export class ProviderService {
         supportsSubscriptionRules: capabilities.supportsSubscriptionRules === true,
         supportsTransferDeadLetter: capabilities.supportsTransferDeadLetter === true,
         supportsPeekFromSequenceNumber: capabilities.supportsPeekFromSequenceNumber === true,
-        supportsDefinitions: capabilities.supportsDefinitions === true
+        supportsDefinitions: capabilities.supportsDefinitions === true,
+        supportsNamespaceProperties: capabilities.supportsNamespaceProperties === true,
+        supportsManualDeadLetter: capabilities.supportsManualDeadLetter === true,
+        supportsBinaryBody: capabilities.supportsBinaryBody === true
       })),
       tap(capabilities => {
         this.providerStateSubject.next({
