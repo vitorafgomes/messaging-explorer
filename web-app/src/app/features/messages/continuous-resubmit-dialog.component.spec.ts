@@ -69,6 +69,26 @@ describe('ContinuousResubmitDialogComponent', () => {
     };
   });
 
+  it('on a subscription the dialog says that the topic sends every resubmitted message to all its subscriptions', () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideNoopAnimations(),
+        { provide: MAT_DIALOG_DATA, useValue: { entityType: 'subscription', entityName: 'eu', topicName: 'sales', deadLetterMessageCount: 3 } },
+        { provide: MatDialogRef, useValue: { close: vi.fn(), disableClose: false } },
+        { provide: QueueService, useValue: queueService },
+        { provide: TopicService, useValue: { getSubscription: vi.fn().mockReturnValue(of({ name: 'eu', deadLetterMessageCount: 3 })) } },
+        { provide: ProviderService, useValue: { capabilities: signal(capabilities) } },
+        { provide: ConnectionService, useValue: { connectionStatus$: of({ connected: true }), currentTarget: 'sample.example.net', onBeforeSwitch: vi.fn() } },
+        { provide: MessageExportService, useValue: exporter }
+      ]
+    });
+    const fixture = TestBed.createComponent(ContinuousResubmitDialogComponent);
+    fixture.detectChanges();
+
+    expect((fixture.nativeElement as HTMLElement).querySelector('.topic-resubmit-note[role="note"]')?.textContent?.replace(/\s+/g, ' ').trim())
+      .toBe('Resubmit publishes to the topic sales. Every subscription of sales receives these messages again, not only eu.');
+  });
+
   describe('continuous resubmit never re-sends a message that failed or may be duplicated, and stops on a failure', () => {
     it('a batch with one possible duplicate stops the loop: the head still holding it is not sent again, and the dialog says why', async () => {
       queueService.resubmitDeadLetterMessages.mockReturnValue(of({
