@@ -64,4 +64,67 @@ public class RabbitMQPeekFailureTests
         Assert.Empty(await provider.PeekMessagesAsync("orders", 1));
         reopened.Verify(c => c.BasicGet("orders", false), Times.Once);
     }
+
+    private static BasicGetResult Delivery(ulong tag, string body) =>
+        new(tag, false, "", "orders", 0, new Mock<IBasicProperties>().SetupAllProperties().Object, System.Text.Encoding.UTF8.GetBytes(body));
+
+    private static (RabbitMQProvider Provider, Mock<IModel> Channel) HoldingProvider(Func<int, BasicGetResult?> get, bool channelOpen = true)
+    {
+        var connection = new Mock<IConnection>();
+        connection.Setup(c => c.IsOpen).Returns(true);
+        var channel = new Mock<IModel>();
+        var open = true;
+        channel.Setup(c => c.IsOpen).Returns(() => open);
+        var call = 0;
+        channel.Setup(c => c.BasicGet("orders", false)).Returns(() =>
+        {
+            call++;
+            var result = get(call);
+            if (!channelOpen && call > 1) open = false;
+            return result;
+        });
+        return (new RabbitMQProvider(connection.Object, Client(new StatusHandler(HttpStatusCode.OK)), channel.Object), channel);
+    }
+
+    [Fact]
+    public async Task A_peek_that_fails_after_reading_two_messages_requeues_both_with_one_nack_and_fails_with_the_error()
+    {
+        var (provider, channel) = HoldingProvider(call => call switch
+        {
+            1 => Delivery(1, "m1"),
+            2 => Delivery(2, "m2"),
+            _ => throw new IOException("BROKER-DETAIL-SENTINEL")
+        });
+
+        await Assert.ThrowsAsync<IOException>(() => provider.PeekMessagesAsync("orders", 5));
+
+        channel.Verify(c => c.BasicNack(2, true, true), Times.Once);
+        channel.Verify(c => c.BasicNack(It.IsAny<ulong>(), It.IsAny<bool>(), It.IsAny<bool>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task A_peek_cancelled_after_reading_one_message_requeues_it_and_is_cancelled()
+    {
+        using var cts = new CancellationTokenSource();
+        var (provider, channel) = HoldingProvider(call =>
+        {
+            if (call == 1) { cts.Cancel(); return Delivery(1, "m1"); }
+            return Delivery((ulong)call, $"m{call}");
+        });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => provider.PeekMessagesAsync("orders", 5, cancellationToken: cts.Token));
+
+        channel.Verify(c => c.BasicNack(1, true, true), Times.Once);
+    }
+
+    [Fact]
+    public async Task A_peek_whose_channel_closed_while_reading_sends_no_nack_since_the_broker_requeues_what_it_held()
+    {
+        var (provider, channel) = HoldingProvider(call => call == 1 ? Delivery(1, "m1") : null, channelOpen: false);
+
+        var peeked = await provider.PeekMessagesAsync("orders", 5);
+
+        Assert.Single(peeked);
+        channel.Verify(c => c.BasicNack(It.IsAny<ulong>(), It.IsAny<bool>(), It.IsAny<bool>()), Times.Never);
+    }
 }
