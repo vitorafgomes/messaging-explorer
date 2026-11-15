@@ -81,7 +81,7 @@ public class RabbitMQPeekFailureTests
             call++;
             var result = get(call);
             if (!channelOpen && call > 1) open = false;
-            return result;
+            return result!;
         });
         return (new RabbitMQProvider(connection.Object, Client(new StatusHandler(HttpStatusCode.OK)), channel.Object), channel);
     }
