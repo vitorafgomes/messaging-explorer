@@ -1,3 +1,6 @@
+## [2026-11-15] feature | Manage Groups and the automatic resubmit as drawn
+Every dialog takes the artboards' 20 px title and surface container. [[pages/services/web-app/features-connections]]
+
 ## [2026-11-15] feature | No broker screen without a connection; Connections dialogs as drawn
 The guard reads the status again before it sends the user back. [[pages/services/web-app/features-connections]]
 

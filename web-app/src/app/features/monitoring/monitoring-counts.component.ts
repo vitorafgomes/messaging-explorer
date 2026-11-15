@@ -168,6 +168,6 @@ export class MonitoringCountsComponent implements AfterViewInit {
       topicName: row.topicName ?? undefined,
       deadLetterMessageCount: row.deadLetter
     };
-    this.dialog.open(ContinuousResubmitDialogComponent, { width: '760px', maxWidth: '95vw', data });
+    this.dialog.open(ContinuousResubmitDialogComponent, { width: '720px', maxWidth: '95vw', data });
   }
 }

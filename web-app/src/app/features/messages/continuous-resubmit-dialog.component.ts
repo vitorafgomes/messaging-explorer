@@ -302,11 +302,13 @@ interface LeftRow extends LeftBehind {
           <mat-checkbox class="new-message-id" [checked]="newMessageId()" (change)="newMessageId.set($event.checked)">{{ newMessageIdOption.label }}</mat-checkbox>
           <p class="hint">{{ newMessageIdOption.hint }}</p>
         }
-        <mat-form-field appearance="outline" subscriptSizing="dynamic" class="batch">
-          <mat-label>Batch Size</mat-label>
-          <input matInput type="number" name="batchSize" [(ngModel)]="batchSize" min="1" max="500" [attr.aria-invalid]="!batchSizeValid()">
+        <div class="field batch">
+        <label for="resubmit-batch-size">Batch Size</label>
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <input matInput id="resubmit-batch-size" type="number" name="batchSize" [(ngModel)]="batchSize" min="1" max="500" [attr.aria-invalid]="!batchSizeValid()">
           <mat-hint [class.invalid]="!batchSizeValid()">{{ batchHint() }}</mat-hint>
         </mat-form-field>
+        </div>
         @if (!positional) {
           @if (knownCount(); as count) {
             <p class="note count" role="note">
@@ -448,7 +450,10 @@ interface LeftRow extends LeftBehind {
     p { margin: 0; }
     .target { overflow-wrap: anywhere; }
     .intro { color: var(--mat-sys-on-surface-variant); }
-    .note { display: flex; align-items: flex-start; gap: 8px; padding: 8px 12px; border-radius: 8px; background: var(--mat-sys-surface-container); color: var(--mat-sys-on-surface-variant); }
+    .note { display: flex; align-items: flex-start; gap: 8px; padding: 8px 12px; border-radius: 8px; background: var(--mat-sys-surface-container-high); color: var(--mat-sys-on-surface-variant); }
+    .note mat-icon { flex: none; }
+    .field { display: flex; flex-direction: column; gap: 4px; }
+    .field > label { font: var(--mat-sys-label-medium); color: var(--mat-sys-on-surface-variant); }
     .note.warn { background: var(--app-warning-container); color: var(--app-on-warning-container); }
     .note.count { background: var(--mat-sys-secondary-container); color: var(--mat-sys-on-secondary-container); }
     .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
@@ -477,8 +482,8 @@ interface LeftRow extends LeftBehind {
     .batch { max-width: 360px; }
     .cost { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--mat-sys-outline-variant); border-radius: 8px; }
     .cost dl { display: flex; flex-direction: column; gap: 6px; margin: 0; }
-    .cost dl > div { display: grid; grid-template-columns: minmax(0, 160px) minmax(0, 1fr); gap: 12px; }
-    .cost dt { color: var(--mat-sys-on-surface-variant); }
+    .cost dl > div { display: grid; grid-template-columns: minmax(0, 180px) minmax(0, 1fr); gap: 12px; padding-top: 6px; border-top: 1px solid var(--mat-sys-outline-variant); }
+    .cost dt { font-weight: 400; color: var(--mat-sys-on-surface-variant); }
     .cost dd { margin: 0; }
     .cost-note { font: var(--mat-sys-body-small); color: var(--mat-sys-on-surface-variant); }
     .results { width: 100%; }

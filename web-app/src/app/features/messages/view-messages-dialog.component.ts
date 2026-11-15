@@ -930,7 +930,7 @@ export class ViewMessagesDialogComponent implements OnInit {
       deadLetterMessageCount: this.data.deadLetterMessageCount,
       targetDetectsDuplicates: this.data.targetDetectsDuplicates
     };
-    this.dialog.open(ContinuousResubmitDialogComponent, { width: '500px', data })
+    this.dialog.open(ContinuousResubmitDialogComponent, { width: '720px', maxWidth: '95vw', data })
       .afterClosed().pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(result => { if (result) this.reload('deadletter'); });
   }
