@@ -1,3 +1,6 @@
+## [2026-11-15] chore | A pull request description fills every section of the template
+The template gained what was asked, done, not done, the tests and the risk; the safety boxes stay. `.github/PULL_REQUEST_TEMPLATE.md`, `CLAUDE.md`.
+
 ## [2026-11-15] feature | RabbitMQ resubmit sends first and removes after
 Resubmit of chosen dead-letter messages and the automatic resubmit are offered on RabbitMQ again. [[pages/services/core/rabbitmq-and-legacy]]
 

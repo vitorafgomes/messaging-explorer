@@ -33,10 +33,10 @@ No test counts go into the context; CI shows them.
 
 - After a change to `src/`, `web-app/` or `context/`, run `tools/checks/check-context-refs.sh` and fix
   every citation it reports.
-- The pull request body uses `.github/PULL_REQUEST_TEMPLATE.md` and carries the line
-  `Review: applied N, rejected M`. Its three safety boxes (API surface, secrets, message
-  safety) are ticked only after the matching lens, or the plan's statement that the change
-  touches none, says so.
+- The pull request body fills every section of `.github/PULL_REQUEST_TEMPLATE.md`, one that does
+  not apply saying so in words, and carries the line `Review: applied N, rejected M`. Its three
+  safety boxes (API surface, secrets, message safety) are ticked only after the matching lens, or
+  the plan's statement that the change touches none, says so.
 
 ## Spending less
 
