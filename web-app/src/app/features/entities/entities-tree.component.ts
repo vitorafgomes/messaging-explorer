@@ -53,9 +53,6 @@ export const STATUS_MARKERS: Partial<Record<string, { icon: string; text: string
                 (click)="selectNode(node)">
           <mat-icon class="node-icon" [fontIcon]="node.type === 'topic' ? 'campaign' : node.type === 'subscription' ? 'subdirectory_arrow_right' : 'inbox'" aria-hidden="true" />
           <span class="node-name">{{ node.name }}</span>
-          @if (node.type === 'subscription' && $any(node.data)?.routingKey; as key) {
-            <span class="routing-key" [matTooltip]="'Routing key ' + key">{{ key }}</span>
-          }
           @if (node.type !== 'subscription' && $any(node.data)?.patternDisplay; as pattern) {
             <span class="pattern-chip" [matTooltip]="$any(node.data)?.detectedPattern?.reason || pattern">{{ pattern }}</span>
           }
@@ -80,6 +77,17 @@ export const STATUS_MARKERS: Partial<Record<string, { icon: string; text: string
         @if (node.type === 'topic') {
           <ng-container *ngTemplateOutlet="createAction; context: { $implicit: node }" />
         }
+      </div>
+    </ng-template>
+    <ng-template #bindingRow let-node>
+      <div class="tree-row">
+        <button type="button" class="tree-node node-binding"
+                [attr.aria-label]="'Binding ' + (bindingKey(node) || 'with no routing key') + ' to queue ' + node.name + ': open the queue'"
+                (click)="openBoundQueue(node)">
+          <span class="binding-key">{{ bindingKey(node) || '(no key)' }}</span>
+          <mat-icon class="binding-arrow" fontIcon="arrow_forward" aria-hidden="true" />
+          <span class="node-name">{{ node.name }}</span>
+        </button>
       </div>
     </ng-template>
     <div class="tree-container">
@@ -148,7 +156,7 @@ export const STATUS_MARKERS: Partial<Record<string, { icon: string; text: string
               @if (node.type === 'topic' && isExpanded(node) && shownChildren(node).length) {
                 <div class="tree-children">
                   @for (subscription of shownChildren(node); track subscription.id) {
-                    <ng-container *ngTemplateOutlet="row; context: { $implicit: subscription }" />
+                    <ng-container *ngTemplateOutlet="(isBinding() ? bindingRow : row); context: { $implicit: subscription }" />
                   }
                 </div>
               }
@@ -186,6 +194,21 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
   /** The connected broker's words for topics and subscriptions: Exchanges and bindings on RabbitMQ. */
   terms() {
     return getProviderMetadata(this.providerService.selectedProvider).terms;
+  }
+
+  /** On RabbitMQ a row under an exchange is a binding, not a second copy of its queue. */
+  isBinding(): boolean {
+    return this.terms().subscription === 'binding';
+  }
+
+  bindingKey(node: TreeNode): string {
+    return (node.data as SubscriptionNodeData | undefined)?.routingKey ?? '';
+  }
+
+  /** Selects the queue a binding feeds, where it is listed under Queues; the binding itself when the queue is not listed. */
+  openBoundQueue(binding: TreeNode) {
+    const queue = this.treeData.find(c => c.id === 'category-queues')?.children?.find(q => q.name === binding.name);
+    this.selectionService.select(queue ?? binding);
   }
 
   readonly canCreate = computed(() => this.providerService.capabilities()?.supportsEntityUpdate === true);

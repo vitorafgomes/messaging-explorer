@@ -624,7 +624,7 @@ describe('EntitiesTreeComponent on a RabbitMQ connection names exchanges and bin
     expect(Array.from(el.querySelectorAll('.create-btn')).map(b => b.getAttribute('aria-label'))).toStrictEqual(['Create queue', 'Create exchange', 'Create binding in orders']);
     const bound = el.querySelector('.tree-children button.tree-node')!;
     expect(text(bound.querySelector('.node-name'))).toBe('orders.created');
-    expect(text(bound.querySelector('.routing-key'))).toBe('order.created');
+    expect(text(bound.querySelector('.binding-key'))).toBe('order.created');
   });
 
   it('an exchange and a queue that carry a pattern show it as a chip on their row; a row without one shows none', () => {
@@ -657,6 +657,40 @@ describe('EntitiesTreeComponent on a RabbitMQ connection names exchanges and bin
 
     expect(rows.map(r => [text(r.querySelector('.node-name')), text(r.querySelector('.pattern-chip'))]))
       .toStrictEqual([['tasks', 'Work queue, 3 consumers'], ['plain', ''], ['orders.dlx', 'Pub/Sub']]);
+  });
+
+  it('RabbitMQ: under an exchange a row is a binding, "routing key -> queue", named as one, and a click selects the queue in Queues, not a second copy of it', () => {
+    const select = vi.fn();
+    TestBed.configureTestingModule({
+      imports: [EntitiesTreeComponent],
+      providers: [
+        { provide: TreeDataBuilderService, useValue: { buildTree: () => of(tree()) } },
+        { provide: EntitySelectionService, useValue: { selection$: of(null), treeRefresh$: NEVER, select } },
+        { provide: ConnectionService, useValue: { isConnected: true, connectionStatus$: NEVER } },
+        resubmitRuns,
+        { provide: LoggerService, useValue: { log: () => undefined, error: () => undefined } },
+        { provide: DeadLetterNotificationService, useValue: { clear: () => undefined } },
+        { provide: ProviderService, useValue: { capabilities: signal(DEFAULT_RABBITMQ_CAPABILITIES), selectedProvider: ProviderType.RabbitMQ } },
+        { provide: MatDialog, useValue: { open: vi.fn() } }
+      ]
+    });
+    const fixture = TestBed.createComponent(EntitiesTreeComponent);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    Array.from(el.querySelectorAll<HTMLButtonElement>('.entity-tree button.tree-node')).find(b => b.classList.contains('node-topic'))!.click();
+    fixture.detectChanges();
+    select.mockClear();
+
+    const binding = el.querySelector<HTMLButtonElement>('.tree-children button.tree-node')!;
+    expect(binding.classList.contains('node-binding')).toBe(true);
+    expect(text(binding.querySelector('.binding-key'))).toBe('order.created');
+    expect(text(binding.querySelector('.node-name'))).toBe('orders.created');
+    expect(binding.getAttribute('aria-label')).toBe('Binding order.created to queue orders.created: open the queue');
+    expect(binding.querySelectorAll('.count-chip').length, 'a binding holds no messages: the counts are on the queue').toBe(0);
+
+    binding.click();
+    expect(select).toHaveBeenCalledTimes(1);
+    expect(select.mock.calls[0][0]).toEqual(expect.objectContaining({ id: 'queue-orders.created', type: 'queue' }));
   });
 
   it('Azure Service Bus keeps Topics and subscriptions', () => {

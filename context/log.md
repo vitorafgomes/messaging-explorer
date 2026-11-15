@@ -1,3 +1,6 @@
+## [2026-11-15] feature | A row under a RabbitMQ exchange is a binding, not a second copy of the queue
+The owner read the bound queue as listed twice. [[pages/services/web-app/providers-and-shared]]
+
 ## [2026-11-15] feature | Pattern labels on RabbitMQ exchanges and queues
 The detector's result reaches the tree; it was lost to a name-versus-number enum. [[pages/services/web-app/providers-and-shared]]
 
