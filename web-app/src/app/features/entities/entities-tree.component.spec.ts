@@ -502,3 +502,68 @@ describe('EntitiesTreeComponent: status and forwarding markers', () => {
     });
   });
 });
+
+describe('EntitiesTreeComponent: a topic whose subscriptions were not listed with it', () => {
+  const warehouse: TreeNode = { id: 'subscription-order-events-warehouse', name: 'warehouse', type: 'subscription', icon: 'subscriptions', expandable: false, level: 2, data: { topicName: 'order-events', activeMessageCount: 4, deadLetterMessageCount: 2 } as never };
+  const email: TreeNode = { id: 'subscription-order-events-email', name: 'email', type: 'subscription', icon: 'subscriptions', expandable: false, level: 2, data: { topicName: 'order-events', activeMessageCount: 6, deadLetterMessageCount: 0 } as never };
+  const tree = (): TreeNode[] => [
+    { id: 'category-queues', name: 'Queues', type: 'category', icon: 'folder', expandable: true, level: 0, children: [] },
+    { id: 'category-topics', name: 'Topics', type: 'category', icon: 'folder', expandable: true, level: 0, children: [
+      { id: 'topic-order-events', name: 'order-events', type: 'topic', icon: 'topic', expandable: false, level: 1, data: { subscriptionCount: 0 } as never, children: [] }
+    ] }
+  ];
+
+  function render(loadSubscriptions: ReturnType<typeof vi.fn>) {
+    TestBed.configureTestingModule({
+      imports: [EntitiesTreeComponent],
+      providers: [
+        { provide: TreeDataBuilderService, useValue: { buildTree: () => of(tree()), loadSubscriptions } },
+        { provide: EntitySelectionService, useValue: { selection$: of(null), treeRefresh$: NEVER, select: vi.fn() } },
+        { provide: ConnectionService, useValue: { isConnected: true, connectionStatus$: NEVER } },
+        resubmitRuns,
+        { provide: LoggerService, useValue: { log: () => undefined, error: () => undefined } },
+        { provide: DeadLetterNotificationService, useValue: { clear: () => undefined } },
+        { provide: ProviderService, useValue: { capabilities: signal(DEFAULT_AZURE_CAPABILITIES) } },
+        { provide: MatDialog, useValue: { open: vi.fn() } }
+      ]
+    });
+    const fixture = TestBed.createComponent(EntitiesTreeComponent);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const names = () => Array.from(el.querySelectorAll('.entity-tree button.tree-node .node-name')).map(n => n.textContent?.trim());
+    const topic = () => Array.from(el.querySelectorAll<HTMLButtonElement>('.entity-tree button.tree-node')).find(b => b.textContent?.includes('order-events'))!;
+    return { fixture, el, names, topic };
+  }
+
+  it('opening a topic whose count said no subscription, as the emulator answers, reads its subscriptions once and shows them under it', () => {
+    const loadSubscriptions = vi.fn(() => of([warehouse, email]));
+    const { fixture, names, topic } = render(loadSubscriptions);
+
+    topic().click();
+    fixture.detectChanges();
+    expect(names()).toStrictEqual(['order-events', 'warehouse', 'email']);
+    expect(loadSubscriptions).toHaveBeenCalledTimes(1);
+
+    topic().click();
+    fixture.detectChanges();
+    topic().click();
+    fixture.detectChanges();
+    expect(loadSubscriptions, 'closing and opening again reads nothing more').toHaveBeenCalledTimes(1);
+  });
+
+  it('a read of the subscriptions that fails says so under the topic, never an empty topic, and the next opening tries again', () => {
+    const loadSubscriptions = vi.fn().mockReturnValueOnce(throwError(() => new Error('503'))).mockReturnValue(of([warehouse]));
+    const { fixture, el, names, topic } = render(loadSubscriptions);
+
+    topic().click();
+    fixture.detectChanges();
+    expect(el.querySelector('[role="alert"].subscriptions-error')?.textContent?.trim()).toBe('Could not load the subscriptions of order-events.');
+
+    topic().click();
+    fixture.detectChanges();
+    topic().click();
+    fixture.detectChanges();
+    expect(names()).toStrictEqual(['order-events', 'warehouse']);
+    expect(el.querySelector('.subscriptions-error')).toBeNull();
+  });
+});

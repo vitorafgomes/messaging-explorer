@@ -237,3 +237,9 @@
   font-size: 16px;
   color: var(--mat-sys-on-surface-variant);
 }
+
+.subscriptions-error {
+  margin: 0 0 4px 24px;
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-error);
+}
