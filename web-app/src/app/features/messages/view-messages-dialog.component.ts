@@ -353,10 +353,12 @@ const SCAN_NOTICE = 'The broker cannot lock one message by its number, so the ap
               <mat-icon fontIcon="refresh" aria-hidden="true"></mat-icon>
               Refresh
             </button>
-            <button mat-flat-button type="button" class="tonal" (click)="openAutoResubmit()">
-              <mat-icon fontIcon="replay" aria-hidden="true"></mat-icon>
-              Auto resubmit
-            </button>
+            @if (bulkOperations()) {
+              <button mat-flat-button type="button" class="tonal" (click)="openAutoResubmit()">
+                <mat-icon fontIcon="replay" aria-hidden="true"></mat-icon>
+                Auto resubmit
+              </button>
+            }
           </div>
           @if (dlRegexError) {
             <p class="regex-error" role="alert">
