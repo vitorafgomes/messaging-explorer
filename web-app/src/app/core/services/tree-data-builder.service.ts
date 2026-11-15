@@ -218,7 +218,8 @@ export class TreeDataBuilderService {
       topicName,
       activeMessageCount: subscription.activeMessageCount,
       deadLetterMessageCount: subscription.deadLetterMessageCount,
-      status: subscription.status
+      status: subscription.status,
+      routingKey: subscription.rules?.find(r => (r.filterType as string) === 'RoutingKey')?.sqlExpression ?? undefined
     };
 
     return {
