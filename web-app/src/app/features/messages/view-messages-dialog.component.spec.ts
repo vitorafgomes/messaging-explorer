@@ -514,20 +514,20 @@ describe('ViewMessagesDialogComponent: transfer dead-letter queue, message state
   afterEach(() => vi.useRealTimers());
 
   describe('the transfer dead-letter queue is reachable', () => {
-    it('a subscription with dead-letter messages selected says, above Resubmit, that the topic sends them to every subscription; none selected, or a queue, says nothing', () => {
+    it('the dead-letter tab of a subscription says that the topic sends a resubmit to every subscription, with or without a ticked row, since the detail pane resubmits one message at once; the active tab and a queue say nothing', () => {
       const { component, el, refresh } = render({ entityType: 'subscription', topicName: 'sales', entityName: 'eu', initialTab: 1 }, { deadLetter: messages(2) });
-      expect(el.querySelector('.topic-resubmit-note'), 'nothing selected').toBeNull();
+      expect(text(el.querySelector('.topic-resubmit-note[role="note"]')), 'nothing ticked: the detail pane can still resubmit')
+        .toBe('Resubmit publishes to the topic sales. Every subscription of sales receives these messages again, not only eu.');
 
       component.toggleAllDeadLetter(true);
       refresh();
-      expect(text(el.querySelector('.topic-resubmit-note[role="note"]')))
-        .toBe('Resubmit publishes to the topic sales. Every subscription of sales receives these messages again, not only eu.');
+      expect(el.querySelectorAll('.topic-resubmit-note').length, 'one note, not one per row').toBe(1);
 
       TestBed.resetTestingModule();
-      const onQueue = render({ initialTab: 1 }, { deadLetter: messages(2) });
-      onQueue.component.toggleAllDeadLetter(true);
-      onQueue.refresh();
-      expect(onQueue.el.querySelector('.topic-resubmit-note'), 'a queue resubmits to itself').toBeNull();
+      expect(render({ entityType: 'subscription', topicName: 'sales', entityName: 'eu', initialTab: 0 }, { active: messages(2) }).el.querySelector('.topic-resubmit-note'), 'the active tab resubmits nothing').toBeNull();
+
+      TestBed.resetTestingModule();
+      expect(render({ initialTab: 1 }, { deadLetter: messages(2) }).el.querySelector('.topic-resubmit-note'), 'a queue resubmits to itself').toBeNull();
     });
 
     it('a queue: the tab lists the transfer dead-letter queue, and delete and resubmit send the selected sequence numbers to its routes only', () => {

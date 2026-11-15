@@ -724,7 +724,7 @@ const SCAN_NOTICE = 'The broker cannot lock one message by its number, so the ap
       </div>
     </div>
 
-    @if (data.entityType === 'subscription' && subQueue !== 'active' && getSelectedCount() > 0) {
+    @if (data.entityType === 'subscription' && subQueue !== 'active') {
       <p class="topic-resubmit-note" role="note">
         <mat-icon fontIcon="warning" aria-hidden="true" />
         <span><strong>Resubmit publishes to the topic {{ data.topicName }}.</strong> Every subscription of {{ data.topicName }} receives these messages again, not only {{ data.entityName }}.</span>
