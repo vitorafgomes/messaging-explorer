@@ -142,5 +142,8 @@ public class AzureProviderCapabilities : IProviderCapabilities
     public bool SupportsManualDeadLetter => true;
 
     /// <inheritdoc />
+    public bool SupportsBulkMessageOperations => true;
+
+    /// <inheritdoc />
     public bool SupportsBinaryBody => true;
 }

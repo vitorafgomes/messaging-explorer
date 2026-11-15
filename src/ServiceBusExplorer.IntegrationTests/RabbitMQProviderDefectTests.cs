@@ -86,18 +86,21 @@ public sealed class RabbitMQProviderDefectTests(RabbitMqFixture fixture) : IAsyn
         Assert.Equal(["m1", "m2", "m3"], fixture.Drain(queue));
     }
 
-    /// <summary>Correct: every peeked message carries a key the bulk operations can address it by.</summary>
+    /// <summary>Fixed 2026-11-15: every peeked message carries its position in the queue, the key the bulk operations address it by, so deleting position 2 deletes only the second message.</summary>
     [Fact]
-    public async Task Defect_peeked_messages_carry_no_sequence_number()
+    public async Task Peeked_messages_carry_their_position_and_a_delete_of_one_position_deletes_only_that_message()
     {
         var queue = await CreateQueueAsync("peek-seq");
         fixture.PublishToQueue(queue, "m1");
         fixture.PublishToQueue(queue, "m2");
+        fixture.PublishToQueue(queue, "m3");
 
-        var peeked = (await _provider.PeekMessagesAsync(queue, 2)).ToList();
+        var peeked = (await _provider.PeekMessagesAsync(queue, 3)).ToList();
 
-        Assert.Equal(2, peeked.Count);
-        Assert.All(peeked, m => Assert.Null(m.SequenceNumber));
+        Assert.Equal([(1L, "m1"), (2L, "m2"), (3L, "m3")], peeked.Select(m => (m.SequenceNumber ?? 0, m.Body)));
+        var deleted = await _provider.DeleteMessagesAsync(queue, [peeked[1].SequenceNumber!.Value]);
+        Assert.Equal(1, deleted.SuccessCount);
+        Assert.Equal(["m1", "m3"], fixture.Drain(queue).OrderBy(b => b));
     }
 
     /// <summary>Correct: a queue with a message TTL is listed with that TTL, and the other queues and topics still list.</summary>

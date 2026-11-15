@@ -33,6 +33,7 @@ export const DEFAULT_AZURE_CAPABILITIES: ProviderCapabilities = {
   supportsDeferral: false,
   supportsDuplicateDetection: true,
   supportsAutoForwarding: true,
+  supportsBulkMessageOperations: true,
   supportsEntityUpdate: true,
   supportsSubscriptionRules: true,
   supportedExchangeTypes: [],
@@ -59,6 +60,7 @@ export const DEFAULT_RABBITMQ_CAPABILITIES: ProviderCapabilities = {
   supportsDeferral: false,
   supportsDuplicateDetection: false,
   supportsAutoForwarding: false,
+  supportsBulkMessageOperations: false,
   supportsEntityUpdate: false,
   supportsSubscriptionRules: false,
   supportedExchangeTypes: ['direct', 'fanout', 'topic', 'headers'],
@@ -89,6 +91,7 @@ function unconfirmed(capabilities: ProviderCapabilities): ProviderCapabilities {
     supportsDefinitions: false,
     supportsNamespaceProperties: false,
     supportsManualDeadLetter: false,
+    supportsBulkMessageOperations: false,
     supportsBinaryBody: false
   };
 }
@@ -191,6 +194,7 @@ export class ProviderService {
         supportsDefinitions: capabilities.supportsDefinitions === true,
         supportsNamespaceProperties: capabilities.supportsNamespaceProperties === true,
         supportsManualDeadLetter: capabilities.supportsManualDeadLetter === true,
+        supportsBulkMessageOperations: capabilities.supportsBulkMessageOperations === true,
         supportsBinaryBody: capabilities.supportsBinaryBody === true
       })),
       tap(capabilities => {

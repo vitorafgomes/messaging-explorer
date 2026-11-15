@@ -692,7 +692,7 @@ const SCAN_NOTICE = 'The broker cannot lock one message by its number, so the ap
             </div>
           }
 
-          @if (subQueue === 'deadletter') {
+          @if (subQueue === 'deadletter' && bulkOperations()) {
             <div class="message-actions">
               <button mat-stroked-button type="button" (click)="editAndResubmit(selectedMessage)">
                 <mat-icon fontIcon="edit" aria-hidden="true"></mat-icon>
@@ -705,7 +705,7 @@ const SCAN_NOTICE = 'The broker cannot lock one message by its number, so the ap
             </div>
           }
 
-          @if (subQueue !== 'transferdeadletter' && capabilities()?.supportsSequenceNumbers === true && (subQueue !== 'active' || isScanReachable(selectedMessage))) {
+          @if (bulkOperations() && subQueue !== 'transferdeadletter' && capabilities()?.supportsSequenceNumbers === true && (subQueue !== 'active' || isScanReachable(selectedMessage))) {
             <div class="message-actions apart">
               <button mat-button type="button" class="danger-text" data-testid="delete-one" (click)="deleteOne(selectedMessage)">
                 <mat-icon fontIcon="delete" aria-hidden="true"></mat-icon>
@@ -724,7 +724,7 @@ const SCAN_NOTICE = 'The broker cannot lock one message by its number, so the ap
       </div>
     </div>
 
-    @if (data.entityType === 'subscription' && subQueue !== 'active') {
+    @if (data.entityType === 'subscription' && subQueue !== 'active' && bulkOperations()) {
       <p class="topic-resubmit-note" role="note">
         <mat-icon fontIcon="warning" aria-hidden="true" />
         <span><strong>Resubmit publishes to the topic {{ data.topicName }}.</strong> Every subscription of {{ data.topicName }} receives these messages again, not only {{ data.entityName }}.</span>
@@ -734,9 +734,10 @@ const SCAN_NOTICE = 'The broker cannot lock one message by its number, so the ap
     <app-bulk-actions-toolbar
       [selectedCount]="getSelectedCount()"
       [detail]="getSelectionSummary()"
-      [showResubmit]="subQueue !== 'active'"
+      [showResubmit]="subQueue !== 'active' && bulkOperations()"
       [showCompare]="getSelectedCount() === 2 && subQueue !== 'transferdeadletter'"
-      [showMove]="subQueue !== 'transferdeadletter'"
+      [showMove]="subQueue !== 'transferdeadletter' && bulkOperations()"
+      [showDelete]="bulkOperations()"
       [showCancelScheduled]="canOfferCancelScheduled()"
       [cancelScheduledBlockedReason]="canOfferCancelScheduled() ? cancelScheduledBlockedReason() : ''"
       [deferredCount]="selectedDeferred().length"
@@ -749,6 +750,11 @@ const SCAN_NOTICE = 'The broker cannot lock one message by its number, so the ap
   styleUrl: './view-messages-dialog.component.scss'
 })
 export class ViewMessagesDialogComponent implements OnInit {
+  /** Delete, move and resubmit are offered unless the broker declares it cannot do them safely, as RabbitMQ does. */
+  bulkOperations(): boolean {
+    return this.capabilities()?.supportsBulkMessageOperations !== false;
+  }
+
   /** The active connection and its environment, for the line under the title. */
   readonly context = connectionContext();
   data = inject<ViewMessagesDialogData>(MAT_DIALOG_DATA);

@@ -18,7 +18,7 @@ import { EntityStatusDialogComponent } from '../entities/entity-status-dialog.co
 import { SendMessageDialogComponent } from './send-message-dialog.component';
 import { BulkOperationProgressDialogComponent } from '../../shared/components/bulk-operation-progress-dialog/bulk-operation-progress-dialog.component';
 import { BulkOperationResultsDialogComponent } from '../../shared/components/bulk-operation-results-dialog/bulk-operation-results-dialog.component';
-import { DEFAULT_AZURE_CAPABILITIES, ProviderService } from '../../core/services/provider.service';
+import { DEFAULT_AZURE_CAPABILITIES, DEFAULT_RABBITMQ_CAPABILITIES, ProviderService } from '../../core/services/provider.service';
 import { ProviderCapabilities } from '../../core/models/provider.model';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { FilterLogic, FilterOperator } from '../../core/models/filter.model';
@@ -514,6 +514,25 @@ describe('ViewMessagesDialogComponent: transfer dead-letter queue, message state
   afterEach(() => vi.useRealTimers());
 
   describe('the transfer dead-letter queue is reachable', () => {
+    it('RabbitMQ, which declares no safe bulk operations, offers no Delete, Move or Resubmit, in the toolbar or the detail pane; Azure offers them', () => {
+      const rabbit = render({ initialTab: 1 }, { deadLetter: messages(2) }, DEFAULT_RABBITMQ_CAPABILITIES);
+      rabbit.component.toggleAllDeadLetter(true);
+      rabbit.component.selectMessage(rabbit.component.filteredDeadLetterMessages[0]);
+      rabbit.refresh();
+      const rabbitButtons = [...toolbarButtons(rabbit.el), ...Array.from(rabbit.el.querySelectorAll('.message-actions button')).map(b => text(b))];
+      expect(rabbitButtons.filter(t => /Delete|Move|Resubmit/.test(t)), 'nothing that deletes, moves or resubmits').toStrictEqual([]);
+
+      TestBed.resetTestingModule();
+      const azure = render({ initialTab: 1 }, { deadLetter: messages(2) }, withTransfer);
+      azure.component.toggleAllDeadLetter(true);
+      azure.component.selectMessage(azure.component.filteredDeadLetterMessages[0]);
+      azure.refresh();
+      const azureButtons = [...toolbarButtons(azure.el), ...Array.from(azure.el.querySelectorAll('.message-actions button')).map(b => text(b))];
+      expect(azureButtons.some(t => t.startsWith('Delete'))).toBe(true);
+      expect(azureButtons.some(t => t.startsWith('Move'))).toBe(true);
+      expect(azureButtons.some(t => t.includes('Resubmit'))).toBe(true);
+    });
+
     it('the dead-letter tab of a subscription says that the topic sends a resubmit to every subscription, with or without a ticked row, since the detail pane resubmits one message at once; the active tab and a queue say nothing', () => {
       const { component, el, refresh } = render({ entityType: 'subscription', topicName: 'sales', entityName: 'eu', initialTab: 1 }, { deadLetter: messages(2) });
       expect(text(el.querySelector('.topic-resubmit-note[role="note"]')), 'nothing ticked: the detail pane can still resubmit')

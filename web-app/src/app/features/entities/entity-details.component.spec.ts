@@ -262,6 +262,12 @@ describe('EntityDetailsComponent panels', () => {
       expect(all(el, '.stat-label')).not.toContain('Transfer dead-letter');
     });
 
+    it('RabbitMQ, which declares no safe bulk operations, offers no Auto resubmit and no Resubmit dead-letter, even with dead-letter messages', () => {
+      const el = render(queue({ deadLetterMessageCount: 2 }), DEFAULT_RABBITMQ_CAPABILITIES);
+      expect(all(el, 'button').some(b => b.startsWith('Auto resubmit'))).toBe(false);
+      expect(el.querySelector('.auto-resubmit')).toBeNull();
+    });
+
     it('dead letter: a broker without a dead-letter queue hides the Dead Letter cards and Auto Resubmit of a queue and a subscription; Azure shows them', () => {
       const hiddenQueue = render(queue({ transferDeadLetterMessageCount: 4 }), NO_DEAD_LETTER);
       expect(all(hiddenQueue, '.stat-label')).toEqual(['Active', 'Scheduled', 'Transfer', 'Size']);
