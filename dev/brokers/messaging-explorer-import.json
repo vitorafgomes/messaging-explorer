@@ -1,0 +1,65 @@
+{
+  "Connections": [
+    {
+      "Id": "8f6c2a3e-0b1d-4c5e-9a7f-000000000001",
+      "Name": "Local Service Bus",
+      "ProviderType": 0,
+      "AuthType": 0,
+      "ConnectionString": "Endpoint=sb://localhost:5673;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;",
+      "ClientId": "8f6c2a3e-0b1d-4c5e-9a7f-0000000000c1",
+      "EnvironmentId": "8f6c2a3e-0b1d-4c5e-9a7f-0000000000e1",
+      "CreatedAt": "2026-11-15T00:00:00Z"
+    },
+    {
+      "Id": "8f6c2a3e-0b1d-4c5e-9a7f-000000000002",
+      "Name": "Local Service Bus (marked Production)",
+      "ProviderType": 0,
+      "AuthType": 0,
+      "ConnectionString": "Endpoint=sb://localhost:5673;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;",
+      "ClientId": "8f6c2a3e-0b1d-4c5e-9a7f-0000000000c1",
+      "EnvironmentId": "8f6c2a3e-0b1d-4c5e-9a7f-0000000000e2",
+      "CreatedAt": "2026-11-15T00:00:00Z"
+    },
+    {
+      "Id": "8f6c2a3e-0b1d-4c5e-9a7f-000000000003",
+      "Name": "Local RabbitMQ",
+      "ProviderType": 1,
+      "HostName": "localhost",
+      "Port": 5672,
+      "UserName": "explorer",
+      "Password": "explorer",
+      "VirtualHost": "/",
+      "ManagementPort": 15672,
+      "UseSsl": false,
+      "UseManagementSsl": false,
+      "ClientId": "8f6c2a3e-0b1d-4c5e-9a7f-0000000000c1",
+      "EnvironmentId": "8f6c2a3e-0b1d-4c5e-9a7f-0000000000e1",
+      "CreatedAt": "2026-11-15T00:00:00Z"
+    }
+  ],
+  "Groups": [
+    {
+      "Id": "8f6c2a3e-0b1d-4c5e-9a7f-0000000000c1",
+      "Name": "Local brokers",
+      "Type": "client",
+      "Description": "The containers of dev/brokers on this machine",
+      "CreatedAt": "2026-11-15T00:00:00Z"
+    },
+    {
+      "Id": "8f6c2a3e-0b1d-4c5e-9a7f-0000000000e1",
+      "Name": "Development",
+      "Type": "environment",
+      "ParentId": "8f6c2a3e-0b1d-4c5e-9a7f-0000000000c1",
+      "IsProduction": false,
+      "CreatedAt": "2026-11-15T00:00:00Z"
+    },
+    {
+      "Id": "8f6c2a3e-0b1d-4c5e-9a7f-0000000000e2",
+      "Name": "Production (test)",
+      "Type": "environment",
+      "ParentId": "8f6c2a3e-0b1d-4c5e-9a7f-0000000000c1",
+      "IsProduction": true,
+      "CreatedAt": "2026-11-15T00:00:00Z"
+    }
+  ]
+}

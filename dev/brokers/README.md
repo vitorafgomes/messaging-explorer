@@ -9,3 +9,5 @@ docker compose -f dev/brokers/docker-compose.yml down -v    # stop and discard a
 
 Connection values, the sample entities and the limits of the emulator:
 [`context/pages/runbooks/local-brokers.md`](../../context/pages/runbooks/local-brokers.md).
+
+To add the three connections in one step: Connections, Import, `messaging-explorer-import.json` from this folder.
