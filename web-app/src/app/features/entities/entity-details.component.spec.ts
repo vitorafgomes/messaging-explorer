@@ -510,7 +510,7 @@ describe('EntityDetailsComponent opens the messages dialog on the transfer dead-
       ]
     });
     const fixture = TestBed.createComponent(EntityDetailsComponent);
-    open = vi.spyOn(fixture.debugElement.injector.get(MatDialog), 'open').mockReturnValue({} as never) as unknown as ReturnType<typeof vi.fn>;
+    open = vi.spyOn(fixture.debugElement.injector.get(MatDialog), 'open').mockReturnValue({ afterClosed: () => NEVER } as never) as unknown as ReturnType<typeof vi.fn>;
     fixture.detectChanges();
     return fixture.nativeElement as HTMLElement;
   }
@@ -584,7 +584,7 @@ describe('EntityDetailsComponent: the subscription panel has a Transfer Dead Let
       ]
     });
     const fixture = TestBed.createComponent(EntityDetailsComponent);
-    open = vi.spyOn(fixture.debugElement.injector.get(MatDialog), 'open').mockReturnValue({} as never) as unknown as ReturnType<typeof vi.fn>;
+    open = vi.spyOn(fixture.debugElement.injector.get(MatDialog), 'open').mockReturnValue({ afterClosed: () => NEVER } as never) as unknown as ReturnType<typeof vi.fn>;
     fixture.detectChanges();
     return fixture.nativeElement as HTMLElement;
   }
@@ -813,7 +813,7 @@ describe('EntityDetailsComponent: one panel shape for a queue and a subscription
     TestBed.configureTestingModule({
       imports: [EntityDetailsComponent],
       providers: [
-        { provide: EntitySelectionService, useValue: { state$: of(state), currentSelection: state.selection, isLoading: false, refreshCurrentSelection } },
+        { provide: EntitySelectionService, useValue: { state$: of(state), currentSelection: state.selection, isLoading: false, refreshCurrentSelection, refreshTree: vi.fn() } },
         { provide: ConnectionService, useValue: { currentTarget: 'prod.example.net' } },
         { provide: QueueService, useValue: {} },
         { provide: TopicService, useValue: { getSubscription: () => NEVER } },
@@ -980,6 +980,17 @@ describe('EntityDetailsComponent as Main.dc.html draws the panel', () => {
   };
   const labels = (el: HTMLElement) => Array.from(el.querySelectorAll('.stat-card .stat-label')).map(text);
   const note = (el: HTMLElement, label: string) => text(Array.from(el.querySelectorAll('.stat-card')).find(c => text(c.querySelector('.stat-label')) === label)!.querySelector('.stat-note'));
+
+  it('when the messages dialog closes, the panel and the tree read their counts again: what was resubmitted, moved or deleted in it changed them', () => {
+    const fixture = render({ selection: subscription(), loading: false, error: null });
+    const el = fixture.nativeElement as HTMLElement;
+
+    Array.from(el.querySelectorAll<HTMLElement>('.stat-card')).find(c => text(c.querySelector('.stat-label')) === 'Active')!.click();
+
+    expect(open.mock.calls[0][0]).toBe(ViewMessagesDialogComponent);
+    expect(selectionService['refreshCurrentSelection']).toHaveBeenCalledTimes(1);
+    expect(selectionService['refreshTree']).toHaveBeenCalledTimes(1);
+  });
 
   it(`a subscription's Active card reads "Active", the count and "Open the active messages", like the queue card, with the live count and no Live badge or sparkline`, () => {
     const fixture = render({ selection: subscription(), loading: false, error: null });

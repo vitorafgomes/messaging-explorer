@@ -947,7 +947,23 @@ export class ViewMessagesDialogComponent implements OnInit {
     };
     this.dialog.open(ContinuousResubmitDialogComponent, { width: '720px', maxWidth: '95vw', data })
       .afterClosed().pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(result => { if (result) this.reload('deadletter'); });
+      .subscribe(result => { if (result) this.afterAutoResubmit(); });
+  }
+
+  /** A run moves messages from the dead-letter queue to the active one: both tabs are read again, with the counts the broker has now. */
+  private afterAutoResubmit() {
+    this.reload('deadletter');
+    this.reload('active');
+    const counts: Observable<{ activeMessageCount?: number; deadLetterMessageCount?: number }> = this.data.entityType === 'queue'
+      ? this.queueService.getQueue(this.data.entityName)
+      : this.topicService.getSubscription(this.data.topicName!, this.data.entityName);
+    counts.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: entity => {
+        this.activeMessageCount.set(entity.activeMessageCount);
+        this.deadLetterMessageCount.set(entity.deadLetterMessageCount);
+      },
+      error: () => undefined
+    });
   }
 
   /** Opens Change status for this entity; the status as read is not known here. A status that was set loads the tab again. */

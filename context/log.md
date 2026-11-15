@@ -1,3 +1,6 @@
+## [2026-11-15] fix | Counts stayed stale after an automatic resubmit from the messages dialog
+Tabs, panel, tree and bell now read the broker again. [[pages/services/web-app/bulk-automatic-resubmit]]
+
 ## [2026-11-15] feature | A row under a RabbitMQ exchange is a binding, not a second copy of the queue
 The owner read the bound queue as listed twice. [[pages/services/web-app/providers-and-shared]]
 

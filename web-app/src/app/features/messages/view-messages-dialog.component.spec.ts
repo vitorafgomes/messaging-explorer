@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { formatDate } from '@angular/common';
-import { Observable, of, Subject } from 'rxjs';
+import { NEVER, Observable, of, Subject } from 'rxjs';
 import { throwError } from 'rxjs';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
@@ -486,7 +486,7 @@ describe('ViewMessagesDialogComponent: transfer dead-letter queue, message state
     const peek = () => vi.fn().mockReturnValue(of([]));
     const pending = () => vi.fn().mockReturnValue(new Subject<BatchOperationResult>());
     queue = {
-      peekMessages: peek(), peekDeadLetterMessages: peek(), peekTransferDeadLetterMessages: peek(),
+      getQueue: vi.fn(() => NEVER), peekMessages: peek(), peekDeadLetterMessages: peek(), peekTransferDeadLetterMessages: peek(),
       deleteMessages: pending(), deleteTransferDeadLetterMessages: pending(),
       resubmitDeadLetterMessages: pending(), resubmitTransferDeadLetterMessages: pending(),
       moveMessages: pending(), cancelScheduledMessages: pending(), settleDeferredMessages: pending(), settleActiveMessages: pending()
@@ -1402,6 +1402,38 @@ describe('ViewMessagesDialogComponent: transfer dead-letter queue, message state
       expect(run?.data, 'the same data the entity panel passes').toEqual({ entityType: 'queue', entityName: 'orders', topicName: undefined, deadLetterMessageCount: 7 });
       run!.closed.next({ totalProcessed: 7, totalSuccess: 7, totalFailure: 0, stopped: false, completed: true });
       expect(queue['peekDeadLetterMessages'], 'the dead-letter tab is read again after the run').toHaveBeenCalledTimes(reads + 1);
+    });
+
+    function runAutoResubmit(counts: () => unknown) {
+      lists({});
+      providers({ activeMessageCount: 4, deadLetterMessageCount: 3, initialTab: 1 }, withTransfer);
+      queue['getQueue'] = vi.fn(counts);
+      openThroughTheMock();
+      const fixture = TestBed.createComponent(ViewMessagesDialogComponent);
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+      const refresh = () => { fixture.changeDetectorRef.markForCheck(); fixture.detectChanges(); };
+      refresh();
+      const activeReads = queue['peekMessages'].mock.calls.length;
+      (Array.from(el.querySelectorAll('button')).find(b => text(b).endsWith('Auto resubmit')) as HTMLElement).click();
+      lastOpened(ContinuousResubmitDialogComponent)!.closed.next({ totalProcessed: 3, totalSuccess: 3, totalFailure: 0, stopped: false, completed: true });
+      refresh();
+      return { counts: Array.from(el.querySelectorAll('.sub-queue-tab .count')).slice(0, 2).map(c => text(c)), activeReads };
+    }
+
+    it('after a run the tabs show the counts the broker has now, 7 active and 0 dead-letter, and the active tab is read again', () => {
+      const { counts, activeReads } = runAutoResubmit(() => of({ name: 'orders', activeMessageCount: 7, deadLetterMessageCount: 0 }));
+
+      expect(queue['getQueue']).toHaveBeenCalledWith('orders');
+      expect(counts).toStrictEqual(['7', '0']);
+      expect(queue['peekMessages'], 'the messages that came back are in the active tab').toHaveBeenCalledTimes(activeReads + 1);
+    });
+
+    it('a read of the counts that fails after a run keeps the counts shown and still reads both tabs again', () => {
+      const { counts, activeReads } = runAutoResubmit(() => throwError(() => new Error('503')));
+
+      expect(counts, 'no count is made up').toStrictEqual(['4', '3']);
+      expect(queue['peekMessages']).toHaveBeenCalledTimes(activeReads + 1);
     });
 
     it('Auto resubmit is not in the active tab', () => {

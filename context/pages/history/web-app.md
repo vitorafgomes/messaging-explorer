@@ -97,6 +97,7 @@ What changed when in the project [[pages/services/web-app|Web App]] describes, n
 
 - **A binary body and single-message actions.** A body that is not text shows as hex with Copy base64; the detail pane dead-letters, defers or deletes one message after a confirmation ([[pages/services/web-app/features-message-detail-actions]]).
 
+- **2026-11-15: counts follow what the messages dialog did.** After an automatic resubmit the tab counts come from the broker, and closing the dialog refreshes the panel, the tree and the bell; the owner saw 4 and 3 where the broker had 7 and 0.
 - **2026-11-15: under a RabbitMQ exchange a row is a binding.** It reads "routing key -> queue" and opens the queue under Queues, so a queue is listed once and Exchanges shows only routing; the owner read the earlier rows as duplicates.
 - **2026-11-15: RabbitMQ exchanges and queues show how they are used.** A chip names the pattern of an exchange (Pub/Sub, Routing, Topics) and a queue that is a stream or a work queue; the pattern never showed before because the app read the provider and the pattern as numbers and the API sends names.
 - **2026-11-15: a RabbitMQ connection shows Exchanges and bindings.** The tree names the second section Exchanges and shows each bound queue with its routing key, so a queue listed under Queues and again under its exchange reads as one queue and its binding.
