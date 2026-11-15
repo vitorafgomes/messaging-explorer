@@ -244,6 +244,10 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
         next: (data) => {
           this.logger.log('[EntitiesTree] Tree data received:', data);
           this.treeData = data;
+          this.subscriptionsFailed.set(new Set());
+          for (const topic of data.find(c => c.id === 'category-topics')?.children ?? []) {
+            if (this.opened().has(topic.id) && !topic.children?.length) this.loadSubscriptions(topic);
+          }
         },
         error: (err) => {
           this.logger.error('[EntitiesTree] Failed to load entities:', err);

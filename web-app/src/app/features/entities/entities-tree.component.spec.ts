@@ -551,6 +551,19 @@ describe('EntitiesTreeComponent: a topic whose subscriptions were not listed wit
     expect(loadSubscriptions, 'closing and opening again reads nothing more').toHaveBeenCalledTimes(1);
   });
 
+  it('a topic left open when the tree is read again, by Refresh, reads its subscriptions again instead of showing none', () => {
+    const loadSubscriptions = vi.fn(() => of([warehouse, email]));
+    const { fixture, el, names, topic } = render(loadSubscriptions);
+    topic().click();
+    fixture.detectChanges();
+
+    (el.querySelector('button[aria-label="Refresh entities"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(names()).toStrictEqual(['order-events', 'warehouse', 'email']);
+    expect(loadSubscriptions).toHaveBeenCalledTimes(2);
+  });
+
   it('a read of the subscriptions that fails says so under the topic, never an empty topic, and the next opening tries again', () => {
     const loadSubscriptions = vi.fn().mockReturnValueOnce(throwError(() => new Error('503'))).mockReturnValue(of([warehouse]));
     const { fixture, el, names, topic } = render(loadSubscriptions);

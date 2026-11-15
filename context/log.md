@@ -1,6 +1,8 @@
 ## [2026-11-15] fix | The entity form says every field error where it can be read
 Found in the hand test: a lock duration of 5 hours showed a cut message. [[pages/services/web-app/features-entities-main]]
 
+## [2026-11-15] fix | RabbitMQ: empty properties, a missing dead-letter queue and a closed channel
+Found in the hand test: opening orders.audit failed and broke the connection. [[pages/services/core/rabbitmq-and-legacy]]
 ## [2026-11-15] fix | Test of a stored connection tests with the stored secret
 The Edit dialog sent the mask and no id; the test route tested `***`. [[pages/services/api/connections-and-secrets]]
 

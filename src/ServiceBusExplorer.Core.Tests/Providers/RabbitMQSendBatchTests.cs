@@ -19,6 +19,7 @@ public class RabbitMQSendBatchTests
         var connection = new Mock<IConnection>();
         connection.Setup(c => c.IsOpen).Returns(true);
         var channel = new Mock<IModel>();
+        channel.Setup(c => c.IsOpen).Returns(true);
         channel.Setup(c => c.CreateBasicProperties()).Returns(() => new Mock<IBasicProperties>().SetupAllProperties().Object);
         var call = 0;
         channel.Setup(c => c.BasicPublish(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<IBasicProperties>(), It.IsAny<ReadOnlyMemory<byte>>()))
@@ -82,6 +83,7 @@ public class RabbitMQSendBatchTests
         var connection = new Mock<IConnection>();
         connection.Setup(c => c.IsOpen).Returns(true);
         var channel = new Mock<IModel>();
+        channel.Setup(c => c.IsOpen).Returns(true);
         channel.Setup(c => c.CreateBasicProperties()).Returns(() => new Mock<IBasicProperties>().SetupAllProperties().Object);
         channel.Setup(c => c.BasicPublish(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<IBasicProperties>(), It.IsAny<ReadOnlyMemory<byte>>()))
             .Callback((string _, string _, bool _, IBasicProperties _, ReadOnlyMemory<byte> body) =>
