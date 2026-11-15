@@ -39,6 +39,8 @@ export interface SubscriptionNodeData {
   activeMessageCount: number;
   deadLetterMessageCount: number;
   status: string;
+  /** RabbitMQ: the routing key of the binding this subscription stands for. */
+  routingKey?: string;
 }
 
 export interface FlatTreeNode {

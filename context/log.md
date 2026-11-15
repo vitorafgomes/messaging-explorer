@@ -1,3 +1,6 @@
+## [2026-11-15] feature | The tree speaks RabbitMQ on a RabbitMQ connection
+Exchanges and bindings with their routing keys instead of topics and subscriptions. [[pages/services/web-app/providers-and-shared]]
+
 ## [2026-11-15] fix | The entity form says every field error where it can be read
 Found in the hand test: a lock duration of 5 hours showed a cut message. [[pages/services/web-app/features-entities-main]]
 

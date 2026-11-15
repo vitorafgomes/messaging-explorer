@@ -191,6 +191,9 @@ export interface ProviderComponentMetadata {
 
   /** Version string of the provider integration (e.g., "1.0.0") */
   version: string;
+
+  /** The broker's own words for what the app treats as a topic and a subscription, for the tree and its buttons. */
+  terms: { topics: string; topic: string; subscription: string };
 }
 
 /**
@@ -216,7 +219,8 @@ export function getProviderMetadata(providerType: ProviderType): ProviderCompone
         icon: 'cloud',
         documentationUrl: 'https://docs.microsoft.com/azure/service-bus-messaging/',
         isStable: true,
-        version: '1.0.0'
+        version: '1.0.0',
+        terms: { topics: 'Topics', topic: 'topic', subscription: 'subscription' }
       };
     case ProviderType.RabbitMQ:
       return {
@@ -226,7 +230,8 @@ export function getProviderMetadata(providerType: ProviderType): ProviderCompone
         icon: 'dns',
         documentationUrl: 'https://www.rabbitmq.com/documentation.html',
         isStable: true,
-        version: '1.0.0'
+        version: '1.0.0',
+        terms: { topics: 'Exchanges', topic: 'exchange', subscription: 'binding' }
       };
     default:
       return {
@@ -235,7 +240,8 @@ export function getProviderMetadata(providerType: ProviderType): ProviderCompone
         description: 'Provider information not available.',
         icon: 'help',
         isStable: false,
-        version: '0.0.0'
+        version: '0.0.0',
+        terms: { topics: 'Topics', topic: 'topic', subscription: 'subscription' }
       };
   }
 }

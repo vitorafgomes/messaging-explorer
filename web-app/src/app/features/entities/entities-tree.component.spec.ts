@@ -14,7 +14,7 @@ const resubmitRuns = {
   useValue: { find: (target: ResubmitRunTarget) => target.entityName === activeRunOn ? { isActive: () => true } as ResubmitRun : undefined }
 };
 import { DEFAULT_AZURE_CAPABILITIES, DEFAULT_RABBITMQ_CAPABILITIES, ProviderService } from '../../core/services/provider.service';
-import { ProviderCapabilities } from '../../core/models/provider.model';
+import { ProviderCapabilities, ProviderType } from '../../core/models/provider.model';
 import { TreeNode } from '../../core/models';
 import { EntitiesTreeComponent } from './entities-tree.component';
 import { EntityFormDialogComponent } from './entity-form-dialog.component';
@@ -578,5 +578,58 @@ describe('EntitiesTreeComponent: a topic whose subscriptions were not listed wit
     fixture.detectChanges();
     expect(names()).toStrictEqual(['order-events', 'warehouse']);
     expect(el.querySelector('.subscriptions-error')).toBeNull();
+  });
+});
+
+describe('EntitiesTreeComponent on a RabbitMQ connection names exchanges and bindings as RabbitMQ does', () => {
+  const created: TreeNode = { id: 'subscription-orders-orders.created', name: 'orders.created', type: 'subscription', icon: 'subscriptions', expandable: false, level: 2,
+    data: { topicName: 'orders', activeMessageCount: 4, deadLetterMessageCount: 0, routingKey: 'order.created' } as never };
+  const tree = (): TreeNode[] => [
+    { id: 'category-queues', name: 'Queues', type: 'category', icon: 'folder', expandable: true, level: 0, children: [
+      { id: 'queue-orders.created', name: 'orders.created', type: 'queue', icon: 'inbox', expandable: false, level: 1, data: { activeMessageCount: 4, deadLetterMessageCount: 0 } as never }
+    ] },
+    { id: 'category-topics', name: 'Topics', type: 'category', icon: 'folder', expandable: true, level: 0, children: [
+      { id: 'topic-orders', name: 'orders', type: 'topic', icon: 'topic', expandable: true, level: 1, data: { subscriptionCount: 1 } as never, children: [created] }
+    ] }
+  ];
+
+  function render(provider: ProviderType) {
+    TestBed.configureTestingModule({
+      imports: [EntitiesTreeComponent],
+      providers: [
+        { provide: TreeDataBuilderService, useValue: { buildTree: () => of(tree()) } },
+        { provide: EntitySelectionService, useValue: { selection$: of(null), treeRefresh$: NEVER, select: vi.fn() } },
+        { provide: ConnectionService, useValue: { isConnected: true, connectionStatus$: NEVER } },
+        resubmitRuns,
+        { provide: LoggerService, useValue: { log: () => undefined, error: () => undefined } },
+        { provide: DeadLetterNotificationService, useValue: { clear: () => undefined } },
+        { provide: ProviderService, useValue: { capabilities: signal({ ...DEFAULT_AZURE_CAPABILITIES, supportsEntityUpdate: true }), selectedProvider: provider } },
+        { provide: MatDialog, useValue: { open: vi.fn() } }
+      ]
+    });
+    const fixture = TestBed.createComponent(EntitiesTreeComponent);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    (Array.from(el.querySelectorAll<HTMLButtonElement>('.entity-tree button.tree-node')).find(b => b.textContent?.includes('orders') && !b.textContent?.includes('created')))!.click();
+    fixture.detectChanges();
+    return el;
+  }
+  const text = (e: Element | null) => (e?.textContent ?? '').replace(/\s+/g, ' ').trim();
+
+  it('RabbitMQ: the section is Exchanges, create is "Create exchange" and "Create binding in orders", and a bound queue shows its routing key', () => {
+    const el = render(ProviderType.RabbitMQ);
+
+    expect(Array.from(el.querySelectorAll('.entity-tree h2.section-head')).map(text)).toStrictEqual(['Queues 1', 'Exchanges 1']);
+    expect(Array.from(el.querySelectorAll('.create-btn')).map(b => b.getAttribute('aria-label'))).toStrictEqual(['Create queue', 'Create exchange', 'Create binding in orders']);
+    const bound = el.querySelector('.tree-children button.tree-node')!;
+    expect(text(bound.querySelector('.node-name'))).toBe('orders.created');
+    expect(text(bound.querySelector('.routing-key'))).toBe('order.created');
+  });
+
+  it('Azure Service Bus keeps Topics and subscriptions', () => {
+    const el = render(ProviderType.AzureServiceBus);
+
+    expect(Array.from(el.querySelectorAll('.entity-tree h2.section-head')).map(text)).toStrictEqual(['Queues 1', 'Topics 1']);
+    expect(Array.from(el.querySelectorAll('.create-btn')).map(b => b.getAttribute('aria-label'))).toStrictEqual(['Create queue', 'Create topic', 'Create subscription in orders']);
   });
 });

@@ -8,7 +8,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import {finalize, Subject, Subscription} from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { SubscriptionNodeData, TreeNode } from '../../core/models';
+import { SubscriptionNodeData, TreeNode, getProviderMetadata } from '../../core/models';
 import { TreeDataBuilderService, EntitySelectionService, ConnectionService, LoggerService, DeadLetterNotificationService, ResubmitRunService } from '../../core/services';
 import { ProviderService } from '../../core/services/provider.service';
 import { EntityFormDialogComponent, EntityFormDialogData } from './entity-form-dialog.component';
@@ -53,6 +53,9 @@ export const STATUS_MARKERS: Partial<Record<string, { icon: string; text: string
                 (click)="selectNode(node)">
           <mat-icon class="node-icon" [fontIcon]="node.type === 'topic' ? 'campaign' : node.type === 'subscription' ? 'subdirectory_arrow_right' : 'inbox'" aria-hidden="true" />
           <span class="node-name">{{ node.name }}</span>
+          @if (node.type === 'subscription' && $any(node.data)?.routingKey; as key) {
+            <span class="routing-key" [matTooltip]="'Routing key ' + key">{{ key }}</span>
+          }
           @if (statusMarker(node); as marker) {
             <mat-icon class="node-marker" [fontIcon]="marker.icon" [matTooltip]="marker.text" [attr.aria-label]="marker.text" role="img" />
           }
@@ -131,7 +134,7 @@ export const STATUS_MARKERS: Partial<Record<string, { icon: string; text: string
           }
           @for (category of treeData; track category.id) {
             <div class="section">
-              <h2 class="section-head">{{ category.name }} <span class="section-count">{{ category.children?.length || 0 | number }}</span></h2>
+              <h2 class="section-head">{{ category.id === 'category-topics' ? terms().topics : category.name }} <span class="section-count">{{ category.children?.length || 0 | number }}</span></h2>
               <ng-container *ngTemplateOutlet="createAction; context: { $implicit: category }" />
             </div>
             @for (node of shown(category.children); track node.id) {
@@ -177,6 +180,11 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
 
   /** Create is offered only when the connected broker's API explicitly declares entity administration. */
+  /** The connected broker's words for topics and subscriptions: Exchanges and bindings on RabbitMQ. */
+  terms() {
+    return getProviderMetadata(this.providerService.selectedProvider).terms;
+  }
+
   readonly canCreate = computed(() => this.providerService.capabilities()?.supportsEntityUpdate === true);
 
   /** Export and import of definitions are offered only when the connected broker's API explicitly declares them. */
@@ -341,8 +349,8 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
 
   createLabel(node: TreeNode): string | null {
     if (node.id === 'category-queues') return 'Create queue';
-    if (node.id === 'category-topics') return 'Create topic';
-    if (node.type === 'topic') return `Create subscription in ${node.name}`;
+    if (node.id === 'category-topics') return `Create ${this.terms().topic}`;
+    if (node.type === 'topic') return `Create ${this.terms().subscription} in ${node.name}`;
     return null;
   }
 
