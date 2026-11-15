@@ -65,12 +65,12 @@ const plural = (count: number, one: string, many: string) => `${count} ${count =
                           [attr.aria-label]="'Edit client ' + client.name"
                           [matTooltip]="'Edit client ' + client.name"
                           (click)="editClient(client)">
-                          <mat-icon>edit</mat-icon>
+                          <mat-icon class="row-icon">mode_edit_outline</mat-icon>
                         </button>
                         <button mat-button class="delete"
                           [attr.aria-label]="'Delete client ' + client.name"
                           (click)="deleteClient(client)">
-                          <mat-icon>delete</mat-icon>Delete
+                          <mat-icon class="row-icon">delete_outline</mat-icon>Delete
                         </button>
                       </span>
                     </li>
@@ -85,7 +85,7 @@ const plural = (count: number, one: string, many: string) => `${count} ${count =
                 <div class="grid">
                   <div class="field">
                     <label for="grp-client-name-1">Client Name</label>
-                    <mat-form-field appearance="outline">
+                    <mat-form-field appearance="outline" subscriptSizing="dynamic">
                     <input matInput id="grp-client-name-1" formControlName="name" placeholder="e.g., Contoso">
                     @if (clientForm.get('name')?.hasError('required') && clientForm.get('name')?.touched) {
                       <mat-error>Client name is required</mat-error>
@@ -95,7 +95,7 @@ const plural = (count: number, one: string, many: string) => `${count} ${count =
 
                   <div class="field">
                     <label for="grp-description-optional-2">Description (optional)</label>
-                    <mat-form-field appearance="outline">
+                    <mat-form-field appearance="outline" subscriptSizing="dynamic">
                     <input matInput id="grp-description-optional-2" formControlName="description" placeholder="Brief description">
                   </mat-form-field>
                   </div>
@@ -119,7 +119,7 @@ const plural = (count: number, one: string, many: string) => `${count} ${count =
           <div class="tab-content">
             <div class="field client-selector">
               <label id="grp-select-client-3-label" for="grp-select-client-3">Select Client</label>
-              <mat-form-field appearance="outline">
+              <mat-form-field appearance="outline" subscriptSizing="dynamic">
               <mat-select id="grp-select-client-3" aria-labelledby="grp-select-client-3-label" [(value)]="selectedClientId" (selectionChange)="onClientSelected()">
                 @for (client of clients(); track client.id) {
                   <mat-option [value]="client.id">{{ client.name }}</mat-option>
@@ -149,12 +149,12 @@ const plural = (count: number, one: string, many: string) => `${count} ${count =
                             [attr.aria-label]="'Edit environment ' + env.name"
                             [matTooltip]="'Edit environment ' + env.name"
                             (click)="editEnvironment(env)">
-                            <mat-icon>edit</mat-icon>
+                            <mat-icon class="row-icon">mode_edit_outline</mat-icon>
                           </button>
                           <button mat-button class="delete"
                             [attr.aria-label]="'Delete environment ' + env.name"
                             (click)="deleteEnvironment(env)">
-                            <mat-icon>delete</mat-icon>Delete
+                            <mat-icon class="row-icon">delete_outline</mat-icon>Delete
                           </button>
                         </span>
                       </li>
@@ -170,7 +170,7 @@ const plural = (count: number, one: string, many: string) => `${count} ${count =
                   <div class="grid">
                     <div class="field">
                       <label for="grp-environment-name-4">Environment Name</label>
-                      <mat-form-field appearance="outline">
+                      <mat-form-field appearance="outline" subscriptSizing="dynamic">
                       <input matInput id="grp-environment-name-4" formControlName="name" placeholder="e.g., Production, Development">
                       @if (environmentForm.get('name')?.hasError('required') && environmentForm.get('name')?.touched) {
                         <mat-error>Environment name is required</mat-error>
@@ -180,7 +180,7 @@ const plural = (count: number, one: string, many: string) => `${count} ${count =
 
                     <div class="field">
                       <label for="grp-description-optional-5">Description (optional)</label>
-                      <mat-form-field appearance="outline">
+                      <mat-form-field appearance="outline" subscriptSizing="dynamic">
                       <input matInput id="grp-description-optional-5" formControlName="description" placeholder="Brief description">
                     </mat-form-field>
                     </div>
@@ -220,13 +220,26 @@ const plural = (count: number, one: string, many: string) => `${count} ${count =
       padding-top: 16px;
     }
 
-    .list-section,
-    .form-section {
-      h3 {
-        margin: 0 0 8px;
-        font: var(--mat-sys-title-small);
-        color: var(--mat-sys-on-surface-variant);
-      }
+    .list-section h3 {
+      margin: 0 0 4px;
+      font: var(--mat-sys-label-medium);
+      color: var(--mat-sys-on-surface-variant);
+    }
+
+    .form-section h3 {
+      margin: 0 0 12px;
+      font: var(--mat-sys-title-small);
+      color: var(--mat-sys-on-surface);
+    }
+
+    .item-actions button[mat-icon-button] {
+      color: var(--mat-sys-on-surface-variant);
+    }
+
+    .row-icon {
+      width: 20px;
+      height: 20px;
+      font-size: 20px;
     }
 
     .grid {
@@ -236,6 +249,7 @@ const plural = (count: number, one: string, many: string) => `${count} ${count =
     }
 
     .form-actions {
+      margin-top: 12px;
       display: flex;
       justify-content: flex-start;
       gap: 8px;

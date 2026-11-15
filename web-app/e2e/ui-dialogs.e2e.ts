@@ -57,6 +57,11 @@ test.describe('Connections dialogs as Connections.dc.html draws them', () => {
       await expect(dialog).toContainText(env);
     }
     await shoot(page, 'dlg-groups-environments');
+    await dialog.getByRole('checkbox', { name: /mark Production as a production environment/ }).check();
+    await expect(dialog.locator('.environment-chip.production')).toHaveCount(1);
+    await shoot(page, 'dlg-groups-environments-prod');
+    await dialog.getByRole('tab', { name: 'Clients' }).click();
+    await shoot(page, 'dlg-groups-clients-with-envs');
     await dialog.getByRole('button', { name: 'Close' }).click();
   });
 

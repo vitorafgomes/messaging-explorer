@@ -89,6 +89,6 @@ export class ResubmitRunIndicatorComponent {
       entityName: run.target.entityName,
       topicName: run.target.topicName
     };
-    this.dialog.open(ContinuousResubmitDialogComponent, { width: '760px', maxWidth: '95vw', data });
+    this.dialog.open(ContinuousResubmitDialogComponent, { width: '720px', maxWidth: '95vw', data });
   }
 }

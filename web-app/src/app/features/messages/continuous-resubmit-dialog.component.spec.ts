@@ -434,7 +434,7 @@ describe('ContinuousResubmitDialogComponent', () => {
         expect(text(el.querySelector('h2[mat-dialog-title]'))).toBe('Auto Resubmit Dead Letters');
         expect(icons(el.querySelector('h2[mat-dialog-title]')), 'the title carries the resubmit icon').toStrictEqual(['refresh']);
         expect(text(el.querySelector('.intro'))).toBe('This will continuously resubmit dead letter messages in batches until the queue is empty or you stop the process.');
-        expect(text(el.querySelector('.batch mat-label'))).toBe('Batch Size');
+        expect(text(el.querySelector('.batch > label'))).toBe('Batch Size');
         expect(text(el.querySelector('.batch mat-hint')), 'the hint says the range and the starting size').toBe('Number of messages to process per cycle (1 to 500). The app starts at 10.');
         expect(text(el.querySelector('.note.count')), 'the dead-letter count sits in an info notice').toBe('Approximately 3 dead letter messages in queue.');
         expect(icons(el.querySelector('.note.count'))).toStrictEqual(['info']);
@@ -545,7 +545,7 @@ describe('ContinuousResubmitDialogComponent', () => {
         expect(text(el.querySelector('.scope legend'))).toBe('Which messages');
         expect(Array.from(el.querySelectorAll('.scope mat-radio-button')).map(r => text(r))).toStrictEqual(['All 3 dead-letter messages', 'Only the messages that match']);
         expect(el.querySelector('select[name="reason"]'), 'the filter fields wait for "Only the messages that match"').toBeNull();
-        expect(text(el.querySelector('.batch mat-label'))).toBe('Batch Size');
+        expect(text(el.querySelector('.batch > label'))).toBe('Batch Size');
         expect(text(el.querySelector('.batch mat-hint')), 'the cycles a run of all of them takes').toBe('1 to 500 messages per cycle: 1 cycle for 3.');
         expect(buttons()).toStrictEqual(['Cancel', 'Start: resubmit 3']);
 

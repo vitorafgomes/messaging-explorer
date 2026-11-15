@@ -209,6 +209,12 @@ html,
 html.dark-theme {
   @include mat.form-field-overrides((outlined-container-shape: var(--mat-sys-corner-small)));
   @include mat.menu-overrides((container-shape: var(--mat-sys-corner-small)));
+  @include mat.dialog-overrides((
+    container-color: var(--mat-sys-surface-container),
+    subhead-size: 20px,
+    subhead-line-height: 28px,
+    subhead-weight: 500,
+  ));
   @include mat.button-overrides((
     filled-container-height: 40px,
     outlined-container-height: 40px,
@@ -218,10 +224,29 @@ html.dark-theme {
   ));
 }
 
-// The connection dialogs draw a 40 px field with its label above it, as Connections.dc.html does.
+// The connection dialogs and the automatic resubmit draw a 40 px field with its label above it, as their artboards do.
 app-add-connection-dialog,
-app-manage-group-dialog {
+app-manage-group-dialog,
+app-continuous-resubmit-dialog {
   @include mat.form-field-density(-4);
+  @include mat.tabs-overrides((
+    active-indicator-height: 3px,
+    active-label-text-color: var(--mat-sys-primary),
+    active-focus-label-text-color: var(--mat-sys-primary),
+    active-hover-label-text-color: var(--mat-sys-primary),
+    inactive-label-text-color: var(--mat-sys-on-surface-variant),
+    inactive-focus-label-text-color: var(--mat-sys-on-surface-variant),
+    inactive-hover-label-text-color: var(--mat-sys-on-surface),
+  ));
+
+  .mat-mdc-tab .mdc-tab__text-label {
+    color: var(--mat-sys-on-surface-variant);
+  }
+
+  .mat-mdc-tab[aria-selected='true'] .mdc-tab__text-label {
+    color: var(--mat-sys-primary);
+    font-weight: 700;
+  }
 
   .mat-mdc-form-field-hint-wrapper,
   .mat-mdc-form-field-error-wrapper {

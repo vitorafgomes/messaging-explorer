@@ -773,7 +773,8 @@ export class EntityDetailsComponent {
     };
 
     const dialogRef = this.dialog.open(ContinuousResubmitDialogComponent, {
-      width: '500px',
+      width: '720px',
+      maxWidth: '95vw',
       data,
     });
 

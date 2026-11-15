@@ -69,7 +69,7 @@ describe('ManageGroupDialogComponent', () => {
   it('Delete of a client is a text button named after the client, and the client name hint reads "e.g., Contoso"', async () => {
     const { el } = await render([contoso, prod, fabrikam], connections);
     const del = el.querySelector('[aria-label="Delete client Fabrikam"]') as HTMLElement;
-    expect(del.textContent?.replace('delete', '').trim()).toBe('Delete');
+    expect(del.textContent?.replace('delete_outline', '').trim()).toBe('Delete');
     expect((el.querySelector('input[formcontrolname="name"]') as HTMLInputElement).placeholder).toBe('e.g., Contoso');
     expect(el.querySelector('textarea')).toBeNull();
   });
