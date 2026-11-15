@@ -6,7 +6,7 @@ changes: "Initial runbook"
 page_type: runbook
 status: active
 description: "Start RabbitMQ and the Azure Service Bus emulator on this machine and connect the app to them, to try a change by hand without touching a real broker."
-updated: 2026-11-12
+updated: 2026-11-15
 source:
   - chat
   - "dev/brokers/docker-compose.yml"
@@ -43,6 +43,8 @@ Every port is published on `127.0.0.1` only (`dev/brokers/docker-compose.yml:14`
 |---|---|
 | Azure Service Bus | Connection string: `Endpoint=sb://localhost:5673;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;` |
 | RabbitMQ | Host `localhost`, port `5672`, user `explorer`, password `explorer`, virtual host `/`, management port `15672` |
+
+Or import them all at once: Connections, Import, the file `dev/brokers/messaging-explorer-import.json`. It adds the client "Local brokers" with three connections: "Local Service Bus" and "Local RabbitMQ" in the environment Development, and "Local Service Bus (marked Production)", the same emulator in the environment "Production (test)", marked Production, to try the typed-name confirmations without a real namespace. The file is checked by `src/ServiceBusExplorer.Api.Tests/ImportPreviewTests.cs#The_local_brokers_file_imports_its_three_connections_under_one_client_with_a_development_and_a_production_environment`.
 
 `SAS_KEY_VALUE` is the literal text the emulator expects, not a placeholder. The RabbitMQ management page is at `http://localhost:15672`.
 

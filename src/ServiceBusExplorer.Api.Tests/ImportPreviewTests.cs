@@ -161,4 +161,45 @@ public class ImportPreviewTests
         var body = await response.Content.ReadAsStringAsync();
         Assert.Equal(ConstantBody, body);
     }
+
+    /// <summary>The file dev/brokers/messaging-explorer-import.json, found from the test's output folder up to the repository root.</summary>
+    private static string LocalBrokersImportFile()
+    {
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
+        {
+            var candidate = Path.Combine(dir.FullName, "dev", "brokers", "messaging-explorer-import.json");
+            if (File.Exists(candidate)) return candidate;
+        }
+        throw new FileNotFoundException("dev/brokers/messaging-explorer-import.json was not found above the test folder.");
+    }
+
+    [Fact]
+    public async Task The_local_brokers_file_imports_its_three_connections_under_one_client_with_a_development_and_a_production_environment()
+    {
+        using var factory = new ApiFactory();
+        var client = KeyedClient(factory);
+        var file = await File.ReadAllTextAsync(LocalBrokersImportFile());
+
+        using (var preview = await client.PostAsJsonAsync("/api/connections/import/preview", new { configurationJson = file }))
+        {
+            Assert.Equal(HttpStatusCode.OK, preview.StatusCode);
+        }
+        using (var import = await client.PostAsJsonAsync("/api/connections/import-full", new { configurationJson = file }))
+        {
+            Assert.Equal(HttpStatusCode.OK, import.StatusCode);
+        }
+
+        var connections = JsonDocument.Parse(await client.GetStringAsync("/api/connections")).RootElement.EnumerateArray()
+            .Select(c => (Name: c.GetProperty("name").GetString(), Provider: c.GetProperty("providerType").GetString(),
+                Environment: c.GetProperty("environmentId").GetString()))
+            .OrderBy(c => c.Name).ToList();
+        Assert.Equal(new[] { "Local RabbitMQ", "Local Service Bus", "Local Service Bus (marked Production)" }, connections.Select(c => c.Name));
+        Assert.Equal(new[] { "RabbitMQ", "AzureServiceBus", "AzureServiceBus" }, connections.Select(c => c.Provider));
+
+        var groups = JsonDocument.Parse(await client.GetStringAsync("/api/connectiongroups")).RootElement.EnumerateArray().ToList();
+        var production = groups.Single(g => g.GetProperty("name").GetString() == "Production (test)");
+        Assert.True(production.GetProperty("isProduction").GetBoolean(), "the second environment is marked Production, for the typed-name confirmations");
+        Assert.Equal(production.GetProperty("id").GetString(), connections.Single(c => c.Name == "Local Service Bus (marked Production)").Environment);
+        Assert.Equal(new[] { "Development", "Local brokers", "Production (test)" }, groups.Select(g => g.GetProperty("name").GetString()).OrderBy(n => n));
+    }
 }
