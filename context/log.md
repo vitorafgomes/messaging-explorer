@@ -1,3 +1,6 @@
+## [2026-11-15] decision | ADR 0006: choose the version to install, per channel
+Proposed after the owner tested v2.4.5-beta.1: Stable claimed a beta as newest, and no version could be picked. [[pages/decisions/0006-choose-the-version-to-install]]
+
 ## [2026-11-15] feature | Manage Groups and the automatic resubmit as drawn
 Every dialog takes the artboards' 20 px title and surface container. [[pages/services/web-app/features-connections]]
 
