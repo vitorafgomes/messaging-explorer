@@ -6,9 +6,13 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { Subject } from 'rxjs';
 import { SUB_QUEUE_LABEL, SubQueue } from '../../../core/models/message.model';
+import { connectionContext } from '../../../features/entities/connection-context';
+import { EnvironmentLineComponent } from '../../environment-line.component';
 
 export interface BulkOperationProgressDialogData {
-  operation: 'delete' | 'resubmit' | 'move' | 'export';
+  operation: 'delete' | 'resubmit' | 'move' | 'export' | 'deadletter';
+  /** The operation runs on deferred messages, named by sequence number. */
+  deferred?: boolean;
   totalCount: number;
   entityName: string;
   entityType: 'queue' | 'topic';
@@ -26,7 +30,7 @@ export interface ProgressUpdate {
 @Component({
   selector: 'app-bulk-operation-progress-dialog',
   standalone: true,
-  imports: [
+  imports: [EnvironmentLineComponent, 
     MatDialogModule,
     MatButtonModule,
     MatIconModule,
@@ -35,11 +39,12 @@ export interface ProgressUpdate {
   ],
   template: `
     <h2 mat-dialog-title class="title">
-      <mat-icon [fontIcon]="getOperationIcon()" [class.danger]="data.operation === 'delete'" aria-hidden="true"></mat-icon>
+      <mat-icon [fontIcon]="getOperationIcon()" [class.danger]="data.operation === 'delete' || data.operation === 'deadletter'" aria-hidden="true"></mat-icon>
       {{ getOperationTitle() }}
     </h2>
 
     <mat-dialog-content class="content">
+      <app-environment-line [mark]="context().mark"><b>{{ data.entityName }}</b> on {{ context().where }}</app-environment-line>
       <p class="description">{{ getOperationDescription() }}</p>
 
       <!--
@@ -50,6 +55,7 @@ export interface ProgressUpdate {
       <div class="progress-section">
         @if (!isComplete() && !cancelled()) {
           <span class="progress-label" aria-live="polite">
+            <mat-progress-spinner mode="indeterminate" diameter="18" aria-hidden="true"></mat-progress-spinner>
             Processing {{ progress().total }} {{ progress().total === 1 ? 'message' : 'messages' }}...
           </span>
           <mat-progress-bar mode="indeterminate" aria-label="Operation in progress"></mat-progress-bar>
@@ -88,7 +94,6 @@ export interface ProgressUpdate {
           <mat-icon fontIcon="block" aria-hidden="true"></mat-icon>
           <span>Operation cancelled</span>
         } @else if (!isComplete()) {
-          <mat-progress-spinner mode="indeterminate" diameter="18" aria-hidden="true"></mat-progress-spinner>
           <span>{{ getStatusMessage() }}</span>
         } @else if (progress().failureCount === 0) {
           <mat-icon fontIcon="check_circle" aria-hidden="true"></mat-icon>
@@ -114,10 +119,7 @@ export interface ProgressUpdate {
 
     <mat-dialog-actions align="end">
       @if (!isComplete() && !cancelled()) {
-        <button matButton="outlined" type="button" (click)="cancel()">
-          <mat-icon fontIcon="block" aria-hidden="true"></mat-icon>
-          Cancel
-        </button>
+        <button matButton="tonal" type="button" (click)="cancel()">Cancel</button>
       } @else {
         <button matButton="filled" type="button" [mat-dialog-close]="true">
           <mat-icon fontIcon="check" aria-hidden="true"></mat-icon>
@@ -129,6 +131,8 @@ export interface ProgressUpdate {
   styleUrl: './bulk-operation-progress-dialog.component.scss'
 })
 export class BulkOperationProgressDialogComponent implements OnDestroy {
+  /** The active connection and its environment, for the line under the title. */
+  readonly context = connectionContext();
   data = inject<BulkOperationProgressDialogData>(MAT_DIALOG_DATA);
   private dialogRef = inject(MatDialogRef<BulkOperationProgressDialogComponent>);
 
@@ -168,12 +172,17 @@ export class BulkOperationProgressDialogComponent implements OnDestroy {
         return 'swap_horiz';
       case 'export':
         return 'download';
+      case 'deadletter':
+        return 'report';
       default:
         return 'settings';
     }
   }
 
   getOperationTitle(): string {
+    if (this.data.operation === 'deadletter') {
+      return 'Dead-letter Messages';
+    }
     const operation = this.data.operation.charAt(0).toUpperCase() + this.data.operation.slice(1);
     return `${operation} Messages`;
   }
@@ -181,13 +190,15 @@ export class BulkOperationProgressDialogComponent implements OnDestroy {
   getOperationDescription(): string {
     const count = this.data.totalCount;
     const entity = this.data.entityName;
-    const type = SUB_QUEUE_LABEL[this.data.subQueue];
+    const type = this.data.deferred ? 'deferred' : SUB_QUEUE_LABEL[this.data.subQueue];
 
     switch (this.data.operation) {
       case 'delete':
         return `Deleting ${count} ${type} ${count === 1 ? 'message' : 'messages'} from ${entity}...`;
       case 'resubmit':
-        return `Resubmitting ${count} ${SUB_QUEUE_LABEL[this.data.subQueue === 'transferdeadletter' ? 'transferdeadletter' : 'deadletter']} ${count === 1 ? 'message' : 'messages'} from ${entity}...`;
+        return `Resubmitting ${count} ${this.data.deferred ? type : SUB_QUEUE_LABEL[this.data.subQueue === 'transferdeadletter' ? 'transferdeadletter' : 'deadletter']} ${count === 1 ? 'message' : 'messages'} from ${entity}...`;
+      case 'deadletter':
+        return `Dead-lettering ${count} ${type} ${count === 1 ? 'message' : 'messages'} in ${entity}...`;
       case 'move':
         return `Moving ${count} ${type} ${count === 1 ? 'message' : 'messages'} from ${entity} to ${this.data.targetQueue}...`;
       case 'export':

@@ -1,5 +1,6 @@
 import {Component, OnInit, inject, WritableSignal, signal, computed, DestroyRef, ChangeDetectorRef, ApplicationRef} from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Router, RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -8,18 +9,32 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ConnectionService, ConnectionGroupService, DevSettingsService } from '../../core/services';
-import { ServiceBusConnection, ConnectionGroup, ConnectionGroupTree, getConnectionDisplayTarget, getProviderDisplayName, getProviderIcon } from '../../core/models';
+import { ServiceBusConnection, ConnectionGroup, ConnectionGroupTree, getConnectionAuthLabel, getConnectionDisplayTarget, getConnectionSecretLabel, getProviderDisplayName, getProviderIcon } from '../../core/models';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog.component';
 import { AddConnectionDialogComponent } from './add-connection-dialog.component';
-import { finalize, forkJoin } from 'rxjs';
+import { EMPTY, Observable, finalize, forkJoin, of, skip, switchMap, take } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ManageGroupDialogComponent } from './manage-group-dialog.component';
 import { ExportConnectionsDialogComponent, ExportConnectionsDialogResult } from './export-connections-dialog.component';
+import { ImportConnectionsDialogComponent, ImportConnectionsDialogData } from './import-connections-dialog.component';
+import { EnvironmentChipComponent } from '../../shared/environment-chip.component';
 
 interface ConnectionSection {
   key: string;
   label: string;
   connections: ServiceBusConnection[];
   emptyText: string;
+}
+
+/** The sentence for the reason code the connect route answers, with the target; the general line when it gave none. */
+function connectFailureSentence(code: unknown, target: string): string {
+  switch (code) {
+    case 'connection-refused': return `The broker at ${target} refused the connection. Check the host name and the port.`;
+    case 'host-not-found': return `The host of ${target} was not found. Check the host name.`;
+    case 'timeout': return `The broker at ${target} did not answer in time. Check the host name, the port and the network.`;
+    case 'tls': return `The TLS handshake with ${target} failed. Check the TLS setting and the port.`;
+    default: return 'Check the target, the credentials and the port of this connection.';
+  }
 }
 
 const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
@@ -35,13 +50,14 @@ const plural = (count: number, one: string, many: string) => `${count} ${count =
     MatDialogModule,
     MatProgressSpinnerModule,
     MatSnackBarModule,
-    MatTooltipModule
+    MatTooltipModule,
+    EnvironmentChipComponent
   ],
   template: `
     <div class="connections-container">
       <div class="header">
         <div class="title">
-          <h2>Connections</h2>
+          <h1>Connections</h1>
           @if (hasData()) {
             <p class="summary">{{ summary() }}</p>
           }
@@ -75,24 +91,23 @@ const plural = (count: number, one: string, many: string) => `${count} ${count =
       </div>
 
       @if (debugMode()) {
-        <div class="alert alert-warning debug-panel mb-4">
-          <h5 class="alert-heading">
-            <i class="fa fa-bug me-2"></i>
-            DEBUG MODE
-            <button class="btn btn-sm btn-warning float-end" (click)="refreshDebugInfo()">
-              <i class="fa-solid fa-arrows-rotate me-1"></i>
+        <section class="debug-panel" aria-label="Debug mode">
+          <div class="debug-header">
+            <mat-icon fontIcon="bug_report" aria-hidden="true"></mat-icon>
+            <h2>Debug mode</h2>
+            <button matButton="outlined" (click)="refreshDebugInfo()">
+              <mat-icon fontIcon="refresh" aria-hidden="true"></mat-icon>
               Refresh
             </button>
-            <button class="btn btn-sm btn-success float-end me-2" (click)="forceReload()">
-              <i class="fa-solid fa-arrows-rotate me-1"></i>
+            <button matButton="tonal" (click)="forceReload()">
+              <mat-icon fontIcon="refresh" aria-hidden="true"></mat-icon>
               Force Reload
             </button>
-          </h5>
-          <hr>
-          <div class="row">
-            <div class="col-md-6">
-              <h6>📊 Current State:</h6>
-              <ul class="small mb-2">
+          </div>
+          <div class="debug-columns">
+            <div>
+              <h3>Current state</h3>
+              <ul>
                 <li><strong>Connections:</strong> {{ connections().length }}</li>
                 <li><strong>Groups:</strong> {{ groups().length }}</li>
                 <li><strong>Grouped Tree Nodes:</strong> {{ groupedTree().length }}</li>
@@ -100,16 +115,14 @@ const plural = (count: number, one: string, many: string) => `${count} ${count =
                 <li><strong>Loading:</strong> {{ loading() ? 'YES' : 'NO' }}</li>
               </ul>
             </div>
-            <div class="col-md-6">
-              <h6>🔍 Connections Details:</h6>
-              <pre class="small mb-0" style="max-height: 200px; overflow-y: auto; background: rgba(0,0,0,0.05); padding: 8px; border-radius: 4px;">{{ connections() | json }}</pre>
+            <div>
+              <h3>Connections details</h3>
+              <pre class="debug-pre">{{ connections() | json }}</pre>
             </div>
           </div>
-          <div class="mt-2">
-            <h6>📝 Debug Log:</h6>
-            <pre class="small mb-0" style="max-height: 150px; overflow-y: auto; background: rgba(0,0,0,0.05); padding: 8px; border-radius: 4px;">{{ debugInfo() }}</pre>
-          </div>
-        </div>
+          <h3>Debug log</h3>
+          <pre class="debug-pre debug-log">{{ debugInfo() }}</pre>
+        </section>
       }
 
       @if (loading()) {
@@ -131,12 +144,12 @@ const plural = (count: number, one: string, many: string) => `${count} ${count =
       } @else if (isEmpty()) {
         <div class="empty-state">
           <mat-icon class="empty-icon" aria-hidden="true">power</mat-icon>
-          <h3>No connections configured</h3>
+          <h2>No connections configured</h2>
           <p>Nothing is saved on this computer yet, so there is no broker to explore. Start with one connection:</p>
           <ol>
             <li>Add a connection to an Azure Service Bus namespace or to a RabbitMQ broker.</li>
             <li>Test it in the dialog before you save it.</li>
-            <li>Connect. The entities of the broker open, and the toolbar shows which broker you are on.</li>
+            <li>Connect. The entities of the broker open, and the toolbar shows which environment you are on.</li>
           </ol>
           <div class="empty-actions">
             <button matButton="filled" (click)="openAddDialog()">
@@ -151,6 +164,19 @@ const plural = (count: number, one: string, many: string) => `${count} ${count =
           <p class="footnote">Import reads a file exported from this app on another computer: its connections, clients and environments.</p>
         </div>
       } @else {
+        @if (connectError(); as failed) {
+          <section class="connect-error" aria-label="Error" role="alert" data-testid="connect-error">
+            <h2><mat-icon aria-hidden="true">warning</mat-icon>Could not connect to {{ failed.connection.name }}</h2>
+            <p class="reason">{{ failed.reason }}</p>
+            @if (failed.keeps) {
+              <p>{{ failed.keeps }}</p>
+            }
+            <div class="error-actions">
+              <button matButton="outlined" type="button" (click)="connect(failed.connection)" [disabled]="connecting()"><mat-icon aria-hidden="true">refresh</mat-icon>Retry</button>
+              <button matButton type="button" (click)="editConnection(failed.connection)"><mat-icon aria-hidden="true">edit</mat-icon>Edit the connection</button>
+            </div>
+          </section>
+        }
         <div class="connections-content">
           <table class="connections-table">
             <caption>Saved connections, grouped by client and environment</caption>
@@ -159,13 +185,15 @@ const plural = (count: number, one: string, many: string) => `${count} ${count =
                 <th scope="col">Connection</th>
                 <th scope="col">Broker</th>
                 <th scope="col">Target</th>
+                <th scope="col">Environment</th>
+                <th scope="col">Last used</th>
                 <th scope="col" class="actions-col">Actions</th>
               </tr>
             </thead>
             @for (section of sections(); track section.key) {
               <tbody>
                 <tr>
-                  <th colspan="4" scope="rowgroup" class="group-header">{{ section.label }}</th>
+                  <th colspan="6" scope="rowgroup" class="group-header">{{ section.label }}</th>
                 </tr>
                 @for (connection of section.connections; track connection.id) {
                   <tr class="connection-card" [class.active]="connection.isConnected">
@@ -179,9 +207,14 @@ const plural = (count: number, one: string, many: string) => `${count} ${count =
                           </span>
                         }
                       </div>
+                      <div class="auth-line">{{ getAuthLabel(connection) }}</div>
                     </td>
                     <td>{{ getProviderName(connection.providerType) }}</td>
                     <td class="target">{{ getConnectionTarget(connection) }}</td>
+                    <td>
+                      <app-environment-chip [name]="environmentOf(connection)?.name" [isProduction]="!!environmentOf(connection)?.isProduction" />
+                    </td>
+                    <td class="last-used muted">{{ connection.lastUsedAt ? (connection.lastUsedAt | date:'medium') : 'Never' }}</td>
                     <td class="actions-col">
                       <div class="row-actions">
                         @if (connection.isConnected) {
@@ -217,7 +250,7 @@ const plural = (count: number, one: string, many: string) => `${count} ${count =
                   </tr>
                 } @empty {
                   <tr>
-                    <td colspan="4" class="muted none">{{ section.emptyText }}</td>
+                    <td colspan="6" class="muted none">{{ section.emptyText }}</td>
                   </tr>
                 }
               </tbody>
@@ -255,6 +288,10 @@ export class ConnectionsComponent implements OnInit {
   getConnectionTarget = getConnectionDisplayTarget;
   getProviderName = getProviderDisplayName;
   getProviderIcon = getProviderIcon;
+  getAuthLabel = getConnectionAuthLabel;
+
+  /** The last connect that failed, with what stayed as it was; cleared by the next connect. */
+  readonly connectError = signal<{ connection: ServiceBusConnection; reason: string; keeps: string } | null>(null);
 
   readonly hasData = computed(() => this.groupedTree().length > 0 || this.ungroupedConnections().length > 0);
   readonly isEmpty = computed(() => !this.loading() && !this.loadError() && !this.hasData());
@@ -293,6 +330,11 @@ export class ConnectionsComponent implements OnInit {
     return sections;
   });
 
+  /** The environment group a connection is placed in, if any. */
+  environmentOf(connection: ServiceBusConnection): ConnectionGroup | undefined {
+    return connection.environmentId ? this.groups().find(g => g.id === connection.environmentId) : undefined;
+  }
+
   ngOnInit() {
     console.log('╔' + '═'.repeat(78) + '╗');
     console.log('║ ConnectionsComponent ngOnInit() - Component Initialized');
@@ -313,7 +355,7 @@ export class ConnectionsComponent implements OnInit {
 
   loadData() {
     console.log('[ConnectionsComponent] loadData() called');
-    this.addDebugLog('🔄 loadData() started');
+    this.addDebugLog('loadData() started');
 
     // Reset signals to force UI update
     this.connections.set([]);
@@ -344,12 +386,12 @@ export class ConnectionsComponent implements OnInit {
         console.log(`[ConnectionsComponent] loadData() success - ${connections.length} connections, ${groups.length} groups`);
         console.log('[ConnectionsComponent] Connections:', connections);
 
-        this.addDebugLog(`✅ Received ${connections.length} connections, ${groups.length} groups from API`);
+        this.addDebugLog(`Received ${connections.length} connections, ${groups.length} groups from API`);
 
         if (connections.length > 0) {
           this.addDebugLog('Connection names: ' + connections.map(c => c.name).join(', '));
         } else {
-          this.addDebugLog('⚠️ WARNING: API returned ZERO connections!');
+          this.addDebugLog('WARNING: API returned ZERO connections!');
         }
 
         // Update signals
@@ -368,15 +410,13 @@ export class ConnectionsComponent implements OnInit {
         this.addDebugLog('UI update and change detection completed');
         console.log('[ConnectionsComponent] UI update complete');
 
-        // Show alert with results (useful for debugging)
         if (this.debugMode()) {
-          const msg = `✅ LOAD COMPLETE\n\nConnections: ${connections.length}\nGroups: ${groups.length}\n\nNames:\n${connections.map(c => '- ' + c.name).join('\n')}`;
-          alert(msg);
+          this.showDebugCounts('Load complete');
         }
       },
       error: (err) => {
         console.error('[ConnectionsComponent] loadData() error:', err);
-        this.addDebugLog('❌ ERROR loading data: ' + (err as any).message);
+        this.addDebugLog('ERROR loading data: ' + (err as any).message);
         this.loadError.set(true);
         this.snackBar.open('Failed to load data', 'Close', { duration: 3000 });
       }
@@ -403,6 +443,7 @@ export class ConnectionsComponent implements OnInit {
   openAddDialog() {
     const dialogRef = this.dialog.open(AddConnectionDialogComponent, {
       width: '780px',
+      maxWidth: '95vw',
       data: { groups: this.groups() }
     });
 
@@ -418,7 +459,8 @@ export class ConnectionsComponent implements OnInit {
   openManageGroupDialog() {
     const dialogRef = this.dialog.open(ManageGroupDialogComponent, {
       width: '680px',
-      data: { groups: this.groups() }
+      maxWidth: '95vw',
+      data: { groups: this.groups(), connections: this.connections() }
     });
 
     dialogRef.afterClosed().pipe(
@@ -433,6 +475,7 @@ export class ConnectionsComponent implements OnInit {
   editConnection(connection: ServiceBusConnection) {
     const dialogRef = this.dialog.open(AddConnectionDialogComponent, {
       width: '620px',
+      maxWidth: '95vw',
       data: {
         connection,
         groups: this.groups()
@@ -449,6 +492,8 @@ export class ConnectionsComponent implements OnInit {
   }
 
   connect(connection: ServiceBusConnection) {
+    const wasActive = this.connectionService.isConnected ? this.connectionService.currentNamespace : undefined;
+    this.connectError.set(null);
     this.connecting.set(true);
     this.connectionService.connect(connection.id).pipe(
       finalize(() => this.connecting.set(false)),
@@ -468,26 +513,77 @@ export class ConnectionsComponent implements OnInit {
         // Navigate to entities view automatically after successful connection
         this.router.navigate(['/entities']);
       },
-      error: () => {
-        this.snackBar.open('Failed to connect', 'Close', { duration: 3000 });
+      error: (error: unknown) => {
+        const reason = connectFailureSentence((error as HttpErrorResponse | undefined)?.error?.code, getConnectionDisplayTarget(connection));
+        this.connectError.set({ connection, reason, keeps: '' });
+        this.connectionService.connectionStatus$.pipe(skip(1), take(1), takeUntilDestroyed(this.destroyRef)).subscribe(status => {
+          if (this.connectError()?.connection !== connection) return;
+          const keeps = !status.connected
+            ? 'No connection is active. Nothing was changed on the broker.'
+            : status.namespace === wasActive
+              ? `The connection that was active stays active: ${status.namespace}. Nothing was changed on either broker.`
+              : `The active connection is now ${status.namespace}. Nothing was changed on either broker.`;
+          this.connectError.set({ connection, reason, keeps });
+        });
       }
     });
   }
 
   delete(connection: ServiceBusConnection) {
-    if (confirm(`Are you sure you want to delete "${connection.name}"?`)) {
-      this.connectionService.deleteConnection(connection.id).pipe(
-        takeUntilDestroyed(this.destroyRef)
-      ).subscribe({
-        next: () => {
-          this.snackBar.open('Connection deleted', 'Close', { duration: 3000 });
-          this.loadData();
-        },
-        error: () => {
-          this.snackBar.open('Failed to delete connection', 'Close', { duration: 3000 });
-        }
-      });
-    }
+    const active = this.isActive(connection);
+    const target = getConnectionDisplayTarget(connection);
+    const secret = getConnectionSecretLabel(connection);
+    const data: ConfirmDialogData = {
+      title: 'Delete connection?',
+      icon: 'warning',
+      message: `This removes the saved connection from this computer${secret ? `, with its stored ${secret}` : ''}. `
+        + 'Nothing on the broker is changed. It cannot be undone, except by adding the connection again.',
+      notice: active
+        ? `This is the active connection. The app disconnects from ${target} first, and the Entities and Monitoring screens go empty.`
+        : undefined,
+      facts: [
+        { label: 'Connection', value: connection.name },
+        { label: 'Broker', value: getProviderDisplayName(connection.providerType) },
+        { label: 'Target', value: target },
+        { label: 'Client and environment', value: this.groupLabel(connection) },
+      ],
+      confirmText: 'Delete connection',
+      context: {
+        subject: connection.name,
+        where: `to ${target}`,
+        mark: { name: this.environmentOf(connection)?.name ?? null, isProduction: !!this.environmentOf(connection)?.isProduction }
+      },
+    };
+    this.dialog.open(ConfirmDialogComponent, { width: '560px', data }).afterClosed().pipe(
+      switchMap(confirmed => {
+        if (!confirmed) return EMPTY;
+        const first: Observable<unknown> = active ? this.connectionService.disconnect() : of(null);
+        return first.pipe(switchMap(() => this.connectionService.deleteConnection(connection.id)));
+      }),
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe({
+      next: () => {
+        if (this.connectError()?.connection.id === connection.id) this.connectError.set(null);
+        this.snackBar.open('Connection deleted', 'Close', { duration: 3000 });
+        this.loadData();
+      },
+      error: () => {
+        this.snackBar.open('The connection was not deleted: the local API answered with an error.', 'Close', { duration: 5000 });
+      }
+    });
+  }
+
+  /** The client and environment of a connection, as the delete confirmation of Connections.dc.html names it. */
+  private groupLabel(connection: ServiceBusConnection): string {
+    const section = this.sections().find(s => s.connections.includes(connection));
+    return !section || section.key === 'ungrouped' ? 'Ungrouped, no environment' : section.label;
+  }
+
+  /** Active by what the service knows now: the id it connected, or the target the API reports. */
+  private isActive(connection: ServiceBusConnection): boolean {
+    const service = this.connectionService;
+    return service.currentConnectionId === connection.id
+      || (service.isConnected && service.currentNamespace === getConnectionDisplayTarget(connection));
   }
 
   exportConfiguration() {
@@ -499,7 +595,8 @@ export class ConnectionsComponent implements OnInit {
       ExportConnectionsDialogResult | undefined
     >(ExportConnectionsDialogComponent, {
       width: '560px',
-      autoFocus: false
+      autoFocus: false,
+      data: { connections: this.connections(), groups: this.groups() }
     });
 
     dialogRef.afterClosed().pipe(
@@ -515,7 +612,7 @@ export class ConnectionsComponent implements OnInit {
 
   private runFullExport(includeSecrets: boolean) {
     console.log('[ConnectionsComponent] Running FULL export (connections + groups), includeSecrets=', includeSecrets);
-    this.addDebugLog(`📤 Starting FULL export (connections + groups) includeSecrets=${includeSecrets}`);
+    this.addDebugLog(`Starting FULL export (connections + groups) includeSecrets=${includeSecrets}`);
 
     this.connectionService.exportFullConfiguration(includeSecrets).pipe(
       takeUntilDestroyed(this.destroyRef)
@@ -530,7 +627,7 @@ export class ConnectionsComponent implements OnInit {
           groups: config.groups?.length || 0,
           includeSecrets
         });
-        this.addDebugLog(`✅ Exported: ${config.connections?.length || 0} connections, ${config.groups?.length || 0} groups`);
+        this.addDebugLog(`Exported: ${config.connections?.length || 0} connections, ${config.groups?.length || 0} groups`);
 
         // Create a downloadable file
         const blob = new Blob([jsonString], { type: 'application/json' });
@@ -557,7 +654,7 @@ export class ConnectionsComponent implements OnInit {
       },
       error: (err) => {
         console.error('[ConnectionsComponent] Export failed:', err);
-        this.addDebugLog('❌ Export failed: ' + (err as any).message);
+        this.addDebugLog('Export failed: ' + (err as any).message);
         this.snackBar.open('Failed to export configuration', 'Close', { duration: 3000 });
       }
     });
@@ -583,49 +680,24 @@ export class ConnectionsComponent implements OnInit {
         const jsonData = e.target.result;
         console.log('[ConnectionsComponent] File read, data length:', jsonData?.length);
 
-        if (confirm('This will import connections AND groups from the selected file. Existing items with the same ID will be updated. Continue?')) {
-          console.log('[ConnectionsComponent] User confirmed import - using FULL import (connections + groups)');
-          this.addDebugLog('📥 Starting FULL import (connections + groups)');
-          this.connectionService.importFullConfiguration(jsonData).pipe(
-            takeUntilDestroyed(this.destroyRef)
-          ).subscribe({
-            next: (result) => {
-              console.log('='.repeat(80));
-              console.log('[IMPORT] ✅ SUCCESS!');
-              console.log('[IMPORT] Response:', result);
-              console.log('[IMPORT] Reloading data directly (no navigation)...');
-              console.log('='.repeat(80));
-
-              this.addDebugLog('📥 IMPORT SUCCESS: ' + result.message);
-
-              this.snackBar.open(result.message, 'Close', { duration: 3000 });
-
-              // Wait a bit for backend to finish saving, then reload
-              setTimeout(() => {
-                console.log('[IMPORT] Calling loadData() now...');
-                this.addDebugLog('Waiting 500ms before reload...');
-                setTimeout(() => {
-                  this.addDebugLog('Now calling loadData() after import');
-                  this.loadData();
-                }, 500);
-              }, 100);
-            },
-            error: (err) => {
-              console.error('='.repeat(80));
-              console.error('[IMPORT] ❌ ERROR!');
-              console.error('[IMPORT] Error:', err);
-              console.error('='.repeat(80));
-              this.snackBar.open(err.error?.message || 'Failed to import configuration', 'Close', { duration: 5000 });
-            }
-          });
-        } else {
-          console.log('[ConnectionsComponent] User cancelled import');
-        }
+        this.openImportDialog({ fileName: file.name, json: jsonData });
       };
       reader.readAsText(file);
     };
 
     input.click();
+  }
+
+  /** Shows the API's preview of a read file; the dialog imports it, and a completed import reloads the list. */
+  openImportDialog(data: ImportConnectionsDialogData) {
+    this.dialog.open(ImportConnectionsDialogComponent, { width: '760px', maxWidth: '95vw', data })
+      .afterClosed().pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(message => {
+        if (message) {
+          this.snackBar.open(message, 'Close', { duration: 3000 });
+          this.loadData();
+        }
+      });
   }
 
   toggleDebugMode() {
@@ -658,19 +730,20 @@ export class ConnectionsComponent implements OnInit {
 
   forceReload() {
     console.log('[DEBUG] Force reload requested');
-    this.addDebugLog('🔄 FORCE RELOAD initiated by user');
-
-    // Show alert with current state BEFORE reload
-    const beforeMsg = `BEFORE RELOAD:\n\nConnections: ${this.connections().length}\nGroups: ${this.groups().length}`;
-    alert(beforeMsg);
+    this.addDebugLog('FORCE RELOAD initiated by user');
+    this.showDebugCounts('Before reload');
 
     this.loadData();
 
-    // Show alert with state AFTER reload (with delay)
     setTimeout(() => {
-      const afterMsg = `AFTER RELOAD:\n\nConnections: ${this.connections().length}\nGroups: ${this.groups().length}\n\nConnections:\n${this.connections().map(c => '- ' + c.name).join('\n')}`;
-      alert(afterMsg);
-      this.addDebugLog('✅ Force reload completed');
+      this.showDebugCounts('After reload');
+      this.addDebugLog('Force reload completed');
     }, 2000);
+  }
+
+  /** Shows the connection and group counts in the snack bar, for the debug panel. */
+  private showDebugCounts(label: string) {
+    const message = `${label}: ${plural(this.connections().length, 'connection', 'connections')}, ${plural(this.groups().length, 'group', 'groups')}`;
+    this.snackBar.open(message, 'Close', { duration: 5000 });
   }
 }

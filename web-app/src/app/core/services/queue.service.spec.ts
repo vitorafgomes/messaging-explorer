@@ -72,7 +72,7 @@ describe('QueueService', () => {
       expect(apiGet.mock.calls).toEqual([['queues/a%2Fb/transferdeadletter?count=5']]);
       expect(apiPost.mock.calls).toEqual([
         ['queues/a%2Fb/transferdeadletter/delete-batch', { sequenceNumbers: [1, 2], all: false }],
-        ['queues/a%2Fb/transferdeadletter/resubmit-batch', { sequenceNumbers: [3] }]
+        ['queues/a%2Fb/transferdeadletter/resubmit-batch', { sequenceNumbers: [3], newMessageIdOnDuplicateDetection: false }]
       ]);
     });
 

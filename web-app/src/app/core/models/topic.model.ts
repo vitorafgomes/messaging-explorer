@@ -95,6 +95,8 @@ export interface SubscriptionInfo {
   forwardTo?: string;
   forwardDeadLetteredMessagesTo?: string;
   rules: SubscriptionRuleInfo[];
+  /** How many rules the subscription has, or null where the API did not count them (past its limit, a failed listing, a provider without rules). */
+  ruleCount?: number | null;
 
   // Provider identification (optional for backward compatibility)
   providerType?: ProviderType;

@@ -1,4 +1,6 @@
+using Azure;
 using Azure.Messaging.ServiceBus;
+using Azure.Messaging.ServiceBus.Administration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -59,9 +61,29 @@ public class AzureServiceBusProviderSubQueueTests
                 .ReturnsAsync(Batch());
             Sender.Setup(s => s.CreateMessageBatchAsync(It.IsAny<CancellationToken>()))
                 .Returns(() => new ValueTask<ServiceBusMessageBatch>(NewTestBatch()));
+            Admin.Setup(a => a.GetQueueAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync((string name, CancellationToken _) => Response.FromValue(ServiceBusModelFactory.QueueProperties(
+                    name: name, lockDuration: TimeSpan.FromSeconds(30), maxSizeInMegabytes: 1024, requiresDuplicateDetection: false,
+                    requiresSession: false, defaultMessageTimeToLive: TimeSpan.FromDays(1), autoDeleteOnIdle: TimeSpan.MaxValue,
+                    deadLetteringOnMessageExpiration: false, duplicateDetectionHistoryTimeWindow: TimeSpan.FromMinutes(10),
+                    maxDeliveryCount: 10, enableBatchedOperations: true, status: EntityStatus.Active, forwardTo: null,
+                    forwardDeadLetteredMessagesTo: null, userMetadata: "", enablePartitioning: false, maxMessageSizeInKilobytes: 256), Mock.Of<Response>()));
+            Admin.Setup(a => a.GetTopicAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync((string name, CancellationToken _) => Response.FromValue(ServiceBusModelFactory.TopicProperties(
+                    name: name, maxSizeInMegabytes: 1024, requiresDuplicateDetection: false, defaultMessageTimeToLive: TimeSpan.FromDays(1),
+                    autoDeleteOnIdle: TimeSpan.MaxValue, duplicateDetectionHistoryTimeWindow: TimeSpan.FromMinutes(10),
+                    enableBatchedOperations: true, status: EntityStatus.Active, enablePartitioning: false), Mock.Of<Response>()));
         }
 
-        public AzureServiceBusProvider Provider() => new(Client.Object);
+        /// <summary>Entity settings with no duplicate detection and a delivery limit of 10, as a bulk call reads them first.</summary>
+        public Mock<ServiceBusAdministrationClient> Admin { get; } = new();
+
+        public AzureServiceBusProvider Provider()
+        {
+            var provider = new AzureServiceBusProvider(Client.Object);
+            provider.UseAdministrationClient(Admin.Object);
+            return provider;
+        }
     }
 
     [Theory]
@@ -130,11 +152,12 @@ public class AzureServiceBusProviderSubQueueTests
     }
 
     [Fact]
-    public void Azure_declares_the_transfer_dead_letter_queue_and_no_longer_declares_deferral()
+    public void Azure_declares_the_transfer_dead_letter_queue_and_deferral()
     {
         var capabilities = new AzureServiceBusProvider().Capabilities;
 
-        Assert.Equal((true, false), (capabilities.SupportsTransferDeadLetter, capabilities.SupportsDeferral));
+        Assert.True((capabilities.SupportsTransferDeadLetter, capabilities.SupportsDeferral) == (true, true),
+            "Azure handles deferred messages by sequence number, so it must declare deferral, and the transfer dead-letter queue.");
     }
 
     [Fact]
@@ -289,12 +312,14 @@ public class AzureServiceBusProviderSubQueueTests
     [InlineData("receive")]
     [InlineData("peek")]
     [InlineData("search")]
+    [InlineData("schedule")]
     public async Task A_disabled_entity_answers_the_neutral_exception_with_the_fixed_text_on_every_single_message_path(string operation)
     {
         var broker = new FakeBroker();
         var disabled = Broker(ServiceBusFailureReason.MessagingEntityDisabled);
         broker.Sender.Setup(s => s.SendMessageAsync(It.IsAny<ServiceBusMessage>(), It.IsAny<CancellationToken>())).ThrowsAsync(disabled);
-        broker.Sender.Setup(s => s.SendMessagesAsync(It.IsAny<IEnumerable<ServiceBusMessage>>(), It.IsAny<CancellationToken>())).ThrowsAsync(disabled);
+        broker.Sender.Setup(s => s.ScheduleMessageAsync(It.IsAny<ServiceBusMessage>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>())).ThrowsAsync(disabled);
+        broker.Sender.Setup(s => s.SendMessagesAsync(It.IsAny<ServiceBusMessageBatch>(), It.IsAny<CancellationToken>())).ThrowsAsync(disabled);
         broker.Receiver.Setup(r => r.ReceiveMessagesAsync(It.IsAny<int>(), It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>())).ThrowsAsync(disabled);
         broker.Receiver.Setup(r => r.PeekMessagesAsync(It.IsAny<int>(), It.IsAny<long?>(), It.IsAny<CancellationToken>())).ThrowsAsync(disabled);
         var provider = broker.Provider();
@@ -306,11 +331,150 @@ public class AzureServiceBusProviderSubQueueTests
             "send batch" => provider.SendMessagesAsync("orders", [message]),
             "receive" => provider.ReceiveMessagesAsync("orders"),
             "peek" => provider.PeekMessagesAsync("orders"),
+            "schedule" => provider.SendMessageAsync("events", new SendMessageRequest { Body = "b", ScheduledEnqueueTime = DateTimeOffset.UtcNow.AddMinutes(10) }),
             _ => provider.SearchMessagesAsync("orders", new MessageSearchRequest { Query = "x" })
         });
 
         Assert.Equal("The entity is disabled for this operation.", error.Message);
         Assert.Same(disabled, error.InnerException);
+    }
+
+    private const string DuplicateDetectionRefusal = "The target detects duplicates; a copy with the same message id would be dropped. Nothing was sent or removed.";
+    private const string SettingsUnreadable = "The settings of the entity could not be read; the connection needs the Manage right for this. Nothing was sent or removed.";
+
+    private static QueueProperties DetectingQueue(string name) => ServiceBusModelFactory.QueueProperties(
+        name: name, lockDuration: TimeSpan.FromSeconds(30), maxSizeInMegabytes: 1024, requiresDuplicateDetection: true,
+        requiresSession: false, defaultMessageTimeToLive: TimeSpan.FromDays(1), autoDeleteOnIdle: TimeSpan.MaxValue,
+        deadLetteringOnMessageExpiration: false, duplicateDetectionHistoryTimeWindow: TimeSpan.FromMinutes(10),
+        maxDeliveryCount: 10, enableBatchedOperations: true, status: EntityStatus.Active, forwardTo: null,
+        forwardDeadLetteredMessagesTo: null, userMetadata: "", enablePartitioning: false, maxMessageSizeInKilobytes: 256);
+
+    private static TopicProperties DetectingTopic(string name) => ServiceBusModelFactory.TopicProperties(
+        name: name, maxSizeInMegabytes: 1024, requiresDuplicateDetection: true, defaultMessageTimeToLive: TimeSpan.FromDays(1),
+        autoDeleteOnIdle: TimeSpan.MaxValue, duplicateDetectionHistoryTimeWindow: TimeSpan.FromMinutes(10),
+        enableBatchedOperations: true, status: EntityStatus.Active, enablePartitioning: false);
+
+    /// <summary>A broker whose queue and topic named "orders" detect duplicates.</summary>
+    private static FakeBroker DetectingBroker()
+    {
+        var broker = new FakeBroker();
+        broker.Admin.Setup(a => a.GetQueueAsync("orders", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Response.FromValue(DetectingQueue("orders"), Mock.Of<Response>()));
+        broker.Admin.Setup(a => a.GetTopicAsync("orders", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Response.FromValue(DetectingTopic("orders"), Mock.Of<Response>()));
+        return broker;
+    }
+
+    private static void AssertNothingSentOrRemoved(FakeBroker broker, string because)
+    {
+        broker.Sender.Verify(s => s.SendMessageAsync(It.IsAny<ServiceBusMessage>(), It.IsAny<CancellationToken>()), Times.Never, because);
+        broker.Receiver.Verify(r => r.CompleteMessageAsync(It.IsAny<ServiceBusReceivedMessage>(), It.IsAny<CancellationToken>()), Times.Never, because);
+        Assert.True(broker.Receivers.Count == 0, $"{because} Receivers opened: {string.Join(", ", broker.Receivers)}");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("audit")]
+    public async Task A_single_resubmit_into_a_queue_or_topic_that_detects_duplicates_is_refused_with_the_fixed_text_and_sends_and_removes_nothing(string? subscription)
+    {
+        var broker = DetectingBroker();
+        broker.Receiver.Setup(r => r.PeekMessagesAsync(1, 7, It.IsAny<CancellationToken>())).ReturnsAsync(Batch(Msg(7)));
+
+        var error = await Assert.ThrowsAsync<InvalidEntityConfigurationException>(() =>
+            broker.Provider().ResubmitDeadLetterMessageAsync("orders", 7, subscription));
+
+        Assert.True(error.Message == DuplicateDetectionRefusal,
+            $"A single resubmit with the original id into a target that detects duplicates must be refused with the fixed text; it said: {error.Message}");
+        AssertNothingSentOrRemoved(broker, "A refused single resubmit sends nothing and removes nothing from the dead-letter queue.");
+    }
+
+    [Fact]
+    public async Task A_single_resubmit_whose_target_settings_cannot_be_read_is_refused_with_the_Manage_text_and_no_broker_text()
+    {
+        var broker = new FakeBroker();
+        broker.Admin.Setup(a => a.GetQueueAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ThrowsAsync(new ServiceBusException(Sentinel, ServiceBusFailureReason.ServiceTimeout));
+
+        var error = await Assert.ThrowsAsync<InvalidEntityConfigurationException>(() =>
+            broker.Provider().ResubmitDeadLetterMessageAsync("orders", 7));
+
+        Assert.True(error.Message == SettingsUnreadable,
+            $"A single resubmit that cannot read its target's settings must be refused with the Manage text; it said: {error.Message}");
+        AssertNothingSentOrRemoved(broker, "A single resubmit that cannot read its target's settings sends nothing and removes nothing.");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("audit")]
+    public async Task A_single_resubmit_with_a_new_id_into_a_target_that_detects_duplicates_sends_the_copy_with_a_new_id_keeps_the_original_and_completes_the_source(string? subscription)
+    {
+        var broker = DetectingBroker();
+        var original = ServiceBusModelFactory.ServiceBusReceivedMessage(body: BinaryData.FromString("b"), messageId: "order-7", sequenceNumber: 7);
+        broker.Receiver.Setup(r => r.PeekMessagesAsync(1, 7, It.IsAny<CancellationToken>())).ReturnsAsync(Batch(original));
+        broker.Receiver.Setup(r => r.ReceiveMessagesAsync(It.IsAny<int>(), It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>())).ReturnsAsync(Batch(original));
+        var sent = new List<ServiceBusMessage>();
+        broker.Sender.Setup(s => s.SendMessageAsync(It.IsAny<ServiceBusMessage>(), It.IsAny<CancellationToken>()))
+            .Callback((ServiceBusMessage m, CancellationToken _) => sent.Add(m)).Returns(Task.CompletedTask);
+
+        await broker.Provider().ResubmitDeadLetterMessageAsync("orders", 7, subscription, newMessageIdOnDuplicateDetection: true);
+
+        var copy = Assert.Single(sent);
+        Assert.True(copy.MessageId != "order-7" && Guid.TryParse(copy.MessageId, out _),
+            $"The copy must carry a new message id so the target does not drop it; it carried {copy.MessageId}");
+        Assert.True(copy.ApplicationProperties.TryGetValue(AzureServiceBusProvider.OriginalMessageIdProperty, out var kept) && (string)kept == "order-7",
+            "The copy must keep the original message id in x-original-message-id.");
+        broker.Receiver.Verify(r => r.CompleteMessageAsync(original, It.IsAny<CancellationToken>()), Times.Once,
+            "After the copy was sent, the original is completed in the dead-letter queue.");
+    }
+
+    private static ServiceBusReceivedMessage Delivered(long sequenceNumber, int deliveryCount) =>
+        ServiceBusModelFactory.ServiceBusReceivedMessage(body: BinaryData.FromString($"body-{sequenceNumber}"), messageId: $"order-{sequenceNumber}",
+            sequenceNumber: sequenceNumber, deliveryCount: deliveryCount);
+
+    [Fact]
+    public async Task The_public_move_hands_the_core_the_new_ids_and_the_max_delivery_count_it_read()
+    {
+        var broker = new FakeBroker();
+        broker.Admin.Setup(a => a.GetQueueAsync("orders", It.IsAny<CancellationToken>())).ReturnsAsync(Response.FromValue(ServiceBusModelFactory.QueueProperties(
+            name: "orders", lockDuration: TimeSpan.FromSeconds(30), maxSizeInMegabytes: 1024, requiresDuplicateDetection: false,
+            requiresSession: false, defaultMessageTimeToLive: TimeSpan.FromDays(1), autoDeleteOnIdle: TimeSpan.MaxValue,
+            deadLetteringOnMessageExpiration: false, duplicateDetectionHistoryTimeWindow: TimeSpan.FromMinutes(10),
+            maxDeliveryCount: 3, enableBatchedOperations: true, status: EntityStatus.Active, forwardTo: null,
+            forwardDeadLetteredMessagesTo: null, userMetadata: "", enablePartitioning: false, maxMessageSizeInKilobytes: 256), Mock.Of<Response>()));
+        broker.Admin.Setup(a => a.GetQueueAsync("archive", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Response.FromValue(DetectingQueue("archive"), Mock.Of<Response>()));
+        var cycles = new Queue<IReadOnlyList<ServiceBusReceivedMessage>>([Batch(Delivered(10, 2), Delivered(1, 1)), Batch(Delivered(2, 1))]);
+        broker.Receiver.Setup(r => r.ReceiveMessagesAsync(It.IsAny<int>(), It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => cycles.Count > 0 ? cycles.Dequeue() : Batch());
+        var sent = new List<ServiceBusMessage>();
+        broker.Sender.Setup(s => s.CreateMessageBatchAsync(It.IsAny<CancellationToken>()))
+            .Returns(() => new ValueTask<ServiceBusMessageBatch>(ServiceBusModelFactory.ServiceBusMessageBatch(long.MaxValue, sent, new CreateMessageBatchOptions(), _ => true)));
+
+        var result = await broker.Provider().MoveMessagesAsync("orders", "archive", [1, 2], newMessageIdOnDuplicateDetection: true);
+
+        var copy = Assert.Single(sent);
+        Assert.True(copy.MessageId != "order-1" && result.NewMessageIds.SequenceEqual([new KeyValuePair<long, string>(1, copy.MessageId)]),
+            $"A move that opted in to new ids into a duplicate-detecting target must send the copy with a new id and report it; sent {copy.MessageId}, reported {string.Join(", ", result.NewMessageIds)}");
+        Assert.True(result.Failures.Select(f => (f.SequenceNumber, f.Error)).SequenceEqual([(2L, "Not reached: going on would have sent unselected messages past their max delivery count into the dead-letter queue. Nothing was sent or removed.")]),
+            $"The move must stop before an unselected message reaches the max delivery count it read; failures: {string.Join("; ", result.Failures.Select(f => $"{f.SequenceNumber}: {f.Error}"))}");
+    }
+
+    [Fact]
+    public async Task A_dead_letter_delete_or_resubmit_never_reads_the_source_settings_so_a_connection_without_Manage_can_run_it()
+    {
+        var broker = new FakeBroker();
+        broker.Admin.Setup(a => a.GetQueueAsync("orders", It.IsAny<CancellationToken>())).ThrowsAsync(new UnauthorizedAccessException("no Manage"));
+        broker.Admin.Setup(a => a.GetSubscriptionAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>())).ThrowsAsync(new UnauthorizedAccessException("no Manage"));
+        broker.Receiver.Setup(r => r.ReceiveMessagesAsync(It.IsAny<int>(), It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>())).ReturnsAsync(Batch(Msg(1)));
+        var provider = broker.Provider();
+
+        var queueDelete = await provider.DeleteMessagesAsync("orders", [1], MessageSubQueue.DeadLetter);
+        var subscriptionDelete = await provider.DeleteMessagesAsync("events", [1], MessageSubQueue.DeadLetter, "audit");
+        var subscriptionResubmit = await provider.ResubmitDeadLetterMessagesAsync("events", [1], MessageSubQueue.DeadLetter, "audit");
+
+        Assert.True(new[] { queueDelete, subscriptionDelete, subscriptionResubmit }.All(r => r.SuccessCount == 1 && r.FailureCount == 0),
+            "A delete or resubmit on a dead-letter queue has no delivery limit to read, so it must run without reading the source's settings.");
+        broker.Admin.Verify(a => a.GetSubscriptionAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never,
+            "A dead-letter delete or resubmit never reads the source's max delivery count.");
     }
 
     [Fact]
@@ -383,6 +547,28 @@ public class AzureServiceBusProviderSubQueueTests
             result.Failures.Select(f => (f.SequenceNumber, f.Error)).OrderBy(f => f.SequenceNumber).ToArray());
         Assert.Equal(new long[] { 1 }, completed.ToArray());
         sender.Verify(s => s.CreateMessageBatchAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
+    }
+
+    [Theory]
+    [InlineData("resubmit")]
+    [InlineData("move")]
+    public async Task A_batch_the_broker_refuses_midway_as_disabled_is_never_listed_with_a_new_message_id(string operation)
+    {
+        var receiver = ReceiverFailingAfter([Batch(Msg(1)), Batch(Msg(2), Msg(3))], Broker(ServiceBusFailureReason.ServiceTimeout));
+        receiver.Setup(r => r.CompleteMessageAsync(It.IsAny<ServiceBusReceivedMessage>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        var sender = new Mock<ServiceBusSender>();
+        sender.Setup(s => s.CreateMessageBatchAsync(It.IsAny<CancellationToken>())).Returns(() => new ValueTask<ServiceBusMessageBatch>(NewTestBatch()));
+        sender.SetupSequence(s => s.SendMessagesAsync(It.IsAny<ServiceBusMessageBatch>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask)
+            .Throws(Broker(ServiceBusFailureReason.MessagingEntityDisabled));
+
+        var result = operation == "resubmit"
+            ? await AzureServiceBusProvider.ResubmitCoreAsync(receiver.Object, sender.Object, [1, 2, 3], CancellationToken.None, newMessageIds: true)
+            : await AzureServiceBusProvider.MoveCoreAsync(receiver.Object, sender.Object, [1, 2, 3], CancellationToken.None, newMessageIds: true);
+
+        Assert.Equal(new long[] { 1 }, result.NewMessageIds.Keys.OrderBy(k => k).ToArray());
+        Assert.True(!result.NewMessageIds.ContainsKey(2) && !result.NewMessageIds.ContainsKey(3),
+            "A batch the broker refused as disabled was not sent, so none of it may be listed with a new message id.");
     }
 
     [Theory]
@@ -571,6 +757,82 @@ public class AzureServiceBusProviderSubQueueTests
         broker.Sender.Verify(s => s.CancelScheduledMessagesAsync(numbers, It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    [Fact]
+    public async Task A_scheduled_send_returns_the_sequence_number_the_broker_gave_it_and_a_send_without_a_time_returns_none()
+    {
+        var broker = new FakeBroker();
+        var due = DateTimeOffset.UtcNow.AddMinutes(10);
+        broker.Sender.Setup(s => s.ScheduleMessageAsync(It.IsAny<ServiceBusMessage>(), due, It.IsAny<CancellationToken>())).ReturnsAsync(42L);
+        var provider = broker.Provider();
+
+        var scheduled = await provider.SendMessageAsync("events", new SendMessageRequest { Body = "later", ScheduledEnqueueTime = due });
+        var sentNow = await provider.SendMessageAsync("events", new SendMessageRequest { Body = "now" });
+
+        Assert.Equal<(long?, long?)>((42L, null), (scheduled, sentNow));
+        broker.Sender.Verify(s => s.ScheduleMessageAsync(It.Is<ServiceBusMessage>(m => m.Body.ToString() == "later"), due, It.IsAny<CancellationToken>()), Times.Once);
+        broker.Sender.Verify(s => s.SendMessageAsync(It.Is<ServiceBusMessage>(m => m.Body.ToString() == "now"), It.IsAny<CancellationToken>()), Times.Once);
+        broker.Client.Verify(c => c.CreateSender("events"), Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task A_scheduled_send_the_broker_refuses_for_another_reason_throws_its_exception_and_returns_no_number()
+    {
+        var broker = new FakeBroker();
+        broker.Sender.Setup(s => s.ScheduleMessageAsync(It.IsAny<ServiceBusMessage>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(Broker(ServiceBusFailureReason.ServiceTimeout));
+
+        var error = await Assert.ThrowsAsync<ServiceBusException>(() => broker.Provider().SendMessageAsync("events",
+            new SendMessageRequest { Body = "later", ScheduledEnqueueTime = DateTimeOffset.UtcNow.AddMinutes(10) }));
+
+        Assert.Equal(ServiceBusFailureReason.ServiceTimeout, error.Reason);
+        broker.Sender.Verify(s => s.SendMessageAsync(It.IsAny<ServiceBusMessage>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Cancelling_scheduled_messages_of_a_topic_uses_the_topic_sender_and_reports_each_number_not_cancelled()
+    {
+        var broker = new FakeBroker();
+        var calls = new List<long[]>();
+        broker.Sender.Setup(s => s.CancelScheduledMessagesAsync(It.IsAny<IEnumerable<long>>(), It.IsAny<CancellationToken>()))
+            .Returns((IEnumerable<long> numbers, CancellationToken _) =>
+            {
+                calls.Add(numbers.ToArray());
+                return numbers.Contains(13) ? Task.FromException(Broker(ServiceBusFailureReason.MessageNotFound)) : Task.CompletedTask;
+            });
+
+        var result = await broker.Provider().CancelScheduledMessagesAsync("events", [12, 13, 14]);
+
+        Assert.Equal(2, result.SuccessCount);
+        Assert.Equal(new[] { (13L, "This message is not scheduled any more.") }, FailuresOf(result));
+        Assert.Equal(new[] { new long[] { 12, 13, 14 }, [12], [13], [14] }, calls.ToArray());
+        broker.Client.Verify(c => c.CreateSender("events"), Times.Once);
+    }
+
+    [Fact]
+    public async Task A_failing_cancel_call_on_a_topic_fails_every_number_with_the_fixed_sentence()
+    {
+        var broker = new FakeBroker();
+        broker.Sender.Setup(s => s.CancelScheduledMessagesAsync(It.IsAny<IEnumerable<long>>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(Broker(ServiceBusFailureReason.ServiceTimeout));
+
+        var result = await broker.Provider().CancelScheduledMessagesAsync("events", [12, 13]);
+
+        Assert.Equal(0, result.SuccessCount);
+        Assert.Equal(new[] { (12L, CancelFailed), (13L, CancelFailed) }, FailuresOf(result));
+    }
+
+    [Fact]
+    public async Task A_cancel_of_501_numbers_on_a_topic_is_refused_before_the_topic_sender_is_created()
+    {
+        var broker = new FakeBroker();
+
+        var error = await Assert.ThrowsAsync<InvalidEntityConfigurationException>(() =>
+            broker.Provider().CancelScheduledMessagesAsync("events", Enumerable.Range(1, 501).Select(i => (long)i).ToArray()));
+
+        Assert.Equal("sequenceNumbers must hold 1 to 500 sequence numbers.", error.Message);
+        broker.Client.Verify(c => c.CreateSender(It.IsAny<string>()), Times.Never);
+    }
+
     [Theory]
     [InlineData(MessageSubQueue.Active)]
     [InlineData(MessageSubQueue.DeadLetter)]
@@ -719,5 +981,297 @@ public class AzureServiceBusProviderSubQueueTests
 
         Assert.Equal(new[] { (1L, duplicate), (2L, duplicate), (3L, Disabled), (4L, Disabled) },
             result.Failures.Select(f => (f.SequenceNumber, f.Error)).OrderBy(f => f.SequenceNumber).ToArray());
+    }
+
+    private const string NotDeferred = "Not found as a deferred message.";
+    private const string DeferredNotHandled = "Nothing was done to this deferred message: the call stopped on a broker failure.";
+    private const string DeferredDuplicate = "Message was resubmitted but could not be removed from the deferred messages and may be duplicated on retry";
+
+    private static ServiceBusReceivedMessage Deferred(long sequenceNumber) => Msg(sequenceNumber, ServiceBusMessageState.Deferred);
+
+    /// <summary>A broker whose deferred messages are <paramref name="deferred"/>: a call naming any other number fails whole with MessageNotFound, as the broker does.</summary>
+    private static FakeBroker DeferredBroker(List<long[]> calls, params long[] deferred)
+    {
+        var broker = new FakeBroker();
+        broker.Receiver.Setup(r => r.ReceiveDeferredMessagesAsync(It.IsAny<IEnumerable<long>>(), It.IsAny<CancellationToken>()))
+            .Returns((IEnumerable<long> numbers, CancellationToken _) =>
+            {
+                var asked = numbers.ToArray();
+                calls.Add(asked);
+                return asked.All(deferred.Contains)
+                    ? Task.FromResult<IReadOnlyList<ServiceBusReceivedMessage>>(asked.Select(Deferred).ToList())
+                    : Task.FromException<IReadOnlyList<ServiceBusReceivedMessage>>(Broker(ServiceBusFailureReason.MessageNotFound));
+            });
+        return broker;
+    }
+
+    private static Task<BatchOperationResult> RunDeferred(AzureServiceBusProvider provider, string operation, long[] numbers, string? subscription = null, CancellationToken token = default) =>
+        operation switch
+        {
+            "delete" => provider.DeleteDeferredMessagesAsync("orders", numbers, subscription, token),
+            "resubmit" => provider.ResubmitDeferredMessagesAsync("orders", numbers, subscription, cancellationToken: token),
+            _ => provider.DeadLetterDeferredMessagesAsync("orders", numbers, subscription, "bad-data", "rejected by the operator", token)
+        };
+
+    [Theory]
+    [InlineData("delete", null, "orders")]
+    [InlineData("resubmit", "audit", "orders/subscriptions/audit")]
+    [InlineData("deadletter", "audit", "orders/subscriptions/audit")]
+    public async Task Deferred_messages_are_received_by_sequence_number_from_the_active_queue_in_one_call_and_each_is_settled(string operation, string? subscription, string path)
+    {
+        var calls = new List<long[]>();
+        var broker = DeferredBroker(calls, 4, 5);
+
+        var result = await RunDeferred(broker.Provider(), operation, [4, 5], subscription);
+
+        Assert.True(result.SuccessCount == 2 && result.FailureCount == 0, $"Both deferred messages must be handled; failures: {string.Join("; ", FailuresOf(result))}");
+        Assert.Equal((path, SubQueue.None), Assert.Single(broker.Receivers));
+        Assert.Equal(new[] { new long[] { 4, 5 } }, calls.ToArray());
+    }
+
+    [Theory]
+    [InlineData("delete")]
+    [InlineData("resubmit")]
+    [InlineData("deadletter")]
+    public async Task A_sequence_number_that_is_not_a_deferred_message_is_reported_not_found_as_a_deferred_message_and_the_others_are_still_handled(string operation)
+    {
+        var calls = new List<long[]>();
+        var broker = DeferredBroker(calls, 4, 6);
+
+        var result = await RunDeferred(broker.Provider(), operation, [4, 5, 6]);
+
+        Assert.True(FailuresOf(result).SequenceEqual(new[] { (5L, NotDeferred) }),
+            $"A number the broker does not hold as a deferred message must be reported 'not found as a deferred message', never skipped; got {string.Join("; ", FailuresOf(result))}");
+        Assert.Equal(2, result.SuccessCount);
+        Assert.Equal(new[] { new long[] { 4, 5, 6 }, [4], [5], [6] }, calls.ToArray());
+    }
+
+    [Fact]
+    public async Task A_deferred_number_the_broker_answers_without_a_message_is_reported_not_found_as_a_deferred_message()
+    {
+        var broker = new FakeBroker();
+        broker.Receiver.Setup(r => r.ReceiveDeferredMessagesAsync(It.IsAny<IEnumerable<long>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<ServiceBusReceivedMessage> { Deferred(4) });
+
+        var result = await broker.Provider().DeleteDeferredMessagesAsync("orders", [4, 5]);
+
+        Assert.True(FailuresOf(result).SequenceEqual(new[] { (5L, NotDeferred) }),
+            $"A number the broker answered nothing for must be reported, never skipped; got {string.Join("; ", FailuresOf(result))}");
+        broker.Receiver.Verify(r => r.CompleteMessageAsync(It.Is<ServiceBusReceivedMessage>(m => m.SequenceNumber == 4), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Theory]
+    [InlineData("delete")]
+    [InlineData("resubmit")]
+    [InlineData("deadletter")]
+    public async Task A_receive_of_deferred_messages_that_fails_reports_every_number_with_the_fixed_text_and_settles_nothing(string operation)
+    {
+        var broker = new FakeBroker();
+        broker.Receiver.Setup(r => r.ReceiveDeferredMessagesAsync(It.IsAny<IEnumerable<long>>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ServiceBusException(Sentinel, ServiceBusFailureReason.ServiceTimeout));
+
+        var result = await RunDeferred(broker.Provider(), operation, [4, 5]);
+
+        Assert.True(FailuresOf(result).SequenceEqual(new[] { (4L, DeferredNotHandled), (5L, DeferredNotHandled) }),
+            $"A failed receive of deferred messages must report each number with the fixed text and no broker text; got {string.Join("; ", FailuresOf(result))}");
+        broker.Receiver.Verify(r => r.CompleteMessageAsync(It.IsAny<ServiceBusReceivedMessage>(), It.IsAny<CancellationToken>()), Times.Never);
+        broker.Sender.Verify(s => s.SendMessagesAsync(It.IsAny<ServiceBusMessageBatch>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task A_deferred_resubmit_sends_the_copies_before_it_completes_the_deferred_messages()
+    {
+        var order = new List<string>();
+        var broker = DeferredBroker(new List<long[]>(), 4, 5);
+        broker.Sender.Setup(s => s.SendMessagesAsync(It.IsAny<ServiceBusMessageBatch>(), It.IsAny<CancellationToken>()))
+            .Callback(() => order.Add("send")).Returns(Task.CompletedTask);
+        broker.Receiver.Setup(r => r.CompleteMessageAsync(It.IsAny<ServiceBusReceivedMessage>(), It.IsAny<CancellationToken>()))
+            .Callback((ServiceBusReceivedMessage m, CancellationToken _) => order.Add($"complete {m.SequenceNumber}")).Returns(Task.CompletedTask);
+
+        var result = await broker.Provider().ResubmitDeferredMessagesAsync("orders", [4, 5]);
+
+        Assert.True(order.SequenceEqual(new[] { "send", "complete 4", "complete 5" }),
+            $"A deferred resubmit must send first and complete after; the broker saw {string.Join(", ", order)}");
+        Assert.Equal(2, result.SuccessCount);
+        broker.Client.Verify(c => c.CreateSender("orders"), Times.Once);
+    }
+
+    [Fact]
+    public async Task A_deferred_resubmit_whose_complete_fails_after_the_send_reports_a_possible_duplicate_and_never_sends_again()
+    {
+        var broker = DeferredBroker(new List<long[]>(), 4, 5);
+        broker.Receiver.Setup(r => r.CompleteMessageAsync(It.Is<ServiceBusReceivedMessage>(m => m.SequenceNumber == 5), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(Broker(ServiceBusFailureReason.MessageLockLost));
+
+        var result = await broker.Provider().ResubmitDeferredMessagesAsync("orders", [4, 5]);
+
+        var failure = Assert.Single(result.Failures);
+        Assert.True(failure.SequenceNumber == 5 && failure.Error.StartsWith(DeferredDuplicate),
+            $"A deferred message sent and not completed must be reported as a possible duplicate; got {failure.SequenceNumber}: {failure.Error}");
+        Assert.Equal(1, result.SuccessCount);
+        broker.Sender.Verify(s => s.SendMessagesAsync(It.IsAny<ServiceBusMessageBatch>(), It.IsAny<CancellationToken>()), Times.Once,
+            "A possible duplicate is never sent again.");
+    }
+
+    [Fact]
+    public async Task A_deferred_resubmit_whose_send_fails_reports_each_message_handed_to_the_send_as_a_possible_duplicate_completes_nothing_and_carries_no_broker_text()
+    {
+        var broker = DeferredBroker(new List<long[]>(), 4, 5);
+        broker.Sender.Setup(s => s.SendMessagesAsync(It.IsAny<ServiceBusMessageBatch>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ServiceBusException(Sentinel, ServiceBusFailureReason.ServiceTimeout));
+
+        var result = await broker.Provider().ResubmitDeferredMessagesAsync("orders", [4, 5]);
+
+        Assert.True(result.Failures.Count == 2 && result.Failures.All(f => f.Error.StartsWith(DeferredDuplicate)),
+            "A send that failed may have reached the broker, so each message handed to it is a possible duplicate, never 'nothing was done': "
+            + string.Join("; ", result.Failures.Select(f => $"{f.SequenceNumber}: {f.Error}")));
+        Assert.DoesNotContain(result.Failures, f => f.Error.Contains(Sentinel));
+        broker.Receiver.Verify(r => r.CompleteMessageAsync(It.IsAny<ServiceBusReceivedMessage>(), It.IsAny<CancellationToken>()), Times.Never,
+            "Nothing is completed when the send failed.");
+    }
+
+    [Fact]
+    public async Task A_deferred_resubmit_whose_complete_fails_carries_no_broker_text()
+    {
+        var broker = DeferredBroker(new List<long[]>(), 4);
+        broker.Receiver.Setup(r => r.CompleteMessageAsync(It.IsAny<ServiceBusReceivedMessage>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ServiceBusException(Sentinel, ServiceBusFailureReason.MessageLockLost));
+
+        var result = await broker.Provider().ResubmitDeferredMessagesAsync("orders", [4]);
+
+        var failure = Assert.Single(result.Failures);
+        Assert.True(failure.Error.StartsWith(DeferredDuplicate) && !failure.Error.Contains(Sentinel),
+            $"The possible duplicate is reported in the fixed text, never with the broker's; got {failure.Error}");
+    }
+
+    [Theory]
+    [InlineData(ServiceBusFailureReason.MessagingEntityDisabled, "The entity is disabled for this operation.")]
+    [InlineData(ServiceBusFailureReason.ServiceTimeout, DeferredNotHandled)]
+    public async Task A_deferred_call_whose_second_batch_fails_keeps_what_the_first_settled_and_reports_the_rest_without_a_second_receive(ServiceBusFailureReason reason, string expected)
+    {
+        var numbers = Enumerable.Range(1, 150).Select(n => (long)n).ToArray();
+        var broker = new FakeBroker();
+        var receives = 0;
+        broker.Receiver.Setup(r => r.ReceiveDeferredMessagesAsync(It.IsAny<IEnumerable<long>>(), It.IsAny<CancellationToken>()))
+            .Returns((IEnumerable<long> asked, CancellationToken _) => ++receives == 1
+                ? Task.FromResult<IReadOnlyList<ServiceBusReceivedMessage>>(asked.Select(Deferred).ToList())
+                : Task.FromException<IReadOnlyList<ServiceBusReceivedMessage>>(Broker(reason)));
+
+        var result = await broker.Provider().DeleteDeferredMessagesAsync("orders", numbers);
+
+        Assert.Equal(100, result.SuccessCount);
+        Assert.True(result.Failures.Select(f => f.SequenceNumber).SequenceEqual(numbers[100..]) && result.Failures.All(f => f.Error == expected),
+            $"Numbers 101 to 150 are reported with '{expected}' and the first batch's outcomes are kept; got {result.Failures.Count} failures.");
+        Assert.Equal(2, receives);
+    }
+
+    [Fact]
+    public async Task A_deferred_resubmit_whose_target_settings_cannot_be_read_is_refused_with_the_Manage_text_and_receives_nothing()
+    {
+        var broker = DeferredBroker(new List<long[]>(), 4, 5);
+        broker.Admin.Setup(a => a.GetQueueAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ServiceBusException(Sentinel, ServiceBusFailureReason.ServiceTimeout));
+
+        var result = await broker.Provider().ResubmitDeferredMessagesAsync("orders", [4, 5]);
+
+        Assert.True(result.Failures.Count == 2 && result.Failures.All(f => f.Error.Contains("needs the Manage right") && !f.Error.Contains(Sentinel)),
+            "A deferred resubmit that cannot read whether the target detects duplicates refuses each number with the fixed Manage text.");
+        broker.Receiver.Verify(r => r.ReceiveDeferredMessagesAsync(It.IsAny<IEnumerable<long>>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task A_deferred_resubmit_into_a_target_that_detects_duplicates_is_refused_and_receives_nothing()
+    {
+        var broker = DetectingBroker();
+
+        var result = await broker.Provider().ResubmitDeferredMessagesAsync("orders", [4, 5], "audit");
+
+        Assert.Equal(new[] { (4L, DuplicateDetectionRefusal), (5L, DuplicateDetectionRefusal) }, FailuresOf(result));
+        broker.Receiver.Verify(r => r.ReceiveDeferredMessagesAsync(It.IsAny<IEnumerable<long>>(), It.IsAny<CancellationToken>()), Times.Never);
+        broker.Admin.Verify(a => a.GetSubscriptionAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never,
+            "A deferred message is received by its number, so no unselected message is received and the source's delivery limit is not read.");
+    }
+
+    [Fact]
+    public async Task A_deferred_dead_letter_writes_the_reason_and_description_and_a_failing_one_is_reported_with_the_fixed_text()
+    {
+        var broker = DeferredBroker(new List<long[]>(), 4, 5);
+        broker.Receiver.Setup(r => r.DeadLetterMessageAsync(It.Is<ServiceBusReceivedMessage>(m => m.SequenceNumber == 5), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ServiceBusException(Sentinel, ServiceBusFailureReason.ServiceTimeout));
+
+        var result = await broker.Provider().DeadLetterDeferredMessagesAsync("orders", [4, 5], reason: "bad-data", description: "rejected by the operator");
+
+        Assert.Equal(new[] { (5L, "The broker did not dead-letter this deferred message.") }, FailuresOf(result));
+        Assert.Equal(1, result.SuccessCount);
+        broker.Receiver.Verify(r => r.DeadLetterMessageAsync(It.Is<ServiceBusReceivedMessage>(m => m.SequenceNumber == 4), "bad-data", "rejected by the operator", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task A_deferred_delete_whose_complete_fails_reports_that_number_with_the_fixed_text_and_no_broker_text()
+    {
+        var broker = DeferredBroker(new List<long[]>(), 4, 5);
+        broker.Receiver.Setup(r => r.CompleteMessageAsync(It.Is<ServiceBusReceivedMessage>(m => m.SequenceNumber == 4), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ServiceBusException(Sentinel, ServiceBusFailureReason.ServiceTimeout));
+
+        var result = await broker.Provider().DeleteDeferredMessagesAsync("orders", [4, 5]);
+
+        Assert.Equal(new[] { (4L, "The broker did not remove this deferred message.") }, FailuresOf(result));
+        Assert.Equal(1, result.SuccessCount);
+    }
+
+    [Theory]
+    [InlineData("delete")]
+    [InlineData("resubmit")]
+    [InlineData("deadletter")]
+    public async Task A_deferred_call_on_an_entity_disabled_before_anything_was_done_throws_the_neutral_exception(string operation)
+    {
+        var broker = new FakeBroker();
+        broker.Receiver.Setup(r => r.ReceiveDeferredMessagesAsync(It.IsAny<IEnumerable<long>>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(Broker(ServiceBusFailureReason.MessagingEntityDisabled));
+
+        var error = await Assert.ThrowsAsync<EntityDisabledException>(() => RunDeferred(broker.Provider(), operation, [4]));
+
+        Assert.Equal(Disabled, error.Message);
+    }
+
+    [Fact]
+    public async Task A_deferred_call_above_1000_sequence_numbers_is_refused_naming_the_field_before_the_broker_is_called()
+    {
+        var broker = new FakeBroker();
+        var numbers = Enumerable.Range(1, 1001).Select(i => (long)i).ToArray();
+
+        var error = await Assert.ThrowsAsync<InvalidEntityConfigurationException>(() => broker.Provider().DeleteDeferredMessagesAsync("orders", numbers));
+
+        Assert.True(error.Message == "sequenceNumbers must hold 1 to 1000 sequence numbers.",
+            $"A deferred call is bounded at 1000 sequence numbers; it said: {error.Message}");
+        Assert.Empty(broker.Receivers);
+    }
+
+    [Fact]
+    public async Task A_deferred_call_of_1000_numbers_reaches_the_broker_in_batches_of_100()
+    {
+        var calls = new List<long[]>();
+        var numbers = Enumerable.Range(1, 1000).Select(i => (long)i).ToArray();
+        var broker = DeferredBroker(calls, numbers);
+
+        var result = await broker.Provider().DeleteDeferredMessagesAsync("orders", numbers);
+
+        Assert.Equal(1000, result.SuccessCount);
+        Assert.Equal(Enumerable.Repeat(100, 10), calls.Select(c => c.Length));
+    }
+
+    [Fact]
+    public async Task The_caller_token_stops_a_deferred_call_before_the_next_batch_is_received()
+    {
+        using var cts = new CancellationTokenSource();
+        var calls = new List<long[]>();
+        var numbers = Enumerable.Range(1, 150).Select(i => (long)i).ToArray();
+        var broker = DeferredBroker(calls, numbers);
+        broker.Receiver.Setup(r => r.CompleteMessageAsync(It.IsAny<ServiceBusReceivedMessage>(), It.IsAny<CancellationToken>()))
+            .Callback(() => cts.Cancel()).Returns(Task.CompletedTask);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => broker.Provider().DeleteDeferredMessagesAsync("orders", numbers, cancellationToken: cts.Token));
+
+        Assert.True(calls.Count == 1, $"The caller's token must stop the call before the next batch is received; receives: {calls.Count}");
     }
 }

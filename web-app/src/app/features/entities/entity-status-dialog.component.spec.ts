@@ -2,6 +2,8 @@ import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { of, throwError } from 'rxjs';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { MatTooltip } from '@angular/material/tooltip';
+import { By } from '@angular/platform-browser';
 import { ConnectionGroupService, ConnectionService, EntitySelectionService, QueueService, TopicService } from '../../core/services';
 import { EntityStatusDialogComponent, EntityStatusDialogData } from './entity-status-dialog.component';
 
@@ -32,7 +34,7 @@ describe('EntityStatusDialogComponent: enable and disable an entity', () => {
           provide: ConnectionService,
           useValue: { currentTarget: 'ns.example.net', currentConnectionId: 'c-1', getConnections: () => of([{ id: 'c-1', name: 'contoso-prod', environmentId: 'g-env' }]) }
         },
-        { provide: ConnectionGroupService, useValue: { getGroups: () => of([{ id: 'g-env', name: 'Production', type: 'environment' }]) } }
+        { provide: ConnectionGroupService, useValue: { getGroups: () => of([{ id: 'g-env', name: 'Production', type: 'environment', isProduction: true }]) } }
       ]
     });
     fixture = TestBed.createComponent(EntityStatusDialogComponent);
@@ -75,6 +77,15 @@ describe('EntityStatusDialogComponent: enable and disable an entity', () => {
       open({ kind: 'subscription', entityName: 'billing', topicName: 'events', status: 'Active' });
       expect(options()).toStrictEqual(['Active', 'Receive disabled', 'Disabled']);
     });
+  });
+
+  it('as EntityAdmin.dc.html draws it: the choices sit in a fieldset whose legend "Status" a screen reader reads and the screen does not show', () => {
+    open({ kind: 'queue', entityName: 'orders', status: 'Active' });
+    const legend = el.querySelector('fieldset > legend');
+
+    expect(text(legend), 'the fieldset of the choices has the legend Status').toBe('Status');
+    expect(legend?.classList.contains('visually-hidden'), 'the legend is visually hidden, as drawn').toBe(true);
+    expect(legend?.parentElement?.querySelector('mat-radio-group'), 'the radio group sits in that fieldset').not.toBeNull();
   });
 
   it('Continue is disabled while the chosen status is the current one', () => {
@@ -181,5 +192,42 @@ describe('EntityStatusDialogComponent: enable and disable an entity', () => {
     expect(selection['refreshTree']).toHaveBeenCalledTimes(1);
     expect(selection['clearSelection']).toHaveBeenCalledTimes(1);
     expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  describe('as EntityAdmin.dc.html draws it', () => {
+    it('the choice: "Queue orders on <connection>, now Active", a "Current" tag on the current status, and Continue says why it is disabled', () => {
+      open({ kind: 'queue', entityName: 'orders', status: 'Active' });
+
+      expect(text(el.querySelector('.environment-line .where'))).toBe('Queue orders on contoso-prod (ns.example.net), now Active');
+      const current = Array.from(el.querySelectorAll('mat-radio-button')).filter(r => r.querySelector('.current-tag'));
+      expect(current.map(r => text(r.querySelector('b')))).toStrictEqual(['Active']);
+      expect(text(current[0].querySelector('.current-tag'))).toBe('Current');
+      const tooltip = fixture.debugElement.query(By.css('.continue-wrap')).injector.get(MatTooltip);
+      expect(button('Continue')!.disabled).toBe(true);
+      expect(tooltip.message).toBe('Choose a status other than the current one');
+
+      choose('Disabled');
+      expect(tooltip.message, 'no reason once another status is chosen').toBe('');
+    });
+
+    it('the confirmation: "orders on <connection>" under the title, the hint under the typed name, and the action in the error colour, Set Active too', () => {
+      open({ kind: 'queue', entityName: 'orders', status: 'Active' });
+      choose('Disabled');
+      click('Continue');
+
+      expect(text(el.querySelector('.environment-line .where'))).toBe('orders on contoso-prod (ns.example.net)');
+      expect(text(el.querySelector('.environment-line .where b'))).toBe('orders');
+      const chip = el.querySelector('.environment-line .environment-chip') as HTMLElement;
+      expect(chip.textContent?.replace('warning', '').trim(), 'the status confirmation opens with the PRODUCTION chip').toBe('PRODUCTION');
+      expect(chip.classList.contains('production'), 'a production environment takes the error container').toBe(true);
+      expect(text(el.querySelector('mat-hint'))).toBe('The button stays disabled until the name matches exactly.');
+      expect(button('Disable')!.classList.contains('danger')).toBe(true);
+      TestBed.resetTestingModule();
+
+      open({ kind: 'queue', entityName: 'orders', status: 'Disabled' });
+      choose('Active');
+      click('Continue');
+      expect(button('Set Active')!.classList.contains('danger'), 'Set Active in the error colour').toBe(true);
+    });
   });
 });

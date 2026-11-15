@@ -119,6 +119,10 @@ public class SessionsController : ControllerBase
         {
             return Conflict(new { message = ex.Message, code = "SessionStateChanged" });
         }
+        catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
+        {
+            return new EmptyResult();
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Session {Operation} failed for {EntityPath} session {SessionId}",

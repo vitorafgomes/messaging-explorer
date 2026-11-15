@@ -1,9 +1,9 @@
 ---
 title: "Electron Shell history"
-version: "1.0"
+version: "1.1"
 date: 2026-11-13
-updated: 2026-11-13
-changes: "v1.0: the version notes of the service page header"
+updated: 2026-11-14
+changes: "v1.1: dated entries above the version notes"
 page_type: reference
 status: active
 description: "What changed in the Electron Shell project and when, newest first, as the service page header recorded it until 2026-11-13."
@@ -15,6 +15,11 @@ reliability: high
 # Electron Shell history
 
 What changed when in the project [[pages/services/electron-shell|Electron Shell]] describes, newest first.
+
+## 2026-11-14
+
+- `open-dev-tools`, an IPC channel with no argument: it opens the developer tools of the main window only when the main window's own webContents asks, and does nothing when the window is gone (`web-app/electron/shell-helpers.js#openDevTools`); the preload exposes it as `openDevTools`. Ctrl+N, or Cmd+N on macOS, in every build, sends `navigate` `/connections` (`web-app/electron/shell-helpers.js#shellShortcut`). The `before-input-event` handler names each action, where before any action other than full screen toggled the developer tools.
+- Two IPC channels for the Settings screen, neither taking an argument: `get-data-file` answers the path of `data/workspace.json` under the user data folder, and `show-data-file` shows it in the file manager, answering an error when nothing is saved yet or the file manager refuses (`web-app/electron/shell-helpers.js#showDataFile`). Tests: four new shell tests, two of them where the call fails.
 
 ## Version notes until 2026-11-13
 

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using ServiceBusExplorer.Core.Abstractions;
+using ServiceBusExplorer.Core.Models;
 
 namespace ServiceBusExplorer.Api.Controllers;
 
@@ -21,6 +22,32 @@ internal static class EntityAdministrationResults
     public static BadRequestObjectResult DeleteAllOfTransferDeadLetter() => new(new { message = "all must be false for the transfer dead-letter queue." });
 
     public static BadRequestObjectResult ScheduledMessagesNotSupported() => new(new { message = "This provider does not support scheduled messages." });
+
+    public static BadRequestObjectResult DeferralNotSupported() => new(new { message = "This provider does not support deferred messages." });
+
+    public static BadRequestObjectResult ManualDeadLetterNotSupported() => new(new { message = "This provider does not support dead-lettering a message by sequence number." });
+
+    /// <summary>
+    /// 400 before the provider is called when a body names an encoding other than text or base64, when a base64 body
+    /// does not decode, or when the provider declares no binary body, so a base64 body is never sent as its text;
+    /// null when every body may be sent.
+    /// </summary>
+    public static BadRequestObjectResult? BodyNotAccepted(IMessagingProvider provider, IEnumerable<SendMessageRequest> messages)
+    {
+        foreach (var message in messages)
+        {
+            if (message.BodyEncoding is null or MessageBodyEncoding.Text)
+                continue;
+            if (message.BodyEncoding != MessageBodyEncoding.Base64)
+                return new(new { message = "bodyEncoding must be text or base64." });
+            if (!provider.Capabilities.SupportsBinaryBody)
+                return new(new { message = "This provider does not support a binary body." });
+            if (!Convert.TryFromBase64String(message.Body, new byte[message.Body.Length], out _))
+                return new(new { message = "A base64 body must be valid base64." });
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// 400 when the route reads the transfer dead-letter queue and the provider declares it does not have one;
@@ -60,17 +87,19 @@ internal static class EntityAdministrationResults
 
     /// <summary>
     /// 400 when <paramref name="value"/> is given and is not a whole number of 0 or more, or when it is given and the
-    /// provider cannot peek from a position; null otherwise, with <paramref name="fromSequenceNumber"/> null when the
-    /// value was absent.
+    /// provider cannot peek from a position, naming the queue or the dead-letter queue as <paramref name="subQueue"/> is;
+    /// null otherwise, with <paramref name="fromSequenceNumber"/> null when the value was absent.
     /// </summary>
-    public static BadRequestObjectResult? PeekPosition(IMessagingProvider provider, string? value, out long? fromSequenceNumber)
+    public static BadRequestObjectResult? PeekPosition(IMessagingProvider provider, MessageSubQueue subQueue, string? value, out long? fromSequenceNumber)
     {
         fromSequenceNumber = null;
         if (value is null) return null;
         if (!long.TryParse(value, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var position))
             return new(new { message = "fromSequenceNumber must be a whole number of 0 or more." });
         if (!provider.Capabilities.SupportsPeekFromSequenceNumber)
-            return new(new { message = "This provider cannot read the dead-letter queue from a position." });
+            return new(new { message = subQueue == MessageSubQueue.Active
+                ? "This provider cannot read the queue from a position."
+                : "This provider cannot read the dead-letter queue from a position." });
         fromSequenceNumber = position;
         return null;
     }

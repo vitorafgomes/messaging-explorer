@@ -22,7 +22,7 @@ describe('CancelScheduledDialogComponent', () => {
             getConnections: () => of([{ id: 'c-1', name: 'contoso-prod', environmentId: 'g-env' }])
           }
         },
-        { provide: ConnectionGroupService, useValue: { getGroups: () => of([{ id: 'g-env', name: 'Production', type: 'environment' }]) } }
+        { provide: ConnectionGroupService, useValue: { getGroups: () => of([{ id: 'g-env', name: 'Production', type: 'environment', isProduction: true }]) } }
       ]
     });
     const fixture = TestBed.createComponent(CancelScheduledDialogComponent);
@@ -45,6 +45,10 @@ describe('CancelScheduledDialogComponent', () => {
     expect(fact(el, 'Connection')).toBe('contoso-prod (ns.example.net)');
     expect(fact(el, 'Environment')).toBe('Production');
     expect(fact(el, 'Messages')).toBe('3 scheduled');
+    expect(text(el.querySelector('.environment-line .where')), 'as Messages.dc.html draws it: the queue on the connection').toBe('billing/invoices on contoso-prod (ns.example.net)');
+    const chip = el.querySelector('.environment-line .environment-chip') as HTMLElement;
+    expect(chip.textContent?.replace('warning', '').trim(), 'the cancel confirmation opens with the PRODUCTION chip').toBe('PRODUCTION');
+    expect(chip.classList.contains('production'), 'a production environment takes the error container').toBe(true);
   });
 
   it('more than one message: the confirm button stays disabled until the queue name is typed exactly', () => {
@@ -66,6 +70,21 @@ describe('CancelScheduledDialogComponent', () => {
     fixture.detectChanges();
     confirmButton().click();
     expect(close).toHaveBeenCalledWith(true);
+  });
+
+  it('says the button waits for the exact name, and the confirm carries the delete icon', () => {
+    const { el, confirmButton } = render({ queueName: 'billing/invoices', sequenceNumbers: [12, 13] });
+    expect(el.querySelector('mat-hint')?.textContent?.trim()).toBe('The button stays disabled until the name matches exactly.');
+    expect(confirmButton().querySelector('mat-icon')?.getAttribute('fonticon')).toBe('delete');
+  });
+
+  it('on a topic: names the topic, asks for the topic name, and offers no export it cannot do', () => {
+    const { el } = render({ queueName: 'billing/events', entityKind: 'topic', sequenceNumbers: [12, 13] });
+
+    expect(fact(el, 'Topic'), 'the facts name the topic, not a queue').toBe('billing/events');
+    expect(fact(el, 'Queue')).toBe('');
+    expect(text(el.querySelector('mat-label'))).toBe('Type the topic name to confirm');
+    expect(text(el.querySelector('.consequence'))).toBe('The messages are deleted before they are ever delivered. This cannot be undone.');
   });
 
   it('one message: no name to type, and the dialog names its sequence number', () => {

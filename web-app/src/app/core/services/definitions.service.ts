@@ -1,17 +1,22 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
-import { DefinitionCounts, DefinitionsImportResult, EntityDefinitionsDocument } from '../models';
+import { DefinitionCounts, DefinitionsImportResult, EntityDefinitionsDocument, NamespaceInfo } from '../models';
 
 /**
- * The definitions of the connected namespace: export to one document, a dry run of an import, and the import itself,
- * which creates only what does not exist.
+ * The connected namespace: its properties, read-only; its definitions, as an export to one document, a dry run of an
+ * import, and the import itself, which creates only what does not exist.
  */
 @Injectable({
   providedIn: 'root'
 })
 export class DefinitionsService {
   private api = inject(ApiService);
+
+  /** The namespace's tier, units, alias, times and largest message; unsubscribing cancels the read. */
+  properties(): Observable<NamespaceInfo> {
+    return this.api.get<NamespaceInfo>('namespace/properties');
+  }
 
   export(): Observable<EntityDefinitionsDocument> {
     return this.api.post<EntityDefinitionsDocument>('namespace/export', {});

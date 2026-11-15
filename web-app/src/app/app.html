@@ -1,25 +1,31 @@
 <mat-toolbar color="primary" class="app-toolbar">
   <nav aria-label="Main" class="main-nav">
     @for (item of navItems; track item.route) {
-      <a mat-button class="nav-link" [routerLink]="item.route" routerLinkActive="active-link" ariaCurrentWhenActive="page">{{ item.label }}</a>
+      <a mat-button class="nav-link" [routerLink]="item.route" routerLinkActive="active-link" ariaCurrentWhenActive="page"
+        [disabled]="!!item.needsConnection && !connected()" [disabledInteractive]="false">{{ item.label }}</a>
     }
   </nav>
+  <span class="nav-separator" aria-hidden="true"></span>
 
   @if (connectionStatus$ | async; as status) {
     @if (status.connected) {
-      <span class="connection-badge connected" [title]="status.namespace">
-        <mat-icon class="status-icon">check_circle</mat-icon>
-        <span class="badge-text">{{ status.namespace }}</span>
+      @if (environment()?.mark; as mark) {
+        <span class="environment"><span class="visually-hidden">Environment: </span><app-environment-chip [name]="mark.name" [isProduction]="mark.isProduction" /></span>
+      }
+      <span class="broker" [title]="status.namespace">
+        <mat-icon class="status-icon" aria-hidden="true">check_circle</mat-icon>
+        <span class="visually-hidden">Connected to </span>
+        <span class="broker-name">{{ status.namespace }}</span>
       </span>
     } @else {
-      <span class="connection-badge disconnected">
-        <mat-icon class="status-icon">cancel</mat-icon>
-        Disconnected
+      <span class="broker">
+        <mat-icon class="status-icon" aria-hidden="true">cancel</mat-icon>
+        <span class="broker-name">Disconnected</span>
       </span>
     }
+  } @else {
+    <span class="broker"></span>
   }
-
-  <span class="spacer"></span>
 
   @switch (updates.status()) {
     @case ('available') {
@@ -47,14 +53,22 @@
     }
   }
 
-  <app-resubmit-run-indicator />
-
   <!-- Notifications -->
-  <button mat-icon-button [matMenuTriggerFor]="notifMenu" matTooltip="Notifications"
-    [matBadge]="dlqService.alertCount()" [matBadgeHidden]="!dlqService.hasAlerts()" matBadgeColor="warn" matBadgeSize="small">
-    <mat-icon>notifications</mat-icon>
-  </button>
+  @let active = runs.activeRuns();
+  @if (active.length > 0) {
+    <button mat-button class="notifications running" [matMenuTriggerFor]="notifMenu" matTooltip="Notifications" [attr.aria-label]="notificationsLabel()">
+      <mat-icon>notifications</mat-icon>
+      <mat-progress-spinner mode="indeterminate" diameter="14" aria-hidden="true" />
+      <span aria-hidden="true">{{ active.length === 1 ? runPercent(active[0]) + '%' : active.length }}</span>
+    </button>
+  } @else {
+    <button mat-icon-button class="notifications" [matMenuTriggerFor]="notifMenu" matTooltip="Notifications" [attr.aria-label]="notificationsLabel()"
+      [matBadge]="dlqService.alertCount()" [matBadgeHidden]="!dlqService.hasAlerts()" matBadgeSize="small">
+      <mat-icon>notifications</mat-icon>
+    </button>
+  }
   <mat-menu #notifMenu="matMenu" class="notification-menu">
+    <app-resubmit-run-indicator [environment]="environment()?.mark?.name" />
     @if (dlqService.hasAlerts()) {
       @for (alert of dlqService.alerts(); track alert.subscriptionName) {
         <button mat-menu-item (click)="onNotificationClick(alert)">
@@ -65,13 +79,13 @@
           <span class="notif-count">{{ alert.deadLetterMessageCount }}</span>
         </button>
       }
-    } @else {
+    } @else if (active.length === 0) {
       <div class="notif-empty">No dead letter messages</div>
     }
   </mat-menu>
 
   <!-- Help Menu -->
-  <button mat-icon-button [matMenuTriggerFor]="helpMenu" matTooltip="Help">
+  <button mat-icon-button [matMenuTriggerFor]="helpMenu" matTooltip="Help" aria-label="Help">
     <mat-icon>help_outline</mat-icon>
   </button>
   <mat-menu #helpMenu="matMenu">
@@ -84,11 +98,6 @@
       <span>Suggest Feature</span>
     </button>
   </mat-menu>
-
-  <!-- Theme Toggle -->
-  <button mat-icon-button (click)="themeService.toggle()" [matTooltip]="themeService.themeLabel()" [attr.aria-label]="'Theme: ' + themeService.themeLabel()">
-    <mat-icon>{{ themeService.themeIcon() }}</mat-icon>
-  </button>
 
   <a mat-icon-button class="settings-link" routerLink="/settings" routerLinkActive="active-link" ariaCurrentWhenActive="page" aria-label="Settings" matTooltip="Settings">
     <mat-icon>tune</mat-icon>

@@ -12,4 +12,6 @@ export interface SelectionState {
   selection: EntitySelection | null;
   loading: boolean;
   error: string | null;
+  /** The node being read while `loading` is true; the selection still holds the one shown before. */
+  loadingNode?: TreeNode | null;
 }

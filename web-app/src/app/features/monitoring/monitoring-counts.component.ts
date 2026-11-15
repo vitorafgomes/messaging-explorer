@@ -1,20 +1,26 @@
-import { AfterViewInit, ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, input, linkedSignal, signal, viewChild } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { HttpErrorResponse } from '@angular/common/http';
+import { AfterViewInit, ChangeDetectionStrategy, Component, computed, effect, inject, input, model, signal, viewChild } from '@angular/core';
 import { Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
+import { MatDialog } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSort, MatSortModule } from '@angular/material/sort';
 import { MatTableDataSource, MatTableModule } from '@angular/material/table';
-import { MatTooltipModule } from '@angular/material/tooltip';
-import { Observable } from 'rxjs';
 import { MonitoringEntity, MonitoringSnapshot } from '../../core/models';
-import { EntitySelectionService, MonitoringService } from '../../core/services';
+import { EntitySelectionService } from '../../core/services';
+import { ProviderService } from '../../core/services/provider.service';
+import type { ContinuousResubmitDialogData } from '../messages/continuous-resubmit-dialog.component';
 
 export const DEAD_LETTER_THRESHOLD_KEY = 'monitoring-dead-letter-threshold';
 const DEFAULT_THRESHOLD = '100';
+
+/** The periods the screen can read the snapshot at; 30 seconds is the floor. */
+export const REFRESH_PERIODS: ReadonlyArray<{ seconds: number; label: string }> = [
+  { seconds: 30, label: '30 seconds' },
+  { seconds: 60, label: '1 minute' },
+  { seconds: 300, label: '5 minutes' }
+];
 
 export interface CountsRow {
   key: string;
@@ -47,45 +53,42 @@ function toRow(entity: MonitoringEntity, topicName: string | null): CountsRow {
 /**
  * The counts of every queue and subscription of one snapshot in one table: sorted by any column,
  * filtered by name, the dead-letter rows above a threshold the user sets (kept in this browser)
- * marked, a name that opens the entity, and a refresh that reads one entity's counts now.
+ * marked, a name that opens the entity, and an auto resubmit where dead-letter messages wait.
  */
 @Component({
   selector: 'app-monitoring-counts',
   standalone: true,
-  imports: [MatButtonModule, MatFormFieldModule, MatIconModule, MatInputModule, MatSortModule, MatTableModule, MatTooltipModule],
+  imports: [MatButtonModule, MatFormFieldModule, MatIconModule, MatInputModule, MatSortModule, MatTableModule],
   templateUrl: './monitoring-counts.component.html',
   styleUrl: './monitoring-counts.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class MonitoringCountsComponent implements AfterViewInit {
-  private readonly monitoring = inject(MonitoringService);
   private readonly selection = inject(EntitySelectionService);
   private readonly router = inject(Router);
-  private readonly destroyRef = inject(DestroyRef);
+  private readonly dialog = inject(MatDialog);
+  private readonly provider = inject(ProviderService);
+
+  /** Auto resubmit is offered unless the provider says it has no dead-letter queue, as on the entity panel. */
+  readonly canResubmit = computed(() => this.provider.capabilities()?.supportsDeadLetterQueue !== false);
 
   readonly snapshot = input.required<MonitoringSnapshot>();
+  /** How often the screen reads the snapshot, in seconds; the screen that polls owns it. */
+  readonly refreshSeconds = model(REFRESH_PERIODS[0].seconds);
+  readonly periods = REFRESH_PERIODS;
 
   readonly columns = ['name', 'kind', 'active', 'deadLetter', 'scheduled', 'transferDeadLetter', 'actions'];
   readonly filter = signal('');
   readonly thresholdText = signal(localStorage.getItem(DEAD_LETTER_THRESHOLD_KEY) ?? DEFAULT_THRESHOLD);
   readonly threshold = computed(() => /^\d+$/.test(this.thresholdText().trim()) ? Number(this.thresholdText().trim()) : null);
-  readonly refreshing = signal<ReadonlySet<string>>(new Set());
-  readonly refreshFailure = signal<string | null>(null);
-
-  /** Counts read one entity at a time since the snapshot was taken; a snapshot taken later drops them. */
-  private readonly refreshed = linkedSignal<string, Record<string, CountsRow>>({
-    source: computed(() => this.snapshot().timestamp),
-    computation: () => ({})
-  });
 
   // ponytail: every row is rendered; virtualise or page the table when a namespace passes a few hundred entities.
   readonly rows = computed(() => {
     const snapshot = this.snapshot();
-    const refreshed = this.refreshed();
     return [
       ...snapshot.queues.map(q => toRow(q, null)),
       ...snapshot.subscriptions.map(s => toRow(s, s.topicName))
-    ].map(row => refreshed[row.key] ?? row);
+    ];
   });
 
   private readonly needle = computed(() => this.filter().trim().toLowerCase());
@@ -131,6 +134,13 @@ export class MonitoringCountsComponent implements AfterViewInit {
     localStorage.setItem(DEAD_LETTER_THRESHOLD_KEY, value);
   }
 
+  onRefreshEvery(value: string): void {
+    const period = REFRESH_PERIODS.find(p => String(p.seconds) === value);
+    if (period) {
+      this.refreshSeconds.set(period.seconds);
+    }
+  }
+
   isOver(row: CountsRow): boolean {
     const threshold = this.threshold();
     return threshold !== null && row.deadLetter > threshold;
@@ -149,34 +159,15 @@ export class MonitoringCountsComponent implements AfterViewInit {
     this.router.navigate(['/entities']);
   }
 
-  refresh(row: CountsRow): void {
-    this.refreshing.update(keys => new Set(keys).add(row.key));
-    this.refreshFailure.set(null);
-    const read: Observable<MonitoringEntity> = row.topicName === null
-      ? this.monitoring.getQueueCounts(row.name)
-      : this.monitoring.getSubscriptionCounts(row.topicName, row.name);
-    read.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: entity => {
-        this.refreshed.update(rows => ({ ...rows, [row.key]: toRow(entity, row.topicName) }));
-        this.done(row);
-      },
-      error: (err: HttpErrorResponse) => {
-        const reason = err?.status && err.error?.message ? err.error.message : 'the API did not answer.';
-        this.refreshFailure.set(`Could not refresh ${row.name}: ${reason} The counts shown are from the last poll.`);
-        this.done(row);
-      }
-    });
-  }
-
-  isRefreshing(row: CountsRow): boolean {
-    return this.refreshing().has(row.key);
-  }
-
-  private done(row: CountsRow): void {
-    this.refreshing.update(keys => {
-      const next = new Set(keys);
-      next.delete(row.key);
-      return next;
-    });
+  /** Opens the auto resubmit of the row's dead-letter queue, loaded on demand so the screen does not carry it. */
+  async autoResubmit(row: CountsRow): Promise<void> {
+    const { ContinuousResubmitDialogComponent } = await import('../messages/continuous-resubmit-dialog.component');
+    const data: ContinuousResubmitDialogData = {
+      entityType: row.topicName === null ? 'queue' : 'subscription',
+      entityName: row.name,
+      topicName: row.topicName ?? undefined,
+      deadLetterMessageCount: row.deadLetter
+    };
+    this.dialog.open(ContinuousResubmitDialogComponent, { width: '760px', maxWidth: '95vw', data });
   }
 }

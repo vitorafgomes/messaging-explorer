@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { provideRouter } from '@angular/router';
 import { MatDialogRef } from '@angular/material/dialog';
 import { of, throwError } from 'rxjs';
 import { ClearAllDataDialogComponent } from './clear-all-data-dialog.component';
@@ -27,7 +28,7 @@ describe('ClearAllDataDialogComponent', () => {
       getConnections: vi.fn(() => of([{ id: 'a' }, { id: 'b' }, { id: 'c' }])),
       clearAllData: vi.fn(() => of(result)),
     };
-    groupService = { getGroups: vi.fn(() => of([{ id: 'g1' }, { id: 'g2' }])) };
+    groupService = { getGroups: vi.fn(() => of([{ id: 'g1', type: 'client' }, { id: 'g2', type: 'environment' }, { id: 'g3', type: 'environment' }])) };
   });
 
   async function render() {
@@ -35,6 +36,7 @@ describe('ClearAllDataDialogComponent', () => {
       imports: [ClearAllDataDialogComponent],
       providers: [
         provideNoopAnimations(),
+        provideRouter([]),
         { provide: MatDialogRef, useValue: dialogRef },
         { provide: ConnectionService, useValue: connectionService },
         { provide: ConnectionGroupService, useValue: groupService },
@@ -60,9 +62,19 @@ describe('ClearAllDataDialogComponent', () => {
     expect(text()).toContain('Connected now to sample-ns.servicebus.windows.net ; the app disconnects first.');
     expect(text()).toContain('every saved connection, client and environment from this computer, with the secrets stored in them. No broker is touched. It cannot be undone.');
     expect(text()).toContain('Connections 3, read now');
-    expect(text()).toContain('Clients and environments 2');
+    expect(text()).toContain('Clients and environments 1 client, 2 environments');
     expect(text()).toContain('File data/workspace.json');
     expect(text()).toContain('Type clear all data to confirm');
+  });
+
+  it('offers to export the connections first, on the Connections screen, and shows the words to type as a placeholder', async () => {
+    const { el, text } = await render();
+    expect(text()).toContain('To keep a copy, export the connections first .');
+    const link = Array.from(el.querySelectorAll('a')).find(a => words(a) === 'export the connections first');
+    expect(link?.getAttribute('href')).toBe('/connections');
+    const input = el.querySelector('input') as HTMLInputElement;
+    expect(input.placeholder).toBe('clear all data');
+    expect(input.classList).toContain('mono');
   });
 
   it('the button stays disabled until the words are typed exactly, and a near word never clears', async () => {

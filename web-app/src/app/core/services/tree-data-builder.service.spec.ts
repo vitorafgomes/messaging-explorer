@@ -68,3 +68,34 @@ describe('TreeDataBuilderService reports a failed load instead of an empty tree'
     expect(received).toBe(outage);
   });
 });
+
+describe('TreeDataBuilderService gives its counts only from a whole build', () => {
+  function builderWith(subscriptions: () => any) {
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: QueueService, useValue: { getQueues: () => of([{ name: 'orders' }]) } },
+        { provide: TopicService, useValue: { getTopics: () => of([{ name: 'events', subscriptionCount: 2 }]), getSubscriptions: subscriptions } },
+        { provide: LoggerService, useValue: { log: () => undefined, error: () => undefined } },
+        { provide: DeadLetterNotificationService, useValue: { updateFromSubscriptions: () => undefined } }
+      ]
+    });
+    return TestBed.inject(TreeDataBuilderService);
+  }
+
+  it('after a whole build it counts queues, topics and subscriptions; before any build it gives none', () => {
+    const builder = builderWith(() => of([{ name: 'audit' }, { name: 'billing' }]));
+    expect(builder.wholeCounts(), 'nothing is counted before a build').toBeNull();
+
+    builder.buildTree().subscribe();
+
+    expect(builder.wholeCounts()).toStrictEqual({ queues: 1, topics: 1, subscriptions: 2 });
+  });
+
+  it('a topic whose subscriptions could not be read makes the counts unknown, never an undercount', () => {
+    const builder = builderWith(() => throwError(() => new Error('boom')));
+
+    builder.buildTree().subscribe();
+
+    expect(builder.wholeCounts(), 'a missed subscription read is not counted as none').toBeNull();
+  });
+});

@@ -70,8 +70,104 @@
 
   h2 {
     margin: 0;
-    font: var(--mat-sys-headline-small);
+    font: var(--mat-sys-headline-medium);
     overflow-wrap: anywhere;
+  }
+}
+
+.name-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-width: 0;
+}
+
+.link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--mat-sys-primary);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary);
+  }
+}
+
+.state-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.placeholder-cards,
+.placeholder-lines {
+  display: flex;
+  gap: 12px;
+  padding: 0 24px;
+
+  div {
+    border-radius: 8px;
+    background: var(--mat-sys-surface-container);
+  }
+}
+
+.placeholder-cards div {
+  flex: 1;
+  height: 88px;
+}
+
+.placeholder-lines {
+  flex-direction: column;
+  padding-top: 24px;
+
+  div {
+    height: 12px;
+
+    &:nth-child(2) { width: 80%; }
+    &:nth-child(3) { width: 60%; }
+  }
+}
+
+.resubmit-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: var(--app-warning-container);
+  color: var(--app-on-warning-container);
+}
+
+.subscriptions {
+  width: 100%;
+
+  .number {
+    text-align: end;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.count-chip.dead-letter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 8px 0 6px;
+  border-radius: 999px;
+  background: var(--app-warning-container);
+  color: var(--app-on-warning-container);
+  font: var(--mat-sys-label-small);
+  font-weight: 700;
+
+  .chip-icon {
+    width: 12px;
+    height: 12px;
+    font-size: 12px;
   }
 }
 
@@ -98,6 +194,7 @@
 
 .danger:not([disabled]) {
   --mat-menu-item-label-text-color: var(--mat-sys-error);
+  --mat-menu-item-icon-color: var(--mat-sys-error);
   font-weight: 500;
 }
 
@@ -175,12 +272,12 @@
   }
 
   &.warning {
-    background: var(--mat-sys-error-container);
-    color: var(--mat-sys-on-error-container);
+    background: var(--app-warning-container);
+    color: var(--app-on-warning-container);
 
     .stat-label,
     .stat-note {
-      color: var(--mat-sys-on-error-container);
+      color: var(--app-on-warning-container);
     }
   }
 
@@ -188,11 +285,6 @@
     align-self: flex-start;
     margin: 0 12px 12px;
   }
-}
-
-.live-card {
-  flex: 2 1 0;
-  min-width: 264px;
 }
 
 .property-columns {
@@ -233,11 +325,6 @@
   }
 }
 
-.entity-properties h3 {
-  margin: 0;
-  font: var(--mat-sys-title-medium);
-}
-
 .error-panel {
   display: flex;
   align-items: flex-start;
@@ -266,4 +353,20 @@
     margin: 0;
     overflow-wrap: anywhere;
   }
+}
+
+.run-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+// A disabled Sessions tab keeps its pointer so its title says why it is disabled; the tab group ignores a click on it.
+:host ::ng-deep .mat-mdc-tab-disabled,
+:host ::ng-deep .mat-mdc-tab-link.sessions-off {
+  pointer-events: auto;
+  cursor: not-allowed;
 }

@@ -93,6 +93,32 @@ describe('ResubmitRunService', () => {
   const resubmitted = () => queue.resubmitDeadLetterMessages.mock.calls.map(call => call[1]);
   const peekedFrom = () => queue.peekDeadLetterMessages.mock.calls.map(call => call[2]);
 
+  describe('a target that detects duplicates', () => {
+    it('a run started with "Send with a new message ID" asks for it on every batch, and a retry of a refused run can ask for it', async () => {
+      queue.peekDeadLetterMessages
+        .mockReturnValueOnce(of(range(1, 3)))
+        .mockReturnValueOnce(of(range(4, 2)))
+        .mockReturnValue(of([]));
+
+      const optedIn = service.start(ORDERS, { batchSize: 3, stopAtFirstFailure: false, newMessageIdOnDuplicateDetection: true })!;
+      await optedIn.done;
+
+      expect(queue.resubmitDeadLetterMessages.mock.calls.map(call => call[2]), 'every batch of an opted-in run carries the new message id flag').toEqual([true, true]);
+    });
+
+    it('a run without the option never asks for new ids, and Retry after a duplicate refusal sends the failed ones with it', async () => {
+      queue.peekDeadLetterMessages.mockReturnValueOnce(of(range(1, 2))).mockReturnValue(of([]));
+      queue.resubmitDeadLetterMessages.mockReturnValueOnce(of(result(0, [[1, 'The target detects duplicates; a copy with the same message id would be dropped. Nothing was sent or removed.'], [2, 'The target detects duplicates; a copy with the same message id would be dropped. Nothing was sent or removed.']])));
+
+      const refused = service.start(ORDERS, { batchSize: 3, stopAtFirstFailure: false })!;
+      await refused.done;
+      const retried = service.retry(refused, true);
+      await retried.done;
+
+      expect(queue.resubmitDeadLetterMessages.mock.calls.map(call => [call[1], call[2]]), 'unticked sends false; the retry the user ticked sends true').toEqual([[[1, 2], false], [[1, 2], true]]);
+    });
+  });
+
   describe('continue past a failure', () => {
     it('a failed batch member is recorded with its reason and left in the queue, and the next cycle reads past it', async () => {
       queue.peekDeadLetterMessages
@@ -106,7 +132,7 @@ describe('ResubmitRunService', () => {
 
       expect(peekedFrom()).toEqual([0, 4, 6]);
       expect(resubmitted()).toEqual([[1, 2, 3], [4, 5]]);
-      expect(run.failed).toEqual([{ sequenceNumber: 2, deadLetterReason: 'MaxDeliveryCountExceeded', error: REFUSED }]);
+      expect(run.failed).toEqual([{ sequenceNumber: 2, deadLetterReason: 'MaxDeliveryCountExceeded', error: REFUSED, batch: 1 }]);
       expect(run.progress()).toMatchObject({ status: 'completed', read: 5, matched: 5, resubmitted: 4, failed: 1, possibleDuplicates: 0 });
     });
 
@@ -316,13 +342,13 @@ describe('ResubmitRunService', () => {
       await run.done;
 
       expect(topic.peekDeadLetterMessages.mock.calls[0]).toEqual(['sales', 'eu', 2, 0, false]);
-      expect(topic.resubmitDeadLetterMessages.mock.calls[0]).toEqual(['sales', 'eu', [1, 2]]);
+      expect(topic.resubmitDeadLetterMessages.mock.calls[0]).toEqual(['sales', 'eu', [1, 2], false]);
       expect(run.progress()).toMatchObject({ status: 'completed', resubmitted: 2 });
     });
   });
 
   describe('progress', () => {
-    it('reports read, matched, resubmitted, elapsed, the rate over the last minute and the time left from N', async () => {
+    it('reports read, matched, resubmitted, elapsed, the rate over the last 5 minutes and the time left from N', async () => {
       deadLetterCount(1000);
       let clock = START;
       service.now = () => clock;
@@ -339,7 +365,7 @@ describe('ResubmitRunService', () => {
 
       expect(run.progress()).toMatchObject({ total: 1000, read: 200, matched: 200, resubmitted: 100, elapsedMs: 10_000 });
 
-      clock = START + 90_000;
+      clock = START + 400_000;
       answers[1].next(ok(100));
       answers[1].complete();
       await flush();
@@ -424,7 +450,7 @@ describe('ResubmitRunService', () => {
         { reason: 'MaxDeliveryCountExceeded', read: 2, resubmitted: 1, failed: 0, possibleDuplicates: 1 },
         { reason: 'TTLExpiredException', read: 1, resubmitted: 0, failed: 1, possibleDuplicates: 0 }
       ]);
-      expect(report.failedMessages).toEqual([{ sequenceNumber: 2, deadLetterReason: 'TTLExpiredException', error: REFUSED }]);
+      expect(report.failedMessages).toEqual([{ sequenceNumber: 2, deadLetterReason: 'TTLExpiredException', error: REFUSED, batch: 1 }]);
       expect(report.possibleDuplicateMessages.map(entry => entry.sequenceNumber)).toEqual([3]);
       expect(JSON.stringify(report)).not.toContain('sample-1');
     });
@@ -825,4 +851,146 @@ describe('ResubmitRunService', () => {
       expect(retry.progress()).toMatchObject({ status: 'completed', total: 1, resubmitted: 1 });
     });
   });
+  describe('the enqueued-time filter of the proposed panels', () => {
+    it('resubmits only the messages enqueued from the first to the last moment given, both included, and leaves the others in dead-letter, counted as left by the filter', async () => {
+      const from = START - 7_200_000;
+      const to = START - 3_600_000;
+      queue.peekDeadLetterMessages
+        .mockReturnValueOnce(of([
+          msg(1, { enqueuedTime: new Date(from - 1).toISOString() as never }),
+          msg(2, { enqueuedTime: new Date(from).toISOString() as never }),
+          msg(3, { enqueuedTime: new Date(to).toISOString() as never }),
+          msg(4, { enqueuedTime: new Date(to + 1).toISOString() as never })
+        ]))
+        .mockReturnValue(of([]));
+
+      const run = service.start(ORDERS, { batchSize: 4, stopAtFirstFailure: false, enqueuedFrom: from, enqueuedTo: to })!;
+      await run.done;
+
+      expect(resubmitted(), 'only the messages enqueued inside the range, its two ends included, are resubmitted').toEqual([[2, 3]]);
+      expect(run.progress(), 'a message the filter excludes stays in dead-letter and is counted as left by the filter').toMatchObject({ read: 4, matched: 2, resubmitted: 2, leftByFilter: 2 });
+      expect(run.report(), 'the report says how many the filter left and which range it applied').toMatchObject({
+        leftByFilter: 2,
+        filter: { reason: null, text: null, enqueuedFrom: new Date(from).toISOString(), enqueuedTo: new Date(to).toISOString() }
+      });
+    });
+
+    it('a bound that is not a number is no bound', async () => {
+      queue.peekDeadLetterMessages.mockReturnValueOnce(of(range(1, 2))).mockReturnValue(of([]));
+
+      const run = service.start(ORDERS, { batchSize: 2, stopAtFirstFailure: false, enqueuedFrom: Number.NaN, enqueuedTo: Number.NaN })!;
+      await run.done;
+
+      expect(resubmitted(), 'an unreadable bound never excludes a message').toEqual([[1, 2]]);
+      expect(run.progress().leftByFilter).toBe(0);
+    });
+  });
+
+  describe('batch number and cycles of the proposed panels', () => {
+    it('says "Batch N of M: resubmitting K." while a batch is in flight, keeps the batch of each message left behind, and the report counts the cycles', async () => {
+      deadLetterCount(6);
+      const answer = new Subject<BatchOperationResult>();
+      queue.peekDeadLetterMessages.mockReturnValueOnce(of(range(1, 3))).mockReturnValueOnce(of(range(4, 3))).mockReturnValue(of([]));
+      queue.resubmitDeadLetterMessages.mockReturnValueOnce(of(result(2, [[2, REFUSED]]))).mockReturnValueOnce(answer);
+
+      const run = service.start(ORDERS, { batchSize: 3, stopAtFirstFailure: false })!;
+      await flush();
+
+      expect(run.progress(), 'the second of two batches is in flight').toMatchObject({ batch: 2, batches: 2 });
+      expect(run.progress().message).toBe('Batch 2 of 2: resubmitting 3. Reading onward from sequence number 7; the 1 left behind are not read again by this run.');
+      answer.next(ok(3));
+      answer.complete();
+      await run.done;
+
+      expect(run.failed, 'a message left behind names the batch it was read in').toEqual([{ sequenceNumber: 2, deadLetterReason: 'MaxDeliveryCountExceeded', error: REFUSED, batch: 1 }]);
+      expect(run.report().cycles, 'the report counts the cycles the run took').toBe(2);
+    });
+  });
+
+  describe('the rate over the last 5 minutes', () => {
+    it('a batch read 4 minutes ago still counts in the rate, one read 6 minutes ago no longer does', async () => {
+      deadLetterCount(1000);
+      let clock = START;
+      service.now = () => clock;
+      const answers = [new Subject<BatchOperationResult>(), new Subject<BatchOperationResult>()];
+      queue.peekDeadLetterMessages.mockReturnValueOnce(of(range(1, 100))).mockReturnValueOnce(of(range(101, 100))).mockReturnValue(new Observable());
+      queue.resubmitDeadLetterMessages.mockReturnValueOnce(answers[0]).mockReturnValueOnce(answers[1]);
+
+      const run = service.start(ORDERS, { batchSize: 100, stopAtFirstFailure: false })!;
+      await flush();
+      clock = START + 240_000;
+      answers[0].next(ok(100));
+      answers[0].complete();
+      await flush();
+
+      expect(run.progress().ratePerSecond, '200 read in the 4 minutes since the start').toBeCloseTo(200 / 240, 5);
+
+      clock = START + 600_000;
+      answers[1].next(ok(100));
+      answers[1].complete();
+      await flush();
+
+      expect(run.progress().ratePerSecond, 'nothing read in the last 5 minutes').toBeCloseTo(0, 5);
+      run.stop();
+      await run.done;
+    });
+  });
+
+  describe('the count of the matching messages before a run', () => {
+    const counts: unknown[] = [];
+    const count = (filter: object, cap?: number) => new Promise<{ read: number; matched: number; peeks: number; capped: boolean; done: boolean }>((resolve, reject) => {
+      service.countMatching(ORDERS, filter, cap).subscribe({ next: c => counts.push(c), complete: () => resolve(counts[counts.length - 1] as never), error: reject });
+    });
+    beforeEach(() => (counts.length = 0));
+
+    it('peeks the dead-letter queue onward from the start, 500 at a time and without bodies, counts what the filter of a run would match, and never resubmits', async () => {
+      queue.peekDeadLetterMessages
+        .mockReturnValueOnce(of([msg(1), msg(2, { deadLetterReason: 'TTLExpiredException' }), msg(3)]))
+        .mockReturnValueOnce(of([msg(7, { enqueuedTime: new Date(START - 10 * 3_600_000).toISOString() as never })]))
+        .mockReturnValue(of([]));
+
+      const result = await count({ reason: 'MaxDeliveryCountExceeded', enqueuedFrom: START - 5 * 3_600_000 });
+
+      expect(queue.peekDeadLetterMessages.mock.calls, 'pages of 500, onward from past the highest sequence number, no bodies').toEqual([
+        ['orders', 500, 0, false], ['orders', 500, 4, false], ['orders', 500, 8, false]
+      ]);
+      expect(result, 'the same filter a run applies: reason and enqueued time').toEqual({ read: 4, matched: 2, peeks: 3, capped: false, done: true });
+      expect(queue.resubmitDeadLetterMessages, 'a count changes nothing').not.toHaveBeenCalled();
+    });
+
+    it('stops at its cap and says so', async () => {
+      queue.peekDeadLetterMessages.mockImplementation((_: string, n: number, from: number) => of(range(from + 1, n)));
+
+      const result = await count({}, 1200);
+
+      expect(queue.peekDeadLetterMessages.mock.calls.map(call => call[1]), 'never reads past the cap').toEqual([500, 500, 200]);
+      expect(result, 'a count that reached its cap says it was capped').toEqual({ read: 1200, matched: 1200, peeks: 3, capped: true, done: true });
+    });
+
+    it('asks for the bodies only with a text filter', async () => {
+      queue.peekDeadLetterMessages.mockReturnValueOnce(of([msg(1), msg(2, { body: 'other' , subject: 'x' })])).mockReturnValue(of([]));
+
+      const result = await count({ text: 'SAMPLE-1' });
+
+      expect(queue.peekDeadLetterMessages.mock.calls[0][3], 'the text is matched in the body, so the body is read').toBe(true);
+      expect(result.matched).toBe(1);
+    });
+
+    it('is cancelled by an unsubscribe, which aborts the peek in flight', () => {
+      let aborted = false;
+      queue.peekDeadLetterMessages.mockReturnValue(new Observable<MessageInfo[]>(() => () => { aborted = true; }));
+
+      service.countMatching(ORDERS, {}).subscribe().unsubscribe();
+
+      expect(aborted, 'cancelling the count aborts its request').toBe(true);
+    });
+
+    it('a peek that fails ends the count with the error, never with a number', async () => {
+      queue.peekDeadLetterMessages.mockReturnValueOnce(of(range(1, 2))).mockReturnValueOnce(throwError(() => new Error('timeout')));
+
+      await expect(count({}), 'a failed peek is an error, not a count of what was read before it').rejects.toThrow('timeout');
+      expect(counts.every(c => !(c as { done: boolean }).done), 'no finished count was published').toBe(true);
+    });
+  });
 });
+

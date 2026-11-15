@@ -1,3 +1,5 @@
+using System.Net.Sockets;
+using System.Security.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using ServiceBusExplorer.Core.Abstractions;
 using ServiceBusExplorer.Core.Models;
@@ -110,6 +112,18 @@ public class ConnectionsController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<ServiceBusConnection>> SaveConnection([FromBody] ServiceBusConnection connection)
     {
+        if (!connection.HasAllowedProxy())
+        {
+            _logger.LogWarning("Connection save refused: the proxy address is not allowed on a {ProviderType} connection", connection.ProviderType);
+            return BadRequest(new { message = ServiceBusConnection.ProxyRefusal });
+        }
+
+        if (!connection.HasAllowedResourceId())
+        {
+            _logger.LogWarning("Connection save refused: the Azure resource ID is not allowed on a {ProviderType} connection", connection.ProviderType);
+            return BadRequest(new { message = ServiceBusConnection.ResourceIdRefusal });
+        }
+
         try
         {
             // If updating an existing connection, merge masked/sensitive fields from the original
@@ -131,6 +145,10 @@ public class ConnectionsController : ControllerBase
                     {
                         connection.Password = existing.Password;
                     }
+                    if (connection.ClientSecret == "***")
+                    {
+                        connection.ClientSecret = existing.ClientSecret;
+                    }
 
                     // Check if only metadata changed (clientId, environmentId, name)
                     var sameConnectionString = connection.ConnectionString == existing.ConnectionString;
@@ -139,9 +157,14 @@ public class ConnectionsController : ControllerBase
                     var sameUser = connection.UserName == existing.UserName;
                     var samePassword = connection.Password == existing.Password;
                     var sameProvider = connection.ProviderType == existing.ProviderType;
+                    var sameTls = connection.UseSsl == existing.UseSsl
+                        && connection.UseManagementSsl == existing.UseManagementSsl;
+                    var sameTransport = connection.UseWebSockets == existing.UseWebSockets
+                        && (connection.ProxyAddress ?? "") == (existing.ProxyAddress ?? "");
 
                     isMetadataOnlyUpdate = sameProvider && sameConnectionString
-                        && sameHost && samePort && sameUser && samePassword;
+                        && sameHost && samePort && sameUser && samePassword && sameTls && sameTransport
+                        && connection.ClientSecret == existing.ClientSecret;
 
                     if (isMetadataOnlyUpdate)
                     {
@@ -236,15 +259,28 @@ public class ConnectionsController : ControllerBase
 
             _logger.LogInformation("Connecting to {Name} ({ProviderType})", connection.Name, connection.ProviderType);
 
-            // Create and connect provider using the factory
-            var provider = await _providerFactory.CreateConnectedProviderAsync(connection);
+            IMessagingProvider provider;
+            try
+            {
+                provider = await _providerFactory.CreateConnectedProviderAsync(connection);
+            }
+            catch (Exception ex) when (ConnectFailureReason(ex) is { } reason)
+            {
+                _logger.LogError(ex, "Failed to connect to {ConnectionId} ({Reason})", id, reason.Code);
+                return StatusCode(500, new { message = reason.Message, code = reason.Code });
+            }
 
             // Store the provider for use by other controllers
             await SetCurrentProviderAsync(provider);
 
-            // Update last used timestamp
-            connection.LastUsedAt = DateTime.UtcNow;
-            await _connectionManager.SaveConnectionAsync(connection);
+            try
+            {
+                await _connectionManager.MarkUsedAsync(id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not record the last use of connection {ConnectionId} ({ExceptionType})", id, ex.GetType().Name);
+            }
 
             _logger.LogInformation("Connected successfully to {Target}", provider.CurrentTarget);
 
@@ -262,6 +298,42 @@ public class ConnectionsController : ControllerBase
             _logger.LogError(ex, "Failed to connect to {ConnectionId}", id);
             return StatusCode(500, new { message = "An internal error occurred." });
         }
+    }
+
+    /// <summary>
+    /// Why a connect failed, as one code of a fixed set with a fixed sentence, read from the BCL exceptions anywhere
+    /// in the chain; null when no known cause is found. The exception's own text is never used: it can carry the
+    /// connection string, the user name, the password or a key.
+    /// </summary>
+    private static (string Code, string Message)? ConnectFailureReason(Exception exception)
+    {
+        var pending = new Stack<Exception>([exception]);
+        while (pending.TryPop(out var e))
+        {
+            switch (e)
+            {
+                case AuthenticationException:
+                    return ("tls", "The TLS handshake with the broker failed.");
+                case TimeoutException:
+                case SocketException { SocketErrorCode: SocketError.TimedOut }:
+                    return ("timeout", "The broker did not answer in time.");
+                case SocketException { SocketErrorCode: SocketError.HostNotFound or SocketError.NoData or SocketError.TryAgain }:
+                    return ("host-not-found", "The host name was not found.");
+                case SocketException { SocketErrorCode: SocketError.ConnectionRefused }:
+                    return ("connection-refused", "The broker refused the connection on its port.");
+            }
+
+            if (e is AggregateException aggregate)
+            {
+                foreach (var inner in aggregate.InnerExceptions) pending.Push(inner);
+            }
+            else if (e.InnerException != null)
+            {
+                pending.Push(e.InnerException);
+            }
+        }
+
+        return null;
     }
 
     [HttpPost("disconnect")]
@@ -397,6 +469,9 @@ public class ConnectionsController : ControllerBase
                 supportsSubscriptionRules = capabilities.SupportsSubscriptionRules,
                 supportsTransferDeadLetter = capabilities.SupportsTransferDeadLetter, supportsPeekFromSequenceNumber = capabilities.SupportsPeekFromSequenceNumber,
                 supportsDefinitions = capabilities.SupportsDefinitions,
+                supportsNamespaceProperties = capabilities.SupportsNamespaceProperties,
+                supportsManualDeadLetter = capabilities.SupportsManualDeadLetter,
+                supportsBinaryBody = capabilities.SupportsBinaryBody,
                 maxMessageSizeInBytes = capabilities.MaxMessageSizeInBytes,
                 maxTimeToLive = capabilities.MaxTimeToLive.ToString(),
                 supportedExchangeTypes = capabilities.SupportedExchangeTypes
@@ -524,13 +599,7 @@ public class ConnectionsController : ControllerBase
                 return BadRequest(new { message = "Configuration data is required" });
             }
 
-            // Configure JSON options to accept both PascalCase and camelCase
-            var jsonOptions = new System.Text.Json.JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            };
-
-            var fullConfig = System.Text.Json.JsonSerializer.Deserialize<FullConfiguration>(request.ConfigurationJson, jsonOptions);
+            var fullConfig = ParseFullConfiguration(request.ConfigurationJson);
 
             if (fullConfig == null)
             {
@@ -540,6 +609,18 @@ public class ConnectionsController : ControllerBase
             _logger.LogInformation(
                 "Importing {ConnectionCount} connections and {GroupCount} groups",
                 fullConfig.Connections?.Count ?? 0, fullConfig.Groups?.Count ?? 0);
+
+            if (fullConfig.Connections?.Any(c => !c.HasAllowedProxy()) == true)
+            {
+                _logger.LogWarning("Import-full refused: a connection has a proxy address its provider cannot use; nothing imported");
+                return BadRequest(new { message = ServiceBusConnection.ProxyRefusal });
+            }
+
+            if (fullConfig.Connections?.Any(c => !c.HasAllowedResourceId()) == true)
+            {
+                _logger.LogWarning("Import-full refused: a connection has an Azure resource ID that is not allowed; nothing imported");
+                return BadRequest(new { message = ServiceBusConnection.ResourceIdRefusal });
+            }
 
             // Import groups first (connections reference them)
             if (fullConfig.Groups != null && fullConfig.Groups.Count > 0)
@@ -567,6 +648,82 @@ public class ConnectionsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Import-full configuration failed");
+            return StatusCode(500, new { message = "An internal error occurred." });
+        }
+    }
+
+    /// <summary>
+    /// Parses an import-full file, PascalCase or camelCase. Shared by import-full and its preview so both read a file alike.
+    /// </summary>
+    private static FullConfiguration? ParseFullConfiguration(string json) =>
+        System.Text.Json.JsonSerializer.Deserialize<FullConfiguration>(json, new System.Text.Json.JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        });
+
+    /// <summary>
+    /// Dry run of import-full: what the file would add and update, compared by id with what is stored.
+    /// Writes nothing. The answer is built from non-secret fields only; a secret is reported only as masked or not.
+    /// </summary>
+    [HttpPost("import/preview")]
+    public async Task<ActionResult<ImportPreview>> PreviewImport([FromBody] ImportFullConfigurationRequest request)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(request?.ConfigurationJson))
+                return BadRequest(new { message = "Configuration data is required" });
+
+            var fullConfig = ParseFullConfiguration(request.ConfigurationJson);
+            if (fullConfig == null)
+                return BadRequest(new { message = "Invalid configuration format" });
+
+            var storedConnections = (await _connectionManager.GetConnectionsAsync()).ToList();
+            var storedGroups = (await _groupManager.GetGroupsAsync()).ToList();
+            var fileGroups = fullConfig.Groups ?? new List<ConnectionGroup>();
+            var fileConnections = fullConfig.Connections ?? new List<ServiceBusConnection>();
+
+            string? GroupName(string? id) => id == null
+                ? null
+                : (fileGroups.FirstOrDefault(g => g.Id == id) ?? storedGroups.FirstOrDefault(g => g.Id == id))?.Name;
+
+            var items = new List<ImportPreviewItem>();
+            foreach (var g in fileGroups)
+            {
+                var kind = g.Type == "environment" ? $"Environment of {GroupName(g.ParentId) ?? "an unknown client"}" : "Client";
+                var exists = !string.IsNullOrEmpty(g.Id) && storedGroups.Any(x => x.Id == g.Id);
+                items.Add(new ImportPreviewItem(g.Name, kind, null, null, exists, false));
+            }
+
+            var anyMasked = false;
+            foreach (var c in fileConnections)
+            {
+                var masked = c.ConnectionString == "***" || c.Password == "***" || c.ClientSecret == "***";
+                anyMasked |= masked;
+                var exists = !string.IsNullOrEmpty(c.Id) && storedConnections.Any(x => x.Id == c.Id);
+                var kind = c.ProviderType == ProviderType.RabbitMQ ? "RabbitMQ" : "Azure Service Bus";
+                var target = c.ProviderType == ProviderType.RabbitMQ
+                    ? $"{c.HostName ?? "localhost"}:{c.Port ?? 5672}"
+                    : c.Namespace ?? c.FullyQualifiedNamespace;
+                var placement = string.Join(", ", new[] { GroupName(c.ClientId), GroupName(c.EnvironmentId) }.Where(n => n != null));
+                items.Add(new ImportPreviewItem(c.Name, kind, target, placement.Length == 0 ? null : placement, exists, exists && masked));
+            }
+
+            var fileIds = fileConnections.Select(c => c.Id).ToHashSet();
+            return Ok(new ImportPreview(
+                items,
+                Add: items.Count(i => !i.Exists),
+                Update: items.Count(i => i.Exists),
+                SecretsMasked: anyMasked,
+                NotInFile: storedConnections.Where(c => !fileIds.Contains(c.Id)).Select(c => c.Name).ToList()));
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            _logger.LogWarning(ex, "Import preview rejected due to invalid JSON");
+            return BadRequest(new { message = "Invalid JSON format." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Import preview failed");
             return StatusCode(500, new { message = "An internal error occurred." });
         }
     }
@@ -621,6 +778,27 @@ public class ImportFullConfigurationRequest
 {
     public string ConfigurationJson { get; set; } = string.Empty;
 }
+
+/// <summary>
+/// One item of an import file, a client, an environment or a connection, and whether its id is already stored.
+/// </summary>
+/// <param name="Name">The item's name.</param>
+/// <param name="Kind">"Client", "Environment of {client}", or the broker of a connection.</param>
+/// <param name="Target">The namespace or host:port of a connection; null for a group.</param>
+/// <param name="Placement">The client and environment a connection goes into; null when ungrouped and for a group.</param>
+/// <param name="Exists">True when the id is stored, so the import updates it; false when it adds it.</param>
+/// <param name="KeepsStoredSecret">True when a stored connection arrives with a masked secret, so its stored secret is kept.</param>
+public record ImportPreviewItem(string Name, string Kind, string? Target, string? Placement, bool Exists, bool KeepsStoredSecret);
+
+/// <summary>
+/// The answer of the import preview. It carries no secret.
+/// </summary>
+/// <param name="Items">Every group and connection of the file, groups first.</param>
+/// <param name="Add">How many items the import would add.</param>
+/// <param name="Update">How many items the import would update.</param>
+/// <param name="SecretsMasked">True when a connection in the file carries a masked secret.</param>
+/// <param name="NotInFile">Names of the stored connections the file does not hold; the import leaves them.</param>
+public record ImportPreview(List<ImportPreviewItem> Items, int Add, int Update, bool SecretsMasked, List<string> NotInFile);
 
 public class FullConfiguration
 {

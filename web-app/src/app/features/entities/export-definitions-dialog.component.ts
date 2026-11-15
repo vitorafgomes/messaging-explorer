@@ -1,13 +1,14 @@
-import { Component, OnDestroy, inject, signal } from '@angular/core';
+import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MatDialogActions, MatDialogContent, MatDialogRef, MatDialogTitle } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatChipsModule } from '@angular/material/chips';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { Subscription } from 'rxjs';
-import { ConnectionService, DefinitionsService, MessageExportService, countDefinitions, describeCounts } from '../../core/services';
+import { DefinitionCounts } from '../../core/models';
+import { ConnectionService, DefinitionsService, MessageExportService, TreeDataBuilderService, countDefinitions, describeCounts } from '../../core/services';
 import { connectionContext } from './connection-context';
+import { EnvironmentLineComponent } from '../../shared/environment-line.component';
 
 /** The file a namespace's definitions are saved to: `<namespace>.definitions.json`. */
 export function definitionsFileName(namespace: string | undefined): string {
@@ -21,23 +22,24 @@ export function definitionsFileName(namespace: string | undefined): string {
 @Component({
   selector: 'app-export-definitions-dialog',
   standalone: true,
-  imports: [MatDialogTitle, MatDialogContent, MatDialogActions, MatButtonModule, MatIconModule, MatChipsModule, MatProgressBarModule],
+  imports: [MatDialogTitle, MatDialogContent, MatDialogActions, MatButtonModule, MatIconModule, EnvironmentLineComponent, MatProgressBarModule],
   template: `
     <h2 mat-dialog-title>Export definitions</h2>
     <mat-dialog-content>
-      <p class="context">
-        <mat-chip-set aria-label="Environment"><mat-chip [disableRipple]="true">{{ context().environment }}</mat-chip></mat-chip-set>
-        <span>From {{ context().connection }}</span>
-      </p>
+      <app-environment-line [mark]="context().mark">From {{ context().where }}</app-environment-line>
       <p>Writes every queue, topic, subscription and rule of this namespace, with its full configuration, to one versioned JSON file.</p>
       <dl class="facts">
-        <div class="fact"><dt>File</dt><dd>{{ fileName }}</dd></div>
+        @for (fact of countFacts(); track fact.label) {
+          <div class="fact"><dt>{{ fact.label }}</dt><dd>{{ fact.value }}</dd></div>
+        }
         <div class="fact"><dt>Messages</dt><dd>Not included</dd></div>
         <div class="fact"><dt>Secrets</dt><dd>None: an entity definition holds no secret</dd></div>
       </dl>
+      @if (state() !== 'done') {
+        <p class="note">This is the slowest read in the app: every entity, and the rules of every subscription. It shows its progress and can be cancelled.</p>
+      }
       @switch (state()) {
         @case ('exporting') {
-          <p class="note">Reading every entity and the rules of every subscription. On a large namespace this takes a while.</p>
           <mat-progress-bar mode="indeterminate" aria-label="Exporting"></mat-progress-bar>
         }
         @case ('done') {
@@ -94,6 +96,19 @@ export class ExportDefinitionsDialogComponent implements OnDestroy {
   readonly fileName = definitionsFileName(inject(ConnectionService).currentTarget);
   readonly state = signal<'ready' | 'exporting' | 'done' | 'error'>('ready');
   readonly summary = signal('');
+  /** Queues, topics and subscriptions as the tree read them in a whole build, then all four as the export read them; null when the tree's counts cannot be trusted. */
+  readonly counts = signal<Partial<DefinitionCounts> | null>(inject(TreeDataBuilderService).wholeCounts());
+  /** The four counts as the artboard draws them, said as not yet counted before the read. */
+  readonly countFacts = computed(() => {
+    const counts = this.counts();
+    const value = (n: number | undefined) => n === undefined ? 'Counted when exported' : String(n);
+    return [
+      { label: 'Queues', value: value(counts?.queues) },
+      { label: 'Topics', value: value(counts?.topics) },
+      { label: 'Subscriptions', value: value(counts?.subscriptions) },
+      { label: 'Rules', value: value(counts?.rules) }
+    ];
+  });
   readonly empty = signal(false);
   readonly errorMessage = signal('');
   private running?: Subscription;
@@ -105,6 +120,7 @@ export class ExportDefinitionsDialogComponent implements OnDestroy {
       next: document => {
         const counts = countDefinitions(document);
         this.files.downloadFile(JSON.stringify(document, null, 2), this.fileName, 'application/json');
+        this.counts.set(counts);
         this.summary.set(describeCounts(counts));
         this.empty.set(counts.queues === 0 && counts.topics === 0);
         this.state.set('done');

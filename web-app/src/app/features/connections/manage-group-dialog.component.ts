@@ -1,23 +1,28 @@
 import { Component, inject, signal, WritableSignal, Inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
-import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
+import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators, FormGroupDirective } from '@angular/forms';
+import { MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatSelectModule } from '@angular/material/select';
 import { MatIconModule } from '@angular/material/icon';
-import { MatListModule } from '@angular/material/list';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ConnectionGroupService } from '../../core/services';
-import { ConnectionGroup } from '../../core/models';
+import { ConnectionGroup, ServiceBusConnection } from '../../core/models';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog.component';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { MatCheckboxChange, MatCheckboxModule } from '@angular/material/checkbox';
+import { EnvironmentChipComponent } from '../../shared/environment-chip.component';
 
 interface ManageGroupDialogData {
   groups: ConnectionGroup[];
+  connections?: ServiceBusConnection[];
 }
+
+const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
 
 @Component({
   selector: 'app-manage-group-dialog',
@@ -32,17 +37,18 @@ interface ManageGroupDialogData {
     MatButtonModule,
     MatSelectModule,
     MatIconModule,
-    MatListModule,
     MatSnackBarModule,
     MatTabsModule,
-    MatTooltipModule
+    MatTooltipModule,
+    MatCheckboxModule,
+    EnvironmentChipComponent
   ],
   template: `
     <h2 mat-dialog-title>Manage Groups</h2>
 
     <mat-dialog-content>
       <p class="intro">Clients and their environments group the saved connections. Nothing here reaches a broker.</p>
-      <mat-tab-group>
+      <mat-tab-group mat-stretch-tabs="false" mat-align-tabs="start" animationDuration="0ms">
         <mat-tab label="Clients">
           <div class="tab-content">
             <div class="list-section">
@@ -50,55 +56,54 @@ interface ManageGroupDialogData {
               @if (clients().length === 0) {
                 <p class="empty-message">No clients yet</p>
               } @else {
-                <mat-list>
+                <ul class="rows">
                   @for (client of clients(); track client.id) {
-                    <mat-list-item>
-                      <mat-icon matListItemIcon>business</mat-icon>
-                      <div matListItemTitle>{{ client.name }}</div>
-                      @if (client.description) {
-                        <div matListItemLine>{{ client.description }}</div>
-                      }
-                      <div matListItemMeta class="item-actions">
+                    <li class="group-row">
+                      <span class="group-name"><strong>{{ client.name }}</strong>&ngsp;<span class="counts">{{ clientCounts(client) }}</span></span>
+                      <span class="item-actions">
                         <button mat-icon-button
                           [attr.aria-label]="'Edit client ' + client.name"
                           [matTooltip]="'Edit client ' + client.name"
                           (click)="editClient(client)">
                           <mat-icon>edit</mat-icon>
                         </button>
-                        <button mat-icon-button class="delete"
+                        <button mat-button class="delete"
                           [attr.aria-label]="'Delete client ' + client.name"
-                          [matTooltip]="'Delete client ' + client.name"
                           (click)="deleteClient(client)">
-                          <mat-icon>delete</mat-icon>
+                          <mat-icon>delete</mat-icon>Delete
                         </button>
-                      </div>
-                    </mat-list-item>
+                      </span>
+                    </li>
                   }
-                </mat-list>
+                </ul>
               }
             </div>
 
             <div class="form-section">
               <h3>{{ editingClient() ? 'Edit Client' : 'Add New Client' }}</h3>
-              <form [formGroup]="clientForm" (ngSubmit)="saveClient()">
+              <form [formGroup]="clientForm" #clientDir="ngForm" (ngSubmit)="saveClient(clientDir)">
                 <div class="grid">
-                  <mat-form-field appearance="outline">
-                    <mat-label>Client Name</mat-label>
-                    <input matInput formControlName="name" placeholder="e.g., Acme Corp">
+                  <div class="field">
+                    <label for="grp-client-name-1">Client Name</label>
+                    <mat-form-field appearance="outline">
+                    <input matInput id="grp-client-name-1" formControlName="name" placeholder="e.g., Contoso">
                     @if (clientForm.get('name')?.hasError('required') && clientForm.get('name')?.touched) {
                       <mat-error>Client name is required</mat-error>
                     }
                   </mat-form-field>
+                  </div>
 
-                  <mat-form-field appearance="outline">
-                    <mat-label>Description (optional)</mat-label>
-                    <textarea matInput formControlName="description" rows="1" placeholder="Brief description"></textarea>
+                  <div class="field">
+                    <label for="grp-description-optional-2">Description (optional)</label>
+                    <mat-form-field appearance="outline">
+                    <input matInput id="grp-description-optional-2" formControlName="description" placeholder="Brief description">
                   </mat-form-field>
+                  </div>
                 </div>
 
                 <div class="form-actions">
                   @if (editingClient()) {
-                    <button matButton type="button" (click)="cancelEditClient()">Cancel</button>
+                    <button matButton type="button" (click)="cancelEditClient(clientDir)">Cancel</button>
                   }
                   <button matButton="tonal" type="submit" [disabled]="!clientForm.valid || saving()">
                     <mat-icon>{{ editingClient() ? 'save' : 'add' }}</mat-icon>
@@ -112,14 +117,16 @@ interface ManageGroupDialogData {
 
         <mat-tab label="Environments" [disabled]="clients().length === 0">
           <div class="tab-content">
-            <mat-form-field appearance="outline" class="client-selector">
-              <mat-label>Select Client</mat-label>
-              <mat-select [(value)]="selectedClientId" (selectionChange)="onClientSelected()">
+            <div class="field client-selector">
+              <label id="grp-select-client-3-label" for="grp-select-client-3">Select Client</label>
+              <mat-form-field appearance="outline">
+              <mat-select id="grp-select-client-3" aria-labelledby="grp-select-client-3-label" [(value)]="selectedClientId" (selectionChange)="onClientSelected()">
                 @for (client of clients(); track client.id) {
                   <mat-option [value]="client.id">{{ client.name }}</mat-option>
                 }
               </mat-select>
             </mat-form-field>
+            </div>
 
             @if (!selectedClientId) {
               <p class="empty-message">Select a client above to view and manage its environments.</p>
@@ -129,55 +136,59 @@ interface ManageGroupDialogData {
                 @if (getEnvironmentsByClient(selectedClientId).length === 0) {
                   <p class="empty-message">No environments for this client</p>
                 } @else {
-                  <mat-list>
+                  <ul class="rows">
                     @for (env of getEnvironmentsByClient(selectedClientId); track env.id) {
-                      <mat-list-item>
-                        <mat-icon matListItemIcon>dns</mat-icon>
-                        <div matListItemTitle>{{ env.name }}</div>
-                        @if (env.description) {
-                          <div matListItemLine>{{ env.description }}</div>
-                        }
-                        <div matListItemMeta class="item-actions">
+                      <li class="group-row">
+                        <span class="group-name"><strong>{{ env.name }}</strong>&ngsp;<span class="counts">{{ plural(connectionsOf(env).length, 'connection', 'connections') }}</span></span>
+                        <span class="item-actions">
+                          <app-environment-chip [name]="env.name" [isProduction]="!!env.isProduction" />
+                          <mat-checkbox [checked]="!!env.isProduction" (change)="setProduction(env, $event)">
+                            Production<span class="cdk-visually-hidden">: mark {{ env.name }} as a production environment</span>
+                          </mat-checkbox>
                           <button mat-icon-button
                             [attr.aria-label]="'Edit environment ' + env.name"
                             [matTooltip]="'Edit environment ' + env.name"
                             (click)="editEnvironment(env)">
                             <mat-icon>edit</mat-icon>
                           </button>
-                          <button mat-icon-button class="delete"
+                          <button mat-button class="delete"
                             [attr.aria-label]="'Delete environment ' + env.name"
-                            [matTooltip]="'Delete environment ' + env.name"
                             (click)="deleteEnvironment(env)">
-                            <mat-icon>delete</mat-icon>
+                            <mat-icon>delete</mat-icon>Delete
                           </button>
-                        </div>
-                      </mat-list-item>
+                        </span>
+                      </li>
                     }
-                  </mat-list>
+                  </ul>
+                  <p class="production-note">A connection in an environment marked Production shows the PRODUCTION chip on the toolbar and in every confirmation, and its destructive actions ask for the typed name.</p>
                 }
               </div>
 
               <div class="form-section">
                 <h3>{{ editingEnvironment() ? 'Edit Environment' : 'Add New Environment' }}</h3>
-                <form [formGroup]="environmentForm" (ngSubmit)="saveEnvironment()">
+                <form [formGroup]="environmentForm" #environmentDir="ngForm" (ngSubmit)="saveEnvironment(environmentDir)">
                   <div class="grid">
-                    <mat-form-field appearance="outline">
-                      <mat-label>Environment Name</mat-label>
-                      <input matInput formControlName="name" placeholder="e.g., Production, Development">
+                    <div class="field">
+                      <label for="grp-environment-name-4">Environment Name</label>
+                      <mat-form-field appearance="outline">
+                      <input matInput id="grp-environment-name-4" formControlName="name" placeholder="e.g., Production, Development">
                       @if (environmentForm.get('name')?.hasError('required') && environmentForm.get('name')?.touched) {
                         <mat-error>Environment name is required</mat-error>
                       }
                     </mat-form-field>
+                    </div>
 
-                    <mat-form-field appearance="outline">
-                      <mat-label>Description (optional)</mat-label>
-                      <textarea matInput formControlName="description" rows="1" placeholder="Brief description"></textarea>
+                    <div class="field">
+                      <label for="grp-description-optional-5">Description (optional)</label>
+                      <mat-form-field appearance="outline">
+                      <input matInput id="grp-description-optional-5" formControlName="description" placeholder="Brief description">
                     </mat-form-field>
+                    </div>
                   </div>
 
                   <div class="form-actions">
                     @if (editingEnvironment()) {
-                      <button matButton type="button" (click)="cancelEditEnvironment()">Cancel</button>
+                      <button matButton type="button" (click)="cancelEditEnvironment(environmentDir)">Cancel</button>
                     }
                     <button matButton="tonal" type="submit" [disabled]="!environmentForm.valid || saving()">
                       <mat-icon>{{ editingEnvironment() ? 'save' : 'add' }}</mat-icon>
@@ -232,11 +243,16 @@ interface ManageGroupDialogData {
 
     .item-actions {
       display: flex;
-      gap: 4px;
+      align-items: center;
+      gap: 8px;
     }
 
     .delete {
       color: var(--mat-sys-error);
+    }
+
+    .counts {
+      color: var(--mat-sys-on-surface-variant);
     }
 
     .client-selector {
@@ -250,14 +266,45 @@ interface ManageGroupDialogData {
       font-style: italic;
     }
 
-    mat-list {
-      max-height: 320px;
-      overflow-y: auto;
+    .rows {
+      margin: 0;
       padding: 0;
+      list-style: none;
     }
 
-    mat-list-item {
+    .group-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 52px;
       border-bottom: 1px solid var(--mat-sys-outline-variant);
+    }
+
+    .group-name {
+      display: flex;
+      flex: 1;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+
+      > label {
+        font: var(--mat-sys-label-medium);
+        color: var(--mat-sys-on-surface-variant);
+      }
+    }
+
+    .production-note {
+      margin: 4px 0 0;
+      font: var(--mat-sys-body-small);
+      color: var(--mat-sys-on-surface-variant);
     }
   `]
 })
@@ -266,6 +313,8 @@ export class ManageGroupDialogComponent {
   private groupService = inject(ConnectionGroupService);
   private snackBar = inject(MatSnackBar);
   private fb = inject(FormBuilder);
+  private dialog = inject(MatDialog);
+  readonly plural = plural;
   private readonly destroyRef = inject(DestroyRef);
 
   clients: WritableSignal<ConnectionGroup[]> = signal<ConnectionGroup[]>([]);
@@ -293,6 +342,34 @@ export class ManageGroupDialogComponent {
     });
   }
 
+  /** The saved connections whose client or environment is this group. */
+  connectionsOf(group: ConnectionGroup): ServiceBusConnection[] {
+    const all = this.data.connections ?? [];
+    return group.type === 'client'
+      ? all.filter(c => c.clientId === group.id)
+      : all.filter(c => c.environmentId === group.id);
+  }
+
+  clientCounts(client: ConnectionGroup): string {
+    const environments = this.environments().filter(e => e.parentId === client.id).length;
+    return `${plural(environments, 'environment', 'environments')}, ${plural(this.connectionsOf(client).length, 'connection', 'connections')}`;
+  }
+
+  private confirmGroupDelete(group: ConnectionGroup, kind: 'client' | 'environment') {
+    const names = this.connectionsOf(group).map(c => c.name);
+    const data: ConfirmDialogData = {
+      title: `Delete ${kind}?`,
+      icon: 'warning',
+      message: `This removes the ${kind} ${group.name} from this computer. `
+        + (names.length
+          ? `These connections stay saved and lose this ${kind}: ${names.join(', ')}. `
+          : `No connection is in this ${kind}. `)
+        + 'Nothing on a broker is changed.',
+      confirmText: `Delete ${kind}`,
+    };
+    return this.dialog.open(ConfirmDialogComponent, { width: '480px', data }).afterClosed();
+  }
+
   onClientSelected() {
     this.cancelEditEnvironment();
   }
@@ -313,12 +390,13 @@ export class ManageGroupDialogComponent {
     });
   }
 
-  cancelEditClient() {
+  /** Leaves the client form empty and out of the error state, as if never submitted. */
+  cancelEditClient(form?: FormGroupDirective) {
     this.editingClient.set(null);
-    this.clientForm.reset();
+    if (form) form.resetForm(); else this.clientForm.reset();
   }
 
-  saveClient() {
+  saveClient(form?: FormGroupDirective) {
     if (!this.clientForm.valid) return;
 
     const formValue = this.clientForm.value;
@@ -353,7 +431,7 @@ export class ManageGroupDialogComponent {
           this.clients.set([...this.clients(), group]);
         }
 
-        this.cancelEditClient();
+        this.cancelEditClient(form);
         this.saving.set(false);
       },
       error: (err) => {
@@ -377,7 +455,8 @@ export class ManageGroupDialogComponent {
       return;
     }
 
-    if (confirm(`Are you sure you want to delete "${client.name}"?`)) {
+    this.confirmGroupDelete(client, 'client').subscribe(confirmed => {
+      if (!confirmed) return;
       this.groupService.deleteGroup(client.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
         next: () => {
           this.clients.set(this.clients().filter(c => c.id !== client.id));
@@ -387,7 +466,7 @@ export class ManageGroupDialogComponent {
           this.snackBar.open('Failed to delete client', 'Close', { duration: 3000 });
         }
       });
-    }
+    });
   }
 
   editEnvironment(env: ConnectionGroup) {
@@ -398,12 +477,13 @@ export class ManageGroupDialogComponent {
     });
   }
 
-  cancelEditEnvironment() {
+  /** Leaves the environment form empty and out of the error state, as if never submitted. */
+  cancelEditEnvironment(form?: FormGroupDirective) {
     this.editingEnvironment.set(null);
-    this.environmentForm.reset();
+    if (form) form.resetForm(); else this.environmentForm.reset();
   }
 
-  saveEnvironment() {
+  saveEnvironment(form?: FormGroupDirective) {
     if (!this.environmentForm.valid) return;
 
     const formValue = this.environmentForm.value;
@@ -413,7 +493,8 @@ export class ManageGroupDialogComponent {
       name: formValue.name,
       type: 'environment',
       parentId: this.selectedClientId,
-      description: formValue.description || undefined
+      description: formValue.description || undefined,
+      isProduction: !!this.editingEnvironment()?.isProduction
     };
 
     const operation = this.editingEnvironment()
@@ -439,7 +520,7 @@ export class ManageGroupDialogComponent {
           this.environments.set([...this.environments(), group]);
         }
 
-        this.cancelEditEnvironment();
+        this.cancelEditEnvironment(form);
         this.saving.set(false);
       },
       error: () => {
@@ -449,8 +530,22 @@ export class ManageGroupDialogComponent {
     });
   }
 
+  /** Marks an environment production or not; the checkbox goes back when the API refuses. */
+  setProduction(env: ConnectionGroup, change: MatCheckboxChange) {
+    const { id, name, type, parentId, description, order } = env;
+    this.groupService.updateGroup(id, { name, type, parentId, description, order, isProduction: change.checked })
+      .pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+        next: group => this.environments.set(this.environments().map(e => e.id === group.id ? group : e)),
+        error: () => {
+          change.source.checked = !change.checked;
+          this.snackBar.open(`Failed to mark ${env.name}: nothing was changed`, 'Close', { duration: 5000 });
+        }
+      });
+  }
+
   deleteEnvironment(env: ConnectionGroup) {
-    if (confirm(`Are you sure you want to delete "${env.name}"?`)) {
+    this.confirmGroupDelete(env, 'environment').subscribe(confirmed => {
+      if (!confirmed) return;
       this.groupService.deleteGroup(env.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
         next: () => {
           this.environments.set(this.environments().filter(e => e.id !== env.id));
@@ -460,7 +555,7 @@ export class ManageGroupDialogComponent {
           this.snackBar.open('Failed to delete environment', 'Close', { duration: 3000 });
         }
       });
-    }
+    });
   }
 
   close() {

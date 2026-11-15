@@ -25,7 +25,7 @@ describe('RuleDeleteDialogComponent: delete a rule', () => {
           provide: ConnectionService,
           useValue: { currentTarget: 'ns.example.net', currentConnectionId: 'c-1', getConnections: () => of([{ id: 'c-1', name: 'contoso-prod', environmentId: 'g-env' }]) }
         },
-        { provide: ConnectionGroupService, useValue: { getGroups: () => of([{ id: 'g-env', name: 'Production', type: 'environment' }]) } }
+        { provide: ConnectionGroupService, useValue: { getGroups: () => of([{ id: 'g-env', name: 'Production', type: 'environment', isProduction: true }]) } }
       ]
     });
     fixture = TestBed.createComponent(RuleDeleteDialogComponent);
@@ -117,5 +117,17 @@ describe('RuleDeleteDialogComponent: delete a rule', () => {
     }
     expect(close).not.toHaveBeenCalled();
     expect(el.querySelector('mat-progress-bar')).toBeNull();
+  });
+
+  it('as Rules.dc.html draws it: the line "email in order-events on <connection>", the trash icon on Delete rule, and the hint under the typed name', () => {
+    open('$Default', true);
+
+    expect(text(el.querySelector('.environment-line .where'))).toBe('email in order-events on contoso-prod (ns.example.net)');
+    expect(text(el.querySelector('.environment-line .where b'))).toBe('email');
+    const chip = el.querySelector('.environment-line .environment-chip') as HTMLElement;
+    expect(chip.textContent?.replace('warning', '').trim(), 'the rule delete opens with the PRODUCTION chip').toBe('PRODUCTION');
+    expect(chip.classList.contains('production'), 'a production environment takes the error container').toBe(true);
+    expect(button('Delete rule')!.querySelector('mat-icon')?.getAttribute('fontIcon'), 'the trash icon').toBe('delete');
+    expect(text(el.querySelector('mat-hint'))).toBe('The button stays disabled until the name matches exactly.');
   });
 });

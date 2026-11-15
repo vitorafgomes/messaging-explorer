@@ -65,9 +65,9 @@ public class RabbitMQProviderCapabilities : IProviderCapabilities
 
     /// <inheritdoc />
     /// <remarks>
-    /// RabbitMQ supports transactional messaging via TX mode or publisher confirms.
+    /// False: the provider opens no TX channel and uses no publisher confirms.
     /// </remarks>
-    public bool SupportsTransactions => true;
+    public bool SupportsTransactions => false;
 
     /// <inheritdoc />
     /// <remarks>
@@ -102,6 +102,12 @@ public class RabbitMQProviderCapabilities : IProviderCapabilities
 
     /// <inheritdoc />
     public bool SupportsDefinitions => false;
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// A RabbitMQ broker has no namespace; the provider refuses the read.
+    /// </remarks>
+    public bool SupportsNamespaceProperties => false;
 
     /// <inheritdoc />
     /// <remarks>
@@ -153,4 +159,10 @@ public class RabbitMQProviderCapabilities : IProviderCapabilities
     /// A queue is read from its head; the provider refuses a peek that names a start.
     /// </remarks>
     public bool SupportsPeekFromSequenceNumber => false;
+
+    /// <inheritdoc />
+    public bool SupportsManualDeadLetter => false;
+
+    /// <inheritdoc />
+    public bool SupportsBinaryBody => false;
 }

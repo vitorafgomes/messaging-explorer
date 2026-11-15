@@ -105,7 +105,7 @@ describe('SubscriptionRulesComponent: the rules of a subscription', () => {
     it('no rule and failed to load are different states: an empty list says the subscription receives no message', () => {
       render([], ENABLED);
 
-      expect(text(el.querySelector('.empty'))).toBe('No rule: this subscription receives no message');
+      expect(text(el.querySelector('.empty h3'))).toBe('No rule: this subscription receives no message');
       expect(el.querySelector('table')).toBeNull();
       expect(el.querySelector('[role="alert"]')).toBeNull();
       expect(byText('Add rule'), 'Add rule is offered on an empty list with the capability').toBeDefined();
@@ -116,7 +116,7 @@ describe('SubscriptionRulesComponent: the rules of a subscription', () => {
       dialogResult = true;
       click(byText('Add rule'));
 
-      expect(text(el.querySelector('[role="alert"] .grow'))).toBe('Could not read the rules: the API did not answer. Nothing was changed by reading.');
+      expect(text(el.querySelector('[role="alert"] h3'))).toBe('Could not read the rules');
       expect(el.querySelector('.empty'), 'the empty state').toBeNull();
       expect(el.querySelector('table'), 'the table').toBeNull();
 
@@ -131,7 +131,7 @@ describe('SubscriptionRulesComponent: the rules of a subscription', () => {
       dialogResult = true;
       click(byText('Add rule'));
 
-      expect(text(el.querySelector('[role="alert"] .grow'))).toBe('Could not read the rules: the API did not answer. Nothing was changed by reading.');
+      expect(text(el.querySelector('[role="alert"] h3'))).toBe('Could not read the rules');
       expect(byText('Retry')).toBeDefined();
     });
 
@@ -174,7 +174,7 @@ describe('SubscriptionRulesComponent: the rules of a subscription', () => {
     it('without it an empty list says the same and offers no Add', () => {
       render([], { supportsSubscriptionRules: false });
 
-      expect(text(el.querySelector('.empty'))).toBe('No rule: this subscription receives no message');
+      expect(text(el.querySelector('.empty h3'))).toBe('No rule: this subscription receives no message');
       expect(buttons().length).toBe(0);
     });
   });
@@ -222,6 +222,42 @@ describe('SubscriptionRulesComponent: the rules of a subscription', () => {
       dialogResult = undefined;
       click(named('Delete rule uk-orders'));
       expect(open.mock.calls[1][1].data).toStrictEqual({ topicName: 'order-events', subscriptionName: 'warehouse', ruleName: 'uk-orders', isLast: true });
+    });
+  });
+
+  describe('as Rules.dc.html draws the tab', () => {
+    it('"Add rule" in the bar is a small outlined button with the plus icon, shown when there are rules', () => {
+      render([SQL], ENABLED);
+      const add = el.querySelector('.bar button')!;
+
+      expect(text(add)).toBe('addAdd rule');
+      expect(add.hasAttribute('mat-stroked-button'), 'an outlined button').toBe(true);
+      expect(add.classList.contains('small'), 'the small size of a button inside a tab').toBe(true);
+    });
+
+    it('no rule: the empty state with its icon, the heading, the sentence naming the topic and a tonal Add rule in it, none in the bar', () => {
+      render([], ENABLED);
+      const empty = el.querySelector('.empty')!;
+
+      expect(empty.querySelector('mat-icon'), 'the empty-state icon').not.toBeNull();
+      expect(text(empty.querySelector('h3'))).toBe('No rule: this subscription receives no message');
+      expect(text(empty.querySelector('p'))).toBe('Messages published to order-events are not kept for it until a rule is added.');
+      expect(empty.querySelector('button')?.getAttribute('matButton')).toBe('tonal');
+      expect(text(empty.querySelector('button'))).toBe('addAdd rule');
+      expect(el.querySelector('.bar button'), 'Add rule in the bar of an empty list').toBeNull();
+    });
+
+    it('rules that could not be read: the heading "Could not read the rules", what it means for the data, and an outlined Retry with its icon', () => {
+      render(undefined, ENABLED);
+      const alert = el.querySelector('[role="alert"]')!;
+
+      expect(text(alert.querySelector('h3'))).toBe('Could not read the rules');
+      expect(text(alert.querySelector('p'))).toBe('The API did not answer. Nothing was changed by reading. The rules of warehouse are not shown because they were not read; the subscription may well have some.');
+      expect(alert.querySelector('mat-icon')?.textContent?.trim()).toBe('warning');
+      const retry = alert.querySelector('button')!;
+      expect(text(retry)).toBe('refreshRetry');
+      expect(retry.hasAttribute('mat-stroked-button'), 'an outlined Retry').toBe(true);
+      expect(el.querySelector('.bar button'), 'Add rule while the rules are unknown').toBeNull();
     });
   });
 });

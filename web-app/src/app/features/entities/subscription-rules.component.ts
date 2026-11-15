@@ -1,4 +1,4 @@
-import { Component, computed, inject, input, linkedSignal } from '@angular/core';
+import { Component, computed, inject, input, linkedSignal, output } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MatDialog } from '@angular/material/dialog';
 import { MatTableModule } from '@angular/material/table';
@@ -30,8 +30,8 @@ const FILTER_LABELS: Record<string, string> = { Sql: 'SQL', Correlation: 'Correl
   template: `
     <div class="bar">
       <span class="lead">A message is delivered when at least one rule matches.</span>
-      @if (canEdit() && state() === 'ready') {
-        <button mat-flat-button type="button" (click)="add()"><mat-icon>add</mat-icon>Add rule</button>
+      @if (canEdit() && state() === 'ready' && rules().length > 0) {
+        <button mat-stroked-button type="button" class="small" (click)="add()"><mat-icon>add</mat-icon>Add rule</button>
       }
     </div>
 
@@ -40,11 +40,14 @@ const FILTER_LABELS: Record<string, string> = { Sql: 'SQL', Correlation: 'Correl
         <mat-progress-bar mode="indeterminate" aria-label="Reading the rules"></mat-progress-bar>
       }
       @case ('failed') {
-        <div class="error" role="alert">
-          <mat-icon aria-hidden="true">error</mat-icon>
-          <span class="grow">Could not read the rules: the API did not answer. Nothing was changed by reading.</span>
-          <button mat-button type="button" (click)="reload()">Retry</button>
-        </div>
+        <section class="error" role="alert">
+          <mat-icon aria-hidden="true">warning</mat-icon>
+          <div class="grow">
+            <h3>Could not read the rules</h3>
+            <p>The API did not answer. Nothing was changed by reading. The rules of {{ subscription().name }} are not shown because they were not read; the subscription may well have some.</p>
+            <button mat-stroked-button type="button" (click)="reload()"><mat-icon>refresh</mat-icon>Retry</button>
+          </div>
+        </section>
       }
       @case ('gone') {
         <div class="error" role="alert">
@@ -55,7 +58,14 @@ const FILTER_LABELS: Record<string, string> = { Sql: 'SQL', Correlation: 'Correl
       }
       @default {
         @if (rules().length === 0) {
-          <p class="empty">No rule: this subscription receives no message</p>
+          <div class="empty">
+            <mat-icon class="empty-icon" aria-hidden="true">filter_alt_off</mat-icon>
+            <h3>No rule: this subscription receives no message</h3>
+            <p>Messages published to {{ subscription().topicName }} are not kept for it until a rule is added.</p>
+            @if (canEdit()) {
+              <button matButton="tonal" type="button" (click)="add()"><mat-icon>add</mat-icon>Add rule</button>
+            }
+          </div>
         } @else {
           <table mat-table [dataSource]="rules()" class="rules">
             <ng-container matColumnDef="name">
@@ -98,14 +108,19 @@ const FILTER_LABELS: Record<string, string> = { Sql: 'SQL', Correlation: 'Correl
     :host { display: block; padding: 8px 16px; min-width: 0; }
     .bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
     .lead, .muted, .empty { color: var(--mat-sys-on-surface-variant); }
-    .empty { font: var(--mat-sys-body-medium); margin: 16px 0; }
+    .empty { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin: 16px 0; font: var(--mat-sys-body-medium); }
+    .empty h3, .error h3 { margin: 0; font: var(--mat-sys-title-medium); color: var(--mat-sys-on-surface); }
+    .error h3 { color: inherit; }
+    .empty p, .error p { margin: 0; }
+    .empty-icon { color: var(--mat-sys-outline); }
+    .small { --mat-button-outlined-container-height: 32px; }
     .rules { width: 100%; }
     td { overflow-wrap: anywhere; }
     .mono { font-family: ui-monospace, monospace; }
     .acts { white-space: nowrap; text-align: end; }
     .danger { color: var(--mat-sys-error); }
     .error {
-      display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 12px;
+      display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; border-radius: 12px;
       background: var(--mat-sys-error-container); color: var(--mat-sys-on-error-container);
     }
     .grow { flex: 1; min-width: 0; }
@@ -119,6 +134,8 @@ export class SubscriptionRulesComponent {
   private readonly providerService = inject(ProviderService);
 
   readonly subscription = input.required<SubscriptionInfo>();
+  /** The count of the rules each time they are read again, or null when they could not be read. */
+  readonly rulesRead = output<number | null>();
 
   readonly rules = linkedSignal<SubscriptionRuleInfo[]>(() => this.subscription().rules ?? []);
   readonly state = linkedSignal<ListState>(() => Array.isArray(this.subscription().rules) ? 'ready' : 'failed');
@@ -155,11 +172,13 @@ export class SubscriptionRulesComponent {
       next: rules => {
         if (this.subscription() !== subscription) return;
         this.rules.set(rules);
+        this.rulesRead.emit(rules.length);
         this.state.set('ready');
       },
       error: (error: HttpErrorResponse) => {
         if (this.subscription() !== subscription) return;
         this.state.set(error.status === 404 ? 'gone' : 'failed');
+        this.rulesRead.emit(null);
       }
     });
   }

@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Net;
+using Azure.Core.Pipeline;
 using Azure.Messaging.ServiceBus;
 using Azure.Messaging.ServiceBus.Administration;
 using Microsoft.Extensions.Logging;
@@ -70,11 +72,13 @@ public class AzureServiceBusProvider : IMessagingProvider
             _logger.LogInformation("Testing connection to Service Bus for {ConnectionName} via {AuthType}",
                 azureConfig.Name, azureConfig.AuthType);
             // Do not log the connection string or any portion of it.
+            var adminOptions = BuildAdministrationClientOptions(azureConfig);
             var adminClient = azureConfig.AuthType == AzureAuthType.ConnectionString
-                ? new ServiceBusAdministrationClient(azureConfig.ConnectionString)
+                ? new ServiceBusAdministrationClient(azureConfig.ConnectionString, adminOptions)
                 : new ServiceBusAdministrationClient(
                     azureConfig.FullyQualifiedNamespace,
-                    AzureCredentialFactory.Create(azureConfig));
+                    AzureCredentialFactory.Create(azureConfig),
+                    adminOptions);
 
             // Try to get namespace properties - lightweight operation to test connection
             var namespaceProperties = await adminClient.GetNamespacePropertiesAsync();
@@ -107,16 +111,18 @@ public class AzureServiceBusProvider : IMessagingProvider
 
         _currentConfig = azureConfig;
 
+        var clientOptions = BuildClientOptions(azureConfig);
+        var adminOptions = BuildAdministrationClientOptions(azureConfig);
         if (azureConfig.AuthType == AzureAuthType.ConnectionString)
         {
-            _client = new ServiceBusClient(azureConfig.ConnectionString);
-            _adminClient = new ServiceBusAdministrationClient(azureConfig.ConnectionString);
+            _client = new ServiceBusClient(azureConfig.ConnectionString, clientOptions);
+            _adminClient = new ServiceBusAdministrationClient(azureConfig.ConnectionString, adminOptions);
         }
         else
         {
             var credential = AzureCredentialFactory.Create(azureConfig);
-            _client = new ServiceBusClient(azureConfig.FullyQualifiedNamespace, credential);
-            _adminClient = new ServiceBusAdministrationClient(azureConfig.FullyQualifiedNamespace, credential);
+            _client = new ServiceBusClient(azureConfig.FullyQualifiedNamespace, credential, clientOptions);
+            _adminClient = new ServiceBusAdministrationClient(azureConfig.FullyQualifiedNamespace, credential, adminOptions);
         }
 
         // Use the config's own display logic so both auth paths produce a clean short name.
@@ -124,6 +130,33 @@ public class AzureServiceBusProvider : IMessagingProvider
 
         return Task.CompletedTask;
     }
+
+    /// <summary>
+    /// The messaging client's options: AMQP over WebSockets when the connection asks for it, otherwise AMQP, and the
+    /// proxy with this computer's default credentials. The config has passed <see cref="AzureConnectionConfig.IsValid"/>.
+    /// </summary>
+    internal static ServiceBusClientOptions BuildClientOptions(AzureConnectionConfig config) => new()
+    {
+        TransportType = config.UseWebSockets ? ServiceBusTransportType.AmqpWebSockets : ServiceBusTransportType.AmqpTcp,
+        WebProxy = Proxy(config),
+    };
+
+    /// <summary>
+    /// The administration client's options: an HTTP transport through the proxy when one is given, otherwise the SDK's
+    /// defaults. The administration client speaks HTTPS on 443 whatever the transport of the messaging client.
+    /// </summary>
+    internal static ServiceBusAdministrationClientOptions BuildAdministrationClientOptions(AzureConnectionConfig config)
+    {
+        var options = new ServiceBusAdministrationClientOptions();
+        if (Proxy(config) is { } proxy)
+        {
+            options.Transport = new HttpClientTransport(new HttpClientHandler { Proxy = proxy, UseProxy = true });
+        }
+        return options;
+    }
+
+    private static WebProxy? Proxy(AzureConnectionConfig config) =>
+        string.IsNullOrEmpty(config.ProxyAddress) ? null : new WebProxy(new Uri(config.ProxyAddress)) { UseDefaultCredentials = true };
 
     /// <inheritdoc />
     public async Task DisconnectAsync()
@@ -146,13 +179,23 @@ public class AzureServiceBusProvider : IMessagingProvider
     public async Task<IEnumerable<IQueueEntity>> GetQueuesAsync()
     {
         EnsureConnected();
+        return await ListQueuesCoreAsync(_adminClient!);
+    }
+
+    /// <summary>
+    /// Lists the queues from two paged listings, configuration and runtime, joined by name, so each carries its status
+    /// and its forwarding target with its counts: one call per page of each listing, never one per queue. A queue
+    /// created between the two listings keeps only its runtime values. A failed listing fails the read.
+    /// </summary>
+    internal static async Task<List<QueueInfo>> ListQueuesCoreAsync(ServiceBusAdministrationClient adminClient, CancellationToken cancellationToken = default)
+    {
+        var settings = new Dictionary<string, QueueProperties>(StringComparer.OrdinalIgnoreCase);
+        await foreach (var queue in adminClient.GetQueuesAsync(cancellationToken))
+            settings[queue.Name] = queue;
+
         var queues = new List<QueueInfo>();
-
-        await foreach (var queue in _adminClient!.GetQueuesRuntimePropertiesAsync())
-        {
-            queues.Add(MapToQueueInfo(queue));
-        }
-
+        await foreach (var runtime in adminClient.GetQueuesRuntimePropertiesAsync(cancellationToken))
+            queues.Add(settings.TryGetValue(runtime.Name, out var props) ? MapToQueueInfo(props, runtime) : MapToQueueInfo(runtime));
         return queues;
     }
 
@@ -390,45 +433,88 @@ public class AzureServiceBusProvider : IMessagingProvider
     public async Task<IEnumerable<ITopicEntity>> GetTopicsAsync()
     {
         EnsureConnected();
+        return await ListTopicsCoreAsync(_adminClient!);
+    }
+
+    /// <summary>
+    /// Lists the topics from two paged listings, configuration and runtime, joined by name, so each carries its status
+    /// with its counts: one call per page of each listing, never one per topic. A topic has no forwarding target.
+    /// A failed listing fails the read.
+    /// </summary>
+    internal static async Task<List<TopicInfo>> ListTopicsCoreAsync(ServiceBusAdministrationClient adminClient, CancellationToken cancellationToken = default)
+    {
+        var settings = new Dictionary<string, TopicProperties>(StringComparer.OrdinalIgnoreCase);
+        await foreach (var topic in adminClient.GetTopicsAsync(cancellationToken))
+            settings[topic.Name] = topic;
+
         var topics = new List<TopicInfo>();
-
-        await foreach (var topic in _adminClient!.GetTopicsRuntimePropertiesAsync())
-        {
-            topics.Add(MapToTopicInfo(topic));
-        }
-
+        await foreach (var runtime in adminClient.GetTopicsRuntimePropertiesAsync(cancellationToken))
+            topics.Add(settings.TryGetValue(runtime.Name, out var props) ? MapToTopicInfo(props, runtime) : MapToTopicInfo(runtime));
         return topics;
     }
 
     /// <inheritdoc />
-    public async Task<ITopicEntity?> GetTopicAsync(string topicName)
+    public async Task<ITopicEntity?> GetTopicAsync(string topicName, CancellationToken cancellationToken = default)
     {
         EnsureConnected();
+        return await GetTopicCoreAsync(_adminClient!, topicName, cancellationToken);
+    }
+
+    /// <summary>How many subscriptions of one topic read have their rules listed at once.</summary>
+    internal const int TopicRuleCountParallelism = 8;
+
+    /// <summary>How many subscriptions of one topic read have their rules counted; the rest keep a null count.</summary>
+    internal const int TopicRuleCountLimit = 200;
+
+    /// <summary>
+    /// Reads a topic's configuration and runtime properties, then its subscriptions from two paged listings, runtime
+    /// and configuration, joined by name so each carries its counts and its status. Null when the topic does not
+    /// exist. Then counts the rules of at most <see cref="TopicRuleCountLimit"/> subscriptions, at most
+    /// <see cref="TopicRuleCountParallelism"/> at once: 2 topic calls, one call per page of each of the two subscription
+    /// listings, and one rule listing per subscription counted.
+    /// </summary>
+    internal static async Task<TopicInfo?> GetTopicCoreAsync(ServiceBusAdministrationClient adminClient, string topicName, CancellationToken cancellationToken)
+    {
+        var propsTask = adminClient.GetTopicAsync(topicName, cancellationToken);
+        var runtimePropsTask = adminClient.GetTopicRuntimePropertiesAsync(topicName, cancellationToken);
+        TopicInfo topicInfo;
+        var runtime = new List<SubscriptionRuntimeProperties>();
+        var settings = new Dictionary<string, SubscriptionProperties>(StringComparer.OrdinalIgnoreCase);
         try
         {
-            // Fetch BOTH configuration properties and runtime properties
-            var propsTask = _adminClient!.GetTopicAsync(topicName);
-            var runtimePropsTask = _adminClient!.GetTopicRuntimePropertiesAsync(topicName);
-
             await Task.WhenAll(propsTask, runtimePropsTask);
-
-            var props = propsTask.Result.Value;
-            var runtimeProps = runtimePropsTask.Result.Value;
-
-            var topicInfo = MapToTopicInfo(props, runtimeProps);
-
-            // Load subscriptions
-            await foreach (var sub in _adminClient.GetSubscriptionsRuntimePropertiesAsync(topicName))
-            {
-                topicInfo.Subscriptions.Add(MapToSubscriptionInfo(sub));
-            }
-
-            return topicInfo;
+            topicInfo = MapToTopicInfo(propsTask.Result.Value, runtimePropsTask.Result.Value);
+            await foreach (var sub in adminClient.GetSubscriptionsRuntimePropertiesAsync(topicName, cancellationToken))
+                runtime.Add(sub);
+            await foreach (var sub in adminClient.GetSubscriptionsAsync(topicName, cancellationToken))
+                settings[sub.SubscriptionName] = sub;
         }
         catch (ServiceBusException ex) when (ex.Reason == ServiceBusFailureReason.MessagingEntityNotFound)
         {
             return null;
         }
+
+        topicInfo.Subscriptions.AddRange(runtime.Select(r =>
+            settings.TryGetValue(r.SubscriptionName, out var props) ? MapToSubscriptionInfo(props, r) : MapToSubscriptionInfo(r)));
+
+        // ponytail: rules are counted for the first TopicRuleCountLimit subscriptions only; page the count if a topic needs more.
+        var parallel = new ParallelOptions { MaxDegreeOfParallelism = TopicRuleCountParallelism, CancellationToken = cancellationToken };
+        await Parallel.ForEachAsync(topicInfo.Subscriptions.Take(TopicRuleCountLimit), parallel, async (subscription, token) =>
+        {
+            try
+            {
+                var count = 0;
+                await foreach (var _ in adminClient.GetRulesAsync(topicName, subscription.Name, token))
+                    count++;
+                subscription.RuleCount = count;
+            }
+            catch (Exception) when (!token.IsCancellationRequested)
+            {
+                subscription.RuleCount = null;
+            }
+        });
+
+        return topicInfo;
     }
 
     /// <inheritdoc />
@@ -1221,23 +1307,102 @@ public class AzureServiceBusProvider : IMessagingProvider
     }
 
     /// <inheritdoc />
-    public async Task SendMessageAsync(string entityName, SendMessageRequest request)
+    public async Task<long?> SendMessageAsync(string entityName, SendMessageRequest request)
     {
         EnsureConnected();
         await using var sender = _client!.CreateSender(entityName);
 
         var message = CreateServiceBusMessage(request);
+        if (request.ScheduledEnqueueTime is { } enqueueAt)
+            return await RefuseDisabledAsync(() => sender.ScheduleMessageAsync(message, enqueueAt));
+
         await RefuseDisabledAsync(() => sender.SendMessageAsync(message));
+        return null;
     }
 
     /// <inheritdoc />
-    public async Task SendMessagesAsync(string entityName, IEnumerable<SendMessageRequest> requests)
+    public async Task<SendMessagesResult> SendMessagesAsync(string entityName, IEnumerable<SendMessageRequest> requests, CancellationToken cancellationToken = default)
     {
         EnsureConnected();
         await using var sender = _client!.CreateSender(entityName);
 
         var messages = requests.Select(CreateServiceBusMessage).ToList();
-        await RefuseDisabledAsync(() => sender.SendMessagesAsync(messages));
+        return await RefuseDisabledAsync(() => SendInBatchesAsync(sender, messages, _logger, cancellationToken));
+    }
+
+    /// <summary>
+    /// Fills a <see cref="ServiceBusMessageBatch"/> to the size limit, sends it and starts the next. A message that does
+    /// not fit an empty batch is refused with <see cref="SendMessageFailure.TooLarge"/>, never sent alone. Until a batch
+    /// is accepted a failure propagates; after that, the caller's token, checked before each send, or a broker failure
+    /// ends the send with the count accepted, the batch in flight as <see cref="SendMessageFailure.Unconfirmed"/> and
+    /// the rest as <see cref="SendMessageFailure.NotSent"/>.
+    /// </summary>
+    internal static async Task<SendMessagesResult> SendInBatchesAsync(ServiceBusSender sender, IReadOnlyList<ServiceBusMessage> messages, ILogger logger, CancellationToken cancellationToken)
+    {
+        var result = new SendMessagesResult();
+        var pending = new List<int>();
+        var batch = await sender.CreateMessageBatchAsync(cancellationToken);
+        try
+        {
+            for (var i = 0; i < messages.Count; i++)
+            {
+                if (batch.TryAddMessage(messages[i]))
+                {
+                    pending.Add(i);
+                    continue;
+                }
+
+                if (batch.Count == 0)
+                {
+                    result.Failures.Add(new SendMessageFailure { Index = i, Error = SendMessageFailure.TooLarge });
+                    continue;
+                }
+
+                if (!await FlushAsync(i))
+                    return result;
+                i--;
+            }
+
+            if (pending.Count > 0)
+                await FlushAsync(messages.Count);
+            return result;
+        }
+        finally
+        {
+            batch.Dispose();
+        }
+
+        async Task<bool> FlushAsync(int next)
+        {
+            if (result.SentCount > 0 && cancellationToken.IsCancellationRequested)
+                return Stop(SendMessageFailure.NotSent, next);
+
+            try
+            {
+                await sender.SendMessagesAsync(batch, cancellationToken);
+                result.SentCount += pending.Count;
+                pending.Clear();
+                if (next < messages.Count)
+                {
+                    batch.Dispose();
+                    batch = await sender.CreateMessageBatchAsync(cancellationToken);
+                }
+
+                return true;
+            }
+            catch (Exception ex) when (result.SentCount > 0)
+            {
+                logger.LogWarning(ex, "A send of many messages stopped after {SentCount} were sent", result.SentCount);
+                return Stop(SendMessageFailure.Unconfirmed, next);
+            }
+        }
+
+        bool Stop(string inFlightError, int next)
+        {
+            result.Failures.AddRange(pending.Select(i => new SendMessageFailure { Index = i, Error = inFlightError }));
+            result.Failures.AddRange(Enumerable.Range(next, messages.Count - next).Select(i => new SendMessageFailure { Index = i, Error = SendMessageFailure.NotSent }));
+            return false;
+        }
     }
 
     /// <inheritdoc />
@@ -1281,13 +1446,17 @@ public class AzureServiceBusProvider : IMessagingProvider
     }
 
     /// <inheritdoc />
-    public async Task ResubmitDeadLetterMessageAsync(string entityName, long sequenceNumber, string? subscriptionName = null)
+    public async Task ResubmitDeadLetterMessageAsync(string entityName, long sequenceNumber, string? subscriptionName = null, bool newMessageIdOnDuplicateDetection = false)
     {
         EnsureConnected();
 
         // For subscriptions, always send to the TOPIC (not to the subscription directly)
         // This means the message will pass through all subscription filters.
         var targetPath = entityName; // Always send to queue or topic
+
+        var check = await CheckBeforeScanAsync(_adminClient!, [sequenceNumber], entityName, subscriptionName, MessageSubQueue.DeadLetter, (targetPath, subscriptionName is not null), newMessageIdOnDuplicateDetection, CancellationToken.None);
+        if (check.Refusal is not null)
+            throw new InvalidEntityConfigurationException([check.Refusal.Failures[0].Error]);
 
         await using var sender = _client!.CreateSender(targetPath);
 
@@ -1302,6 +1471,8 @@ public class AzureServiceBusProvider : IMessagingProvider
 
         // Phase 2: Create and send the new message immediately from peeked content
         var newMessage = new ServiceBusMessage(peekedMessages[0]);
+        if (check.NewMessageIds)
+            GiveNewMessageId(newMessage, peekedMessages[0].MessageId);
         await RefuseDisabledAsync(() => sender.SendMessageAsync(newMessage));
 
         // Phase 3: Try to complete (remove) the original from DLQ with a hard limit
@@ -1452,6 +1623,106 @@ public class AzureServiceBusProvider : IMessagingProvider
     private const string MoveDuplicateError = "Message was moved to the target but could not be removed from the source and may be duplicated: {0}";
     private const string ResubmitDuplicateError = "Message was resubmitted but could not be removed from the dead-letter queue and may be duplicated on retry: {0}";
     private const string SendOutcomeUnknown = "the send failed and the broker may have accepted it.";
+    private const string DuplicateDetectionRefusal = "The target detects duplicates; a copy with the same message id would be dropped. Nothing was sent or removed.";
+    private const string DeliveryLimitNotReached = "Not reached: going on would have sent unselected messages past their max delivery count into the dead-letter queue. Nothing was sent or removed.";
+    private const string SettingsUnreadable = "The settings of the entity could not be read; the connection needs the Manage right for this. Nothing was sent or removed.";
+
+    /// <summary>The application property that keeps the original message id of a copy sent with a new one.</summary>
+    internal const string OriginalMessageIdProperty = "x-original-message-id";
+
+    /// <summary>Replaces the administration client of a connected provider, for a broker that serves it on its own endpoint.</summary>
+    internal void UseAdministrationClient(ServiceBusAdministrationClient adminClient) => _adminClient = adminClient;
+
+    /// <summary>
+    /// Reads what a bulk call must know before it receives anything: the max delivery count of the sub-queue it scans
+    /// (none for a dead-letter queue, which has no delivery limit, and none when <paramref name="subQueue"/> is null, for a
+    /// call that receives each message by its sequence number and so receives no unselected one) and whether the target
+    /// of a copy detects duplicates. Answers a result that refuses every target when the settings cannot be read, when
+    /// the target detects duplicates and new ids were not asked for, or when a single receive would send an unselected
+    /// message to the dead-letter queue. A cancellation by the caller propagates.
+    /// </summary>
+    internal static async Task<(int? MaxDeliveryCount, bool NewMessageIds, BatchOperationResult? Refusal)> CheckBeforeScanAsync(
+        ServiceBusAdministrationClient adminClient,
+        long[] sequenceNumbers,
+        string sourceEntityName,
+        string? subscriptionName,
+        MessageSubQueue? subQueue,
+        (string Name, bool IsTopic)? copyTarget,
+        bool newMessageIdOnDuplicateDetection,
+        CancellationToken cancellationToken)
+    {
+        int? maxDeliveryCount = null;
+        var detectsDuplicates = false;
+        try
+        {
+            if (subQueue == MessageSubQueue.Active)
+            {
+                maxDeliveryCount = subscriptionName is null
+                    ? (await adminClient.GetQueueAsync(sourceEntityName, cancellationToken)).Value.MaxDeliveryCount
+                    : (await adminClient.GetSubscriptionAsync(sourceEntityName, subscriptionName, cancellationToken)).Value.MaxDeliveryCount;
+            }
+
+            if (copyTarget is { } target)
+            {
+                detectsDuplicates = target.IsTopic
+                    ? (await adminClient.GetTopicAsync(target.Name, cancellationToken)).Value.RequiresDuplicateDetection
+                    : (await adminClient.GetQueueAsync(target.Name, cancellationToken)).Value.RequiresDuplicateDetection;
+            }
+        }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            return (null, false, Refuse(sequenceNumbers, SettingsUnreadable));
+        }
+
+        if (detectsDuplicates && !newMessageIdOnDuplicateDetection)
+            return (null, false, Refuse(sequenceNumbers, DuplicateDetectionRefusal));
+
+        if (maxDeliveryCount <= 1)
+            return (null, false, Refuse(sequenceNumbers, DeliveryLimitNotReached));
+
+        return (maxDeliveryCount, detectsDuplicates, null);
+    }
+
+    private static BatchOperationResult Refuse(long[] sequenceNumbers, string error)
+    {
+        var result = new BatchOperationResult();
+        foreach (var sequenceNumber in sequenceNumbers.Distinct())
+        {
+            result.FailureCount++;
+            result.Failures.Add(new BatchOperationFailure { SequenceNumber = sequenceNumber, Error = error });
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Records the unselected messages a cycle releases from an entity with a delivery limit, and answers whether
+    /// receiving any of them again would bring it to that limit, so the scan must stop after this cycle. A message
+    /// that arrived already at its last delivery is dead-lettered by its release and is reported by sequence number.
+    /// </summary>
+    private static bool RecordReleases(
+        List<ServiceBusReceivedMessage> released,
+        HashSet<long> targets,
+        int? maxDeliveryCount,
+        HashSet<long> raised,
+        BatchOperationResult result)
+    {
+        if (maxDeliveryCount is not { } limit)
+            return false;
+
+        var stop = false;
+        foreach (var message in released.Where(m => !targets.Contains(m.SequenceNumber)))
+        {
+            if (raised.Add(message.SequenceNumber))
+                result.UnselectedDeliveryCountRaised++;
+            if (message.DeliveryCount >= limit)
+                result.UnselectedDeadLettered.Add(message.SequenceNumber);
+            if (message.DeliveryCount + 1 >= limit)
+                stop = true;
+        }
+
+        return stop;
+    }
 
     /// <inheritdoc />
     public async Task<BatchOperationResult> DeleteMessagesAsync(string entityName, long[] sequenceNumbers, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, bool all = false, CancellationToken cancellationToken = default)
@@ -1474,13 +1745,73 @@ public class AzureServiceBusProvider : IMessagingProvider
             return result;
         }
 
+        var check = await CheckBeforeScanAsync(_adminClient!, sequenceNumbers!, entityName, subscriptionName, subQueue, null, false, cancellationToken);
+        if (check.Refusal is not null)
+            return check.Refusal;
+
         await using var receiver = CreateReceiver(_client!, entityName, subscriptionName, subQueue, new ServiceBusReceiverOptions
         {
             ReceiveMode = ServiceBusReceiveMode.PeekLock,
             PrefetchCount = ScanPrefetchCount
         });
 
-        return await DeleteMessagesCoreAsync(receiver, sequenceNumbers!, cancellationToken);
+        return await DeleteMessagesCoreAsync(receiver, sequenceNumbers!, cancellationToken, check.MaxDeliveryCount);
+    }
+
+    private const string ActiveNotDeadLetteredError = "The broker did not dead-letter this message.";
+    private const string ActiveNotDeferredError = "The broker did not defer this message.";
+
+    /// <inheritdoc />
+    public Task<BatchOperationResult> DeadLetterMessagesAsync(string entityName, long[] sequenceNumbers, string? subscriptionName = null, string? reason = null, string? description = null, CancellationToken cancellationToken = default) =>
+        SettleActiveAsync(entityName, sequenceNumbers, subscriptionName,
+            (receiver, maxDeliveryCount) => DeadLetterActiveCoreAsync(receiver, sequenceNumbers, reason, description, cancellationToken, maxDeliveryCount),
+            cancellationToken);
+
+    /// <inheritdoc />
+    public Task<BatchOperationResult> DeferMessagesAsync(string entityName, long[] sequenceNumbers, string? subscriptionName = null, CancellationToken cancellationToken = default) =>
+        SettleActiveAsync(entityName, sequenceNumbers, subscriptionName,
+            (receiver, maxDeliveryCount) => DeferActiveCoreAsync(receiver, sequenceNumbers, cancellationToken, maxDeliveryCount),
+            cancellationToken);
+
+    /// <summary>The scan of the selective delete, dead-lettering each target with the reason and description, or the defaults.</summary>
+    internal static Task<BatchOperationResult> DeadLetterActiveCoreAsync(ServiceBusReceiver receiver, long[] sequenceNumbers, string? reason, string? description, CancellationToken cancellationToken, int? maxDeliveryCount = null) =>
+        DeleteMessagesCoreAsync(receiver, sequenceNumbers, cancellationToken, maxDeliveryCount,
+            (message, token) => receiver.DeadLetterMessageAsync(message, reason ?? DefaultDeadLetterReason, description ?? DefaultDeadLetterDescription, token),
+            ActiveNotDeadLetteredError);
+
+    /// <summary>The scan of the selective delete, deferring each target.</summary>
+    internal static Task<BatchOperationResult> DeferActiveCoreAsync(ServiceBusReceiver receiver, long[] sequenceNumbers, CancellationToken cancellationToken, int? maxDeliveryCount = null) =>
+        DeleteMessagesCoreAsync(receiver, sequenceNumbers, cancellationToken, maxDeliveryCount,
+            (message, token) => receiver.DeferMessageAsync(message, null, token),
+            ActiveNotDeferredError);
+
+    /// <summary>
+    /// The dead-letter and the defer of active messages named by their sequence numbers: the settings check of the
+    /// selective delete on the active sub-queue, then <paramref name="scan"/> on a PeekLock receiver.
+    /// </summary>
+    private async Task<BatchOperationResult> SettleActiveAsync(
+        string entityName,
+        long[] sequenceNumbers,
+        string? subscriptionName,
+        Func<ServiceBusReceiver, int?, Task<BatchOperationResult>> scan,
+        CancellationToken cancellationToken)
+    {
+        EnsureConnected();
+
+        if (sequenceNumbers is not { Length: > 0 })
+            return new BatchOperationResult();
+
+        var check = await CheckBeforeScanAsync(_adminClient!, sequenceNumbers, entityName, subscriptionName, MessageSubQueue.Active, null, false, cancellationToken);
+        if (check.Refusal is not null)
+            return check.Refusal;
+
+        await using var receiver = CreateReceiver(_client!, entityName, subscriptionName, MessageSubQueue.Active, new ServiceBusReceiverOptions
+        {
+            ReceiveMode = ServiceBusReceiveMode.PeekLock,
+            PrefetchCount = ScanPrefetchCount
+        });
+
+        return await scan(receiver, check.MaxDeliveryCount);
     }
 
     /// <summary>
@@ -1556,7 +1887,17 @@ public class AzureServiceBusProvider : IMessagingProvider
     /// read position has passed the largest target, the entity is drained, or the
     /// safety timeout elapses — never on a fixed attempt count.
     /// </summary>
-    internal static async Task<BatchOperationResult> DeleteMessagesCoreAsync(ServiceBusReceiver receiver, long[] sequenceNumbers, CancellationToken cancellationToken)
+    /// <remarks>
+    /// The selective scan of a sub-queue: each target found is completed, or settled by <paramref name="settle"/> for a
+    /// dead-letter or a defer, whose failure is reported with <paramref name="settleFailure"/> instead of the broker text.
+    /// </remarks>
+    internal static async Task<BatchOperationResult> DeleteMessagesCoreAsync(
+        ServiceBusReceiver receiver,
+        long[] sequenceNumbers,
+        CancellationToken cancellationToken,
+        int? maxDeliveryCount = null,
+        Func<ServiceBusReceivedMessage, CancellationToken, Task>? settle = null,
+        string? settleFailure = null)
     {
         var result = new BatchOperationResult();
         var targets = new HashSet<long>(sequenceNumbers);
@@ -1572,6 +1913,7 @@ public class AzureServiceBusProvider : IMessagingProvider
         var consecutiveEmpty = 0;
         var noProgressRounds = 0;
         var missingError = NotFoundError;
+        var raised = new HashSet<long>();
 
         try
         {
@@ -1605,11 +1947,19 @@ public class AzureServiceBusProvider : IMessagingProvider
                         toAbandon.Add(message);
                 }
 
-                await CompleteInChunksAsync(receiver, toComplete, located, result, token);
+                await CompleteInChunksAsync(settle ?? ((m, ct) => receiver.CompleteMessageAsync(m, ct)), toComplete, located, result, token, settleFailure);
+
+                var atDeliveryLimit = RecordReleases(toAbandon, targets, maxDeliveryCount, raised, result);
 
                 // Abandon non-targets in parallel so they return to the queue quickly.
                 if (toAbandon.Count > 0)
                     await Task.WhenAll(toAbandon.Select(m => receiver.AbandonMessageAsync(m, cancellationToken: token)));
+
+                if (atDeliveryLimit)
+                {
+                    missingError = DeliveryLimitNotReached;
+                    break;
+                }
 
                 // Stop once the read position has moved past the largest target: every
                 // message up to that point has been observed, so any still-missing target
@@ -1666,11 +2016,12 @@ public class AzureServiceBusProvider : IMessagingProvider
     /// marked located so it is never re-completed on redelivery nor reported as not found.
     /// </summary>
     private static async Task CompleteInChunksAsync(
-        ServiceBusReceiver receiver,
+        Func<ServiceBusReceivedMessage, CancellationToken, Task> settle,
         List<ServiceBusReceivedMessage> messages,
         HashSet<long> located,
         BatchOperationResult result,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? failureText = null)
     {
         for (var i = 0; i < messages.Count; i += CompleteChunkSize)
         {
@@ -1679,12 +2030,12 @@ public class AzureServiceBusProvider : IMessagingProvider
             {
                 try
                 {
-                    await receiver.CompleteMessageAsync(message, cancellationToken);
+                    await settle(message, cancellationToken);
                     return (message.SequenceNumber, Success: true, Error: (string?)null);
                 }
                 catch (Exception ex)
                 {
-                    return (message.SequenceNumber, Success: false, Error: ex.Message);
+                    return (message.SequenceNumber, Success: false, Error: failureText ?? ex.Message);
                 }
             });
 
@@ -1709,7 +2060,7 @@ public class AzureServiceBusProvider : IMessagingProvider
     }
 
     /// <inheritdoc />
-    public async Task<BatchOperationResult> ResubmitDeadLetterMessagesAsync(string entityName, long[] sequenceNumbers, MessageSubQueue subQueue = MessageSubQueue.DeadLetter, string? subscriptionName = null, CancellationToken cancellationToken = default)
+    public async Task<BatchOperationResult> ResubmitDeadLetterMessagesAsync(string entityName, long[] sequenceNumbers, MessageSubQueue subQueue = MessageSubQueue.DeadLetter, string? subscriptionName = null, bool newMessageIdOnDuplicateDetection = false, CancellationToken cancellationToken = default)
     {
         EnsureConnected();
         if (subQueue == MessageSubQueue.Active)
@@ -1726,6 +2077,10 @@ public class AzureServiceBusProvider : IMessagingProvider
         // This means the message will pass through all subscription filters.
         var targetPath = entityName; // Always send to queue or topic
 
+        var check = await CheckBeforeScanAsync(_adminClient!, sequenceNumbers, entityName, subscriptionName, subQueue, (targetPath, subscriptionName is not null), newMessageIdOnDuplicateDetection, cancellationToken);
+        if (check.Refusal is not null)
+            return check.Refusal;
+
         await using var receiver = CreateReceiver(_client!, entityName, subscriptionName, subQueue, new ServiceBusReceiverOptions
         {
             ReceiveMode = ServiceBusReceiveMode.PeekLock,
@@ -1733,7 +2088,7 @@ public class AzureServiceBusProvider : IMessagingProvider
         });
         await using var sender = _client!.CreateSender(targetPath);
 
-        return await ResubmitCoreAsync(receiver, sender, sequenceNumbers, cancellationToken);
+        return await ResubmitCoreAsync(receiver, sender, sequenceNumbers, cancellationToken, check.NewMessageIds);
     }
 
     /// <summary>
@@ -1748,7 +2103,8 @@ public class AzureServiceBusProvider : IMessagingProvider
         ServiceBusReceiver receiver,
         ServiceBusSender sender,
         long[] sequenceNumbers,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool newMessageIds = false)
     {
         var result = new BatchOperationResult();
         var targets = new HashSet<long>(sequenceNumbers);
@@ -1800,8 +2156,8 @@ public class AzureServiceBusProvider : IMessagingProvider
                 if (cycleTargets.Count > 0)
                 {
                     // Send first (at-least-once), then complete immediately in the same cycle.
-                    await SendOrReportDuplicatesAsync(sender, cycleTargets, located, result, ResubmitDuplicateError, cancellationToken, token);
-                    await CompleteResubmittedAsync(receiver, cycleTargets, located, result, token);
+                    await SendOrReportDuplicatesAsync(sender, cycleTargets, located, result, ResubmitDuplicateError, newMessageIds, cancellationToken, token);
+                    await CompleteResubmittedAsync(receiver, cycleTargets, located, result, ResubmitDuplicateError, token);
                 }
 
                 if (toAbandon.Count > 0)
@@ -1863,6 +2219,7 @@ public class AzureServiceBusProvider : IMessagingProvider
         HashSet<long> located,
         BatchOperationResult result,
         string duplicateError,
+        bool newMessageIds,
         CancellationToken callerToken,
         CancellationToken token)
     {
@@ -1870,7 +2227,7 @@ public class AzureServiceBusProvider : IMessagingProvider
         var inFlight = new List<ServiceBusReceivedMessage>();
         try
         {
-            await SendResubmitBatchAsync(sender, messages, accepted, inFlight, token);
+            await SendResubmitBatchAsync(sender, messages, accepted, inFlight, newMessageIds ? result.NewMessageIds : null, token);
         }
         catch (Exception ex) when (!callerToken.IsCancellationRequested)
         {
@@ -1890,24 +2247,45 @@ public class AzureServiceBusProvider : IMessagingProvider
     }
 
     /// <summary>
+    /// Gives a copy a new message id and keeps the first original id it ever had in <see cref="OriginalMessageIdProperty"/>;
+    /// an existing value is never overwritten. Answers the new id.
+    /// </summary>
+    private static string GiveNewMessageId(ServiceBusMessage copy, string originalMessageId)
+    {
+        copy.ApplicationProperties.TryAdd(OriginalMessageIdProperty, originalMessageId);
+        copy.MessageId = Guid.NewGuid().ToString();
+        return copy.MessageId;
+    }
+
+    /// <summary>
     /// Sends the supplied dead-lettered messages to the destination, splitting them across
     /// as many <see cref="ServiceBusMessageBatch"/> instances as their size requires. The messages of a send are in
-    /// <paramref name="inFlight"/> while it runs and move to <paramref name="accepted"/> when it returns.
+    /// <paramref name="inFlight"/> while it runs and move to <paramref name="accepted"/> when it returns. With
+    /// <paramref name="newMessageIds"/>, each copy gets a new message id and keeps the first original id it ever had in
+    /// <see cref="OriginalMessageIdProperty"/>; the id is recorded there by sequence number only once the message was
+    /// handed to a send, so a message a failed send left unsent is never listed with one; a send the broker refused as
+    /// disabled sent nothing, so its messages are not listed either.
     /// </summary>
     private static async Task SendResubmitBatchAsync(
         ServiceBusSender sender,
         List<ServiceBusReceivedMessage> messages,
         List<ServiceBusReceivedMessage> accepted,
         List<ServiceBusReceivedMessage> inFlight,
+        Dictionary<long, string>? newMessageIds,
         CancellationToken cancellationToken)
     {
-        var batch = await sender.CreateMessageBatchAsync(cancellationToken);
+        var given = new Dictionary<ServiceBusReceivedMessage, string>();
+        var refusedInFlight = false;
+        ServiceBusMessageBatch? batch = null;
         var batched = new List<ServiceBusReceivedMessage>();
         try
         {
+            batch = await sender.CreateMessageBatchAsync(cancellationToken);
             foreach (var received in messages)
             {
                 var outgoing = new ServiceBusMessage(received);
+                if (newMessageIds is not null)
+                    given[received] = GiveNewMessageId(outgoing, received.MessageId);
 
                 if (batch.TryAddMessage(outgoing))
                 {
@@ -1935,9 +2313,19 @@ public class AzureServiceBusProvider : IMessagingProvider
             if (batch.Count > 0)
                 await SendTrackedAsync(() => sender.SendMessagesAsync(batch, cancellationToken), batched, accepted, inFlight);
         }
+        catch (ServiceBusException ex) when (IsEntityDisabled(ex))
+        {
+            refusedInFlight = true;
+            throw;
+        }
         finally
         {
-            batch.Dispose();
+            batch?.Dispose();
+            foreach (var (received, id) in given)
+            {
+                if (accepted.Contains(received) || (!refusedInFlight && inFlight.Contains(received)))
+                    newMessageIds![received.SequenceNumber] = id;
+            }
         }
     }
 
@@ -1955,14 +2343,15 @@ public class AzureServiceBusProvider : IMessagingProvider
 
     /// <summary>
     /// Completes messages already sent to the destination. A complete failure means the
-    /// message was resubmitted but could not be removed from the DLQ, so it is reported as
-    /// a possible duplicate — it is never resent.
+    /// message was resubmitted but could not be removed from its source, so it is reported with
+    /// <paramref name="duplicateError"/> as a possible duplicate — it is never resent.
     /// </summary>
     private static async Task CompleteResubmittedAsync(
         ServiceBusReceiver receiver,
         List<ServiceBusReceivedMessage> messages,
         HashSet<long> located,
         BatchOperationResult result,
+        string duplicateError,
         CancellationToken cancellationToken)
     {
         for (var i = 0; i < messages.Count; i += CompleteChunkSize)
@@ -1994,7 +2383,7 @@ public class AzureServiceBusProvider : IMessagingProvider
                     result.Failures.Add(new BatchOperationFailure
                     {
                         SequenceNumber = r.SequenceNumber,
-                        Error = string.Format(ResubmitDuplicateError, r.Error)
+                        Error = string.Format(duplicateError, r.Error)
                     });
                 }
             }
@@ -2002,7 +2391,7 @@ public class AzureServiceBusProvider : IMessagingProvider
     }
 
     /// <inheritdoc />
-    public async Task<BatchOperationResult> MoveMessagesAsync(string sourceEntityName, string targetQueueName, long[] sequenceNumbers, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, CancellationToken cancellationToken = default)
+    public async Task<BatchOperationResult> MoveMessagesAsync(string sourceEntityName, string targetQueueName, long[] sequenceNumbers, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, bool newMessageIdOnDuplicateDetection = false, CancellationToken cancellationToken = default)
     {
         EnsureConnected();
 
@@ -2013,6 +2402,10 @@ public class AzureServiceBusProvider : IMessagingProvider
             return result;
         }
 
+        var check = await CheckBeforeScanAsync(_adminClient!, sequenceNumbers, sourceEntityName, subscriptionName, subQueue, (targetQueueName, false), newMessageIdOnDuplicateDetection, cancellationToken);
+        if (check.Refusal is not null)
+            return check.Refusal;
+
         await using var receiver = CreateReceiver(_client!, sourceEntityName, subscriptionName, subQueue, new ServiceBusReceiverOptions
         {
             ReceiveMode = ServiceBusReceiveMode.PeekLock,
@@ -2020,7 +2413,7 @@ public class AzureServiceBusProvider : IMessagingProvider
         });
         await using var sender = _client!.CreateSender(targetQueueName);
 
-        return await MoveCoreAsync(receiver, sender, sequenceNumbers, cancellationToken);
+        return await MoveCoreAsync(receiver, sender, sequenceNumbers, cancellationToken, check.MaxDeliveryCount, check.NewMessageIds);
     }
 
     /// <summary>
@@ -2035,7 +2428,9 @@ public class AzureServiceBusProvider : IMessagingProvider
         ServiceBusReceiver receiver,
         ServiceBusSender sender,
         long[] sequenceNumbers,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int? maxDeliveryCount = null,
+        bool newMessageIds = false)
     {
         var result = new BatchOperationResult();
         var targets = new HashSet<long>(sequenceNumbers);
@@ -2051,6 +2446,7 @@ public class AzureServiceBusProvider : IMessagingProvider
         var consecutiveEmpty = 0;
         var noProgressRounds = 0;
         var missingError = NotFoundError;
+        var raised = new HashSet<long>();
 
         try
         {
@@ -2087,12 +2483,20 @@ public class AzureServiceBusProvider : IMessagingProvider
                 if (cycleTargets.Count > 0)
                 {
                     // Send first (at-least-once), then complete immediately in the same cycle.
-                    await SendOrReportDuplicatesAsync(sender, cycleTargets, located, result, MoveDuplicateError, cancellationToken, token);
+                    await SendOrReportDuplicatesAsync(sender, cycleTargets, located, result, MoveDuplicateError, newMessageIds, cancellationToken, token);
                     await CompleteMovedAsync(receiver, cycleTargets, located, result, token);
                 }
 
+                var atDeliveryLimit = RecordReleases(toAbandon, targets, maxDeliveryCount, raised, result);
+
                 if (toAbandon.Count > 0)
                     await Task.WhenAll(toAbandon.Select(m => receiver.AbandonMessageAsync(m, cancellationToken: token)));
+
+                if (atDeliveryLimit)
+                {
+                    missingError = DeliveryLimitNotReached;
+                    break;
+                }
 
                 if (maxSeenSeq >= maxTargetSeq && cycleTargets.Count == 0)
                     break;
@@ -2187,13 +2591,13 @@ public class AzureServiceBusProvider : IMessagingProvider
     }
 
     /// <inheritdoc />
-    public async Task<BatchOperationResult> CancelScheduledMessagesAsync(string queueName, long[] sequenceNumbers, CancellationToken cancellationToken = default)
+    public async Task<BatchOperationResult> CancelScheduledMessagesAsync(string entityName, long[] sequenceNumbers, CancellationToken cancellationToken = default)
     {
         EnsureConnected();
         ThrowIfInvalid(EntityConfigurationValidator.ValidateScheduledSequenceNumbers(sequenceNumbers));
 
-        await using var sender = _client!.CreateSender(queueName);
-        return await CancelScheduledCoreAsync(sender, queueName, _logger, sequenceNumbers, cancellationToken);
+        await using var sender = _client!.CreateSender(entityName);
+        return await CancelScheduledCoreAsync(sender, entityName, _logger, sequenceNumbers, cancellationToken);
     }
 
     /// <summary>
@@ -2206,14 +2610,14 @@ public class AzureServiceBusProvider : IMessagingProvider
     /// token stops the operation.
     /// </summary>
     internal static async Task<BatchOperationResult> CancelScheduledCoreAsync(
-        ServiceBusSender sender, string queueName, ILogger logger, long[] sequenceNumbers, CancellationToken cancellationToken)
+        ServiceBusSender sender, string entityName, ILogger logger, long[] sequenceNumbers, CancellationToken cancellationToken)
     {
         var causes = new List<Exception>();
         var result = await CancelEachScheduledAsync(sender, sequenceNumbers, causes, cancellationToken);
         if (result.FailureCount > 0)
         {
-            logger.LogWarning(causes[0], "Cancel of scheduled messages on queue {QueueName} left {FailureCount} sequence numbers not cancelled; causes: {Causes}",
-                queueName, result.FailureCount, string.Join(", ", causes.Select(CauseOf).Distinct()));
+            logger.LogWarning(causes[0], "Cancel of scheduled messages on {EntityName} left {FailureCount} sequence numbers not cancelled; causes: {Causes}",
+                entityName, result.FailureCount, string.Join(", ", causes.Select(CauseOf).Distinct()));
         }
 
         return result;
@@ -2282,9 +2686,197 @@ public class AzureServiceBusProvider : IMessagingProvider
         result.Failures.Add(new BatchOperationFailure { SequenceNumber = sequenceNumber, Error = error });
     }
 
-    private static ServiceBusMessage CreateServiceBusMessage(SendMessageRequest request)
+    private const int DeferredBatchSize = 100;
+    private const string NotDeferredError = "Not found as a deferred message.";
+    private const string DeferredNotRemovedError = "The broker did not remove this deferred message.";
+    private const string DeferredNotDeadLetteredError = "The broker did not dead-letter this deferred message.";
+    private const string DeferredNotHandledError = "Nothing was done to this deferred message: the call stopped on a broker failure.";
+    private const string DeferredDuplicateError = "Message was resubmitted but could not be removed from the deferred messages and may be duplicated on retry.";
+    private const string DefaultDeadLetterReason = "Manual dead letter";
+    private const string DefaultDeadLetterDescription = "Moved to dead letter by user";
+
+    /// <inheritdoc />
+    public async Task<BatchOperationResult> DeleteDeferredMessagesAsync(string entityName, long[] sequenceNumbers, string? subscriptionName = null, CancellationToken cancellationToken = default)
     {
-        var message = new ServiceBusMessage(request.Body)
+        EnsureConnected();
+        ThrowIfInvalid(EntityConfigurationValidator.ValidateScheduledSequenceNumbers(sequenceNumbers, DeferredBatchRequest.MaxSequenceNumbers));
+
+        await using var receiver = CreateReceiver(_client!, entityName, subscriptionName, MessageSubQueue.Active);
+        return await SettleDeferredCoreAsync(receiver, sequenceNumbers,
+            (received, result, located, causes) => SettleEachAsync(received, m => receiver.CompleteMessageAsync(m, cancellationToken), DeferredNotRemovedError, result, located, causes),
+            _logger, "Delete", EntityPathOf(entityName, subscriptionName), cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<BatchOperationResult> ResubmitDeferredMessagesAsync(string entityName, long[] sequenceNumbers, string? subscriptionName = null, bool newMessageIdOnDuplicateDetection = false, CancellationToken cancellationToken = default)
+    {
+        EnsureConnected();
+        ThrowIfInvalid(EntityConfigurationValidator.ValidateScheduledSequenceNumbers(sequenceNumbers, DeferredBatchRequest.MaxSequenceNumbers));
+
+        var check = await CheckBeforeScanAsync(_adminClient!, sequenceNumbers, entityName, subscriptionName, null, (entityName, subscriptionName is not null), newMessageIdOnDuplicateDetection, cancellationToken);
+        if (check.Refusal is not null)
+            return check.Refusal;
+
+        await using var receiver = CreateReceiver(_client!, entityName, subscriptionName, MessageSubQueue.Active);
+        await using var sender = _client!.CreateSender(entityName);
+        return await SettleDeferredCoreAsync(receiver, sequenceNumbers, async (received, result, located, _) =>
+            {
+                await SendOrReportDuplicatesAsync(sender, received, located, result, DeferredDuplicateError, check.NewMessageIds, cancellationToken, cancellationToken);
+                await CompleteResubmittedAsync(receiver, received, located, result, DeferredDuplicateError, cancellationToken);
+            },
+            _logger, "Resubmit", EntityPathOf(entityName, subscriptionName), cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<BatchOperationResult> DeadLetterDeferredMessagesAsync(string entityName, long[] sequenceNumbers, string? subscriptionName = null, string? reason = null, string? description = null, CancellationToken cancellationToken = default)
+    {
+        EnsureConnected();
+        ThrowIfInvalid(EntityConfigurationValidator.ValidateScheduledSequenceNumbers(sequenceNumbers, DeferredBatchRequest.MaxSequenceNumbers));
+
+        await using var receiver = CreateReceiver(_client!, entityName, subscriptionName, MessageSubQueue.Active);
+        return await SettleDeferredCoreAsync(receiver, sequenceNumbers,
+            (received, result, located, causes) => SettleEachAsync(received,
+                m => receiver.DeadLetterMessageAsync(m, reason ?? DefaultDeadLetterReason, description ?? DefaultDeadLetterDescription, cancellationToken),
+                DeferredNotDeadLetteredError, result, located, causes),
+            _logger, "Dead-letter", EntityPathOf(entityName, subscriptionName), cancellationToken);
+    }
+
+    /// <summary>
+    /// Settles deferred messages in batches of <see cref="DeferredBatchSize"/>: each batch is received by sequence
+    /// number and settled by <paramref name="settle"/> before the next is received, so no lock ages across the
+    /// selection. A number the broker does not hand over is reported <see cref="NotDeferredError"/>. A disabled entity
+    /// before anything was sent or removed throws <see cref="EntityDisabledException"/>; found later, it fails every
+    /// number without an outcome with <see cref="EntityDisabledError"/>. Any other broker failure fails them with
+    /// <see cref="DeferredNotHandledError"/>; a message received and not settled keeps its deferred state once its lock
+    /// expires. The caller's token is checked before each batch and propagates. The causes are logged once.
+    /// </summary>
+    private static async Task<BatchOperationResult> SettleDeferredCoreAsync(
+        ServiceBusReceiver receiver,
+        long[] sequenceNumbers,
+        Func<List<ServiceBusReceivedMessage>, BatchOperationResult, HashSet<long>, List<Exception>, Task> settle,
+        ILogger logger,
+        string operation,
+        string entityPath,
+        CancellationToken cancellationToken)
+    {
+        var result = new BatchOperationResult();
+        var located = new HashSet<long>();
+        var causes = new List<Exception>();
+        for (var start = 0; start < sequenceNumbers.Length; start += DeferredBatchSize)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var batch = sequenceNumbers[start..Math.Min(start + DeferredBatchSize, sequenceNumbers.Length)];
+            try
+            {
+                var received = await ReceiveDeferredAsync(receiver, batch, cancellationToken);
+                foreach (var sequenceNumber in batch.Except(received.Select(m => m.SequenceNumber)).Where(located.Add))
+                    AddFailure(result, sequenceNumber, NotDeferredError);
+                if (received.Count > 0)
+                    await settle(received, result, located, causes);
+            }
+            catch (ServiceBusException ex) when (IsEntityDisabled(ex))
+            {
+                if (result.SuccessCount == 0 && result.Failures.All(f => f.Error == NotDeferredError))
+                    throw new EntityDisabledException(ex);
+                causes.Add(ex);
+                foreach (var sequenceNumber in sequenceNumbers[start..].Where(located.Add))
+                    AddFailure(result, sequenceNumber, EntityDisabledError);
+                break;
+            }
+            catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+            {
+                causes.Add(ex);
+                foreach (var sequenceNumber in sequenceNumbers[start..].Where(located.Add))
+                    AddFailure(result, sequenceNumber, DeferredNotHandledError);
+                break;
+            }
+        }
+
+        if (result.FailureCount > 0)
+        {
+            logger.LogWarning(causes.FirstOrDefault(), "{Operation} of deferred messages on {EntityPath} left {FailureCount} sequence numbers not done; causes: {Causes}",
+                operation, entityPath, result.FailureCount, causes.Count == 0 ? "not deferred" : string.Join(", ", causes.Select(CauseOf).Distinct()));
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Receives the deferred messages of <paramref name="sequenceNumbers"/> in one broker call. The broker refuses the
+    /// whole call when one number is not a deferred message; only then is each number received on its own, so the others
+    /// are still handed over. A message the broker answers for a number not asked is not kept.
+    /// </summary>
+    private static async Task<List<ServiceBusReceivedMessage>> ReceiveDeferredAsync(ServiceBusReceiver receiver, long[] sequenceNumbers, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return (await receiver.ReceiveDeferredMessagesAsync(sequenceNumbers, cancellationToken)).Where(m => sequenceNumbers.Contains(m.SequenceNumber)).ToList();
+        }
+        catch (ServiceBusException ex) when (ex.Reason == ServiceBusFailureReason.MessageNotFound)
+        {
+        }
+
+        var received = new List<ServiceBusReceivedMessage>();
+        foreach (var sequenceNumber in sequenceNumbers)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                received.AddRange((await receiver.ReceiveDeferredMessagesAsync([sequenceNumber], cancellationToken)).Where(m => m.SequenceNumber == sequenceNumber));
+            }
+            catch (ServiceBusException ex) when (ex.Reason == ServiceBusFailureReason.MessageNotFound)
+            {
+            }
+        }
+
+        return received;
+    }
+
+    /// <summary>
+    /// Settles each received message with <paramref name="settle"/>, all of a batch at once; one that fails is reported
+    /// with <paramref name="failure"/> and never the broker's text, and the others are still settled.
+    /// </summary>
+    private static async Task SettleEachAsync(
+        List<ServiceBusReceivedMessage> messages,
+        Func<ServiceBusReceivedMessage, Task> settle,
+        string failure,
+        BatchOperationResult result,
+        HashSet<long> located,
+        List<Exception> causes)
+    {
+        var outcomes = await Task.WhenAll(messages.Select(async message =>
+        {
+            try
+            {
+                await settle(message);
+                return (message.SequenceNumber, Error: (Exception?)null);
+            }
+            catch (Exception ex)
+            {
+                return (message.SequenceNumber, Error: ex);
+            }
+        }));
+
+        foreach (var (sequenceNumber, error) in outcomes)
+        {
+            located.Add(sequenceNumber);
+            if (error is null)
+            {
+                result.SuccessCount++;
+                continue;
+            }
+
+            causes.Add(error);
+            AddFailure(result, sequenceNumber, failure);
+        }
+    }
+
+    internal static ServiceBusMessage CreateServiceBusMessage(SendMessageRequest request)
+    {
+        var body = request.BodyEncoding == MessageBodyEncoding.Base64
+            ? BinaryData.FromBytes(Convert.FromBase64String(request.Body))
+            : BinaryData.FromString(request.Body);
+        var message = new ServiceBusMessage(body)
         {
             ContentType = request.ContentType
         };
@@ -2321,14 +2913,14 @@ public class AzureServiceBusProvider : IMessagingProvider
 
     internal static MessageInfo MapToMessageInfo(ServiceBusReceivedMessage message, bool isDeadLettered, bool includeBody = true)
     {
-        string? body;
-        try
+        string? body = null;
+        var bodyEncoding = MessageBodyEncoding.Text;
+        if (includeBody)
         {
-            body = includeBody ? message.Body.ToString() : null;
-        }
-        catch
-        {
-            body = Convert.ToBase64String(message.Body.ToArray());
+            var (text, isBinary) = DecodeBytes(message.Body.ToMemory().Span);
+            body = text;
+            if (isBinary)
+                bodyEncoding = MessageBodyEncoding.Base64;
         }
 
         return new MessageInfo
@@ -2343,6 +2935,7 @@ public class AzureServiceBusProvider : IMessagingProvider
             Subject = message.Subject,
             ContentType = message.ContentType,
             Body = body,
+            BodyEncoding = bodyEncoding,
             SequenceNumber = message.SequenceNumber,
             DeliveryCount = message.DeliveryCount,
             EnqueuedTime = message.EnqueuedTime,
@@ -2550,13 +3143,22 @@ public class AzureServiceBusProvider : IMessagingProvider
             return (null, false);
         }
 
+        return DecodeBytes(state.ToMemory().Span);
+    }
+
+    /// <summary>
+    /// The bytes as text when they are valid UTF-8, otherwise as base64 with the binary flag; an invalid byte is never
+    /// replaced. No bytes is the empty text.
+    /// </summary>
+    internal static (string Text, bool IsBinary) DecodeBytes(ReadOnlySpan<byte> bytes)
+    {
         try
         {
-            return (StrictUtf8.GetString(state.ToMemory().Span), false);
+            return (StrictUtf8.GetString(bytes), false);
         }
         catch (System.Text.DecoderFallbackException)
         {
-            return (Convert.ToBase64String(state.ToMemory().Span), true);
+            return (Convert.ToBase64String(bytes), true);
         }
     }
 
@@ -2613,6 +3215,39 @@ public class AzureServiceBusProvider : IMessagingProvider
     {
         EnsureConnected();
         return await GetSubscriptionCountsCoreAsync(_adminClient!, topicName, subscriptionName, cancellationToken);
+    }
+
+    /// <summary>The largest message a Basic or Standard namespace accepts: 256 KB.</summary>
+    internal const long StandardMaxMessageSizeInBytes = 256 * 1024;
+
+    /// <summary>The largest message a queue or topic of a Premium namespace can be set to accept: 100 MB.</summary>
+    internal const long PremiumMaxMessageSizeInBytes = 100 * 1024 * 1024;
+
+    /// <inheritdoc />
+    public async Task<NamespaceInfo> GetNamespacePropertiesAsync(CancellationToken cancellationToken)
+    {
+        EnsureConnected();
+        return await GetNamespacePropertiesCoreAsync(_adminClient!, cancellationToken);
+    }
+
+    /// <summary>
+    /// One namespace-properties call with the caller's token; any failure, a missing Manage right included, reaches the
+    /// caller as it is.
+    /// </summary>
+    internal static async Task<NamespaceInfo> GetNamespacePropertiesCoreAsync(ServiceBusAdministrationClient adminClient, CancellationToken cancellationToken)
+    {
+        var properties = (await adminClient.GetNamespacePropertiesAsync(cancellationToken)).Value;
+        var premium = properties.MessagingSku == MessagingSku.Premium;
+        return new NamespaceInfo
+        {
+            Name = properties.Name,
+            Tier = properties.MessagingSku.ToString(),
+            MessagingUnits = premium ? properties.MessagingUnits : null,
+            Alias = string.IsNullOrEmpty(properties.Alias) ? null : properties.Alias,
+            CreatedTime = properties.CreatedTime,
+            ModifiedTime = properties.ModifiedTime,
+            MaxMessageSizeInBytes = premium ? PremiumMaxMessageSizeInBytes : StandardMaxMessageSizeInBytes
+        };
     }
 
     /// <summary>

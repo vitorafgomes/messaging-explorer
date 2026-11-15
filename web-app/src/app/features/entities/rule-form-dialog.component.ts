@@ -9,7 +9,6 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatIconModule } from '@angular/material/icon';
-import { MatChipsModule } from '@angular/material/chips';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { ErrorStateMatcher } from '@angular/material/core';
@@ -18,6 +17,7 @@ import { RuleFilterType, RulePropertyType, SubscriptionRuleInfo } from '../../co
 import { TopicService } from '../../core/services';
 import { connectionContext } from './connection-context';
 import { PROPERTY_TYPES, RuleDraft, SYSTEM_FIELDS, SystemField, describeFilter, emptyDraft, fromRule, ruleErrors, toWire } from './rule-validation';
+import { EnvironmentLineComponent } from '../../shared/environment-line.component';
 
 export interface RuleFormDialogData {
   mode: 'create' | 'edit';
@@ -48,7 +48,7 @@ type PropertyGroup = FormGroup<{ name: FormControl<string>; type: FormControl<Ru
   standalone: true,
   imports: [
     ReactiveFormsModule, MatDialogTitle, MatDialogContent, MatDialogActions, MatDialogClose, MatFormFieldModule, MatInputModule,
-    MatSelectModule, MatButtonModule, MatButtonToggleModule, MatIconModule, MatChipsModule, MatTooltipModule, MatProgressBarModule
+    MatSelectModule, MatButtonModule, MatButtonToggleModule, MatIconModule, EnvironmentLineComponent, MatTooltipModule, MatProgressBarModule
   ],
   templateUrl: './rule-form-dialog.component.html',
   styleUrls: ['./entity-form-dialog.component.scss', './rule-form-dialog.component.scss']
@@ -145,7 +145,7 @@ export class RuleFormDialogComponent {
       this.conflictName.set(name);
       this.form.controls.name.markAsTouched();
     } else if (error.status === 400) {
-      this.errorMessage.set(error.error?.message ?? 'The API refused this rule.');
+      this.errorMessage.set(error.error?.message ?? 'The broker refused this rule. Check the expression.');
     } else if (error.status === 404) {
       this.notFound.set(true);
       this.errorMessage.set(`${error.error?.message ?? 'The rule or its subscription no longer exists.'} Refresh to see the rules as they are now.`);

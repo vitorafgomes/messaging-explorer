@@ -34,6 +34,12 @@ export interface ProviderCapabilities {
   supportsPeekFromSequenceNumber?: boolean;
   /** The definitions of every entity can be exported to a file and imported, creating only what does not exist. An older API does not send it; only an explicit true enables it. */
   supportsDefinitions?: boolean;
+  /** The connected namespace's tier, units, alias and times can be read. An older API does not send it; only an explicit true enables it. */
+  supportsNamespaceProperties?: boolean;
+  /** An active message can be dead-lettered by its sequence number. An older API does not send it; only an explicit true enables it. */
+  supportsManualDeadLetter?: boolean;
+  /** A body that is not UTF-8 is read as base64 and a base64 body can be sent. An older API does not send it; only an explicit true enables it. */
+  supportsBinaryBody?: boolean;
   supportedExchangeTypes: string[];
   maxMessageSizeInBytes: number;
   maxTimeToLive: string;
@@ -123,6 +129,15 @@ export const DEFAULT_RABBITMQ_CONFIG: Omit<RabbitMQConnectionConfig, 'id' | 'nam
 };
 
 /**
+ * Reads a provider type as the API sends it, by name, or as the app holds it, by number;
+ * an absent value is Azure Service Bus, the provider of a connection saved before the field existed.
+ */
+export function toProviderType(value: ProviderType | string | undefined): ProviderType {
+  const parsed = typeof value === 'string' ? ProviderType[value as keyof typeof ProviderType] : value;
+  return typeof parsed === 'number' ? parsed : ProviderType.AzureServiceBus;
+}
+
+/**
  * Gets the display name for a provider type.
  */
 export function getProviderDisplayName(providerType: ProviderType): string {
@@ -168,9 +183,6 @@ export interface ProviderComponentMetadata {
   /** Material icon name for provider representation */
   icon: string;
 
-  /** Optional color theme for provider UI elements (hex color) */
-  themeColor?: string;
-
   /** Documentation URL for the provider */
   documentationUrl?: string;
 
@@ -202,7 +214,6 @@ export function getProviderMetadata(providerType: ProviderType): ProviderCompone
         displayName: 'Azure Service Bus',
         description: 'Microsoft Azure\'s fully managed enterprise message broker with message queues and publish-subscribe topics.',
         icon: 'cloud',
-        themeColor: '#0078D4', // Azure blue
         documentationUrl: 'https://docs.microsoft.com/azure/service-bus-messaging/',
         isStable: true,
         version: '1.0.0'
@@ -213,7 +224,6 @@ export function getProviderMetadata(providerType: ProviderType): ProviderCompone
         displayName: 'RabbitMQ',
         description: 'Open-source message broker supporting multiple messaging protocols with flexible routing and exchange patterns.',
         icon: 'dns',
-        themeColor: '#FF6600', // RabbitMQ orange
         documentationUrl: 'https://www.rabbitmq.com/documentation.html',
         isStable: true,
         version: '1.0.0'

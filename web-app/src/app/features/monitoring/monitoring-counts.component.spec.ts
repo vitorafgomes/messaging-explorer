@@ -1,10 +1,12 @@
-import { Component } from '@angular/core';
+import { Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { HttpErrorResponse } from '@angular/common/http';
 import { Router, provideRouter } from '@angular/router';
-import { BehaviorSubject, Observable, of, throwError } from 'rxjs';
-import { MonitoringEntity, MonitoringSnapshot, MonitoringSubscription, SubscriptionNodeData } from '../../core/models';
-import { ConnectionService, EntitySelectionService, MonitoringService, QueueService, TopicService } from '../../core/services';
+import { MatDialog } from '@angular/material/dialog';
+import { BehaviorSubject, of } from 'rxjs';
+import { MonitoringEntity, MonitoringSnapshot, MonitoringSubscription, ProviderCapabilities, SubscriptionNodeData } from '../../core/models';
+import { ConnectionService, EntitySelectionService, QueueService, TopicService } from '../../core/services';
+import { ProviderService } from '../../core/services/provider.service';
+import { ContinuousResubmitDialogComponent } from '../messages/continuous-resubmit-dialog.component';
 import { DEAD_LETTER_THRESHOLD_KEY, MonitoringCountsComponent } from './monitoring-counts.component';
 
 @Component({ standalone: true, template: '' })
@@ -35,15 +37,13 @@ const SNAPSHOT: MonitoringSnapshot = {
 describe('MonitoringCountsComponent: the counts of every entity on one screen', () => {
   let fixture: ComponentFixture<MonitoringCountsComponent>;
   let el: HTMLElement;
-  let monitoring: { getQueueCounts: ReturnType<typeof vi.fn>; getSubscriptionCounts: ReturnType<typeof vi.fn> };
-
-  function render(snapshot: MonitoringSnapshot = SNAPSHOT) {
-    monitoring = { getQueueCounts: vi.fn(), getSubscriptionCounts: vi.fn() };
+  function render(snapshot: MonitoringSnapshot = SNAPSHOT, capabilities: Partial<ProviderCapabilities> | null = { supportsDeadLetterQueue: true }) {
     TestBed.configureTestingModule({
       imports: [MonitoringCountsComponent],
       providers: [
         provideRouter([{ path: 'entities', component: EntitiesStubComponent }]),
-        { provide: MonitoringService, useValue: monitoring },
+        { provide: MatDialog, useValue: { open: vi.fn() } },
+        { provide: ProviderService, useValue: { capabilities: signal(capabilities) } },
         { provide: QueueService, useValue: { getQueue: vi.fn((name: string) => of({ name })) } },
         { provide: TopicService, useValue: { getSubscription: vi.fn((topicName: string, name: string) => of({ topicName, name })) } },
         { provide: ConnectionService, useValue: { connectionStatus$: new BehaviorSubject({ connected: true }) } }
@@ -213,46 +213,88 @@ describe('MonitoringCountsComponent: the counts of every entity on one screen', 
     });
   });
 
-  describe('on-demand refresh of one entity', () => {
-    it('reads one queue or one subscription now and shows its new counts in its row', () => {
+  describe('the words of the screen', () => {
+    it('names the filter, the threshold and every column as drawn', () => {
       render();
-      monitoring.getQueueCounts.mockReturnValue(of(queue('notifications', 7, 250, 1, 0)));
-      monitoring.getSubscriptionCounts.mockReturnValue(of(subscription('order-events', 'warehouse', 3, 0)));
+      const field = (name: string) => el.querySelector(`[name="${name}"]`)!.closest('mat-form-field')!;
 
-      button('Refresh the counts of notifications').click();
-      button('Refresh the counts of warehouse').click();
+      expect(text(field('filter').querySelector('mat-label'))).toBe('Filter by name');
+      expect(el.querySelector('input[name="filter"]')!.getAttribute('placeholder')).toBe('Part of a name');
+      expect(field('filter').querySelector('mat-icon')?.textContent?.trim(), 'the filter carries the search icon').toBe('search');
+      expect(text(field('threshold').querySelector('mat-label'))).toBe('Dead-letter threshold');
+      expect(text(field('threshold').querySelector('mat-hint'))).toBe('A row above it is marked.');
+      expect(Array.from(el.querySelectorAll('th')).map(text)).toStrictEqual(['Name', 'Kind', 'Active', 'Dead-letter', 'Scheduled', 'Transfer dead-letter', 'Actions']);
+    });
+  });
+
+  describe('the period the screen refreshes at', () => {
+    it('offers Refresh every 30 seconds, 1 minute or 5 minutes, says 30 seconds is the floor, and hands the choice to the screen', () => {
+      render();
+      const select = el.querySelector('select[name="refreshEvery"]') as HTMLSelectElement;
+
+      expect(text(select.closest('mat-form-field')!.querySelector('mat-label'))).toBe('Refresh every');
+      expect(Array.from(select.options).map(o => o.textContent?.trim()), 'the three periods, none below 30 seconds').toStrictEqual(['30 seconds', '1 minute', '5 minutes']);
+      expect(select.value, 'the screen starts at the floor').toBe('30');
+      expect(text(select.closest('mat-form-field')!.querySelector('mat-hint'))).toBe('30 seconds is the floor.');
+
+      select.value = '300';
+      select.dispatchEvent(new Event('change'));
       fixture.detectChanges();
 
-      expect(monitoring.getQueueCounts.mock.calls).toStrictEqual([['notifications']]);
-      expect(monitoring.getSubscriptionCounts.mock.calls).toStrictEqual([['order-events', 'warehouse']]);
-      expect(rows()).toContainEqual(['notifications', 'Queue', '7', '250 over threshold', '1', '0']);
-      expect(rows()).toContainEqual(['warehouse in order-events', 'Subscription', '3', '0', 'Not counted', '0']);
+      expect(fixture.componentInstance.refreshSeconds(), 'the period chosen reaches the screen that polls').toBe(300);
     });
 
-    it('keeps a refreshed row until the API takes a new snapshot, not when the same snapshot is read again', () => {
+    it('a period that is not offered changes nothing', () => {
       render();
-      monitoring.getQueueCounts.mockReturnValue(of(queue('notifications', 7, 250, 1, 0)));
-      button('Refresh the counts of notifications').click();
-      fixture.detectChanges();
+      fixture.componentInstance.onRefreshEvery('5');
+      expect(fixture.componentInstance.refreshSeconds()).toBe(30);
+    });
+  });
 
-      fixture.componentRef.setInput('snapshot', { ...SNAPSHOT, queues: [...SNAPSHOT.queues] });
-      fixture.detectChanges();
-      expect(rows()).toContainEqual(['notifications', 'Queue', '7', '250 over threshold', '1', '0']);
+  describe('auto resubmit from a row', () => {
+    it('offers Auto resubmit only on a row whose dead-letter count is above zero, named with the count and the entity', () => {
+      render();
 
-      fixture.componentRef.setInput('snapshot', { ...SNAPSHOT, timestamp: '2026-11-13T09:00:30Z' });
-      fixture.detectChanges();
-      expect(rows()).toContainEqual(['notifications', 'Queue', '0', '0', '0', '0']);
+      const offered = Array.from(el.querySelectorAll('tr.count-row')).map(r => {
+        const link = r.querySelector('td.actions button');
+        return [text(r.querySelector('td')), link?.getAttribute('aria-label') ?? null, link ? text(link) : null];
+      });
+      expect(offered).toStrictEqual([
+        ['orders', 'Auto resubmit the 700,000 dead-letter messages of orders', 'Auto resubmit'],
+        ['email in order-events', 'Auto resubmit the 4 dead-letter messages of email', 'Auto resubmit'],
+        ['billing/invoices', null, null],
+        ['notifications', null, null],
+        ['orders-archive', null, null],
+        ['warehouse in order-events', null, null]
+      ]);
+      expect(el.querySelector('td.actions button mat-icon')?.textContent?.trim(), 'the link carries the arrow').toBe('arrow_forward');
     });
 
-    it('keeps the counts of the last poll and says why when the read fails', () => {
+    it('offers no Auto resubmit where the provider says it has no dead-letter queue, as the entity panel does', () => {
+      render(SNAPSHOT, { supportsDeadLetterQueue: false });
+
+      expect(el.querySelectorAll('td.actions button').length, 'a provider without a dead-letter queue gets no Auto resubmit').toBe(0);
+    });
+
+    it('opens the auto resubmit of that queue, or of that subscription of its topic, with its dead-letter count', async () => {
       render();
-      monitoring.getQueueCounts.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 404, error: { message: 'The queue was not found.' } })) as Observable<never>);
+      const dialog = TestBed.inject(MatDialog) as unknown as { open: ReturnType<typeof vi.fn> };
 
-      button('Refresh the counts of notifications').click();
-      fixture.detectChanges();
+      button('Auto resubmit the 700,000 dead-letter messages of orders').click();
+      button('Auto resubmit the 4 dead-letter messages of email').click();
+      await vi.waitFor(() => expect(dialog.open).toHaveBeenCalledTimes(2));
 
-      expect(text(el.querySelector('[role="alert"]'))).toBe('Could not refresh notifications: The queue was not found. The counts shown are from the last poll.');
-      expect(rows()).toContainEqual(['notifications', 'Queue', '0', '0', '0', '0']);
+      expect(dialog.open.mock.calls.map(([component]) => component), 'the auto resubmit dialog is what opens').toStrictEqual([ContinuousResubmitDialogComponent, ContinuousResubmitDialogComponent]);
+      expect(dialog.open.mock.calls.map(([, config]) => config.data)).toStrictEqual([
+        { entityType: 'queue', entityName: 'orders', topicName: undefined, deadLetterMessageCount: 700000 },
+        { entityType: 'subscription', entityName: 'email', topicName: 'order-events', deadLetterMessageCount: 4 }
+      ]);
+    });
+
+    it('says under the table what a name and Auto resubmit do and that a subscription has no scheduled count', () => {
+      render();
+
+      expect(text(el.querySelector('.footnote'))).toBe('A name opens the entity. Auto resubmit is offered where dead-letter messages wait. A subscription has no scheduled count.');
     });
   });
 });

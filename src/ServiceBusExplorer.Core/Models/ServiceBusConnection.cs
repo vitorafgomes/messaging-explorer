@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using ServiceBusExplorer.Core.Providers;
 using ServiceBusExplorer.Core.Providers.Azure;
 
@@ -74,6 +75,16 @@ public class ServiceBusConnection
     public int? ManagementPort { get; set; }
 
     /// <summary>
+    /// RabbitMQ: use TLS (amqps) for the AMQP connection.
+    /// </summary>
+    public bool UseSsl { get; set; }
+
+    /// <summary>
+    /// RabbitMQ: use TLS (https) for the Management API.
+    /// </summary>
+    public bool UseManagementSsl { get; set; }
+
+    /// <summary>
     /// Timestamp when this connection was created.
     /// </summary>
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -131,4 +142,56 @@ public class ServiceBusConnection
     /// Azure AD application client secret. Required for ServicePrincipal auth.
     /// </summary>
     public string? ClientSecret { get; set; }
+
+    /// <summary>
+    /// Azure: AMQP over WebSockets on port 443 instead of AMQP on port 5671. False keeps the AMQP transport.
+    /// </summary>
+    public bool UseWebSockets { get; set; }
+
+    /// <summary>
+    /// Azure: the address of an HTTP proxy, as http://host:port. Only with <see cref="UseWebSockets"/>; never carries a
+    /// user name or password: the proxy is reached with the default credentials of this computer.
+    /// </summary>
+    public string? ProxyAddress { get; set; }
+
+    /// <summary>
+    /// The fixed text a save or an import answers when <see cref="HasAllowedProxy"/> is false. It never carries the address.
+    /// </summary>
+    public const string ProxyRefusal =
+        "A proxy address must be http or https, without a user name or password, on an Azure Service Bus connection that uses WebSockets.";
+
+    /// <summary>
+    /// Whether <see cref="ProxyAddress"/> may be stored: on Azure Service Bus what <see cref="AzureConnectionConfig.IsProxyAllowed"/>
+    /// allows; on any other provider, which has no proxy, none at all.
+    /// </summary>
+    public bool HasAllowedProxy() => ProviderType == ProviderType.AzureServiceBus
+        ? AzureConnectionConfig.IsProxyAllowed(ProxyAddress, UseWebSockets)
+        : string.IsNullOrEmpty(ProxyAddress);
+
+    /// <summary>
+    /// Azure: the Azure resource ID of the namespace, as
+    /// /subscriptions/{subscription id}/resourceGroups/{resource group}/providers/Microsoft.ServiceBus/namespaces/{namespace}.
+    /// Optional and not a secret; Azure Monitor metrics are read for it.
+    /// </summary>
+    public string? AzureResourceId { get; set; }
+
+    /// <summary>
+    /// The fixed text a save or an import answers when <see cref="HasAllowedResourceId"/> is false. It never carries the value.
+    /// </summary>
+    public const string ResourceIdRefusal =
+        "An Azure resource ID must read /subscriptions/{subscription id}/resourceGroups/{resource group}/providers/Microsoft.ServiceBus/namespaces/{namespace}, on an Azure Service Bus connection.";
+
+    private static readonly Regex ResourceIdFormat = new(
+        "^/subscriptions/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/resourceGroups/[-\\w.()]{1,90}/providers/Microsoft\\.ServiceBus/namespaces/[a-z0-9-]{1,50}\\z",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+
+    /// <summary>
+    /// Whether <see cref="AzureResourceId"/> may be stored: empty on any provider; otherwise only on Azure Service Bus and
+    /// only in the format of a namespace's resource ID.
+    /// </summary>
+    public bool HasAllowedResourceId() => string.IsNullOrEmpty(AzureResourceId)
+        || (ProviderType == ProviderType.AzureServiceBus && IsResourceIdFormat(AzureResourceId));
+
+    /// <summary>Whether <paramref name="resourceId"/> has the format of a Service Bus namespace's Azure resource ID.</summary>
+    public static bool IsResourceIdFormat(string? resourceId) => resourceId is not null && ResourceIdFormat.IsMatch(resourceId);
 }

@@ -267,6 +267,21 @@ public class FileWorkspaceManager : IConnectionManager, IConnectionGroupManager
     // ────────────────────────────────────────────────────────────────
 
     /// <summary>
+    /// The masked connection as the list and a read by id answer it: an Azure connection also names the host of
+    /// its connection string's endpoint as its namespace, which is not a credential. The export and the answer
+    /// to a save stay plain <see cref="MaskConnection"/>.
+    /// </summary>
+    private static ServiceBusConnection MaskedWithTarget(ServiceBusConnection c)
+    {
+        var masked = MaskConnection(c);
+        if (c.ProviderType == Providers.ProviderType.AzureServiceBus)
+        {
+            masked.Namespace = Providers.Azure.AzureConnectionConfig.EndpointHost(c.ConnectionString) ?? c.Namespace;
+        }
+        return masked;
+    }
+
+    /// <summary>
     /// Returns a shallow clone of the given connection with sensitive fields masked.
     /// Keeps non-sensitive metadata (provider type, host, port, user, etc.) intact
     /// so the UI can render and edit safely.
@@ -286,6 +301,8 @@ public class FileWorkspaceManager : IConnectionManager, IConnectionGroupManager
             Password = string.IsNullOrEmpty(c.Password) ? c.Password : "***",
             VirtualHost = c.VirtualHost,
             ManagementPort = c.ManagementPort,
+            UseSsl = c.UseSsl,
+            UseManagementSsl = c.UseManagementSsl,
             CreatedAt = c.CreatedAt,
             LastUsedAt = c.LastUsedAt,
             IsConnected = c.IsConnected,
@@ -295,7 +312,10 @@ public class FileWorkspaceManager : IConnectionManager, IConnectionGroupManager
             FullyQualifiedNamespace = c.FullyQualifiedNamespace,
             TenantId = c.TenantId,
             ServicePrincipalClientId = c.ServicePrincipalClientId,
-            ClientSecret = string.IsNullOrEmpty(c.ClientSecret) ? c.ClientSecret : "***"
+            ClientSecret = string.IsNullOrEmpty(c.ClientSecret) ? c.ClientSecret : "***",
+            UseWebSockets = c.UseWebSockets,
+            ProxyAddress = c.ProxyAddress,
+            AzureResourceId = c.AzureResourceId
         };
     }
 
@@ -310,7 +330,7 @@ public class FileWorkspaceManager : IConnectionManager, IConnectionGroupManager
                 "Masking {ConnectionCount} connection strings for API response",
                 workspace.Connections.Count);
 
-            var maskedConnections = workspace.Connections.Select(MaskConnection);
+            var maskedConnections = workspace.Connections.Select(MaskedWithTarget);
             return Task.FromResult(maskedConnections);
         }
     }
@@ -321,7 +341,7 @@ public class FileWorkspaceManager : IConnectionManager, IConnectionGroupManager
         {
             var workspace = LoadWorkspace();
             var connection = workspace.Connections.FirstOrDefault(c => c.Id == id);
-            return Task.FromResult(connection == null ? null : MaskConnection(connection));
+            return Task.FromResult(connection == null ? null : MaskedWithTarget(connection));
         }
     }
 
@@ -351,6 +371,8 @@ public class FileWorkspaceManager : IConnectionManager, IConnectionGroupManager
         target.Password = source.Password == "***" ? target.Password : source.Password;
         target.VirtualHost = source.VirtualHost;
         target.ManagementPort = source.ManagementPort;
+        target.UseSsl = source.UseSsl;
+        target.UseManagementSsl = source.UseManagementSsl;
         target.ClientId = source.ClientId;
         target.EnvironmentId = source.EnvironmentId;
         target.AuthType = source.AuthType;
@@ -358,10 +380,18 @@ public class FileWorkspaceManager : IConnectionManager, IConnectionGroupManager
         target.TenantId = source.TenantId;
         target.ServicePrincipalClientId = source.ServicePrincipalClientId;
         target.ClientSecret = source.ClientSecret == "***" ? target.ClientSecret : source.ClientSecret;
+        target.UseWebSockets = source.UseWebSockets;
+        target.ProxyAddress = source.ProxyAddress;
+        target.AzureResourceId = source.AzureResourceId;
     }
 
     public Task<ServiceBusConnection> SaveConnectionAsync(ServiceBusConnection connection)
     {
+        if (!connection.HasAllowedProxy())
+            throw new ArgumentException(ServiceBusConnection.ProxyRefusal);
+        if (!connection.HasAllowedResourceId())
+            throw new ArgumentException(ServiceBusConnection.ResourceIdRefusal);
+
         lock (_lock)
         {
             var workspace = LoadWorkspace();
@@ -383,6 +413,21 @@ public class FileWorkspaceManager : IConnectionManager, IConnectionGroupManager
 
             SaveWorkspace(workspace);
             return Task.FromResult(MaskConnection(existing ?? connection));
+        }
+    }
+
+    public Task MarkUsedAsync(string id)
+    {
+        lock (_lock)
+        {
+            var workspace = LoadWorkspace();
+            var existing = workspace.Connections.FirstOrDefault(c => c.Id == id);
+            if (existing != null)
+            {
+                existing.LastUsedAt = DateTime.UtcNow;
+                SaveWorkspace(workspace);
+            }
+            return Task.CompletedTask;
         }
     }
 
@@ -419,6 +464,11 @@ public class FileWorkspaceManager : IConnectionManager, IConnectionGroupManager
 
         if (importedConnections == null || importedConnections.Count == 0)
             throw new ArgumentException("Invalid or empty configuration data");
+
+        if (importedConnections.Any(c => !c.HasAllowedProxy()))
+            throw new ArgumentException(ServiceBusConnection.ProxyRefusal);
+        if (importedConnections.Any(c => !c.HasAllowedResourceId()))
+            throw new ArgumentException(ServiceBusConnection.ResourceIdRefusal);
 
         lock (_lock)
         {
@@ -491,6 +541,7 @@ public class FileWorkspaceManager : IConnectionManager, IConnectionGroupManager
                 existing.ParentId = group.ParentId;
                 existing.Description = group.Description;
                 existing.Order = group.Order;
+                existing.IsProduction = group.IsProduction;
             }
             else
             {

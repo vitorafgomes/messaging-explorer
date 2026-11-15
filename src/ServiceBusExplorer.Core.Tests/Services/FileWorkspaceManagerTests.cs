@@ -173,6 +173,200 @@ public sealed class FileWorkspaceManagerTests : IDisposable
         Assert.True(string.IsNullOrEmpty(stored.ClientSecret), $"ClientSecret was '{stored.ClientSecret}'");
     }
 
+    private static ServiceBusConnection ProxiedAzureConnection(string id) => new()
+    {
+        Id = id,
+        Name = "proxied",
+        ProviderType = ProviderType.AzureServiceBus,
+        ConnectionString = "Endpoint=sb://contoso-test.servicebus.windows.net/;SharedAccessKeyName=K;SharedAccessKey=stored-key",
+        UseWebSockets = true,
+        ProxyAddress = "http://proxy.example:8080"
+    };
+
+    [Fact]
+    public async Task A_connection_string_connection_is_read_with_its_namespace_host_and_never_its_key()
+    {
+        var id = Guid.NewGuid().ToString();
+        await NewManager().SaveConnectionAsync(new ServiceBusConnection
+        {
+            Id = id,
+            Name = "orders",
+            ProviderType = ProviderType.AzureServiceBus,
+            AuthType = ServiceBusExplorer.Core.Providers.Azure.AzureAuthType.ConnectionString,
+            ConnectionString = "Endpoint=sb://sample-ns.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=c2VjcmV0LWtleQ=="
+        });
+
+        var listed = Assert.Single(await NewManager().GetConnectionsAsync());
+        var read = await NewManager().GetConnectionAsync(id);
+
+        Assert.Equal("sample-ns.servicebus.windows.net", listed.Namespace);
+        Assert.Equal("sample-ns.servicebus.windows.net", read?.Namespace);
+        Assert.Equal(Mask, listed.ConnectionString);
+        Assert.DoesNotContain("c2VjcmV0LWtleQ", JsonSerializer.Serialize(listed));
+        Assert.DoesNotContain("RootManageSharedAccessKey", JsonSerializer.Serialize(listed));
+    }
+
+    [Theory]
+    [InlineData("Endpoint=sb://sample-ns.servicebus.windows.net/;SharedAccessKeyName=k;SharedAccessKey=s", "sample-ns.servicebus.windows.net")]
+    [InlineData("SharedAccessKeyName=k;SharedAccessKey=s;Endpoint=sb://localhost:5673;UseDevelopmentEmulator=true", "localhost")]
+    [InlineData("Endpoint=sb://user:secret-pass@sample-ns.servicebus.windows.net/;SharedAccessKey=s", "sample-ns.servicebus.windows.net")]
+    [InlineData("SharedAccessKey=s", null)]
+    [InlineData("Endpoint=not a uri;SharedAccessKey=s", null)]
+    [InlineData("", null)]
+    public void The_endpoint_host_is_the_host_alone_never_a_key_or_user_info(string connectionString, string? host)
+    {
+        Assert.Equal(host, ServiceBusExplorer.Core.Providers.Azure.AzureConnectionConfig.EndpointHost(connectionString));
+    }
+
+    [Fact]
+    public async Task The_transport_and_the_proxy_are_stored_read_masked_and_carried_by_the_default_export_and_its_import()
+    {
+        var id = Guid.NewGuid().ToString();
+        await NewManager().SaveConnectionAsync(ProxiedAzureConnection(id));
+
+        var read = await NewManager().GetConnectionAsync(id);
+        Assert.NotNull(read);
+        Assert.True(read.UseWebSockets, "The masked read carries the transport, so an edit shows it");
+        Assert.Equal("http://proxy.example:8080", read.ProxyAddress);
+        Assert.Equal(Mask, read.ConnectionString);
+
+        var export = await NewManager().ExportConfigurationAsync();
+        File.Delete(_workspaceFile);
+        await NewManager().ImportConfigurationAsync(export);
+
+        var imported = await NewManager().GetConnectionWithSecretAsync(id);
+        Assert.NotNull(imported);
+        Assert.True(imported.UseWebSockets, "The default export and its import keep the transport");
+        Assert.Equal("http://proxy.example:8080", imported.ProxyAddress);
+    }
+
+    [Fact]
+    public async Task An_edit_of_the_transport_and_the_proxy_is_stored_and_keeps_the_masked_secret()
+    {
+        var id = Guid.NewGuid().ToString();
+        var stored = ProxiedAzureConnection(id);
+        stored.UseWebSockets = false;
+        stored.ProxyAddress = null;
+        await NewManager().SaveConnectionAsync(stored);
+        var edited = ProxiedAzureConnection(id);
+        edited.ConnectionString = Mask;
+
+        await NewManager().SaveConnectionAsync(edited);
+
+        var after = await NewManager().GetConnectionWithSecretAsync(id);
+        Assert.NotNull(after);
+        Assert.True(after.UseWebSockets, "An edit stores the transport");
+        Assert.Equal("http://proxy.example:8080", after.ProxyAddress);
+        Assert.Contains("stored-key", after.ConnectionString, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The connections a save or an import must refuse for their proxy: user info or no WebSockets on Azure Service Bus,
+    /// and any proxy at all on RabbitMQ, which has none.
+    /// </summary>
+    public static TheoryData<ProviderType, string, bool> RefusedProxies() => new()
+    {
+        { ProviderType.AzureServiceBus, "http://user:proxy-sentinel-pass@proxy.example:8080", true },
+        { ProviderType.AzureServiceBus, "http://proxy.example:8080", false },
+        { ProviderType.RabbitMQ, "http://user:proxy-sentinel-pass@proxy.example:8080", false },
+        { ProviderType.RabbitMQ, "http://proxy.example:8080", true },
+    };
+
+    private static ServiceBusConnection WithProxy(string id, ProviderType providerType, string proxyAddress, bool useWebSockets)
+    {
+        var connection = ProxiedAzureConnection(id);
+        connection.ProviderType = providerType;
+        connection.HostName = "rabbit.example";
+        connection.ProxyAddress = proxyAddress;
+        connection.UseWebSockets = useWebSockets;
+        return connection;
+    }
+
+    private const string ResourceId =
+        "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/rg-test/providers/Microsoft.ServiceBus/namespaces/contoso-test";
+
+    [Fact]
+    public async Task The_azure_resource_id_is_not_a_secret_it_is_stored_read_unmasked_exported_imported_and_kept_on_an_edit()
+    {
+        var id = Guid.NewGuid().ToString();
+        var connection = ProxiedAzureConnection(id);
+        connection.AzureResourceId = ResourceId;
+        await NewManager().SaveConnectionAsync(connection);
+
+        var read = await NewManager().GetConnectionAsync(id);
+        Assert.Equal((ResourceId, Mask), (read?.AzureResourceId, read?.ConnectionString));
+
+        var export = await NewManager().ExportConfigurationAsync();
+        Assert.Contains(ResourceId, export, StringComparison.Ordinal);
+        File.Delete(_workspaceFile);
+        await NewManager().ImportConfigurationAsync(export);
+        Assert.Equal(ResourceId, (await NewManager().GetConnectionAsync(id))?.AzureResourceId);
+
+        var edit = (await NewManager().GetConnectionAsync(id))!;
+        edit.AzureResourceId = null;
+        await NewManager().SaveConnectionAsync(edit);
+        Assert.Null((await NewManager().GetConnectionWithSecretAsync(id))?.AzureResourceId);
+    }
+
+    public static TheoryData<ProviderType, string> RefusedResourceIds() => new()
+    {
+        { ProviderType.AzureServiceBus, "contoso-test" },
+        { ProviderType.AzureServiceBus, ResourceId + "/queues/orders" },
+        { ProviderType.AzureServiceBus, ResourceId + "\n" },
+        { ProviderType.AzureServiceBus, ResourceId.Replace("00000000-0000-0000-0000-000000000001", "not-a-guid") },
+        { ProviderType.AzureServiceBus, ResourceId.Replace("Microsoft.ServiceBus", "Microsoft.EventHub") },
+        { ProviderType.RabbitMQ, ResourceId },
+    };
+
+    [Theory]
+    [MemberData(nameof(RefusedResourceIds))]
+    public async Task A_save_or_an_import_with_a_resource_id_out_of_format_or_on_rabbitmq_is_refused_with_the_fixed_text(ProviderType providerType, string resourceId)
+    {
+        var id = Guid.NewGuid().ToString();
+        var connection = ProxiedAzureConnection(id);
+        connection.ProviderType = providerType;
+        connection.UseWebSockets = false;
+        connection.ProxyAddress = null;
+        connection.AzureResourceId = resourceId;
+
+        var saved = await Assert.ThrowsAsync<ArgumentException>(() => NewManager().SaveConnectionAsync(connection));
+        var imported = await Assert.ThrowsAsync<ArgumentException>(() => NewManager().ImportConfigurationAsync(JsonSerializer.Serialize(new[] { connection })));
+
+        Assert.Equal((ServiceBusConnection.ResourceIdRefusal, ServiceBusConnection.ResourceIdRefusal), (saved.Message, imported.Message));
+        Assert.Null(await NewManager().GetConnectionWithSecretAsync(id));
+    }
+
+    [Theory]
+    [MemberData(nameof(RefusedProxies))]
+    public async Task A_save_with_a_proxy_the_provider_cannot_use_is_refused_with_the_fixed_text_and_stores_nothing(ProviderType providerType, string proxyAddress, bool useWebSockets)
+    {
+        var id = Guid.NewGuid().ToString();
+
+        var refused = await Assert.ThrowsAsync<ArgumentException>(() =>
+            NewManager().SaveConnectionAsync(WithProxy(id, providerType, proxyAddress, useWebSockets)));
+
+        Assert.Equal(ServiceBusConnection.ProxyRefusal, refused.Message);
+        Assert.False(File.Exists(_workspaceFile) && File.ReadAllText(_workspaceFile).Contains("proxy.example", StringComparison.Ordinal),
+            "A refused proxy address never reaches workspace.json, whatever the provider");
+        Assert.Null(await NewManager().GetConnectionWithSecretAsync(id));
+    }
+
+    [Theory]
+    [MemberData(nameof(RefusedProxies))]
+    public async Task An_import_with_a_proxy_the_provider_cannot_use_is_refused_with_the_fixed_text_and_stores_nothing(ProviderType providerType, string proxyAddress, bool useWebSockets)
+    {
+        var id = Guid.NewGuid().ToString();
+        var connection = WithProxy(id, providerType, proxyAddress, useWebSockets);
+
+        var refused = await Assert.ThrowsAsync<ArgumentException>(() =>
+            NewManager().ImportConfigurationAsync(JsonSerializer.Serialize(new[] { connection })));
+
+        Assert.Equal(ServiceBusConnection.ProxyRefusal, refused.Message);
+        Assert.False(File.Exists(_workspaceFile) && File.ReadAllText(_workspaceFile).Contains("proxy.example", StringComparison.Ordinal),
+            "A refused proxy address never reaches workspace.json on import, whatever the provider");
+        Assert.Null(await NewManager().GetConnectionWithSecretAsync(id));
+    }
+
     [Fact]
     public async Task An_unreadable_workspace_is_an_error_never_an_empty_workspace()
     {
@@ -348,5 +542,118 @@ public sealed class FileWorkspaceManagerTests : IDisposable
         Assert.False(File.Exists(groupsFile));
         Assert.Equal("orders", Assert.Single(await manager.GetConnectionsAsync()).Name);
         Assert.Equal("production", Assert.Single(await manager.GetGroupsAsync()).Name);
+    }
+
+    [Fact]
+    public async Task The_production_mark_of_an_environment_is_stored_and_an_update_can_clear_it()
+    {
+        var env = new ConnectionGroup { Id = "env-1", Name = "Production", Type = "environment", ParentId = "client-1", IsProduction = true };
+        await NewManager().SaveGroupAsync(env);
+
+        var stored = await NewManager().GetGroupAsync("env-1");
+        Assert.True(stored?.IsProduction, "an environment saved as production must read back as production");
+
+        await NewManager().SaveGroupAsync(new ConnectionGroup { Id = "env-1", Name = "Production", Type = "environment", ParentId = "client-1", IsProduction = false });
+        Assert.False((await NewManager().GetGroupAsync("env-1"))?.IsProduction, "an update without the mark must store the environment as not production");
+    }
+
+    [Fact]
+    public async Task A_workspace_written_before_the_production_mark_reads_every_group_as_not_production()
+    {
+        File.WriteAllText(_workspaceFile,
+            "{\"Connections\":[],\"Groups\":[{\"Id\":\"env-1\",\"Name\":\"Production\",\"Type\":\"environment\",\"ParentId\":\"c\"}]}");
+
+        var group = Assert.Single(await NewManager().GetGroupsAsync());
+
+        Assert.Equal("Production", group.Name);
+        Assert.False(group.IsProduction, "an old workspace file without IsProduction must read false");
+    }
+
+    [Fact]
+    public async Task The_TLS_flags_are_stored_read_masked_and_updated()
+    {
+        var manager = NewManager();
+        var connection = EditedRabbitConnection("tls-1");
+        connection.UseSsl = true;
+        connection.UseManagementSsl = true;
+        await manager.SaveConnectionAsync(connection);
+
+        var masked = await manager.GetConnectionAsync("tls-1");
+        Assert.True(masked?.UseSsl, "the masked read must keep UseSsl");
+        Assert.True(masked?.UseManagementSsl, "the masked read must keep UseManagementSsl");
+        Assert.Equal(Mask, masked?.Password);
+
+        var edited = EditedRabbitConnection("tls-1");
+        edited.Password = Mask;
+        edited.UseSsl = false;
+        edited.UseManagementSsl = true;
+        await manager.SaveConnectionAsync(edited);
+
+        var stored = await NewManager().GetConnectionWithSecretAsync("tls-1");
+        Assert.False(stored?.UseSsl, "an update must store the UseSsl it was sent");
+        Assert.True(stored?.UseManagementSsl, "an update must store the UseManagementSsl it was sent");
+        Assert.Equal("new-password", stored?.Password);
+    }
+
+    [Fact]
+    public void The_RabbitMQ_config_uses_the_TLS_flags_of_the_stored_connection()
+    {
+        var connection = EditedRabbitConnection("tls-2");
+        connection.UseSsl = true;
+        connection.UseManagementSsl = true;
+
+        var config = ServiceBusExplorer.Core.Providers.RabbitMQ.RabbitMQConnectionConfig.FromServiceBusConnection(connection);
+
+        Assert.True(config.UseSsl, "the AMQP TLS flag must reach the provider config");
+        Assert.Equal("https://new-host:15673/api", config.GetManagementApiUrl());
+        var back = config.ToServiceBusConnection();
+        Assert.True(back.UseSsl, "UseSsl must survive the conversion back to the stored connection");
+        Assert.True(back.UseManagementSsl, "UseManagementSsl must survive the conversion back to the stored connection");
+    }
+
+    [Fact]
+    public async Task The_time_a_connection_was_used_survives_an_edit_save_that_does_not_send_it()
+    {
+        var manager = NewManager();
+        await manager.SaveConnectionAsync(StoredRabbitConnection("used-1"));
+        var before = DateTime.UtcNow;
+
+        await manager.MarkUsedAsync("used-1");
+        var stamped = (await manager.GetConnectionAsync("used-1"))?.LastUsedAt;
+        Assert.NotNull(stamped);
+        Assert.InRange(stamped.Value, before, DateTime.UtcNow);
+
+        var edit = EditedRabbitConnection("used-1");
+        edit.LastUsedAt = new DateTime(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        await manager.SaveConnectionAsync(edit);
+
+        var after = await NewManager().GetConnectionAsync("used-1");
+        Assert.Equal("new-host", after?.HostName);
+        Assert.Equal(stamped, after?.LastUsedAt);
+    }
+
+    [Fact]
+    public async Task Marking_an_unknown_connection_used_writes_nothing()
+    {
+        var manager = NewManager();
+        await manager.SaveConnectionAsync(StoredRabbitConnection("known"));
+        var before = File.ReadAllBytes(_workspaceFile);
+
+        await manager.MarkUsedAsync("unknown");
+
+        Assert.Equal(before, File.ReadAllBytes(_workspaceFile));
+    }
+
+    [Fact]
+    public async Task A_mark_used_whose_write_fails_keeps_the_original_workspace()
+    {
+        var manager = NewManager();
+        await manager.SaveConnectionAsync(StoredRabbitConnection("used-2"));
+        var before = File.ReadAllBytes(_workspaceFile);
+        Directory.CreateDirectory(_workspaceFile + ".tmp");
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => manager.MarkUsedAsync("used-2"));
+
+        Assert.Equal(before, File.ReadAllBytes(_workspaceFile));
     }
 }

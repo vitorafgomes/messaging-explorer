@@ -22,8 +22,8 @@ input::placeholder{color:currentColor;opacity:.72}
 
   <div style="display: flex; align-items: center; gap: 8px; height: 28px; box-sizing: border-box; padding: 0 16px; background: {{t.surfaceHigh}}; color: {{t.onSurfaceVariant}}; border-bottom: 1px solid {{t.outlineVariant}}; font-size: 12px; line-height: 16px">
     <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M4 10h16M10 10v10"></path></svg>
-    <strong style="font-weight: 600; color: {{t.onSurface}}">Built 2026-11-13, in part</strong>
-    <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Entities: migrated to Material on 2026-11-13, one panel for a queue and a subscription, purge under More actions. Not built: the tree filter, the topic link, Send to topic, a subscription's Size card, live counts and dead-letter purge for a queue, Delete, the topic's Subscriptions tab, Send and Create subscription, the empty-state counts, the topic warning. The Sessions and Rules tags below are older than those tabs, which exist.</span>
+    <strong style="font-weight: 600; color: {{t.onSurface}}">Built 2026-11-14, in part</strong>
+    <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Entities: the tree filter and its hidden count, rows as buttons, topics always open; the topic link, the status chip, View messages, Send, Send to topic, Create subscription; More actions with Resubmit dead-letter, both purges for a queue and a subscription, Delete; the resubmit warning, Rules (n), a topic's Subscriptions tab with Status and Rules; the empty state with what the connection holds; the toolbar with the environment chip; a subscription's plain Active card. Not built: the kind and name above the loading state, a subscription's Size card (Azure gives none). The Rules and Sessions tabs follow Rules.dc.html and Monitoring.dc.html since 2026-11-14.</span>
   </div>
 
   <header style="display: flex; align-items: center; gap: 16px; height: 56px; box-sizing: border-box; padding: 0 8px 0 12px; background: {{bar.bg}}; color: {{bar.fg}}; border-bottom: 1px solid {{bar.line}}">
@@ -359,64 +359,116 @@ input::placeholder{color:currentColor;opacity:.72}
           </sc-if>
 
           <sc-if value="{{showSessions}}" hint-placeholder-val="{{true}}">
-            <div style="display: flex; flex-direction: column; gap: 12px">
-              <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
-                <span style="color: {{t.onSurfaceVariant}}">2 sessions hold messages. Read only.</span>
-                <span style="display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Design, not built for a queue</span>
+            <div style="display: flex; flex-direction: column; gap: 16px">
+              <p style="display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 10px 14px; border-radius: 8px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}">
+                <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
+                <span><strong style="font-weight: 600">Listing sessions locks each one briefly.</strong> The broker cannot list sessions without accepting them: each one is locked, read and released at once, and a consumer that wants it waits for that moment. The listing stops after 10 seconds and shows only the sessions it could lock.</span>
+              </p>
+              <div style="display: flex; align-items: flex-start; gap: 32px; flex-wrap: wrap">
+                <section aria-label="Sessions" style="display: flex; flex-direction: column; gap: 8px; flex: 1 1 380px; min-width: 0">
+                  <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-height: 32px">
+                    <span style="flex: 1; min-width: 160px; color: {{t.onSurfaceVariant}}; font-variant-numeric: tabular-nums">2 sessions listed at 14:02:30</span>
+                    <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"></path></svg>List again</button>
+                  </div>
+                  <table style="width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums">
+                    <thead>
+                      <tr><th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Session ID</th><th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Lock Status</th><th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">State</th></tr>
+                    </thead>
+                    <tbody>
+                      <tr style="background: {{t.secondaryContainer}}">
+                        <td style="padding: 2px 12px; border-bottom: 1px solid {{t.outlineVariant}}"><button type="button" aria-current="true" style="min-height: 32px; padding: 0; border: 0; background: transparent; color: {{t.primary}}; font: inherit; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; font-weight: 700; text-decoration: underline; cursor: pointer">customer-1042</button></td>
+                        <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">Unlocked</td>
+                        <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">Has state</td>
+                      </tr>
+                      <tr style="background: transparent">
+                        <td style="padding: 2px 12px; border-bottom: 1px solid {{t.outlineVariant}}"><button type="button" aria-current="false" style="min-height: 32px; padding: 0; border: 0; background: transparent; color: {{t.primary}}; font: inherit; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; font-weight: 500; text-decoration: underline; cursor: pointer">customer-2718</button></td>
+                        <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">Locked</td>
+                        <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">No state</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </section>
+                <section aria-label="Selected session" style="display: flex; flex-direction: column; gap: 16px; flex: 1.4 1 440px; min-width: 0">
+                  <dl style="display: flex; flex-direction: column; margin: 0; border-top: 1px solid {{t.outlineVariant}}">
+                    <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Session ID</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">customer-1042</dd></div>
+                    <div style="display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}"><dt style="flex: 0 0 40%; color: {{t.onSurfaceVariant}}">Lock Status</dt><dd style="flex: 1; min-width: 0; margin: 0; overflow-wrap: anywhere">Unlocked</dd></div>
+                  </dl>
+                  <div style="display: flex; flex-direction: column; gap: 8px">
+                    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-height: 32px">
+                      <h2 style="margin: 0; font-size: 16px; line-height: 24px; font-weight: 500; flex: 1">Session State</h2>
+                      <span style="display: inline-flex; align-items: center; gap: 8px">
+                        <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built</span>
+                        <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16zM13 7l4 4"></path></svg>Edit state</button>
+                      </span>
+                    </div>
+                    <pre style="margin: 0; padding: 10px 12px; border-radius: 8px; background: {{t.surfaceContainer}}; color: {{t.onSurface}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; line-height: 20px; white-space: pre-wrap; overflow-wrap: anywhere">{{sessionState}}</pre>
+                  </div>
+                  <div style="display: flex; flex-direction: column; gap: 8px">
+                    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+                      <h2 style="margin: 0; font-size: 16px; line-height: 24px; font-weight: 500; flex: 1">Messages of this session</h2>
+                      <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built</span>
+                    </div>
+                    <table style="width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums">
+                      <thead>
+                        <tr><th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: right">Sequence</th><th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Message ID</th><th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Enqueued</th><th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: right">Size</th></tr>
+                      </thead>
+                      <tbody>
+                        <tr><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">88,121</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">SAMPLE-1042-1</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">Nov 12, 2026, 1:58:07 PM</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">412 B</td></tr>
+                        <tr><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">88,134</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">SAMPLE-1042-2</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">Nov 12, 2026, 1:59:40 PM</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">398 B</td></tr>
+                        <tr><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">88,150</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">SAMPLE-1042-3</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">Nov 12, 2026, 2:01:12 PM</td><td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right">431 B</td></tr>
+                      </tbody>
+                    </table>
+                    <p style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}; margin: 0">Peeked, not received: nothing leaves the queue, and the session lock taken to read is released at once.</p>
+                  </div>
+                </section>
               </div>
-              <table style="width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums">
-                <thead>
-                  <tr>
-                    <th scope="col" style="padding: 8px 12px 8px 0; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Session ID</th>
-                    <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Lock Status</th>
-                    <th scope="col" style="padding: 8px 0 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">State</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td style="padding: 8px 12px 8px 0; border-bottom: 1px solid {{t.outlineVariant}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">customer-1042</td>
-                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">Unlocked</td>
-                    <td style="padding: 8px 0 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">Has state</td>
-                  </tr>
-                  <tr>
-                    <td style="padding: 8px 12px 8px 0; border-bottom: 1px solid {{t.outlineVariant}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">customer-2718</td>
-                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">Locked until Nov 12, 2026, 2:10:00 PM</td>
-                    <td style="padding: 8px 0 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; color: {{t.onSurfaceVariant}}">No state</td>
-                  </tr>
-                </tbody>
-              </table>
             </div>
           </sc-if>
 
           <sc-if value="{{showRules}}" hint-placeholder-val="{{true}}">
-            <div style="display: flex; flex-direction: column; gap: 12px">
-              <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
-                <span style="flex: 1; min-width: 200px; color: {{t.onSurfaceVariant}}">A message reaches this subscription when any rule matches.</span>
-                <span style="display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Design, not built</span>
-                <a href="Rules.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; border-radius: 999px; color: {{t.primary}}; font-weight: 500; text-decoration: none; white-space: nowrap">
-                  <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>
-                  Add rule
-                </a>
+            <section aria-label="Rules" style="display: flex; flex-direction: column; gap: 12px">
+              <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-height: 32px">
+                <span style="flex: 1; min-width: 200px; color: {{t.onSurfaceVariant}}">A message is delivered when at least one rule matches.</span>
+                <a href="Rules.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>Add rule</a>
               </div>
-              <sc-for list="{{rules}}" as="rule" hint-placeholder-count="1">
-                <div style="display: flex; flex-direction: column; gap: 8px; padding: 12px 0; border-top: 1px solid {{t.outlineVariant}}">
-                  <div style="display: flex; align-items: center; gap: 8px">
-                    <span style="font-weight: 500">{{rule.name}}</span>
-                    <span style="display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; background: {{t.surfaceHigh}}; color: {{t.onSurfaceVariant}}; font-size: 12px; line-height: 16px; font-weight: 500">{{rule.kind}}</span>
-                  </div>
-                  <div style="display: flex; flex-direction: column; gap: 4px">
-                    <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Filter Expression</span>
-                    <pre style="margin: 0; padding: 10px 12px; border-radius: 8px; background: {{t.surfaceContainer}}; color: {{t.onSurface}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; line-height: 20px; white-space: pre-wrap; overflow-wrap: anywhere">{{rule.expr}}</pre>
-                  </div>
-                  <sc-if value="{{rule.hasAction}}" hint-placeholder-val="{{true}}">
-                    <div style="display: flex; flex-direction: column; gap: 4px">
-                      <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Action</span>
-                      <pre style="margin: 0; padding: 10px 12px; border-radius: 8px; background: {{t.surfaceContainer}}; color: {{t.onSurface}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; line-height: 20px; white-space: pre-wrap; overflow-wrap: anywhere">{{rule.action}}</pre>
-                    </div>
-                  </sc-if>
-                </div>
-              </sc-for>
-            </div>
+              <table style="width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums">
+                <thead>
+                  <tr>
+                    <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left; width: 18%">Rule</th>
+                    <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Filter</th>
+                    <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Expression</th>
+                    <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Action</th>
+                    <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left"><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr style="display: {{r0.display}}">
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-weight: 500; overflow-wrap: anywhere">{{r0.name}}</td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}"><span style="display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; background: {{t.surfaceHigh}}; color: {{t.onSurfaceVariant}}; font-size: 12px; line-height: 16px; font-weight: 500">{{r0.filter}}</span></td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; overflow-wrap: anywhere">{{r0.expr}}</td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-family: {{r0.actionFont}}; font-size: {{r0.actionSize}}; color: {{r0.actionFg}}; overflow-wrap: anywhere">{{r0.action}}</td>
+                    <td style="padding: 2px 0 2px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right; white-space: nowrap">
+                      <span style="display: inline-flex; gap: 4px">
+                        <a href="Rules.dc.html" aria-label="{{r0.editLabel}}" title="{{r0.editLabel}}" class="hov" style="display: flex; align-items: center; justify-content: center; flex: none; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 999px; background: transparent; font: inherit; cursor: pointer; color: {{t.onSurfaceVariant}}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16zM13 7l4 4"></path></svg></a>
+                        <a href="Rules.dc.html" aria-label="{{r0.delLabel}}" title="{{r0.delLabel}}" class="hov" style="display: flex; align-items: center; justify-content: center; flex: none; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 999px; background: transparent; font: inherit; cursor: pointer; color: {{t.error}}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"></path></svg></a>
+                      </span>
+                    </td>
+                  </tr>
+                  <tr style="display: {{r1.display}}">
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-weight: 500; overflow-wrap: anywhere">{{r1.name}}</td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}"><span style="display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; background: {{t.surfaceHigh}}; color: {{t.onSurfaceVariant}}; font-size: 12px; line-height: 16px; font-weight: 500">{{r1.filter}}</span></td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; overflow-wrap: anywhere">{{r1.expr}}</td>
+                    <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-family: {{r1.actionFont}}; font-size: {{r1.actionSize}}; color: {{r1.actionFg}}; overflow-wrap: anywhere">{{r1.action}}</td>
+                    <td style="padding: 2px 0 2px 12px; border-bottom: 1px solid {{t.outlineVariant}}; text-align: right; white-space: nowrap">
+                      <span style="display: inline-flex; gap: 4px">
+                        <a href="Rules.dc.html" aria-label="{{r1.editLabel}}" title="{{r1.editLabel}}" class="hov" style="display: flex; align-items: center; justify-content: center; flex: none; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 999px; background: transparent; font: inherit; cursor: pointer; color: {{t.onSurfaceVariant}}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16zM13 7l4 4"></path></svg></a>
+                        <a href="Rules.dc.html" aria-label="{{r1.delLabel}}" title="{{r1.delLabel}}" class="hov" style="display: flex; align-items: center; justify-content: center; flex: none; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 999px; background: transparent; font: inherit; cursor: pointer; color: {{t.error}}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"></path></svg></a>
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
           </sc-if>
 
           <sc-if value="{{showSubs}}" hint-placeholder-val="{{true}}">
@@ -511,8 +563,8 @@ const ENTITIES = [
       ['Enable Batched Operations', 'Yes'], ['User Metadata', NOT_SET],
       ['Created At (UTC)', 'Mar 14, 2026, 9:21:40 AM'], ['Updated At (UTC)', 'Sep 8, 2026, 10:15:00 AM'], ['Accessed At (UTC)', 'Nov 12, 2026, 1:59:02 PM']],
     rules: [
-      { name: 'paid-orders', kind: 'SQL', expr: "sys.Label = 'OrderPaid' AND region IN ('EU', 'UK')", hasAction: true, action: "SET sys.To = 'warehouse'" },
-      { name: 'returns', kind: 'Correlation', expr: "Label = 'OrderReturned'", hasAction: false, action: '' }] },
+      { name: 'paid-orders', filter: 'SQL', expr: "sys.Label = 'OrderPaid' AND region IN ('EU', 'UK')", action: "SET sys.To = 'warehouse'" },
+      { name: 'returns', filter: 'Correlation', expr: 'Subject = OrderReturned, returnedAt = 2026-11-10T09:30:00Z', action: '' }] },
   { id: 's:email', kind: 'subscription', name: 'email', topic: 'order-events', active: 0, dlq: 4, transfer: 0, size: '3.1 KB', session: false,
     props: [['Topic Name', 'order-events'], ['Lock Duration', '1m'], ['Max Delivery Count', '10'], ['Default Message Time To Live', '14d'],
       ['Auto Delete On Idle', 'Never'], ['Forward To', NOT_SET], ['Forward Dead-lettered Messages To', NOT_SET], ['Status', 'Active'],
@@ -520,12 +572,15 @@ const ENTITIES = [
       ['Enable Batched Operations', 'Yes'], ['User Metadata', NOT_SET],
       ['Created At (UTC)', 'Mar 14, 2026, 9:22:05 AM'], ['Updated At (UTC)', 'Mar 14, 2026, 9:22:05 AM'], ['Accessed At (UTC)', 'Nov 12, 2026, 1:59:02 PM']],
     rules: [
-      { name: 'shipped-orders', kind: 'SQL', expr: "sys.Label = 'OrderShipped' AND notify = TRUE", hasAction: false, action: '' }] }
+      { name: 'shipped-orders', filter: 'SQL', expr: "sys.Label = 'OrderShipped' AND notify = TRUE", action: '' }] }
 ];
 
 const DEFAULT_ID = { queue: 'q:orders', subscription: 's:email', topic: 't:order-events' };
 const KIND_LABEL = { queue: 'Queue', subscription: 'Subscription', topic: 'Topic' };
 const BLANK = { kind: '', kindLower: '', name: '', topic: '', active: '', dlq: '', scheduled: '', transfer: '', size: '', sizeNote: '', sendLabel: '', hasScheduled: false, hasTransfer: false };
+
+const NO_RULE = { display: 'none', name: '', filter: '', expr: '', action: '', actionFont: 'inherit', actionSize: '14px', actionFg: 'inherit', editLabel: '', delLabel: '' };
+function ruleSlot(rule) { return rule ? { display: 'table-row', ...rule } : NO_RULE; }
 
 function fmt(n) { return Number(n || 0).toLocaleString('en-US'); }
 
@@ -635,7 +690,12 @@ class Component extends DCLogic {
       const half = Math.ceil(rows.length / 2);
       propsA = rows.slice(0, half);
       propsB = rows.slice(half);
-      rules = e.rules || [];
+      rules = (e.rules || []).map(r => ({
+        ...r, action: r.action || 'None',
+        actionFont: r.action ? "ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace" : 'inherit',
+        actionSize: r.action ? '13px' : '14px', actionFg: r.action ? t.onSurface : t.onSurfaceVariant,
+        editLabel: 'Edit rule ' + r.name, delLabel: 'Delete rule ' + r.name
+      }));
     }
 
     const tab = tabIds.includes(s.tab) ? s.tab : tabIds[0];
@@ -661,6 +721,8 @@ class Component extends DCLogic {
       menuItems, dangerItems, hasMenuItems: menuItems.length > 0,
       tabs, showProps: tab === 'props', showSessions: tab === 'sessions', showRules: tab === 'rules', showSubs: tab === 'subs',
       propsA, propsB, rules,
+      r0: ruleSlot(rules[0]), r1: ruleSlot(rules[1]),
+      sessionState: '{\n  "step": "awaiting-payment",\n  "orderId": "SAMPLE-1042",\n  "attempt": 2\n}',
       pickTopic: pickId('t:order-events'), pickWarehouse: pickId('s:warehouse'), pickEmail: pickId('s:email'),
       retry: () => this.setState({ view: 'default', menu: false })
     };

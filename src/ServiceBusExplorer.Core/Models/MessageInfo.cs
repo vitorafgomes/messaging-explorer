@@ -13,6 +13,7 @@ public class MessageInfo : IMessage
     public string? ContentType { get; set; }
     public string? Body { get; set; } = string.Empty;
     public string BodyType { get; set; } = "Text";
+    public string BodyEncoding { get; set; } = MessageBodyEncoding.Text;
     public string? ReplyTo { get; set; }
     public string? To { get; set; }
     public string? Subject { get; set; }

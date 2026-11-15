@@ -1,10 +1,10 @@
 import { Injectable, inject } from '@angular/core';
-import { Observable, BehaviorSubject, from, throwError } from 'rxjs';
-import { catchError, switchMap, tap } from 'rxjs/operators';
+import { Observable, BehaviorSubject, Subject, from, throwError } from 'rxjs';
+import { catchError, map, switchMap, tap } from 'rxjs/operators';
 import { ApiService } from './api.service';
 import { apiPath } from './api-path';
-import { ServiceBusConnection, ConnectionStatus, AzureAuthType } from '../models';
-import { ProviderType, ProviderInfo, ProviderCapabilities } from '../models/provider.model';
+import { ServiceBusConnection, ConnectionStatus, AzureAuthType, ImportPreview } from '../models';
+import { ProviderType, ProviderInfo, ProviderCapabilities, toProviderType } from '../models/provider.model';
 
 
 /**
@@ -54,6 +54,10 @@ export interface TestConnectionRequest {
   clientSecret?: string;
 }
 
+/** The API names the provider; the app compares it as the enum number. */
+const withProviderType = (connection: ServiceBusConnection): ServiceBusConnection =>
+  ({ ...connection, providerType: toProviderType(connection.providerType) });
+
 @Injectable({
   providedIn: 'root'
 })
@@ -72,15 +76,18 @@ export class ConnectionService {
   }
 
   getConnections(): Observable<ServiceBusConnection[]> {
-    return this.api.get<ServiceBusConnection[]>('connections');
+    return this.api.get<ServiceBusConnection[]>('connections').pipe(map(list => list.map(withProviderType)));
   }
 
   getConnection(id: string): Observable<ServiceBusConnection> {
-    return this.api.get<ServiceBusConnection>(apiPath`connections/${id}`);
+    return this.api.get<ServiceBusConnection>(apiPath`connections/${id}`).pipe(map(withProviderType));
   }
 
+  /** Emits after a stored connection is saved, so what shows its environment can read it again. */
+  readonly saved$ = new Subject<void>();
+
   saveConnection(connection: Partial<ServiceBusConnection>): Observable<ServiceBusConnection> {
-    return this.api.post<ServiceBusConnection>('connections', connection);
+    return this.api.post<ServiceBusConnection>('connections', connection).pipe(tap(() => this.saved$.next()));
   }
 
   /**
@@ -183,13 +190,24 @@ export class ConnectionService {
     return this.api.delete<void>(apiPath`connections/${id}`);
   }
 
+  /**
+   * Reads the status again. The stored connection this app connected is forgotten when the API is
+   * no longer connected, or is connected to another target than the one that connect answered, as
+   * after a switch that failed half-way: its environment would then name the wrong broker.
+   */
   refreshStatus(): void {
-    this.api.get<ConnectionStatus>('connections/status').subscribe(status => {
-      if (!status.connected) {
+    this.readStatus().subscribe();
+  }
+
+  /** Reads the status from the API and publishes it, with the same rule as {@link refreshStatus}. */
+  readStatus(): Observable<ConnectionStatus> {
+    const connectedTarget = this.connectionStatusSubject.value.namespace;
+    return this.api.get<ConnectionStatus>('connections/status').pipe(tap(status => {
+      if (!status.connected || status.namespace !== connectedTarget) {
         this.currentConnectionId = null;
       }
       this.connectionStatusSubject.next(status);
-    });
+    }));
   }
 
   /**
@@ -257,6 +275,11 @@ export class ConnectionService {
   exportFullConfiguration(includeSecrets: boolean = false): Observable<any> {
     const endpoint = includeSecrets ? 'connections/export-full?includeSecrets=true' : 'connections/export-full';
     return this.api.post<any>(endpoint, null);
+  }
+
+  /** Asks the API what an import-full of this file would add and update; nothing is written. */
+  previewImport(jsonData: string): Observable<ImportPreview> {
+    return this.api.post<ImportPreview>('connections/import/preview', { configurationJson: jsonData });
   }
 
   importFullConfiguration(jsonData: string): Observable<{ message: string }> {

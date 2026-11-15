@@ -5,6 +5,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTableModule } from '@angular/material/table';
 import { EntityKind } from '../../core/models';
 import { ConnectionContext } from './connection-context';
+import { EnvironmentLineComponent } from '../../shared/environment-line.component';
 
 export interface EntityChange {
   label: string;
@@ -25,13 +26,14 @@ export interface EntityReviewDialogData {
 @Component({
   selector: 'app-entity-review-dialog',
   standalone: true,
-  imports: [MatDialogTitle, MatDialogContent, MatDialogActions, MatDialogClose, MatButtonModule, MatIconModule, MatTableModule],
+  imports: [MatDialogTitle, MatDialogContent, MatDialogActions, MatDialogClose, MatButtonModule, MatIconModule, MatTableModule, EnvironmentLineComponent],
   template: `
     <h2 mat-dialog-title class="title">
       <mat-icon class="warn" aria-hidden="true">warning</mat-icon>
       Change the {{ data.kind }} {{ data.entityName }}?
     </h2>
     <mat-dialog-content>
+      <app-environment-line [mark]="data.context().mark"><b>{{ data.entityName }}</b> on {{ data.context().where }}</app-environment-line>
       <p>The new values apply at once to every sender and receiver of this {{ data.kind }}.</p>
       <dl class="facts">
         <div class="fact"><dt>{{ kindLabel }}</dt><dd>{{ data.entityName }}</dd></div>

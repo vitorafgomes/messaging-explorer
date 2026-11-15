@@ -1,10 +1,18 @@
 import { TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
+import { MatTooltip } from '@angular/material/tooltip';
 import { signal } from '@angular/core';
 import { BehaviorSubject, NEVER, Subject, of, throwError } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
 import {
-  ConnectionService, DeadLetterNotificationService, EntitySelectionService, LoggerService, TreeDataBuilderService
+  ConnectionService, DeadLetterNotificationService, EntitySelectionService, LoggerService, ResubmitRun, ResubmitRunService, ResubmitRunTarget, TreeDataBuilderService
 } from '../../core/services';
+
+let activeRunOn: string | undefined;
+const resubmitRuns = {
+  provide: ResubmitRunService,
+  useValue: { find: (target: ResubmitRunTarget) => target.entityName === activeRunOn ? { isActive: () => true } as ResubmitRun : undefined }
+};
 import { DEFAULT_AZURE_CAPABILITIES, DEFAULT_RABBITMQ_CAPABILITIES, ProviderService } from '../../core/services/provider.service';
 import { ProviderCapabilities } from '../../core/models/provider.model';
 import { TreeNode } from '../../core/models';
@@ -40,6 +48,7 @@ describe('EntitiesTreeComponent create entry points', () => {
         { provide: TreeDataBuilderService, useValue: { buildTree: () => of(tree(withQueues)) } },
         { provide: EntitySelectionService, useValue: { selection$: of(null), treeRefresh$: NEVER, select } },
         { provide: ConnectionService, useValue: { isConnected: true, connectionStatus$: NEVER } },
+        resubmitRuns,
         { provide: LoggerService, useValue: { log: () => undefined, error: () => undefined } },
         { provide: DeadLetterNotificationService, useValue: { clear: () => undefined } },
         { provide: ProviderService, useValue: { capabilities: signal(capabilities) } },
@@ -127,6 +136,7 @@ describe('EntitiesTreeComponent when the entities cannot be loaded', () => {
         { provide: TreeDataBuilderService, useValue: { buildTree: () => throwError(() => new Error('503 Service Unavailable')) } },
         { provide: EntitySelectionService, useValue: { selection$: of(null), treeRefresh$: NEVER, select: vi.fn() } },
         { provide: ConnectionService, useValue: { isConnected: true, connectionStatus$: NEVER } },
+        resubmitRuns,
         { provide: LoggerService, useValue: { log: () => undefined, error: () => undefined } },
         { provide: DeadLetterNotificationService, useValue: { clear: () => undefined } },
         { provide: ProviderService, useValue: { capabilities: signal(DEFAULT_AZURE_CAPABILITIES) } },
@@ -152,6 +162,7 @@ describe('EntitiesTreeComponent on a switch to another connection', () => {
         { provide: TreeDataBuilderService, useValue: { buildTree: () => (fail ? throwError(() => new Error('503 Service Unavailable')) : of([])) } },
         { provide: EntitySelectionService, useValue: { selection$: of(null), treeRefresh$: NEVER, select: vi.fn() } },
         { provide: ConnectionService, useValue: { isConnected: true, connectionStatus$: status } },
+        resubmitRuns,
         { provide: LoggerService, useValue: { log: () => undefined, error: () => undefined } },
         { provide: ProviderService, useValue: { capabilities: signal(DEFAULT_AZURE_CAPABILITIES) } },
         { provide: MatDialog, useValue: { open: vi.fn() } }
@@ -182,6 +193,7 @@ describe('EntitiesTreeComponent runs one tree load at a time', () => {
         { provide: TreeDataBuilderService, useValue: { buildTree: () => { const load = new Subject<TreeNode[]>(); loads.push(load); return load; } } },
         { provide: EntitySelectionService, useValue: { selection$: of(null), treeRefresh$: NEVER, select: vi.fn() } },
         { provide: ConnectionService, useValue: { isConnected: true, connectionStatus$: new BehaviorSubject({ connected: true }) } },
+        resubmitRuns,
         { provide: LoggerService, useValue: { log: () => undefined, error: () => undefined } },
         { provide: DeadLetterNotificationService, useValue: { clear: () => undefined } },
         { provide: ProviderService, useValue: { capabilities: signal(DEFAULT_AZURE_CAPABILITIES) } },
@@ -228,6 +240,7 @@ describe('EntitiesTreeComponent: the tree on Material', () => {
         { provide: TreeDataBuilderService, useValue: { buildTree: vi.fn(buildTree) } },
         { provide: EntitySelectionService, useValue: { selection$: of(null), treeRefresh$: NEVER, select: vi.fn() } },
         { provide: ConnectionService, useValue: { isConnected: true, connectionStatus$: NEVER } },
+        resubmitRuns,
         { provide: LoggerService, useValue: { log: () => undefined, error: () => undefined } },
         { provide: DeadLetterNotificationService, useValue: { clear: () => undefined } },
         { provide: ProviderService, useValue: { capabilities: signal(DEFAULT_AZURE_CAPABILITIES) } },
@@ -260,19 +273,232 @@ describe('EntitiesTreeComponent: the tree on Material', () => {
     expect(text(fixture)).toContain('events');
     expect(text(fixture)).not.toContain('Could not load entities');
   });
+});
 
-  it('the toggle of a topic is a button named for its topic that says whether the topic is open', () => {
-    const fixture = render(() => of(topics));
-    const toggle = () => (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('button.node-icon-expandable[aria-label$="events"]')!;
-    expect(toggle().getAttribute('aria-label')).toBe('Expand events');
-    expect(toggle().getAttribute('aria-expanded')).toBe('false');
-    expect(text(fixture)).not.toContain('audit');
+describe('EntitiesTreeComponent as Main.dc.html draws the tree', () => {
+  const orders: TreeNode = { id: 'queue-orders', name: 'orders', type: 'queue', icon: 'inbox', expandable: false, level: 1, data: { activeMessageCount: 1204, deadLetterMessageCount: 37 } as never };
+  const invoices: TreeNode = { id: 'queue-billing/invoices', name: 'billing/invoices', type: 'queue', icon: 'inbox', expandable: false, level: 1, data: { activeMessageCount: 0, deadLetterMessageCount: 0 } as never };
+  const warehouse: TreeNode = { id: 'subscription-order-events-warehouse', name: 'warehouse', type: 'subscription', icon: 'mail', expandable: false, level: 2, data: { topicName: 'order-events', activeMessageCount: 12, deadLetterMessageCount: 0 } as never };
+  const email: TreeNode = { id: 'subscription-order-events-email', name: 'email', type: 'subscription', icon: 'mail', expandable: false, level: 2, data: { topicName: 'order-events', activeMessageCount: 0, deadLetterMessageCount: 4 } as never };
+  const orderEvents: TreeNode = {
+    id: 'topic-order-events', name: 'order-events', type: 'topic', icon: 'topic', expandable: true, level: 1,
+    data: { subscriptionCount: 2, patternDisplay: 'Fan-out' } as never, children: [warehouse, email]
+  };
+  const tree = (): TreeNode[] => [
+    { id: 'category-queues', name: 'Queues', type: 'category', icon: 'folder', expandable: true, level: 0, children: [orders, invoices] },
+    { id: 'category-topics', name: 'Topics', type: 'category', icon: 'folder', expandable: true, level: 0, children: [orderEvents] }
+  ];
 
-    toggle().click();
+  function render(selected: TreeNode | null = null) {
+    const select = vi.fn();
+    TestBed.configureTestingModule({
+      imports: [EntitiesTreeComponent],
+      providers: [
+        { provide: TreeDataBuilderService, useValue: { buildTree: () => of(tree()) } },
+        { provide: EntitySelectionService, useValue: { selection$: of(selected ? { node: selected } : null), treeRefresh$: NEVER, select } },
+        { provide: ConnectionService, useValue: { isConnected: true, connectionStatus$: NEVER } },
+        resubmitRuns,
+        { provide: LoggerService, useValue: { log: () => undefined, error: () => undefined } },
+        { provide: DeadLetterNotificationService, useValue: { clear: () => undefined } },
+        { provide: ProviderService, useValue: { capabilities: signal({ ...DEFAULT_AZURE_CAPABILITIES, supportsEntityUpdate: true }) } },
+        { provide: MatDialog, useValue: { open: vi.fn() } }
+      ]
+    });
+    const fixture = TestBed.createComponent(EntitiesTreeComponent);
+    fixture.detectChanges();
+    return { fixture, el: fixture.nativeElement as HTMLElement, select };
+  }
+  const text = (e: Element | null) => (e?.textContent ?? '').replace(/\s+/g, ' ').trim();
+  const rows = (el: HTMLElement) => Array.from(el.querySelectorAll<HTMLButtonElement>('.entity-tree button.tree-node'));
+  const rowNames = (el: HTMLElement) => rows(el).map(r => text(r.querySelector('.node-name')));
+  const typeFilter = (fixture: ReturnType<typeof render>['fixture'], value: string) => {
+    const input = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>('input[aria-label="Filter entities by name"]')!;
+    input.value = value;
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+  };
+
+  it('a topic starts closed; a click opens its subscriptions and selects it, and a second click hides them all again', () => {
+    const { fixture, el, select } = render();
+    const topic = () => rows(el).find(r => text(r.querySelector('.node-name')) === 'order-events')!;
+
+    expect(rowNames(el), 'closed: no subscription under the topic').toStrictEqual(['orders', 'billing/invoices', 'order-events']);
+    expect(topic().getAttribute('aria-expanded')).toBe('false');
+
+    topic().click();
+    fixture.detectChanges();
+    expect(rowNames(el), 'open: its subscriptions under it').toStrictEqual(['orders', 'billing/invoices', 'order-events', 'warehouse', 'email']);
+    expect(topic().getAttribute('aria-expanded')).toBe('true');
+    expect(select, 'the click also selects the topic').toHaveBeenCalledWith(orderEvents);
+
+    topic().click();
+    fixture.detectChanges();
+    expect(rowNames(el), 'a second click hides every subscription').toStrictEqual(['orders', 'billing/invoices', 'order-events']);
+    expect(topic().getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('a subscription that is selected keeps its topic open, so the selected row is never hidden', () => {
+    const { el } = render(email);
+
+    expect(rowNames(el)).toContain('email');
+  });
+
+  it('has no "Entities" title over the tree: the head of the pane is the filter and Refresh entities', () => {
+    const { el } = render();
+
+    expect(el.querySelector('.tree-header h2'), 'an Entities heading in the tree header').toBeNull();
+    expect(text(el.querySelector('.tree-header')), 'the words of the tree header').not.toContain('Entities');
+    expect(el.querySelector('.tree-header button[aria-label="Refresh entities"]')).not.toBeNull();
+  });
+
+  it('the filter "Filter by name", labelled "Filter entities by name", keeps the rows whose name holds the text and says "N of M entities hidden by the filter"', () => {
+    const { fixture, el } = render();
+    const input = el.querySelector<HTMLInputElement>('input[aria-label="Filter entities by name"]');
+    expect(input, 'the filter field named "Filter entities by name"').not.toBeNull();
+    expect(input!.placeholder).toBe('Filter by name');
+    expect(el.querySelector('[aria-live="polite"].hidden-note'), 'no notice with nothing hidden').toBeNull();
+
+    typeFilter(fixture, 'ORD');
+
+    expect(rowNames(el), 'a topic that matches keeps all its subscriptions').toStrictEqual(['orders', 'order-events', 'warehouse', 'email']);
+    expect(text(el.querySelector('[aria-live="polite"].hidden-note'))).toBe('1 of 5 entities hidden by the filter');
+
+    typeFilter(fixture, 'mail');
+
+    expect(rowNames(el), 'a subscription that matches brings its topic').toStrictEqual(['order-events', 'email']);
+    expect(text(el.querySelector('[aria-live="polite"].hidden-note'))).toBe('3 of 5 entities hidden by the filter');
+  });
+
+  it('the sections are h2 heads "Queues 2" and "Topics 1" with their create button; only a topic opens and closes', () => {
+    const { el } = render();
+
+    expect(Array.from(el.querySelectorAll('.entity-tree h2.section-head')).map(text)).toStrictEqual(['Queues 2', 'Topics 1']);
+    expect(Array.from(el.querySelectorAll('.entity-tree [aria-expanded]')).map(e => text(e.querySelector('.node-name'))), 'the only toggle is the topic row').toStrictEqual(['order-events']);
+    expect(Array.from(el.querySelectorAll('.section .create-btn')).map(b => b.getAttribute('aria-label'))).toStrictEqual(['Create queue', 'Create topic']);
+  });
+
+  it('each entity row is one button, and the selected row says aria-current="true"', () => {
+    const { el, select } = render(email);
+
+    expect(rowNames(el)).toStrictEqual(['orders', 'billing/invoices', 'order-events', 'warehouse', 'email']);
+    expect(rows(el).map(r => r.getAttribute('aria-current'))).toStrictEqual(['false', 'false', 'false', 'false', 'true']);
+    rows(el)[2].click();
+    expect(select).toHaveBeenCalledWith(orderEvents);
+  });
+
+  it('the badges say their count to assistive technology: ", 1,204 active messages" and ", 37 dead-letter messages"; a zero count shows no badge', () => {
+    const { el } = render();
+    const [ordersRow, invoicesRow] = rows(el);
+
+    expect(Array.from(ordersRow.querySelectorAll('.count-chip .visually-hidden')).map(text)).toStrictEqual([', 1,204 active messages', ', 37 dead-letter messages']);
+    expect(Array.from(ordersRow.querySelectorAll('.count-chip .count')).map(text)).toStrictEqual(['1,204', '37']);
+    expect(ordersRow.querySelector('.count-chip.dead-letter mat-icon')?.getAttribute('fontIcon')).toBe('warning');
+    expect(invoicesRow.querySelectorAll('.count-chip').length, 'badges on a queue with no messages').toBe(0);
+  });
+
+  it('an opened topic shows its subscriptions under it, and its row carries no count and no chip', () => {
+    const { fixture, el } = render();
+    const topicRow = rows(el)[2];
+    topicRow.click();
     fixture.detectChanges();
 
-    expect(toggle().getAttribute('aria-label')).toBe('Collapse events');
-    expect(toggle().getAttribute('aria-expanded')).toBe('true');
-    expect(text(fixture)).toContain('audit');
+    expect(Array.from(el.querySelectorAll('.tree-children button.tree-node .node-name')).map(text)).toStrictEqual(['warehouse', 'email']);
+    expect(topicRow.querySelectorAll('.count-chip, .node-count').length, 'counts or chips on the topic row').toBe(0);
+    expect(text(topicRow)).toBe('order-events');
+  });
+});
+
+describe('EntitiesTreeComponent: a resubmit running on an entity', () => {
+  afterEach(() => (activeRunOn = undefined));
+
+  it('the row of a queue with an active run shows a spinner beside its dead-letter count; the other rows do not', () => {
+    activeRunOn = 'orders';
+    const orders: TreeNode = { id: 'queue-orders', name: 'orders', type: 'queue', icon: 'inbox', expandable: false, level: 1, data: { deadLetterMessageCount: 220012 } as never };
+    const invoices: TreeNode = { id: 'queue-invoices', name: 'invoices', type: 'queue', icon: 'inbox', expandable: false, level: 1, data: { deadLetterMessageCount: 18 } as never };
+    TestBed.configureTestingModule({
+      imports: [EntitiesTreeComponent],
+      providers: [
+        { provide: TreeDataBuilderService, useValue: { buildTree: () => of([{ id: 'category-queues', name: 'Queues', type: 'category', icon: 'folder', expandable: true, level: 0, children: [orders, invoices] }]) } },
+        { provide: EntitySelectionService, useValue: { selection$: of(null), treeRefresh$: NEVER, select: vi.fn() } },
+        { provide: ConnectionService, useValue: { isConnected: true, connectionStatus$: NEVER } },
+        resubmitRuns,
+        { provide: LoggerService, useValue: { log: () => undefined, error: () => undefined } },
+        { provide: DeadLetterNotificationService, useValue: { clear: () => undefined } },
+        { provide: ProviderService, useValue: { capabilities: signal(DEFAULT_AZURE_CAPABILITIES) } },
+        { provide: MatDialog, useValue: { open: vi.fn() } }
+      ]
+    });
+    const fixture = TestBed.createComponent(EntitiesTreeComponent);
+    fixture.detectChanges();
+    const row = (name: string) => Array.from<HTMLElement>(fixture.nativeElement.querySelectorAll('.tree-node')).find(r => r.querySelector('.node-name')?.textContent?.trim() === name)!;
+
+    const chip = row('orders').querySelector('.count-chip.dead-letter')!;
+    expect(chip.nextElementSibling?.matches('mat-progress-spinner.resubmit-spinner'), 'the spinner sits beside the dead-letter count').toBe(true);
+    expect(row('orders').textContent, 'and is named for a screen reader').toContain(', resubmit running');
+    expect(row('invoices').querySelector('.resubmit-spinner'), 'no run, no spinner').toBeNull();
+  });
+});
+
+describe('EntitiesTreeComponent: status and forwarding markers', () => {
+  function queue(name: string, status: string, forwardTo?: string | null): TreeNode {
+    return { id: `queue-${name}`, name, type: 'queue', icon: 'inbox', expandable: false, level: 1, data: { activeMessageCount: 0, deadLetterMessageCount: 0, sizeInBytes: 0, status, forwardTo } };
+  }
+
+  function render() {
+    const queues: TreeNode = {
+      id: 'category-queues', name: 'Queues', type: 'category', icon: 'folder', expandable: true, level: 0,
+      children: [
+        queue('off', 'Disabled'), queue('no-send', 'SendDisabled'), queue('no-receive', 'ReceiveDisabled'),
+        queue('relay', 'Active', 'orders-archive'), queue('plain', 'Active', ''), queue('runtime-only', ''), queue('rabbit', 'running')
+      ]
+    };
+    const topics: TreeNode = {
+      id: 'category-topics', name: 'Topics', type: 'category', icon: 'folder', expandable: true, level: 0,
+      children: [{ id: 'topic-events', name: 'events', type: 'topic', icon: 'topic', expandable: false, level: 1, data: { subscriptionCount: 0, sizeInBytes: 0, status: 'SendDisabled' }, children: [] }]
+    };
+    TestBed.configureTestingModule({
+      imports: [EntitiesTreeComponent],
+      providers: [
+        { provide: TreeDataBuilderService, useValue: { buildTree: () => of([queues, topics]) } },
+        { provide: EntitySelectionService, useValue: { selection$: of(null), treeRefresh$: NEVER, select: vi.fn() } },
+        { provide: ConnectionService, useValue: { isConnected: true, connectionStatus$: NEVER } },
+        resubmitRuns,
+        { provide: LoggerService, useValue: { log: () => undefined, error: () => undefined } },
+        { provide: DeadLetterNotificationService, useValue: { clear: () => undefined } },
+        { provide: ProviderService, useValue: { capabilities: signal(DEFAULT_AZURE_CAPABILITIES) } },
+        { provide: MatDialog, useValue: { open: vi.fn() } }
+      ]
+    });
+    const fixture = TestBed.createComponent(EntitiesTreeComponent);
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  /** Each marker of the row named `name`, as its accessible name and its tooltip text. */
+  function markersOf(fixture: ReturnType<typeof render>, name: string): string[] {
+    return fixture.debugElement.queryAll(By.css('.tree-node'))
+      .filter(row => row.query(By.css('.node-name'))?.nativeElement.textContent.trim() === name)
+      .flatMap(row => row.queryAll(By.css('.node-marker')))
+      .map(marker => `${marker.nativeElement.getAttribute('aria-label')} | ${marker.injector.get(MatTooltip).message}`);
+  }
+
+  it('a disabled, send-disabled or receive-disabled queue or topic and a forwarding queue show a marker named by its tooltip; an active, a runtime-only or a RabbitMQ status shows none', () => {
+    const fixture = render();
+    const off = 'Disabled: no message can be sent or received';
+    const noSend = 'Send disabled: messages can be received, not sent';
+    const noReceive = 'Receive disabled: messages can be sent, not received';
+    const relay = 'Forwards every message to orders-archive';
+
+    expect({
+      off: markersOf(fixture, 'off'), noSend: markersOf(fixture, 'no-send'), noReceive: markersOf(fixture, 'no-receive'), relay: markersOf(fixture, 'relay'),
+      plain: markersOf(fixture, 'plain'), runtimeOnly: markersOf(fixture, 'runtime-only'), rabbit: markersOf(fixture, 'rabbit'), topic: markersOf(fixture, 'events')
+    }, 'Only the three disabled statuses and a forward target are marked, the forward target named in the tooltip').toEqual({
+      off: [`${off} | ${off}`],
+      noSend: [`${noSend} | ${noSend}`],
+      noReceive: [`${noReceive} | ${noReceive}`],
+      relay: [`${relay} | ${relay}`],
+      plain: [], runtimeOnly: [], rabbit: [],
+      topic: [`${noSend} | ${noSend}`]
+    });
   });
 });

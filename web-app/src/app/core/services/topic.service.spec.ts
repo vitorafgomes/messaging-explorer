@@ -46,7 +46,7 @@ describe('TopicService', () => {
       expect(apiGet.mock.calls).toEqual([[`${base}?count=5`]]);
       expect(apiPost.mock.calls).toEqual([
         [`${base}/delete-batch`, { sequenceNumbers: [1, 2], all: false }],
-        [`${base}/resubmit-batch`, { sequenceNumbers: [3] }]
+        [`${base}/resubmit-batch`, { sequenceNumbers: [3], newMessageIdOnDuplicateDetection: false }]
       ]);
     });
   });
@@ -92,6 +92,14 @@ describe('TopicService', () => {
         'topics/sales/subscriptions/sub1/deadletter/delete-batch',
         { sequenceNumbers: [], all: true }
       );
+    });
+  });
+
+  describe('cancel scheduled messages', () => {
+    it('posts exactly the given sequence numbers to api/topics/{name}/messages/cancel-scheduled, the name as one segment', () => {
+      service.cancelScheduledMessages('billing/events', [12, 13]).subscribe();
+
+      expect(apiPost.mock.calls).toEqual([['topics/billing%2Fevents/messages/cancel-scheduled', { sequenceNumbers: [12, 13] }]]);
     });
   });
 

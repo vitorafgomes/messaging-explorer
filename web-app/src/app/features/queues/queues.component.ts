@@ -197,6 +197,7 @@ export class QueuesComponent implements OnInit {
         entityName: queue.name,
         activeMessageCount: queue.activeMessageCount,
         deadLetterMessageCount: queue.deadLetterMessageCount,
+        targetDetectsDuplicates: queue.requiresDuplicateDetection,
         initialTab
       }
     });
@@ -204,7 +205,7 @@ export class QueuesComponent implements OnInit {
 
   sendMessage(queue: QueueInfo) {
     const dialogRef = this.dialog.open(SendMessageDialogComponent, {
-      width: '700px',
+      width: '1100px', maxWidth: '95vw',
       data: {
         entityType: 'queue',
         entityName: queue.name
@@ -225,9 +226,12 @@ export class QueuesComponent implements OnInit {
       data: {
         title: 'Purge Messages',
         message: `Are you sure you want to delete all ${queue.activeMessageCount} active messages from queue "${queue.name}"? This action cannot be undone.`,
-        confirmText: 'Purge',
+        confirmText: `Purge ${queue.activeMessageCount.toLocaleString()} messages`,
         confirmColor: 'warn',
-        icon: 'delete_sweep'
+        icon: 'delete_sweep',
+        typedName: queue.name,
+        typedLabel: 'Type the queue name to confirm',
+        context: { subject: queue.name }
       }
     });
 
@@ -255,9 +259,12 @@ export class QueuesComponent implements OnInit {
       data: {
         title: 'Purge Dead Letter Queue',
         message: `Are you sure you want to delete all ${queue.deadLetterMessageCount} dead letter messages from queue "${queue.name}"? This action cannot be undone.`,
-        confirmText: 'Purge',
+        confirmText: `Purge ${queue.deadLetterMessageCount.toLocaleString()} messages`,
         confirmColor: 'warn',
-        icon: 'delete_forever'
+        icon: 'delete_forever',
+        typedName: queue.name,
+        typedLabel: 'Type the queue name to confirm',
+        context: { subject: queue.name }
       }
     });
 

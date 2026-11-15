@@ -107,11 +107,12 @@ public sealed class AzureServiceBusProviderDefectTests(AzureServiceBusFixture fi
     }
 
     /// <summary>
-    /// Correct: a resubmit into an entity with duplicate detection either delivers the message or
-    /// reports it as not delivered; it never removes it from the dead-letter queue as a success.
+    /// A resubmit into a queue with duplicate detection, inside its window, never removes the message as a success:
+    /// without new ids it is refused and stays in the dead-letter queue; with new ids the copy arrives under a new
+    /// message id, keeps the original in <c>x-original-message-id</c>, and the result names the new id.
     /// </summary>
     [Fact]
-    public async Task Defect_resubmit_into_a_queue_with_duplicate_detection_reports_success_and_the_message_is_gone()
+    public async Task A_resubmit_into_a_queue_with_duplicate_detection_is_refused_and_with_new_ids_is_delivered_under_a_new_id()
     {
         var queue = await CreateQueueAsync("dedup", o =>
         {
@@ -130,11 +131,64 @@ public sealed class AzureServiceBusProviderDefectTests(AzureServiceBusFixture fi
 
         var original = await SequenceOfAsync(queue, "order", subQueue: MessageSubQueue.DeadLetter);
 
-        var result = await _messaging.ResubmitDeadLetterMessagesAsync(queue, [original]);
-        await fixture.SendAsync(queue, "sentinel");
+        var refused = await _messaging.ResubmitDeadLetterMessagesAsync(queue, [original]);
+        var stillDeadLettered = await SequenceOfAsync(queue, "order", subQueue: MessageSubQueue.DeadLetter);
+        var resubmitted = await _messaging.ResubmitDeadLetterMessagesAsync(queue, [original], newMessageIdOnDuplicateDetection: true);
 
-        Assert.Equal((1, 0), (result.SuccessCount, result.FailureCount));
-        Assert.Equal(["sentinel"], await fixture.DrainAsync(queue));
+        Assert.Equal(0, refused.SuccessCount);
+        Assert.Equal([(original, "The target detects duplicates; a copy with the same message id would be dropped. Nothing was sent or removed.")], refused.Failures.Select(f => (f.SequenceNumber, f.Error)));
+        Assert.Equal(original, stillDeadLettered);
+        Assert.Equal((1, 0), (resubmitted.SuccessCount, resubmitted.FailureCount));
+        await using (var receiver = fixture.Client.CreateReceiver(queue, new ServiceBusReceiverOptions { ReceiveMode = ServiceBusReceiveMode.ReceiveAndDelete }))
+        {
+            var delivered = await receiver.ReceiveMessageAsync(TimeSpan.FromSeconds(10));
+            Assert.True(delivered is not null, "The copy sent under a new message id must reach the queue that detects duplicates.");
+            Assert.Equal(("order", resubmitted.NewMessageIds[original], "order-1"),
+                (delivered.Body.ToString(), delivered.MessageId, (string)delivered.ApplicationProperties["x-original-message-id"]));
+        }
+        Assert.Empty(await fixture.DrainAsync(AzureServiceBusFixture.DeadLetterOf(queue)));
+    }
+
+    /// <summary>
+    /// The single resubmit into a queue with duplicate detection, inside its window: without a new id it is refused,
+    /// nothing arrives and the message stays in the dead-letter queue; with a new id the copy arrives under a new
+    /// message id, keeps the original in <c>x-original-message-id</c>, and leaves the dead-letter queue.
+    /// </summary>
+    [Fact]
+    public async Task A_single_resubmit_into_a_queue_with_duplicate_detection_is_refused_and_with_a_new_id_is_delivered_under_it()
+    {
+        var queue = await CreateQueueAsync("dedup-single", o =>
+        {
+            o.RequiresDuplicateDetection = true;
+            o.DuplicateDetectionHistoryTimeWindow = TimeSpan.FromMinutes(5);
+        });
+        await using (var sender = fixture.Client.CreateSender(queue))
+        {
+            await sender.SendMessageAsync(new ServiceBusMessage("order") { MessageId = "order-1" });
+        }
+
+        await using (var receiver = fixture.Client.CreateReceiver(queue))
+        {
+            await receiver.DeadLetterMessageAsync(await receiver.ReceiveMessageAsync(TimeSpan.FromSeconds(5)));
+        }
+
+        var original = await SequenceOfAsync(queue, "order", subQueue: MessageSubQueue.DeadLetter);
+
+        var refused = await Assert.ThrowsAsync<InvalidEntityConfigurationException>(() => _messaging.ResubmitDeadLetterMessageAsync(queue, original));
+        var arrivedWhenRefused = (await _messaging.PeekMessagesAsync(queue, 10)).Count();
+        var stillDeadLettered = await SequenceOfAsync(queue, "order", subQueue: MessageSubQueue.DeadLetter);
+        await _messaging.ResubmitDeadLetterMessageAsync(queue, original, newMessageIdOnDuplicateDetection: true);
+
+        Assert.Equal("The target detects duplicates; a copy with the same message id would be dropped. Nothing was sent or removed.", refused.Message);
+        Assert.True(arrivedWhenRefused == 0, "A refused single resubmit must send nothing to the queue.");
+        Assert.Equal(original, stillDeadLettered);
+        await using (var receiver = fixture.Client.CreateReceiver(queue, new ServiceBusReceiverOptions { ReceiveMode = ServiceBusReceiveMode.ReceiveAndDelete }))
+        {
+            var delivered = await receiver.ReceiveMessageAsync(TimeSpan.FromSeconds(10));
+            Assert.True(delivered is not null, "The copy sent under a new message id must reach the queue that detects duplicates.");
+            Assert.True(delivered.Body.ToString() == "order" && delivered.MessageId != "order-1" && (string)delivered.ApplicationProperties["x-original-message-id"] == "order-1",
+                $"The copy must carry a new message id and keep the original in x-original-message-id; it carried {delivered.MessageId}");
+        }
         Assert.Empty(await fixture.DrainAsync(AzureServiceBusFixture.DeadLetterOf(queue)));
     }
 
@@ -151,24 +205,52 @@ public sealed class AzureServiceBusProviderDefectTests(AzureServiceBusFixture fi
         var after = (await _messaging.PeekMessagesAsync(queue, 10)).Select(m => (m.Body, m.DeliveryCount)).ToList();
 
         Assert.Equal((1, 0), (result.SuccessCount, result.FailureCount));
+        Assert.Equal(2, result.UnselectedDeliveryCountRaised);
         Assert.Equal([("m1", 0), ("m2", 0), ("m3", 0)], before);
         Assert.Equal([("m1", 1), ("m2", 1)], after);
     }
 
-    /// <summary>Correct: a selective delete on an active queue with a max delivery count of 1 leaves the messages it did not select in the queue.</summary>
+    /// <summary>
+    /// A selective delete on an active queue with a max delivery count of 1 would dead-letter every message it
+    /// receives and does not select, so it is refused before any receive: every message stays where it was.
+    /// </summary>
     [Fact]
-    public async Task Defect_selective_delete_on_an_active_queue_with_a_low_max_delivery_count_dead_letters_the_unselected_messages()
+    public async Task A_selective_delete_on_an_active_queue_with_a_max_delivery_count_of_1_is_refused_and_every_message_stays()
     {
         var queue = await CreateQueueAsync("low-mdc", o => o.MaxDeliveryCount = 1);
         await fixture.SendAsync(queue, "m1", "m2", "m3");
         var target = await SequenceOfAsync(queue, "m3");
 
         var result = await _messaging.DeleteMessagesAsync(queue, [target]);
-        var deadLettered = (await _messaging.PeekMessagesAsync(queue, 10, subQueue: MessageSubQueue.DeadLetter)).Select(m => (m.Body, m.DeadLetterReason)).ToList();
 
-        Assert.Equal((1, 0), (result.SuccessCount, result.FailureCount));
-        Assert.Equal([("m1", "MaxDeliveryCountExceeded"), ("m2", "MaxDeliveryCountExceeded")], deadLettered);
-        Assert.Empty(await fixture.DrainAsync(queue));
+        Assert.Equal(0, result.SuccessCount);
+        Assert.Equal([(target, "Not reached: going on would have sent unselected messages past their max delivery count into the dead-letter queue. Nothing was sent or removed.")], result.Failures.Select(f => (f.SequenceNumber, f.Error)));
+        Assert.Equal([("m1", 0), ("m2", 0), ("m3", 0)], (await _messaging.PeekMessagesAsync(queue, 10)).Select(m => (m.Body, m.DeliveryCount)));
+        Assert.Empty(await _messaging.PeekMessagesAsync(queue, 10, subQueue: MessageSubQueue.DeadLetter));
+    }
+
+    /// <summary>
+    /// A selective delete on an active queue with a max delivery count of 2 removes its target, reports the two
+    /// unselected messages it received, and none of them reaches the dead-letter queue, also after every lock the
+    /// receiver held has expired.
+    /// </summary>
+    [Fact]
+    public async Task A_selective_delete_on_an_active_queue_with_a_max_delivery_count_of_2_dead_letters_nothing_after_the_locks_expire()
+    {
+        var queue = await CreateQueueAsync("mdc-2", o =>
+        {
+            o.MaxDeliveryCount = 2;
+            o.LockDuration = TimeSpan.FromSeconds(5);
+        });
+        await fixture.SendAsync(queue, "m1", "m2", "m3");
+        var target = await SequenceOfAsync(queue, "m3");
+
+        var result = await _messaging.DeleteMessagesAsync(queue, [target]);
+        await Task.Delay(TimeSpan.FromSeconds(8));
+
+        Assert.Equal((1, 0, 2), (result.SuccessCount, result.FailureCount, result.UnselectedDeliveryCountRaised));
+        Assert.Empty(await _messaging.PeekMessagesAsync(queue, 10, subQueue: MessageSubQueue.DeadLetter));
+        Assert.Equal(["m1", "m2"], (await _messaging.PeekMessagesAsync(queue, 10)).Select(m => m.Body));
     }
 
     /// <summary>Correct: selective delete, move and receive work on a session-enabled queue, or are refused as unsupported before any broker call.</summary>
@@ -207,19 +289,6 @@ public sealed class AzureServiceBusProviderDefectTests(AzureServiceBusFixture fi
         Assert.Equal(["m349"], await fixture.DrainAsync(queue));
         Assert.Equal(350, stillDeadLettered.Count);
         Assert.Contains(deepest, stillDeadLettered);
-    }
-
-    /// <summary>Correct: a send of many messages is split into batches that each fit, and every message is sent.</summary>
-    [Fact]
-    public async Task Defect_send_of_more_messages_than_fit_one_batch_fails_as_a_whole_and_sends_nothing()
-    {
-        var queue = await CreateQueueAsync("big-batch");
-        var requests = Enumerable.Range(0, 40).Select(_ => new SendMessageRequest { Body = new string('x', 10_000) });
-
-        var error = await Assert.ThrowsAsync<ServiceBusException>(() => _messaging.SendMessagesAsync(queue, requests));
-
-        Assert.Equal(ServiceBusFailureReason.MessageSizeExceeded, error.Reason);
-        Assert.Empty(await fixture.DrainAsync(queue));
     }
 
     /// <summary>Correct: a message whose AMQP body is a value is shown with a readable body, and the other messages of the peek are still returned.</summary>

@@ -48,7 +48,7 @@ Recorded here because someone will otherwise undo them without knowing why. Each
 
 ## The Material migration, first attempt
 
-The move to Angular Material was planned on 2026-04-01 in ten phases: theme and shell, navigation, buttons, cards, forms, tables, alerts and badges, grid, cleanup, polish. The shell and the dialogs were done for 2.0.0. The rest was not: on 2026-11-12 the entity screens are still Bootstrap, and `web-app/src/styles.scss#@use 'bootstrap/scss/bootstrap';` still imports it with the comment "removed in Phase 9". The measurements and the rules are on [[pages/conventions/ui]]; the second attempt is [[pages/roadmap/ui-material-migration]], which starts from end-to-end tests the first attempt did not have.
+The move to Angular Material was planned on 2026-04-01 in ten phases: theme and shell, navigation, buttons, cards, forms, tables, alerts and badges, grid, cleanup, polish. The shell and the dialogs were done for 2.0.0. The rest was not: on 2026-11-12 the entity screens are still Bootstrap, and `web-app/src/styles.scss` still imported it then (removed on 2026-11-14, [[pages/roadmap/ui-material-migration]] Phase 4) with the comment "removed in Phase 9". The measurements and the rules are on [[pages/conventions/ui]]; the second attempt is [[pages/roadmap/ui-material-migration]], which starts from end-to-end tests the first attempt did not have.
 
 ## What the earlier plans asked for, and where it stands
 

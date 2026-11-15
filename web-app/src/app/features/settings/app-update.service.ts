@@ -17,7 +17,23 @@ export type SelfUpdateBlocker = 'macos-unsigned' | 'windows-portable' | 'linux-p
 const BLOCKERS: SelfUpdateBlocker[] = ['macos-unsigned', 'windows-portable', 'linux-package'];
 const SHELL_STATUSES: UpdateStatus[] = ['checking', 'up-to-date', 'available', 'downloading', 'downloaded', 'error'];
 
-export const RELEASES_URL = 'https://github.com/vitorafgomes/messaging-explorer/releases';
+export const REPOSITORY_URL = 'https://github.com/vitorafgomes/messaging-explorer';
+export const RELEASES_URL = `${REPOSITORY_URL}/releases`;
+
+/**
+ * The release notes the updater reports (HTML, or one note per version) as plain lines of text:
+ * the items of its lists, else its lines. The HTML is parsed inert and never rendered as markup.
+ */
+export function releaseNoteLines(notes: unknown): string[] {
+  const html = Array.isArray(notes)
+    ? notes.map(n => (typeof n?.note === 'string' ? n.note : '')).join('\n')
+    : typeof notes === 'string' ? notes : '';
+  if (!html.trim()) return [];
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const items = Array.from(doc.querySelectorAll('li')).map(li => li.textContent ?? '');
+  const lines = items.length ? items : (doc.body.textContent ?? '').split('\n');
+  return lines.map(line => line.replace(/\s+/g, ' ').trim()).filter(Boolean);
+}
 
 /** The version of the app and the state of its updates, as the Electron shell reports them. */
 @Injectable({ providedIn: 'root' })
@@ -35,6 +51,8 @@ export class AppUpdateService {
   readonly error = signal('');
   readonly failedDuring = signal<'check' | 'download'>('check');
   readonly blocker = signal<SelfUpdateBlocker | null>(null);
+  readonly releaseNotes = signal<string[]>([]);
+  readonly lastChecked = signal<Date | null>(null);
 
   private get shell(): any {
     return typeof window !== 'undefined' ? (window as any).electronAPI : undefined;
@@ -67,6 +85,7 @@ export class AppUpdateService {
     this.status.set('checking');
     const result = await shell.checkForUpdates();
     if (result?.status === 'dev-mode') {
+      this.lastChecked.set(new Date());
       this.status.set('dev-mode');
     } else if (result?.status === 'error') {
       this.fail('check', result.message);
@@ -106,6 +125,8 @@ export class AppUpdateService {
     if (!SHELL_STATUSES.includes(data?.status)) return;
     if (data.version) this.availableVersion.set(data.version);
     if (typeof data.percent === 'number') this.percent.set(data.percent);
+    if (data.status === 'available') this.releaseNotes.set(releaseNoteLines(data.releaseNotes));
+    if (data.status === 'up-to-date' || data.status === 'available') this.lastChecked.set(new Date());
     if (data.status === 'checking') this.downloadRequested = false;
     if (data.status === 'downloading' || (data.status === 'available' && !this.blocker())) this.downloadRequested = true;
     if (data.status === 'error') {
@@ -116,6 +137,7 @@ export class AppUpdateService {
   }
 
   private fail(during: 'check' | 'download', message: unknown): void {
+    if (during === 'check') this.lastChecked.set(new Date());
     this.failedDuring.set(during);
     this.error.set(typeof message === 'string' && message ? message : 'The updater did not say why.');
     this.status.set('error');

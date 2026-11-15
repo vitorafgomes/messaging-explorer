@@ -34,6 +34,12 @@ public interface IMessage
     string BodyType { get; }
 
     /// <summary>
+    /// How <see cref="Body"/> holds the bytes of the body: <see cref="Models.MessageBodyEncoding.Text"/> when they are
+    /// valid UTF-8, <see cref="Models.MessageBodyEncoding.Base64"/> when they are not. An invalid byte is never replaced.
+    /// </summary>
+    string BodyEncoding { get; }
+
+    /// <summary>
     /// The address to which replies should be sent.
     /// </summary>
     string? ReplyTo { get; }

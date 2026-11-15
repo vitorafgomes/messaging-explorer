@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { TransferMonitorComponent } from './transfer-monitor.component';
 import { TopicService } from '../../core/services';
 import { SubscriptionInfo } from '../../core/models';
@@ -31,201 +31,27 @@ function createMockSubscription(activeMessageCount: number): SubscriptionInfo {
 }
 
 describe('TransferMonitorComponent', () => {
-  let activeCount: number;
-  let topicServiceMock: { getSubscription: ReturnType<typeof vi.fn> };
+  afterEach(() => vi.useRealTimers());
 
-  beforeEach(() => {
+  it('reads the subscription every 3 seconds and emits each read; a failed read is skipped and the next one still comes', () => {
     vi.useFakeTimers();
-    activeCount = 10;
-    topicServiceMock = {
-      getSubscription: vi.fn().mockImplementation(() => of(createMockSubscription(activeCount))),
-    };
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  function createComponent() {
+    let calls = 0;
+    const getSubscription = vi.fn(() => (++calls === 2 ? throwError(() => new Error('timeout')) : of(createMockSubscription(calls * 10))));
     TestBed.configureTestingModule({
       imports: [TransferMonitorComponent],
-      providers: [
-        { provide: TopicService, useValue: topicServiceMock },
-      ],
+      providers: [{ provide: TopicService, useValue: { getSubscription } }],
     });
     const fixture = TestBed.createComponent(TransferMonitorComponent);
     fixture.componentRef.setInput('topicName', 'test-topic');
     fixture.componentRef.setInput('subscriptionName', 'test-sub');
-    fixture.detectChanges(); // triggers ngOnInit -> startPolling -> startWith(0) -> immediate first poll
-    return { fixture, component: fixture.componentInstance };
-  }
-
-  it('should be created', () => {
-    const { component } = createComponent();
-    expect(component).toBeTruthy();
-  });
-
-  it('should start with zero values', () => {
-    TestBed.configureTestingModule({
-      imports: [TransferMonitorComponent],
-      providers: [
-        { provide: TopicService, useValue: topicServiceMock },
-      ],
-    });
-    const fixture = TestBed.createComponent(TransferMonitorComponent);
-    const component = fixture.componentInstance;
-    // Before detectChanges (ngOnInit), check signal defaults
-    expect(component.currentCount()).toBe(0);
-    expect(component.delta()).toBe(0);
-    expect(component.peak()).toBe(0);
-    expect(component.totalProcessed()).toBe(0);
-    expect(component.processingRate()).toBe('0');
-  });
-
-  it('should update currentCount from polling', () => {
-    activeCount = 42;
-    topicServiceMock.getSubscription.mockImplementation(() => of(createMockSubscription(42)));
-
-    const { component } = createComponent();
-    // startWith(0) + of() => first poll fires synchronously
-    expect(component.currentCount()).toBe(42);
-  });
-
-  it('should calculate positive delta when count increases', () => {
-    let count = 10;
-    topicServiceMock.getSubscription.mockImplementation(() => of(createMockSubscription(count)));
-
-    const { component } = createComponent();
-    // First poll: count = 10, no previous => delta = 0
-    expect(component.delta()).toBe(0);
-
-    count = 15;
-    vi.advanceTimersByTime(3000); // Second poll: count = 15, prev = 10 => delta = +5
-    expect(component.delta()).toBe(5);
-  });
-
-  it('should calculate negative delta when count decreases', () => {
-    let count = 20;
-    topicServiceMock.getSubscription.mockImplementation(() => of(createMockSubscription(count)));
-
-    const { component } = createComponent();
-    expect(component.currentCount()).toBe(20);
-
-    count = 12;
-    vi.advanceTimersByTime(3000); // Second poll: delta = -8
-    expect(component.delta()).toBe(-8);
-  });
-
-  it('should track peak value', () => {
-    let count = 5;
-    topicServiceMock.getSubscription.mockImplementation(() => of(createMockSubscription(count)));
-
-    const { component } = createComponent();
-    expect(component.peak()).toBe(5);
-
-    count = 50;
-    vi.advanceTimersByTime(3000);
-    expect(component.peak()).toBe(50);
-
-    count = 30;
-    vi.advanceTimersByTime(3000);
-    expect(component.peak()).toBe(50); // Peak remains at 50
-  });
-
-  it('should accumulate totalProcessed from negative deltas', () => {
-    let count = 100;
-    topicServiceMock.getSubscription.mockImplementation(() => of(createMockSubscription(count)));
-
-    const { component } = createComponent();
-    expect(component.totalProcessed()).toBe(0);
-
-    count = 90;
-    vi.advanceTimersByTime(3000); // delta = -10 => totalProcessed = 10
-    expect(component.totalProcessed()).toBe(10);
-
-    count = 80;
-    vi.advanceTimersByTime(3000); // delta = -10 => totalProcessed = 20
-    expect(component.totalProcessed()).toBe(20);
-
-    count = 85;
-    vi.advanceTimersByTime(3000); // delta = +5 => totalProcessed stays 20
-    expect(component.totalProcessed()).toBe(20);
-  });
-
-  it('should calculate processingRate', () => {
-    let count = 100;
-    topicServiceMock.getSubscription.mockImplementation(() => of(createMockSubscription(count)));
-
-    const { component } = createComponent();
-    expect(component.processingRate()).toBe('0'); // No previous
-
-    count = 91;
-    vi.advanceTimersByTime(3000); // delta = -9, rate = 9 / 3 = 3
-    expect(component.processingRate()).toBe('3');
-  });
-
-  it('should emit subscriptionUpdated on each poll', () => {
-    const emitted: SubscriptionInfo[] = [];
-
-    const { component } = createComponent();
-    component.subscriptionUpdated.subscribe((sub: SubscriptionInfo) => {
-      emitted.push(sub);
-    });
-
-    // First poll already fired via startWith(0), but subscriptionUpdated.subscribe
-    // was added after detectChanges, so we miss the first emission.
-    // Advance to trigger another poll:
-    vi.advanceTimersByTime(3000);
-    expect(emitted.length).toBe(1);
-    expect(emitted[0].activeMessageCount).toBe(10);
-
-    vi.advanceTimersByTime(3000);
-    expect(emitted.length).toBe(2);
-  });
-
-  it('should generate sparklinePath with 2+ data points', () => {
-    let count = 10;
-    topicServiceMock.getSubscription.mockImplementation(() => of(createMockSubscription(count)));
-
-    const { component } = createComponent();
-    // 1 data point after first poll => empty
-    expect(component.sparklinePath()).toBe('');
-
-    count = 20;
-    vi.advanceTimersByTime(3000); // 2 data points => has path
-    const path = component.sparklinePath();
-    expect(path).toBeTruthy();
-    expect(path.startsWith('M')).toBe(true);
-    expect(path).toContain('L');
-  });
-
-  it('should return empty sparklinePath with less than 2 points', () => {
-    const { component } = createComponent();
-    // Only 1 data point from first poll
-    expect(component.sparklinePath()).toBe('');
-  });
-});
-
-describe('TransferMonitorComponent as the live Active card', () => {
-  it('is a button named with the live count that opens the messages, by click or by Enter', () => {
-    TestBed.configureTestingModule({
-      imports: [TransferMonitorComponent],
-      providers: [{ provide: TopicService, useValue: { getSubscription: () => of(createMockSubscription(12)) } }],
-    });
-    const fixture = TestBed.createComponent(TransferMonitorComponent);
-    fixture.componentRef.setInput('topicName', 'test-topic');
-    fixture.componentRef.setInput('subscriptionName', 'test-sub');
-    const clicked = vi.fn();
-    fixture.componentInstance.clicked.subscribe(clicked);
+    const emitted: number[] = [];
+    fixture.componentInstance.subscriptionUpdated.subscribe(sub => emitted.push(sub.activeMessageCount));
     fixture.detectChanges();
-    fixture.detectChanges();
-    const card = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('.transfer-monitor')!;
 
-    expect(card.getAttribute('role')).toBe('button');
-    expect(card.getAttribute('aria-label')).toBe('View the 12 active messages');
-    card.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
-    card.click();
+    vi.advanceTimersByTime(6000);
 
-    expect(clicked).toHaveBeenCalledTimes(2);
+    expect(getSubscription, 'the subscription of its inputs').toHaveBeenCalledWith('test-topic', 'test-sub');
+    expect(emitted, 'the first read at once, the failed second skipped, the third emitted').toStrictEqual([10, 30]);
+    expect((fixture.nativeElement as HTMLElement).textContent?.trim(), 'it draws nothing: the panel draws the Active card').toBe('');
   });
 });

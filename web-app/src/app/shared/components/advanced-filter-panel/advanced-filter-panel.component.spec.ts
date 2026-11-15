@@ -27,6 +27,15 @@ describe('AdvancedFilterPanelComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('as Messages.dc.html draws it: with no condition the panel says what a filter is made of', () => {
+    component.isCollapsed = false;
+    fixture.detectChanges();
+    const empty = (fixture.nativeElement as HTMLElement).querySelector('.empty-state');
+
+    expect(empty?.querySelector('strong')?.textContent?.trim(), 'the empty panel opens with the drawn words in bold').toBe('No filters applied.');
+    expect(empty?.querySelector('.hint')?.textContent?.trim(), 'the empty panel names the parts of a condition').toBe('Click "Add Filter" to create a new filter condition: a property, an operator and a value.');
+  });
+
   it('should initialize with empty filter state', () => {
     expect(component.filterState.conditions).toEqual([]);
     expect(component.filterState.logicOperator).toBe(FilterLogic.And);

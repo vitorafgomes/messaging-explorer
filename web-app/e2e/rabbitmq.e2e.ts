@@ -28,7 +28,7 @@ test.describe('RabbitMQ', () => {
 
     await card.getByRole('button', { name: 'Connect' }).click();
     await expect(page).toHaveURL(/#\/entities$/);
-    await expect(page.locator('.connection-badge.connected')).toContainText(`localhost:${env('E2E_RABBIT_AMQP_PORT')}`);
+    await expect(page.locator('mat-toolbar .broker', { hasText: 'Connected to' })).toContainText(`localhost:${env('E2E_RABBIT_AMQP_PORT')}`);
     for (const name of [SEED.queue, `${SEED.queue}.dlq`, SEED.subscription, SEED.topic]) {
       await expect(treeNode(page, name)).toBeVisible();
     }
@@ -36,7 +36,6 @@ test.describe('RabbitMQ', () => {
   });
 
   test('the connection card names the provider and the broker it points at', async ({ page }) => {
-    test.fail(true, 'The provider type enum of the app is numeric and the API sends a name, so the card says Unknown Provider');
     await open(page, 'connections');
     const card = page.locator('.connection-card', { hasText: 'orders-rabbitmq' });
     await expect(card).toContainText('RabbitMQ', { timeout: 5000 });
@@ -47,7 +46,7 @@ test.describe('RabbitMQ', () => {
     await open(page, 'entities');
     await treeNode(page, SEED.queue).click();
     await expect(page.locator('.entity-title h2')).toHaveText(SEED.queue);
-    await expect(page.locator('.stat-card', { hasText: 'Active Messages' }).locator('.stat-value')).toHaveText(seededCount);
+    await expect(page.locator('.stat-card', { has: page.locator('.stat-label', { hasText: /^Active$/ }) }).locator('.stat-value')).toHaveText(seededCount);
     await shoot(page, 'queue-rabbitmq');
   });
 
@@ -87,10 +86,10 @@ test.describe('RabbitMQ', () => {
   test('sends a message to a queue and sees the queue count grow', async ({ page }) => {
     await open(page, 'entities');
     await treeNode(page, SEED.queue).click();
-    const active = page.locator('.stat-card', { hasText: 'Active Messages' }).locator('.stat-value');
+    const active = page.locator('.stat-card', { has: page.locator('.stat-label', { hasText: /^Active$/ }) }).locator('.stat-value');
     await expect(active).toHaveText(seededCount);
 
-    await page.getByRole('button', { name: 'Send Message' }).click();
+    await page.getByRole('button', { name: 'Send', exact: true }).click();
     await page.getByPlaceholder('{"key": "value"}').fill('{"orderId":"order-2001"}');
     await shoot(page, 'send-message-dialog-rabbitmq');
     await page.locator('mat-dialog-container').getByRole('button', { name: 'Send', exact: true }).click();
@@ -106,10 +105,10 @@ test.describe('RabbitMQ', () => {
   test('the Connections screen lists the connection while the toolbar shows it connected', async ({ page }) => {
     await open(page, 'entities');
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Connections' }).click();
-    await expect(page.getByRole('heading', { name: 'Connections', level: 2 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Connections', level: 1 })).toBeVisible();
     const card = page.locator('.connection-card', { hasText: 'orders-rabbitmq' });
     await expect(card.getByRole('heading', { name: 'orders-rabbitmq' })).toBeVisible();
-    await expect(page.locator('.connection-badge.connected')).toContainText(`localhost:${env('E2E_RABBIT_AMQP_PORT')}`);
+    await expect(page.locator('mat-toolbar .broker', { hasText: 'Connected to' })).toContainText(`localhost:${env('E2E_RABBIT_AMQP_PORT')}`);
     await shoot(page, 'connections-connected');
   });
 
@@ -140,5 +139,26 @@ test.describe('RabbitMQ', () => {
     }).toPass({ timeout: 60_000 });
     await expect(page.getByText('Subscriptions (1)')).toBeVisible();
     await shoot(page, 'monitoring-rabbitmq');
+  });
+
+  test('purges the active messages of a queue only once its name is typed', async ({ page }) => {
+    await open(page, 'entities');
+    await treeNode(page, SEED.queue).click();
+    await page.locator('.entity-actions, .entity-header, body').getByRole('button', { name: 'More actions' }).first().click();
+    await page.getByRole('menuitem', { name: /Purge active messages/ }).click();
+
+    const confirm = page.locator('mat-dialog-container', { hasText: 'Purge active messages?' });
+    await expect(confirm).toBeVisible();
+    const purge = confirm.getByRole('button', { name: /^Purge \d+ messages?$/ });
+    await expect(purge, 'disabled until the name is typed').toBeDisabled();
+    await confirm.getByLabel('Type the queue name to confirm').fill('Orders');
+    await expect(purge, 'a name that differs in case does not confirm').toBeDisabled();
+    await confirm.getByLabel('Type the queue name to confirm').fill(SEED.queue);
+    await shoot(page, 'purge-confirm-rabbitmq');
+    await purge.click();
+    await expect(page.getByText('Messages purged successfully')).toBeVisible();
+
+    await page.getByRole('button', { name: 'View messages' }).click();
+    await expect(messagesDialog(page)).toContainText('No active messages');
   });
 });

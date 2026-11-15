@@ -1,9 +1,9 @@
 ---
 title: "Core: RabbitMQ provider and the legacy service"
-version: "1.0"
+version: "1.1"
 date: 2026-11-13
-updated: 2026-11-13
-changes: "v1.0: split out of the Core service page"
+updated: 2026-11-14
+changes: "v1.1: the topic read builds its subscriptions from the queue listing"
 page_type: service
 status: active
 description: "Read when a change touches RabbitMQProvider: AMQP, RabbitMQManagementClient, the topic and subscription mapping, RabbitMQPatternDetector, RabbitMQ bulk operations; or the legacy ServiceBusService."
@@ -34,3 +34,5 @@ One topic of [[pages/services/core|Core]]; the map lists the others.
 ## Legacy `ServiceBusService`
 
 `Services/ServiceBusService.cs` (780 lines, `src/ServiceBusExplorer.Core/Services/ServiceBusService.cs#ServiceBusService`) is the pre-provider Azure-only service behind `IServiceBusService` (`src/ServiceBusExplorer.Core/Services/IServiceBusService.cs#IServiceBusService`). It is still registered as a singleton (`src/ServiceBusExplorer.Api/Program.cs#FileWorkspaceManager`) and injected into `ConnectionsController` (`src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs#_serviceBusService`), but the controller only reads `IsConnected` and `CurrentNamespace` and calls `DisconnectAsync` (`src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs#Disconnect`, `src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs#GetStatus`, `src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs#ClearAllData`). Nothing in `src/ServiceBusExplorer.Api` calls `ConnectAsync` or any entity method on it, so `IsConnected` is always false at run time and the status endpoint reports it. No other project references the class. Its operations are served by `AzureServiceBusProvider`.
+
+**The topic read (2026-11-14)** builds its subscriptions from the one queue listing it already makes, with each bound queue's state and counts, and no rule count, as `SupportsSubscriptionRules` is false (`src/ServiceBusExplorer.Core/Providers/RabbitMQ/RabbitMQProvider.cs#GetTopicAsync`). A failed listing fails the read instead of showing invented statuses. Only queue bindings are listed; `SubscriptionCount` still counts every binding.

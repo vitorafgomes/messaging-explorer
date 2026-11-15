@@ -17,7 +17,19 @@ public interface IConnectionManager
     /// </summary>
     Task<ServiceBusConnection?> GetConnectionWithSecretAsync(string id);
 
+    /// <summary>
+    /// Saves a connection. On update only the editable fields are copied: the stored
+    /// <see cref="ServiceBusConnection.LastUsedAt"/> and <see cref="ServiceBusConnection.CreatedAt"/> are kept. A proxy
+    /// address <see cref="ServiceBusConnection.HasAllowedProxy"/> refuses throws <see cref="ArgumentException"/> with
+    /// <see cref="ServiceBusConnection.ProxyRefusal"/>, and nothing is stored.
+    /// </summary>
     Task<ServiceBusConnection> SaveConnectionAsync(ServiceBusConnection connection);
+
+    /// <summary>
+    /// Sets <see cref="ServiceBusConnection.LastUsedAt"/> of a stored connection to now. An unknown id is ignored.
+    /// </summary>
+    Task MarkUsedAsync(string id);
+
     Task DeleteConnectionAsync(string id);
 
     /// <summary>

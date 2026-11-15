@@ -14,6 +14,12 @@ public sealed class EntityDefinitionsDocument
 
     public int? Version { get; set; }
     public DateTimeOffset? ExportedAt { get; set; }
+
+    /// <summary>
+    /// The namespace or host the export was read from, as the app shows the connection target: never a connection
+    /// string, a key or a credential. Absent from a file written before it existed; an import does not read it.
+    /// </summary>
+    public string? Source { get; set; }
     public EntityDefinitions? Entities { get; set; }
 }
 
@@ -83,8 +89,27 @@ public sealed class DefinitionImportItem
     /// <summary>For <see cref="DefinitionImportOutcome.Differs"/>, the settings that differ, as the document names them.</summary>
     public List<string>? DifferingFields { get; set; }
 
+    /// <summary>For <see cref="DefinitionImportOutcome.Differs"/>, each setting of <see cref="DifferingFields"/> in its order, with both values.</summary>
+    public List<DefinitionFieldDifference>? Differences { get; set; }
+
     /// <summary>For <see cref="DefinitionImportOutcome.Failed"/>, a fixed text this application wrote; never the broker's.</summary>
     public string? Reason { get; set; }
+}
+
+/// <summary>
+/// One setting that differs between the broker and the document. The rules of a subscription are one setting,
+/// <c>rules</c>, given without values.
+/// </summary>
+public sealed class DefinitionFieldDifference
+{
+    /// <summary>The setting, as the document names it.</summary>
+    public string Field { get; set; } = string.Empty;
+
+    /// <summary>The value on the broker.</summary>
+    public object? Current { get; set; }
+
+    /// <summary>The value in the document.</summary>
+    public object? InFile { get; set; }
 }
 
 /// <summary>The answer of a definitions import: one item per queue, topic and subscription of the document, in its order.</summary>

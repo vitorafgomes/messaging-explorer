@@ -8,12 +8,19 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import {finalize, Subject, Subscription} from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { TreeNode } from '../../core/models';
-import { TreeDataBuilderService, EntitySelectionService, ConnectionService, LoggerService, DeadLetterNotificationService } from '../../core/services';
+import { SubscriptionNodeData, TreeNode } from '../../core/models';
+import { TreeDataBuilderService, EntitySelectionService, ConnectionService, LoggerService, DeadLetterNotificationService, ResubmitRunService } from '../../core/services';
 import { ProviderService } from '../../core/services/provider.service';
 import { EntityFormDialogComponent, EntityFormDialogData } from './entity-form-dialog.component';
 import { ExportDefinitionsDialogComponent } from './export-definitions-dialog.component';
 import { ImportDefinitionsDialogComponent } from './import-definitions-dialog.component';
+
+/** The statuses that get a marker in the tree, with its icon and tooltip; Active and any other provider's status get none. */
+export const STATUS_MARKERS: Partial<Record<string, { icon: string; text: string }>> = {
+  Disabled: { icon: 'block', text: 'Disabled: no message can be sent or received' },
+  SendDisabled: { icon: 'cancel_schedule_send', text: 'Send disabled: messages can be received, not sent' },
+  ReceiveDisabled: { icon: 'do_not_disturb_on', text: 'Receive disabled: messages can be sent, not received' }
+};
 
 @Component({
   selector: 'app-entities-tree',
@@ -34,35 +41,48 @@ import { ImportDefinitionsDialogComponent } from './import-definitions-dialog.co
         </button>
       }
     </ng-template>
-    <ng-template #toggle let-node>
-      <button type="button" class="node-icon-wrapper node-icon-expandable"
-              [attr.aria-label]="(isExpanded(node) ? 'Collapse ' : 'Expand ') + node.name"
-              [attr.aria-expanded]="isExpanded(node)"
-              (click)="toggleNode(node, $event)">
-        <mat-icon class="node-icon" [fontIcon]="isExpanded(node) ? 'expand_more' : 'chevron_right'" />
-      </button>
-    </ng-template>
-    <ng-template #counts let-data>
-      <div class="node-badges">
-        @if (data.activeMessageCount > 0) {
-          <span class="count-chip" title="Active Messages">{{ data.activeMessageCount | number }}</span>
-        }
-        @if (data.deadLetterMessageCount > 0) {
-          <span class="count-chip dead-letter" title="Dead Letter Messages">
-            <mat-icon class="chip-icon" fontIcon="warning" aria-hidden="true" />{{ data.deadLetterMessageCount | number }}
-          </span>
+    <ng-template #row let-node>
+      <div class="tree-row">
+        <button type="button" class="tree-node"
+                [class.selected]="isSelected(node)"
+                [class.node-queue]="node.type === 'queue'"
+                [class.node-topic]="node.type === 'topic'"
+                [class.node-subscription]="node.type === 'subscription'"
+                [attr.aria-current]="isSelected(node) ? 'true' : 'false'"
+                [attr.aria-expanded]="node.type === 'topic' ? isExpanded(node) : null"
+                (click)="selectNode(node)">
+          <mat-icon class="node-icon" [fontIcon]="node.type === 'topic' ? 'campaign' : node.type === 'subscription' ? 'subdirectory_arrow_right' : 'inbox'" aria-hidden="true" />
+          <span class="node-name">{{ node.name }}</span>
+          @if (statusMarker(node); as marker) {
+            <mat-icon class="node-marker" [fontIcon]="marker.icon" [matTooltip]="marker.text" [attr.aria-label]="marker.text" role="img" />
+          }
+          @if (forwardMarker(node); as marker) {
+            <mat-icon class="node-marker" fontIcon="forward" [matTooltip]="marker" [attr.aria-label]="marker" role="img" />
+          }
+          @if (node.type !== 'topic' && node.data; as data) {
+            @if ($any(data).activeMessageCount > 0) {
+              <span class="count-chip"><span class="count" aria-hidden="true">{{ $any(data).activeMessageCount | number }}</span><span class="visually-hidden">, {{ $any(data).activeMessageCount | number }} active messages</span></span>
+            }
+            @if ($any(data).deadLetterMessageCount > 0) {
+              <span class="count-chip dead-letter"><mat-icon class="chip-icon" fontIcon="warning" aria-hidden="true" /><span class="count" aria-hidden="true">{{ $any(data).deadLetterMessageCount | number }}</span><span class="visually-hidden">, {{ $any(data).deadLetterMessageCount | number }} dead-letter messages</span></span>
+            }
+            @if (resubmitRunning(node)) {
+              <mat-progress-spinner class="resubmit-spinner" mode="indeterminate" diameter="14" aria-hidden="true" /><span class="visually-hidden">, resubmit running</span>
+            }
+          }
+        </button>
+        @if (node.type === 'topic') {
+          <ng-container *ngTemplateOutlet="createAction; context: { $implicit: node }" />
         }
       </div>
     </ng-template>
-    <ng-template #pattern let-topicData>
-      <span class="count-chip pattern"
-            [title]="topicData.detectedPattern ? 'Pattern: ' + topicData.patternDisplay + ' (Confidence: ' + (topicData.detectedPattern.confidence * 100).toFixed(0) + '%) - ' + topicData.detectedPattern.reason : topicData.patternDisplay">
-        <mat-icon class="chip-icon" fontIcon="account_tree" aria-hidden="true" />{{ topicData.patternDisplay }}
-      </span>
-    </ng-template>
     <div class="tree-container">
       <div class="tree-header">
-        <h2 class="tree-title">Entities</h2>
+        <label class="filter">
+          <mat-icon fontIcon="search" aria-hidden="true" />
+          <input type="text" aria-label="Filter entities by name" placeholder="Filter by name" autocomplete="off"
+                 [value]="filter()" (input)="filter.set($any($event.target).value)">
+        </label>
         @if (canUseDefinitions() && isConnected) {
           <button mat-icon-button type="button" class="definitions-btn" aria-label="Export definitions" matTooltip="Export definitions" (click)="openExportDefinitions()">
             <mat-icon fontIcon="download" />
@@ -106,100 +126,24 @@ import { ImportDefinitionsDialogComponent } from './import-definitions-dialog.co
         </div>
       } @else {
         <div class="entity-tree">
-          @for (node of treeData; track node.id) {
-            <div class="tree-node-wrapper">
-              @if (hasChild(0, node)) {
-                <div class="tree-node tree-node-parent"
-                     [class.selected]="isSelected(node)"
-                     [class.node-category]="node.type === 'category'"
-                     [class.node-topic]="node.type === 'topic'">
-                  <ng-container *ngTemplateOutlet="toggle; context: { $implicit: node }" />
-                  <span class="node-name" (click)="selectNode(node)">{{ node.name }}</span>
-                  @if (node.type === 'category') {
-                    <span class="node-count" [title]="(node.children?.length || 0) + ' ' + node.name.toLowerCase()">{{ node.children?.length || 0 }}</span>
-                    <ng-container *ngTemplateOutlet="createAction; context: { $implicit: node }" />
-                  }
-                  @if (node.type === 'topic' && node.data) {
-                    @let topicData = $any(node.data);
-                    <span class="node-count" [title]="topicData.subscriptionCount + ' subscriptions'">{{ topicData.subscriptionCount }}</span>
-                  }
-                </div>
-                @if (isExpanded(node) && node.children) {
-                  <div class="tree-children">
-                    @for (child of node.children; track child.id) {
-                      @if (hasChild(0, child)) {
-                        <div class="tree-node tree-node-parent"
-                             [class.selected]="isSelected(child)"
-                             [class.node-topic]="child.type === 'topic'">
-                          <ng-container *ngTemplateOutlet="toggle; context: { $implicit: child }" />
-                          <span class="node-name" (click)="selectNode(child)">{{ child.name }}</span>
-                          @if (child.type === 'topic' && child.data) {
-                            @let topicData = $any(child.data);
-                            <span class="node-count" [title]="topicData.subscriptionCount + ' subscriptions'">{{ topicData.subscriptionCount }}</span>
-                            @if (topicData.patternDisplay) {
-                              <div class="node-badges">
-                                <ng-container *ngTemplateOutlet="pattern; context: { $implicit: topicData }" />
-                              </div>
-                            }
-                          }
-                          <ng-container *ngTemplateOutlet="createAction; context: { $implicit: child }" />
-                        </div>
-                        @if (isExpanded(child) && child.children) {
-                          <div class="tree-children">
-                            @for (subscription of child.children; track subscription.id) {
-                              <div class="tree-node"
-                                   [class.selected]="isSelected(subscription)"
-                                   [class.node-subscription]="subscription.type === 'subscription'"
-                                   (click)="selectNode(subscription)">
-                                <mat-icon class="node-icon" fontIcon="subdirectory_arrow_right" aria-hidden="true" />
-                                <span class="node-name">{{ subscription.name }}</span>
-                                @if (subscription.type === 'subscription' && subscription.data) {
-                                  <ng-container *ngTemplateOutlet="counts; context: { $implicit: subscription.data }" />
-                                }
-                              </div>
-                            }
-                          </div>
-                        }
-                      } @else {
-                        <div class="tree-node"
-                             [class.selected]="isSelected(child)"
-                             [class.node-queue]="child.type === 'queue'"
-                             [class.node-topic]="child.type === 'topic'"
-                             (click)="selectNode(child)">
-                          <mat-icon class="node-icon" [fontIcon]="child.type === 'topic' ? 'campaign' : 'inbox'" aria-hidden="true" />
-                          <span class="node-name">{{ child.name }}</span>
-                          @if ((child.type === 'queue' || child.type === 'subscription') && child.data) {
-                            <ng-container *ngTemplateOutlet="counts; context: { $implicit: child.data }" />
-                          }
-                          @if (child.type === 'topic' && child.data) {
-                            @let topicData = $any(child.data);
-                            <div class="node-badges">
-                              @if (topicData.patternDisplay) {
-                                <ng-container *ngTemplateOutlet="pattern; context: { $implicit: topicData }" />
-                              }
-                            </div>
-                          }
-                          <ng-container *ngTemplateOutlet="createAction; context: { $implicit: child }" />
-                        </div>
-                      }
-                    }
-                  </div>
-                }
-              } @else {
-                <div class="tree-node"
-                     [class.selected]="isSelected(node)"
-                     [class.node-queue]="node.type === 'queue'"
-                     [class.node-subscription]="node.type === 'subscription'"
-                     (click)="selectNode(node)">
-                  <mat-icon class="node-icon" [fontIcon]="node.type === 'category' ? 'folder' : node.type === 'subscription' ? 'subdirectory_arrow_right' : 'inbox'" aria-hidden="true" />
-                  <span class="node-name">{{ node.name }}</span>
-                  <ng-container *ngTemplateOutlet="createAction; context: { $implicit: node }" />
-                  @if ((node.type === 'queue' || node.type === 'subscription') && node.data) {
-                    <ng-container *ngTemplateOutlet="counts; context: { $implicit: node.data }" />
+          @if (hiddenCount() > 0) {
+            <p class="hidden-note" aria-live="polite">{{ hiddenCount() }} of {{ entityCount() }} entities hidden by the filter</p>
+          }
+          @for (category of treeData; track category.id) {
+            <div class="section">
+              <h2 class="section-head">{{ category.name }} <span class="section-count">{{ category.children?.length || 0 | number }}</span></h2>
+              <ng-container *ngTemplateOutlet="createAction; context: { $implicit: category }" />
+            </div>
+            @for (node of shown(category.children); track node.id) {
+              <ng-container *ngTemplateOutlet="row; context: { $implicit: node }" />
+              @if (node.type === 'topic' && isExpanded(node) && shownChildren(node).length) {
+                <div class="tree-children">
+                  @for (subscription of shownChildren(node); track subscription.id) {
+                    <ng-container *ngTemplateOutlet="row; context: { $implicit: subscription }" />
                   }
                 </div>
               }
-            </div>
+            }
           }
         </div>
       }
@@ -211,6 +155,18 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
   private treeDataBuilder = inject(TreeDataBuilderService);
   private selectionService = inject(EntitySelectionService);
   private connectionService = inject(ConnectionService);
+  private readonly resubmitRuns = inject(ResubmitRunService);
+
+  /** An automatic dead-letter resubmit is running or paused on this queue or subscription. */
+  resubmitRunning(node: TreeNode): boolean {
+    if (node.type !== 'queue' && node.type !== 'subscription') return false;
+    return !!this.resubmitRuns.find({
+      entityType: node.type,
+      entityName: node.name,
+      topicName: node.type === 'subscription' ? node.parent?.name ?? (node.data as SubscriptionNodeData | undefined)?.topicName : undefined,
+      subQueue: 'deadletter'
+    })?.isActive();
+  }
   private logger = inject(LoggerService);
   private notificationService = inject(DeadLetterNotificationService);
   private dialog = inject(MatDialog);
@@ -224,7 +180,8 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
   readonly canUseDefinitions = computed(() => this.providerService.capabilities()?.supportsDefinitions === true);
 
   treeData: TreeNode[] = [];
-  expandedNodes = new Set<string>();
+  /** The text typed in the filter; a row is shown when its name holds it, in any case. */
+  readonly filter = signal('');
   loading: WritableSignal<boolean> = signal<boolean>(false);
   loadError = signal(false);
   private treeLoad?: Subscription;
@@ -284,27 +241,6 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
         next: (data) => {
           this.logger.log('[EntitiesTree] Tree data received:', data);
           this.treeData = data;
-
-          // Log topics with their children
-          data.forEach(category => {
-            if (category.type === 'category' && category.name === 'Topics') {
-              this.logger.log('[EntitiesTree] Topics category children:', category.children?.length);
-              category.children?.forEach(topic => {
-                this.logger.log(`[EntitiesTree] Topic: ${topic.name}, expandable: ${topic.expandable}, children: ${topic.children?.length || 0}`);
-                if (topic.children && topic.children.length > 0) {
-                  this.logger.log(`[EntitiesTree]   -> Children:`, topic.children.map(c => c.name));
-                }
-              });
-            }
-          });
-
-          // Auto-expand only categories, not topics
-          data.forEach(node => {
-            if (node.type === 'category') {
-              this.expandedNodes.add(node.id);
-              this.logger.log('[EntitiesTree] Auto-expanded category:', node.name);
-            }
-          });
         },
         error: (err) => {
           this.logger.error('[EntitiesTree] Failed to load entities:', err);
@@ -314,36 +250,64 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
       });
   }
 
-  hasChild = (_: number, node: TreeNode) => {
-    const result = node.expandable && node.children && node.children.length > 0;
-    if (node.type === 'topic') {
-      this.logger.log(`[EntitiesTree] hasChild(${node.name}): expandable=${node.expandable}, hasChildren=${!!node.children}, childCount=${node.children?.length || 0}, result=${result}`);
-    }
-    return result;
-  };
+  private matches(node: TreeNode): boolean {
+    const text = this.filter().trim().toLowerCase();
+    return !text || node.name.toLowerCase().includes(text);
+  }
 
-  isExpanded(node: TreeNode): boolean {
-    return this.expandedNodes.has(node.id);
+  /** The children of a topic shown under it: all of them when the topic matches the filter, else those that match. */
+  shownChildren(topic: TreeNode): TreeNode[] {
+    const children = topic.children ?? [];
+    return this.matches(topic) ? children : children.filter(child => this.matches(child));
+  }
+
+  /** The entities of a section that pass the filter; a topic stays when one of its subscriptions does. */
+  shown(nodes: TreeNode[] | undefined): TreeNode[] {
+    return (nodes ?? []).filter(node => this.matches(node) || (node.type === 'topic' && this.shownChildren(node).length > 0));
+  }
+
+  /** Every queue, topic and subscription of the tree. */
+  entityCount(): number {
+    return this.treeData.flatMap(category => category.children ?? []).reduce((count, node) => count + 1 + (node.type === 'topic' ? node.children?.length ?? 0 : 0), 0);
+  }
+
+  /** How many entities the filter hides. */
+  hiddenCount(): number {
+    const visible = this.treeData.flatMap(category => this.shown(category.children))
+      .reduce((count, node) => count + 1 + (node.type === 'topic' ? this.shownChildren(node).length : 0), 0);
+    return this.entityCount() - visible;
+  }
+
+  /** A marker for a queue or topic the broker reads as disabled, send-disabled or receive-disabled; none for any other status. */
+  statusMarker(node: TreeNode): { icon: string; text: string } | null {
+    if (node.type !== 'queue' && node.type !== 'topic') return null;
+    const status = (node.data as { status?: string } | undefined)?.status ?? '';
+    return STATUS_MARKERS[status] ?? null;
+  }
+
+  /** The tooltip of the forwarding marker of a queue that forwards its messages; null when it does not forward. */
+  forwardMarker(node: TreeNode): string | null {
+    const target = node.type === 'queue' ? (node.data as { forwardTo?: string | null } | undefined)?.forwardTo : null;
+    return target ? `Forwards every message to ${target}` : null;
+  }
+
+  /** The topics whose subscriptions the user opened; every topic starts closed. */
+  private readonly opened = signal<ReadonlySet<string>>(new Set());
+
+  /** A topic shows its subscriptions when opened, while the filter has text, or when one of them is selected. */
+  isExpanded(topic: TreeNode): boolean {
+    return this.opened().has(topic.id)
+      || this.filter().trim() !== ''
+      || (!!this.selectedNode && (topic.children ?? []).some(child => child.id === this.selectedNode!.id));
   }
 
   selectNode(node: TreeNode) {
-    this.logger.log('Tree selectNode:', { node, type: node.type, data: node.data, parent: node.parent?.name });
-    this.selectionService.select(node);
-  }
-
-  toggleNode(node: TreeNode, event: Event) {
-    event.stopPropagation();
-    this.logger.log('[EntitiesTree] toggleNode called for:', node.name, 'type:', node.type, 'expandable:', node.expandable, 'children:', node.children?.length);
-
-    if (this.expandedNodes.has(node.id)) {
-      this.logger.log('[EntitiesTree] Collapsing node:', node.name);
-      this.expandedNodes.delete(node.id);
-    } else {
-      this.logger.log('[EntitiesTree] Expanding node:', node.name);
-      this.expandedNodes.add(node.id);
+    if (node.type === 'topic') {
+      const next = new Set(this.opened());
+      if (!next.delete(node.id)) next.add(node.id);
+      this.opened.set(next);
     }
-
-    this.logger.log('[EntitiesTree] Node is now expanded:', this.expandedNodes.has(node.id));
+    this.selectionService.select(node);
   }
 
   createLabel(node: TreeNode): string | null {
@@ -371,15 +335,5 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
 
   isSelected(node: TreeNode): boolean {
     return this.selectedNode?.id === node.id;
-  }
-
-  getIconClass(node: TreeNode): string {
-    switch (node.type) {
-      case 'queue': return 'icon-queue';
-      case 'topic': return 'icon-topic';
-      case 'subscription': return 'icon-subscription';
-      case 'category': return 'icon-category';
-      default: return '';
-    }
   }
 }

@@ -5,11 +5,20 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { diffLines, Change } from 'diff';
 import { MessageInfo } from '../../core/models';
+import { connectionContext } from '../entities/connection-context';
+import { EnvironmentLineComponent } from '../../shared/environment-line.component';
 
 export interface MessageDiffDialogData {
   left: MessageInfo;
   right: MessageInfo;
   entityName: string;
+}
+
+/** One line of a body side: its mark ("-", "+" or a space), its text, and what a screen reader hears after it. */
+export interface DiffLine {
+  mark: string;
+  text: string;
+  say: string;
 }
 
 export type PropertyStatus = 'same' | 'changed' | 'only-left' | 'only-right';
@@ -24,7 +33,7 @@ export interface PropertyComparison {
 @Component({
   selector: 'app-message-diff-dialog',
   standalone: true,
-  imports: [CommonModule, MatButtonModule, MatDialogModule, MatIconModule],
+  imports: [EnvironmentLineComponent, CommonModule, MatButtonModule, MatDialogModule, MatIconModule],
   template: `
     <h2 mat-dialog-title class="title">
       <mat-icon fontIcon="compare" aria-hidden="true"></mat-icon>
@@ -32,12 +41,13 @@ export interface PropertyComparison {
     </h2>
 
     <mat-dialog-content class="content">
+      <app-environment-line [mark]="context().mark"><b>{{ data.entityName }}</b> on {{ context().where }}</app-environment-line>
       <div class="message-labels">
         <span class="label left">Left: #{{ data.left.sequenceNumber }}</span>
         <span class="label right">Right: #{{ data.right.sequenceNumber }}</span>
       </div>
 
-      <nav class="sections" aria-label="Compare">
+      <nav class="sections" aria-label="What to compare">
         <button mat-button type="button" class="section-tab" [class.current]="activeTab === 0" [attr.aria-current]="activeTab === 0 ? 'true' : null" (click)="activeTab = 0">Body</button>
         <button mat-button type="button" class="section-tab" [class.current]="activeTab === 1" [attr.aria-current]="activeTab === 1 ? 'true' : null" (click)="activeTab = 1">Properties</button>
         <button mat-button type="button" class="section-tab" [class.current]="activeTab === 2" [attr.aria-current]="activeTab === 2 ? 'true' : null" (click)="activeTab = 2">App Properties</button>
@@ -54,23 +64,19 @@ export interface PropertyComparison {
             <div class="diff-panels">
               <div class="diff-panel">
                 <div class="diff-panel-header left">Left (#{{ data.left.sequenceNumber }})</div>
-                <pre class="diff-content">@for (change of bodyDiffs; track $index) {<span
-                  class="diff-line"
-                  [class.diff-removed]="change.removed"
-                  [class.diff-context]="!change.added && !change.removed"
-                  [class.diff-hidden]="change.added"
-                  >{{ change.value }}</span>}
-                </pre>
+                <div class="diff-content">
+                  @for (line of leftLines; track $index) {
+                    <div class="diff-line" [class.diff-removed]="line.mark === '-'"><span class="mark">{{ line.mark }}</span><span class="line-text">{{ line.text }}</span>@if (line.say) {<span class="visually-hidden">{{ line.say }}</span>}</div>
+                  }
+                </div>
               </div>
               <div class="diff-panel">
                 <div class="diff-panel-header right">Right (#{{ data.right.sequenceNumber }})</div>
-                <pre class="diff-content">@for (change of bodyDiffs; track $index) {<span
-                  class="diff-line"
-                  [class.diff-added]="change.added"
-                  [class.diff-context]="!change.added && !change.removed"
-                  [class.diff-hidden]="change.removed"
-                  >{{ change.value }}</span>}
-                </pre>
+                <div class="diff-content">
+                  @for (line of rightLines; track $index) {
+                    <div class="diff-line" [class.diff-added]="line.mark === '+'"><span class="mark">{{ line.mark }}</span><span class="line-text">{{ line.text }}</span>@if (line.say) {<span class="visually-hidden">{{ line.say }}</span>}</div>
+                  }
+                </div>
               </div>
             </div>
           }
@@ -92,8 +98,8 @@ export interface PropertyComparison {
               @for (prop of propertyComparisons; track prop.name) {
                 <tr [class]="getRowClass(prop.status)">
                   <td class="prop-name">{{ prop.name }}</td>
-                  <td class="prop-value">{{ prop.leftValue }}</td>
-                  <td class="prop-value">{{ prop.rightValue }}</td>
+                  <td class="prop-value" [class.empty-value]="prop.leftValue === ''">{{ prop.leftValue === '' ? 'Empty' : prop.leftValue }}</td>
+                  <td class="prop-value" [class.empty-value]="prop.rightValue === ''">{{ prop.rightValue === '' ? 'Empty' : prop.rightValue }}</td>
                   <td>
                     <span class="status" [class]="getStatusBadgeClass(prop.status)">
                       {{ getStatusLabel(prop.status) }}
@@ -127,8 +133,8 @@ export interface PropertyComparison {
                 @for (prop of appPropertyComparisons; track prop.name) {
                   <tr [class]="getRowClass(prop.status)">
                     <td class="prop-name">{{ prop.name }}</td>
-                    <td class="prop-value">{{ prop.leftValue }}</td>
-                    <td class="prop-value">{{ prop.rightValue }}</td>
+                    <td class="prop-value" [class.empty-value]="prop.leftValue === ''">{{ prop.leftValue === '' ? 'Empty' : prop.leftValue }}</td>
+                    <td class="prop-value" [class.empty-value]="prop.rightValue === ''">{{ prop.rightValue === '' ? 'Empty' : prop.rightValue }}</td>
                     <td>
                       <span class="status" [class]="getStatusBadgeClass(prop.status)">
                         {{ getStatusLabel(prop.status) }}
@@ -180,11 +186,13 @@ export interface PropertyComparison {
       white-space: pre-wrap;
       word-break: break-word;
     }
-    .diff-line { display: inline; }
-    .diff-added { background: var(--mat-sys-primary-container); color: var(--mat-sys-on-primary-container); }
+    .diff-line { display: flex; gap: 8px; min-height: 20px; padding: 0 4px; }
+    .mark { flex: 0 0 12px; font-weight: 700; white-space: pre; }
+    .line-text { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .diff-added { background: var(--app-success-container); color: var(--app-on-success-container); }
     .diff-removed { background: var(--mat-sys-error-container); color: var(--mat-sys-on-error-container); }
-    .diff-context { background: transparent; }
-    .diff-hidden { display: none; }
+    .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+    .empty-value { color: var(--mat-sys-on-surface-variant); }
     .comparison-table-container { max-height: 400px; overflow: auto; }
     .comparison-table { width: 100%; border-collapse: collapse; font: var(--mat-sys-body-small); }
     th {
@@ -212,12 +220,18 @@ export interface PropertyComparison {
   `]
 })
 export class MessageDiffDialogComponent implements OnInit {
+  /** The active connection and its environment, for the line under the title. */
+  readonly context = connectionContext();
   data = inject<MessageDiffDialogData>(MAT_DIALOG_DATA);
   dialogRef = inject(MatDialogRef<MessageDiffDialogComponent>);
 
   activeTab = 0;
 
   bodyDiffs: Change[] = [];
+  /** The left body line by line: a removed line marked "-" and said ", removed" to a screen reader. */
+  leftLines: DiffLine[] = [];
+  /** The right body line by line: an added line marked "+" and said ", added" to a screen reader. */
+  rightLines: DiffLine[] = [];
   propertyComparisons: PropertyComparison[] = [];
   appPropertyComparisons: PropertyComparison[] = [];
 
@@ -233,6 +247,10 @@ export class MessageDiffDialogComponent implements OnInit {
     const leftBody = this.formatBody(this.data.left.body);
     const rightBody = this.formatBody(this.data.right.body);
     this.bodyDiffs = diffLines(leftBody, rightBody);
+    const lines = (change: Change, mark: string, say: string) =>
+      change.value.replace(/\n$/, '').split('\n').map(text => ({ mark, text, say }));
+    this.leftLines = this.bodyDiffs.filter(c => !c.added).flatMap(c => c.removed ? lines(c, '-', ', removed') : lines(c, ' ', ''));
+    this.rightLines = this.bodyDiffs.filter(c => !c.removed).flatMap(c => c.added ? lines(c, '+', ', added') : lines(c, ' ', ''));
   }
 
   // --- Properties comparison ---

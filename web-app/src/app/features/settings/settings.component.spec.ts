@@ -1,13 +1,14 @@
 import { TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { provideRouter } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
 import { of } from 'rxjs';
 import { SettingsComponent } from './settings.component';
-import { AppUpdateService, RELEASES_URL } from './app-update.service';
+import { AppUpdateService, RELEASES_URL, REPOSITORY_URL } from './app-update.service';
 import { ClearAllDataDialogComponent } from './clear-all-data-dialog.component';
 import { BugReportDialogComponent } from '../../shared/bug-report-dialog.component';
 import { BugReportService } from '../../shared/bug-report.service';
-import { ConnectionService, DevSettingsService } from '../../core/services';
+import { ConnectionService, DevSettingsService, ThemeService } from '../../core/services';
 
 /** The text of an element as a reader hears it: every text node, separated by one space. */
 function words(node: Element | null | undefined): string {
@@ -49,6 +50,7 @@ describe('SettingsComponent', () => {
       imports: [SettingsComponent],
       providers: [
         provideNoopAnimations(),
+        provideRouter([]),
         { provide: MatDialog, useValue: dialog },
         { provide: ConnectionService, useValue: connectionService },
       ],
@@ -59,6 +61,8 @@ describe('SettingsComponent', () => {
     vi.clearAllMocks();
     delete (window as any).electronAPI;
     localStorage.removeItem('dev-mode');
+    localStorage.removeItem('app-theme');
+    document.documentElement.classList.remove('dark-theme');
   });
 
   async function render(overrides: Record<string, unknown> = {}, withShell = true) {
@@ -78,13 +82,14 @@ describe('SettingsComponent', () => {
     };
   }
 
-  it('About shows the app version and the API only as local, never its port or secret', async () => {
+  it('About lists the version, the licence and what it is built with, as drawn, and never the API port or secret', async () => {
     const { el } = await render();
     const about = words(el.querySelector('[data-testid="about"]'));
 
     expect(el.querySelector('[data-testid="current-version"]')!.textContent).toBe('2.4.2');
+    expect(Array.from(el.querySelectorAll('[data-testid="about"] dt')).map(d => words(d))).toEqual(['Version', 'Licence', 'Built with']);
     expect(about).toContain('Version 2.4.2, Stable channel');
-    expect(about).toContain('API Local, on this computer');
+    expect(about).not.toContain('API');
     expect(el.textContent).not.toContain(SECRET);
     expect(el.textContent).not.toContain(String(PORT));
   });
@@ -151,19 +156,21 @@ describe('SettingsComponent', () => {
     expect(state()).toContain('The connection was reset. You are still on 2.4.2 and nothing was installed.');
     const link = Array.from(el.querySelectorAll('[data-testid="update-state"] a')).map(a => a.getAttribute('href'));
     expect(link).toEqual([`${RELEASES_URL}/tag/v2.5.0`]);
+    expect(words(el.querySelector('[data-testid="update-state"] a'))).toBe('Open the release page of 2.5.0 open_in_new');
 
     button('refresh Retry')!.click();
     expect(shell.downloadUpdate).toHaveBeenCalledTimes(2);
   });
 
   it('a failed check says the check failed and Retry checks again', async () => {
-    const { state, push, button, shell } = await render();
+    const { state, push, button, shell, el } = await render();
     await push({ status: 'error', message: 'net::ERR_INTERNET_DISCONNECTED' });
 
     expect(state()).toContain('Could not check for updates');
     expect(state()).toContain('net::ERR_INTERNET_DISCONNECTED');
     button('refresh Retry')!.click();
     expect(shell.checkForUpdates).toHaveBeenCalledTimes(1);
+    expect(words(el.querySelector('[data-testid="last-check"]'))).not.toBe('Not in this session');
   });
 
   it('a package that cannot update itself links the release of the new version, never Download or Restart', async () => {
@@ -190,7 +197,7 @@ describe('SettingsComponent', () => {
   it('outside the desktop app the screen says updates are handled by it and offers no channel', async () => {
     const { el } = await render({}, false);
     expect(el.textContent).toContain('Updates are handled by the desktop app');
-    expect(el.querySelector('mat-button-toggle-group')).toBeNull();
+    expect(el.querySelector('[aria-labelledby="channel-label"]')).toBeNull();
   });
 
   it('Report a bug opens the bug report with the version, the platform and the errors caught in this session', async () => {
@@ -209,11 +216,11 @@ describe('SettingsComponent', () => {
     expect(config.data.errors[0]).toContain('Sample failure (main.js:7)');
   });
 
-  it('the developer mode switch turns developer mode on and off', async () => {
+  it('the developer mode checkbox turns developer mode on and off', async () => {
     const { el, refresh } = await render();
     const devSettings = TestBed.inject(DevSettingsService);
-    const toggle = el.querySelector('mat-slide-toggle button') as HTMLElement;
-    expect(el.querySelector('mat-slide-toggle')!.textContent).toContain('Show the Debug button on the Connections screen');
+    const toggle = el.querySelector('mat-checkbox input[type="checkbox"]') as HTMLElement;
+    expect(el.querySelector('mat-checkbox')!.textContent).toContain('Show the Debug button on the Connections screen');
 
     toggle.click();
     await refresh();
@@ -259,5 +266,127 @@ describe('SettingsComponent', () => {
       await push(status);
       check();
     }
+  });
+
+  it('Appearance offers System, Light and Dark; System is the default and Dark turns the dark theme on and is remembered', async () => {
+    const { el, refresh } = await render();
+    const group = el.querySelector('[data-testid="theme"]') as HTMLElement;
+    const choices = Array.from(group.querySelectorAll('button'));
+    expect(choices.map(b => words(b))).toEqual(['System', 'Light', 'Dark']);
+    expect(choices.map(b => b.getAttribute('aria-checked'))).toEqual(['true', 'false', 'false']);
+    expect(words(el.querySelector('[aria-labelledby="appearance-heading"]'))).toContain('System follows the light or dark setting of this computer and changes with it.');
+
+    choices[2].click();
+    await refresh();
+    expect(TestBed.inject(ThemeService).mode()).toBe('dark');
+    expect(document.documentElement.classList.contains('dark-theme')).toBe(true);
+    expect(localStorage.getItem('app-theme')).toBe('dark');
+  });
+
+  it('the intro says what the screen gathers, as the artboard words it', async () => {
+    const { el } = await render();
+    expect(words(el.querySelector('.page-head'))).toContain('What the theme button, the version label and the File, View and Help menus held. The window has no menu bar, so it all lives here.');
+  });
+
+  it('Last check says no check yet, then the time a check answered', async () => {
+    const { el, push } = await render();
+    const lastCheck = () => words(el.querySelector('[data-testid="last-check"]'));
+    expect(words(el.querySelector('[data-testid="last-check"]')!.parentElement)).toContain('Last check');
+    expect(lastCheck()).toBe('Not in this session');
+
+    await push({ status: 'up-to-date' });
+    expect(lastCheck()).not.toBe('Not in this session');
+    expect(lastCheck()).toContain(String(new Date().getFullYear()));
+  });
+
+  it('an available version lists its release notes as text, never as markup', async () => {
+    const { el, push } = await render();
+    await push({
+      status: 'available', version: '2.5.0',
+      releaseNotes: '<ul><li>Rules tab for subscriptions</li><li><img src="x" onerror="alert(1)">The entity tree stays fast</li></ul>',
+    });
+    const notes = el.querySelector('[data-testid="release-notes"]') as HTMLElement;
+    expect(words(notes.querySelector('.notes-title'))).toBe('Release notes of 2.5.0');
+    expect(Array.from(notes.querySelectorAll('li')).map(li => words(li))).toEqual(['Rules tab for subscriptions', 'The entity tree stays fast']);
+    expect(notes.querySelector('img')).toBeNull();
+  });
+
+  it('an available version without release notes shows no notes', async () => {
+    const { el, push } = await render();
+    await push({ status: 'available', version: '2.5.0' });
+    expect(el.querySelector('[data-testid="release-notes"]')).toBeNull();
+  });
+
+  it('Data shows the real path of the file and Show in folder shows it in the file manager', async () => {
+    const showDataFile = vi.fn(async () => ({ status: 'ok' }));
+    const { el, refresh, button } = await render({ getDataFile: async () => '/home/u/.config/Messaging Explorer/data/workspace.json', showDataFile });
+    await refresh();
+    expect(words(el.querySelector('[data-testid="data-file"] .mono'))).toBe('/home/u/.config/Messaging Explorer/data/workspace.json');
+    button('folder Show in folder')!.click();
+    await refresh();
+    expect(showDataFile).toHaveBeenCalledTimes(1);
+    expect(el.querySelector('[data-testid="data-file"] [role="alert"]')).toBeNull();
+  });
+
+  it('Show in folder says why when the shell cannot show the file', async () => {
+    const { el, refresh, button } = await render({ getDataFile: async () => '/d/workspace.json', showDataFile: async () => ({ status: 'error', message: 'Nothing is saved yet, so there is no file to show.' }) });
+    await refresh();
+    button('folder Show in folder')!.click();
+    await refresh();
+    await refresh();
+    expect(words(el.querySelector('[data-testid="data-file"] [role="alert"]'))).toBe('Nothing is saved yet, so there is no file to show.');
+  });
+
+  it('Developer tools: Open developer tools opens them through the shell, with the warning that they show the API key', async () => {
+    const openDevTools = vi.fn(async () => undefined);
+    const { el, refresh, button } = await render({ openDevTools });
+    const developer = el.querySelector('section[aria-labelledby="developer-heading"]');
+    const row = developer?.querySelector('[data-testid="developer-tools"]');
+    expect(words(row?.querySelector('.row-label')), 'the Developer section has a row labelled Developer tools').toBe('Developer tools');
+    expect(words(row?.querySelector('button')), 'the desktop app offers Open developer tools in that row').toBe('Open developer tools');
+    expect(words(developer?.querySelector('[data-testid="developer-tools-note"]')), 'the drawn warning is shown word for word in the Developer section')
+      .toBe('The developer tools show every request the page makes to the local API, with its key. Close them before you share your screen.');
+    button('Open developer tools')!.click();
+    await refresh();
+    expect(openDevTools, 'Open developer tools asks the shell once, with no argument').toHaveBeenCalledTimes(1);
+    expect(openDevTools, 'Open developer tools sends no argument to the shell').toHaveBeenCalledWith();
+  });
+
+  it('outside the desktop app there is no Open developer tools and no developer tools row', async () => {
+    const { el, button } = await render({}, false);
+    expect(button('Open developer tools'), 'the browser build offers no Open developer tools').toBeUndefined();
+    expect(el.querySelector('[data-testid="developer-tools"]'), 'the browser build has no developer tools row').toBeNull();
+    expect(el.querySelector('[data-testid="developer-tools-note"]'), 'the browser build has no developer tools note').toBeNull();
+  });
+
+  it('outside the desktop app there is no Show in folder and no path', async () => {
+    const { el, button } = await render({}, false);
+    expect(button('folder Show in folder')).toBeUndefined();
+    expect(el.querySelector('[data-testid="data-file"] .mono')).toBeNull();
+  });
+
+  it('Data says the file is plain text and links Export and Import to the Connections screen', async () => {
+    const { el } = await render();
+    expect(words(el.querySelector('[aria-labelledby="data-heading"]'))).toContain('Plain text, secrets included. Connection strings, passwords and client secrets in it are not encrypted. Protect it like a password file.');
+    const move = el.querySelector('[data-testid="move-connections"]') as HTMLElement;
+    expect(words(move)).toContain('An export masks the secrets unless you ask for them.');
+    expect(Array.from(move.querySelectorAll('a')).map(a => [words(a), a.getAttribute('href')])).toEqual([['download Export', '/connections'], ['upload Import', '/connections']]);
+    expect(Array.from(move.querySelectorAll('a mat-icon')).map(i => i.textContent?.trim()), 'Export carries the download icon and Import the upload icon, as Settings.dc.html draws them').toEqual(['download', 'upload']);
+  });
+
+  it('About links the repository, the changelog and the private security report, each in the browser', async () => {
+    const { el, button } = await render();
+    const links = (id: string) => Array.from(el.querySelectorAll(`[data-testid="${id}"] a`))
+      .map(a => [words(a), a.getAttribute('href'), a.getAttribute('target')]);
+    expect(links('project')).toEqual([
+      ['Repository open_in_new', REPOSITORY_URL, '_blank'],
+      ['Changelog open_in_new', `${REPOSITORY_URL}/blob/main/CHANGELOG.md`, '_blank'],
+    ]);
+    expect(links('security')).toEqual([['Report a security problem privately open_in_new', `${REPOSITORY_URL}/security/advisories/new`, '_blank']]);
+    const trailing = Array.from(el.querySelectorAll('[data-testid="project"] a, [data-testid="security"] a'))
+      .map(a => a.querySelector('mat-icon[iconpositionend]')?.textContent?.trim() ?? null);
+    expect(trailing, 'Repository, Changelog and the security report end with the external-link icon, as Settings.dc.html draws them').toEqual(['open_in_new', 'open_in_new', 'open_in_new']);
+    expect(words(el.querySelector('[data-testid="security"]'))).toContain('A private report to the maintainers, never a public issue.');
+    expect(button('Suggest a feature')).toBeDefined();
   });
 });

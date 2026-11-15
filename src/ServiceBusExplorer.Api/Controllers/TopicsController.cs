@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using ServiceBusExplorer.Core.Abstractions;
 using ServiceBusExplorer.Core.Models;
 
@@ -47,7 +48,7 @@ public class TopicsController : ControllerBase
         if (provider == null)
             return NoProviderConnected();
 
-        var topic = await provider.GetTopicAsync(name);
+        var topic = await provider.GetTopicAsync(name, HttpContext.RequestAborted);
         if (topic == null)
             return NotFound();
 
@@ -91,7 +92,7 @@ public class TopicsController : ControllerBase
         try
         {
             await provider.UpdateTopicAsync(name, options, HttpContext.RequestAborted);
-            var topic = await provider.GetTopicAsync(name);
+            var topic = await provider.GetTopicAsync(name, HttpContext.RequestAborted);
             return topic == null ? EntityAdministrationResults.NotFound("topic") : Ok(topic);
         }
         catch (NotSupportedException)
@@ -121,17 +122,31 @@ public class TopicsController : ControllerBase
         var provider = GetProvider();
         if (provider == null)
             return NoProviderConnected();
+        if (EntityAdministrationResults.BodyNotAccepted(provider, [message]) is { } refused)
+            return refused;
 
         try
         {
-            await provider.SendMessageAsync(name, message);
-            return Ok(new { success = true });
+            var sequenceNumber = await provider.SendMessageAsync(name, message);
+            return Ok(new { success = true, sequenceNumber });
         }
         catch (EntityDisabledException)
         {
             return EntityAdministrationResults.EntityDisabled();
         }
     }
+
+    [HttpPost("{name}/messages/batch")]
+    public Task<ActionResult> SendMessages(string name, [FromBody] List<SendMessageRequest> messages) =>
+        QueuesController.SendBatch(this, name, messages, HttpContext.RequestAborted);
+
+    /// <summary>
+    /// Cancels scheduled messages of the topic by their sequence numbers: a scheduled message stays in the topic until
+    /// it is due, so it is cancelled on the topic, never on a subscription.
+    /// </summary>
+    [HttpPost("{name}/messages/cancel-scheduled")]
+    public Task<ActionResult> CancelScheduledMessages(string name, [FromBody] CancelScheduledRequest request) =>
+        QueuesController.CancelScheduled(this, _logger, name, request, HttpContext.RequestAborted);
 
     // Subscriptions
     [HttpGet("{topicName}/subscriptions")]
@@ -346,8 +361,8 @@ public class TopicsController : ControllerBase
     }
 
     [HttpGet("{topicName}/subscriptions/{subscriptionName}/messages")]
-    public Task<ActionResult<IEnumerable<IMessage>>> PeekMessages(string topicName, string subscriptionName, [FromQuery] int count = 10) =>
-        Peek(topicName, subscriptionName, count, MessageSubQueue.Active, null, null);
+    public Task<ActionResult<IEnumerable<IMessage>>> PeekMessages(string topicName, string subscriptionName, [FromQuery] int count = 10, [FromQuery] string? fromSequenceNumber = null) =>
+        Peek(topicName, subscriptionName, count, MessageSubQueue.Active, fromSequenceNumber, null);
 
     [HttpGet("{topicName}/subscriptions/{subscriptionName}/deadletter")]
     public Task<ActionResult<IEnumerable<IMessage>>> PeekDeadLetterMessages(string topicName, string subscriptionName, [FromQuery] int count = 10, [FromQuery] string? fromSequenceNumber = null, [FromQuery] string? includeBody = null) =>
@@ -363,7 +378,7 @@ public class TopicsController : ControllerBase
 
         var provider = GetProvider();
         if (provider == null) return NoProviderConnected();
-        if (EntityAdministrationResults.PeekPosition(provider, fromSequenceNumber, out var from) is { } refused) return refused;
+        if (EntityAdministrationResults.PeekPosition(provider, subQueue, fromSequenceNumber, out var from) is { } refused) return refused;
         if (EntityAdministrationResults.IncludeBody(includeBody, out var withBody) is { } badBody) return badBody;
         if (EntityAdministrationResults.SubQueueNotSupported(provider, subQueue) is { } notSupported) return notSupported;
 
@@ -399,8 +414,35 @@ public class TopicsController : ControllerBase
         }
     }
 
+    [HttpPost("{topicName}/subscriptions/{subscriptionName}/messages/deadletter-batch")]
+    public Task<ActionResult> DeadLetterMessages(string topicName, string subscriptionName, [FromBody] DeferredBatchRequest request) =>
+        QueuesController.ActiveBatch(this, _logger, $"{topicName}/{subscriptionName}", request,
+            c => c.SupportsManualDeadLetter ? null : EntityAdministrationResults.ManualDeadLetterNotSupported(),
+            p => p.DeadLetterMessagesAsync(topicName, request.SequenceNumbers, subscriptionName, request.Reason, request.Description, HttpContext.RequestAborted));
+
+    [HttpPost("{topicName}/subscriptions/{subscriptionName}/messages/defer-batch")]
+    public Task<ActionResult> DeferMessages(string topicName, string subscriptionName, [FromBody] DeferredBatchRequest request) =>
+        QueuesController.ActiveBatch(this, _logger, $"{topicName}/{subscriptionName}", request,
+            c => c.SupportsDeferral ? null : EntityAdministrationResults.DeferralNotSupported(),
+            p => p.DeferMessagesAsync(topicName, request.SequenceNumbers, subscriptionName, HttpContext.RequestAborted));
+
+    [HttpPost("{topicName}/subscriptions/{subscriptionName}/deferred/delete-batch")]
+    public Task<ActionResult> DeleteDeferredMessages(string topicName, string subscriptionName, [FromBody] DeferredBatchRequest request) =>
+        QueuesController.DeferredBatch(this, _logger, $"{topicName}/{subscriptionName}", request,
+            p => p.DeleteDeferredMessagesAsync(topicName, request.SequenceNumbers, subscriptionName, HttpContext.RequestAborted));
+
+    [HttpPost("{topicName}/subscriptions/{subscriptionName}/deferred/resubmit-batch")]
+    public Task<ActionResult> ResubmitDeferredMessages(string topicName, string subscriptionName, [FromBody] DeferredBatchRequest request) =>
+        QueuesController.DeferredBatch(this, _logger, $"{topicName}/{subscriptionName}", request,
+            p => p.ResubmitDeferredMessagesAsync(topicName, request.SequenceNumbers, subscriptionName, request.NewMessageIdOnDuplicateDetection, HttpContext.RequestAborted));
+
+    [HttpPost("{topicName}/subscriptions/{subscriptionName}/deferred/deadletter-batch")]
+    public Task<ActionResult> DeadLetterDeferredMessages(string topicName, string subscriptionName, [FromBody] DeferredBatchRequest request) =>
+        QueuesController.DeferredBatch(this, _logger, $"{topicName}/{subscriptionName}", request,
+            p => p.DeadLetterDeferredMessagesAsync(topicName, request.SequenceNumbers, subscriptionName, request.Reason, request.Description, HttpContext.RequestAborted));
+
     [HttpPost("{topicName}/subscriptions/{subscriptionName}/deadletter/{sequenceNumber}/resubmit")]
-    public async Task<ActionResult> ResubmitDeadLetterMessage(string topicName, string subscriptionName, long sequenceNumber)
+    public async Task<ActionResult> ResubmitDeadLetterMessage(string topicName, string subscriptionName, long sequenceNumber, [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] ResubmitMessageRequest? request = null)
     {
         var provider = GetProvider();
         if (provider == null)
@@ -408,12 +450,17 @@ public class TopicsController : ControllerBase
 
         try
         {
-            await provider.ResubmitDeadLetterMessageAsync(topicName, sequenceNumber, subscriptionName);
+            await provider.ResubmitDeadLetterMessageAsync(topicName, sequenceNumber, subscriptionName, request?.NewMessageIdOnDuplicateDetection ?? false);
             return Ok(new { success = true });
         }
         catch (EntityDisabledException)
         {
             return EntityAdministrationResults.EntityDisabled();
+        }
+        catch (InvalidEntityConfigurationException ex)
+        {
+            _logger.LogWarning(ex, "Resubmit dead-letter was refused for {TopicName}/{SubscriptionName} seq {SequenceNumber}", topicName, subscriptionName, sequenceNumber);
+            return BadRequest(new { message = ex.Message });
         }
         catch (Exception ex)
         {
@@ -439,7 +486,7 @@ public class TopicsController : ControllerBase
 
         try
         {
-            var result = await provider.ResubmitDeadLetterMessagesAsync(topicName, request.SequenceNumbers, subQueue, subscriptionName, cancellationToken: HttpContext.RequestAborted);
+            var result = await provider.ResubmitDeadLetterMessagesAsync(topicName, request.SequenceNumbers, subQueue, subscriptionName, request.NewMessageIdOnDuplicateDetection, cancellationToken: HttpContext.RequestAborted);
             return Ok(result);
         }
         catch (EntityDisabledException)
@@ -536,7 +583,7 @@ public class TopicsController : ControllerBase
 
         try
         {
-            var result = await provider.MoveMessagesAsync(topicName, request.TargetQueueName, request.SequenceNumbers, subQueue, subscriptionName, cancellationToken: HttpContext.RequestAborted);
+            var result = await provider.MoveMessagesAsync(topicName, request.TargetQueueName, request.SequenceNumbers, subQueue, subscriptionName, request.NewMessageIdOnDuplicateDetection, cancellationToken: HttpContext.RequestAborted);
             return Ok(result);
         }
         catch (EntityDisabledException)

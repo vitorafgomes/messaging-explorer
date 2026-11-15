@@ -52,6 +52,8 @@ public class EntityJsonContractTests
             "DisconnectAsync" => Task.CompletedTask,
             "DisposeAsync" => ValueTask.CompletedTask,
             nameof(IMessagingProvider.GetQueueAsync) => Task.FromResult<IQueueEntity?>(Queue),
+            nameof(IMessagingProvider.GetQueuesAsync) => Task.FromResult<IEnumerable<IQueueEntity>>(new List<QueueInfo> { Queue, new() { Name = "paused", Status = "SendDisabled" } }),
+            nameof(IMessagingProvider.GetTopicsAsync) => Task.FromResult<IEnumerable<ITopicEntity>>(new List<TopicInfo> { new() { Name = "events", Status = "ReceiveDisabled" } }),
             nameof(IMessagingProvider.PeekMessagesAsync) => Task.FromResult<IEnumerable<IMessage>>(new List<IMessage> { Message }),
             nameof(IMessagingProvider.SearchMessagesAsync) => Task.FromResult(new MessageSearchResult { Messages = new List<IMessage> { Message }, TotalPeeked = 1, TotalMatches = 1 }),
             _ => throw new NotSupportedException(m.Name)
@@ -103,6 +105,18 @@ public class EntityJsonContractTests
         Assert.Equal(14, Field(queue, "transferDeadLetterMessageCount").GetInt64());
         Assert.Equal("Active", Field(queue, "status").GetString());
         Assert.Equal("00:00:45", Field(queue, "lockDuration").GetString());
+    }
+
+    [Fact]
+    public async Task The_queue_and_topic_lists_answer_each_entitys_status_and_a_queues_forward_target_for_the_tree_markers()
+    {
+        var queues = await WithConnectedProviderAsync(c => c.GetAsync("/api/queues"));
+        var topics = await WithConnectedProviderAsync(c => c.GetAsync("/api/topics"));
+
+        Assert.Equal(
+            [("orders", "Active", "orders-archive"), ("paused", "SendDisabled", null)],
+            queues.EnumerateArray().Select(q => (Field(q, "name").GetString(), Field(q, "status").GetString(), Field(q, "forwardTo").GetString())));
+        Assert.Equal("ReceiveDisabled", Field(Assert.Single(topics.EnumerateArray()), "status").GetString());
     }
 
     [Fact]

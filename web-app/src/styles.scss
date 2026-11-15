@@ -1,8 +1,5 @@
 @use '@angular/material' as mat;
 
-// === Bootstrap (temporary — removed in Phase 9) ===
-@use 'bootstrap/scss/bootstrap';
-
 // @fontsource supplies the local Material Icons font file but not the helper
 // class normally supplied by Google Fonts. Angular Material applies this class
 // to <mat-icon>, so it must define the icon font and enable ligatures.
@@ -23,15 +20,158 @@
   -webkit-font-smoothing: antialiased;
 }
 
-// === Bootstrap tab-pane fix (no Bootstrap JS loaded) ===
-.tab-pane.active {
-  display: block;
+// === Base ===
+// The few element defaults the screens were built on, with no colour of their own.
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+h1 { font-size: 2.5rem; }
+h2 { font-size: 2rem; }
+h3 { font-size: 1.75rem; }
+h4 { font-size: 1.5rem; }
+h5 { font-size: 1.25rem; }
+h6 { font-size: 1rem; }
+
+p,
+ul,
+ol {
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
+small {
+  font-size: 0.875em;
+}
+
+// Code, 13 / 20 on one monospace stack on every platform, as the Components sheet draws it.
+code,
+kbd,
+pre {
+  font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+}
+
+// A monospace block wraps; it never scrolls sideways.
+pre {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+pre code {
+  font-size: inherit;
+}
+
+// A keyboard key is outlined on the low surface.
+kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--mat-sys-outline);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--mat-sys-surface-container-low);
+  color: var(--mat-sys-on-surface);
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+dl {
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
+dt {
+  font-weight: 700;
+}
+
+dd {
+  margin-bottom: 0.5rem;
+  margin-left: 0;
+}
+
+fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+legend {
+  width: 100%;
+  padding: 0;
+  margin-bottom: 0.5rem;
+  font-size: 1.5rem;
+  line-height: inherit;
+}
+
+caption {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  color: var(--mat-sys-on-surface-variant);
+  text-align: left;
+}
+
+a {
+  color: var(--mat-sys-primary);
+}
+
+table {
+  border-collapse: collapse;
+}
+
+th {
+  text-align: inherit;
+}
+
+label {
+  display: inline-block;
+}
+
+button,
+input,
+select,
+textarea {
+  margin: 0;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+img,
+svg {
+  vertical-align: middle;
+}
+
+[hidden] {
+  display: none !important;
 }
 
 // === Material Theme ===
-// Applied AFTER Bootstrap so Material wins the cascade on body/html
 html {
   height: 100%;
+  color-scheme: light;
+  // Status colours the Material theme lacks, light here and dark below.
+  --app-success: #1b6b32;
+  --app-success-container: #b6f2be;
+  --app-on-success-container: #002108;
+  --app-warning-container: #ffdea3;
+  --app-on-warning-container: #261900;
 
   @include mat.theme((
     color: (
@@ -44,6 +184,13 @@ html {
   ));
 
   &.dark-theme {
+    color-scheme: dark;
+    --app-success: #9bd6a4;
+    --app-success-container: #00531f;
+    --app-on-success-container: #b6f2be;
+    --app-warning-container: #5c4300;
+    --app-on-warning-container: #ffdea3;
+
     @include mat.theme((
       color: (
         theme-type: dark,
@@ -56,7 +203,33 @@ html {
   }
 }
 
-// Override Bootstrap's body styles with Material values
+// The shapes and targets of the Components sheet: a field and a menu at the 8 px corner, a button at 40 px.
+// Density -1 keeps the rest compact; a small 32 px button inside a tab or a row sets its own height.
+html,
+html.dark-theme {
+  @include mat.form-field-overrides((outlined-container-shape: var(--mat-sys-corner-small)));
+  @include mat.menu-overrides((container-shape: var(--mat-sys-corner-small)));
+  @include mat.button-overrides((
+    filled-container-height: 40px,
+    outlined-container-height: 40px,
+    protected-container-height: 40px,
+    text-container-height: 40px,
+    tonal-container-height: 40px,
+  ));
+}
+
+// The connection dialogs draw a 40 px field with its label above it, as Connections.dc.html does.
+app-add-connection-dialog,
+app-manage-group-dialog {
+  @include mat.form-field-density(-4);
+
+  .mat-mdc-form-field-hint-wrapper,
+  .mat-mdc-form-field-error-wrapper {
+    padding: 0;
+  }
+}
+
+// The body takes the Material surface, text colour and type.
 body {
   color-scheme: light;
   background-color: var(--mat-sys-surface) !important;
@@ -94,10 +267,45 @@ app-entity-details {
 // === Material Dialog Overrides ===
 .mat-mdc-dialog-container,
 .cdk-overlay-pane .mat-mdc-dialog-container {
-  border-radius: 8px !important;
+  border-radius: 20px !important;
   overflow: hidden;
 }
 
 .mat-mdc-dialog-surface {
-  border-radius: 8px !important;
+  border-radius: 20px !important;
+}
+
+// Focus: a double ring, the surface inside the primary, visible on every surface of both themes.
+button:focus-visible,
+a:focus-visible,
+select:focus-visible,
+input:focus-visible:not(.mat-mdc-input-element) {
+  outline: 2px solid var(--mat-sys-surface);
+  outline-offset: 0;
+  box-shadow: 0 0 0 4px var(--mat-sys-primary) !important;
+}
+
+// Text a screen reader reads and the screen does not show.
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+// A field error opens with the error icon, as the forms of the prototype draw it.
+mat-error:has(> mat-icon) {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+mat-error > mat-icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 1px;
+  font-size: 14px;
 }

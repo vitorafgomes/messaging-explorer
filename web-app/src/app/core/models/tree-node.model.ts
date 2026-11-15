@@ -17,6 +17,8 @@ export interface QueueNodeData {
   deadLetterMessageCount: number;
   sizeInBytes: number;
   status: string;
+  /** The entity this queue forwards every message to; empty when it does not forward. */
+  forwardTo?: string | null;
 }
 
 export interface TopicNodeData {

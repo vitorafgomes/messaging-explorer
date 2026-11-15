@@ -22,6 +22,7 @@ const READ_ONLY_FIELDS = new Set([
  */
 const SENDABLE_FIELDS = new Set([
   'body',
+  'bodyEncoding',
   'contentType',
   'messageId',
   'correlationId',
@@ -47,6 +48,7 @@ const CSV_HEADER_TO_FIELD: Record<string, string> = {
   'Subject': 'subject',
   'Content Type': 'contentType',
   'Body': 'body',
+  'Body Encoding': 'bodyEncoding',
   'Reply To': 'replyTo',
   'To': 'to',
   'Time To Live': 'timeToLive',

@@ -75,6 +75,22 @@ export interface ServiceBusConnection {
    */
   clientSecret?: string;
 
+  /** Azure: AMQP over WebSockets on port 443 instead of AMQP on port 5671. */
+  useWebSockets?: boolean;
+
+  /**
+   * Azure: an HTTP proxy, as http://host:port, only with WebSockets. An address only, never a user name or
+   * password: the proxy is reached with the default credentials of this computer.
+   */
+  proxyAddress?: string;
+
+  /**
+   * Azure: the Azure resource ID of the namespace, as
+   * /subscriptions/{id}/resourceGroups/{group}/providers/Microsoft.ServiceBus/namespaces/{namespace}.
+   * Not a secret; the Azure Monitor metrics on Monitoring are read for it.
+   */
+  azureResourceId?: string;
+
   // =========================================================================
   // RabbitMQ Properties
   // =========================================================================
@@ -115,6 +131,12 @@ export interface ServiceBusConnection {
    */
   managementPort?: number;
 
+  /** RabbitMQ: TLS (amqps) for the AMQP connection. */
+  useSsl?: boolean;
+
+  /** RabbitMQ: TLS (https) for the Management API. */
+  useManagementSsl?: boolean;
+
   // =========================================================================
   // Common Properties
   // =========================================================================
@@ -150,6 +172,31 @@ export interface ConnectionStatus {
   providerType?: ProviderType;
 }
 
+/** One item of an import file, as the import preview of the API answers it. It carries no secret. */
+export interface ImportPreviewItem {
+  name: string;
+  /** "Client", "Environment of {client}", or the broker of a connection. */
+  kind: string;
+  /** The namespace or host:port of a connection; null for a group. */
+  target: string | null;
+  /** The client and environment a connection goes into; null when ungrouped and for a group. */
+  placement: string | null;
+  /** True when the id is stored, so the import updates it. */
+  exists: boolean;
+  /** True when a stored connection arrives with a masked secret, so the stored secret is kept. */
+  keepsStoredSecret: boolean;
+}
+
+/** What an import-full of a file would add and update, computed by the API without writing anything. */
+export interface ImportPreview {
+  items: ImportPreviewItem[];
+  add: number;
+  update: number;
+  secretsMasked: boolean;
+  /** Names of stored connections the file does not hold; the import leaves them. */
+  notInFile: string[];
+}
+
 /**
  * Default connection values for creating new Azure Service Bus connections.
  */
@@ -182,7 +229,33 @@ export function getConnectionDisplayTarget(connection: ServiceBusConnection): st
   if (connection.providerType === ProviderType.RabbitMQ) {
     return `${connection.hostName || 'localhost'}:${connection.port || 5672}`;
   }
-  return connection.namespace || 'Unknown';
+  return connection.namespace || connection.fullyQualifiedNamespace || 'Unknown';
+}
+
+const AZURE_AUTH_LABELS: Record<AzureAuthType, string> = {
+  ConnectionString: 'Connection string',
+  InteractiveBrowser: 'Sign in with Microsoft',
+  ServicePrincipal: 'Service principal',
+  AzureCli: 'Azure CLI session',
+  DefaultCredential: 'Default credential',
+};
+
+/** How a connection signs in, in words: "Sign in with Microsoft", "Username and password, virtual host /". */
+export function getConnectionAuthLabel(connection: ServiceBusConnection): string {
+  if (connection.providerType === ProviderType.RabbitMQ) {
+    return `Username and password, virtual host ${connection.virtualHost || '/'}`;
+  }
+  return AZURE_AUTH_LABELS[connection.authType ?? 'ConnectionString'] ?? 'Connection string';
+}
+
+/** The secret a connection stores, in lower case ("connection string"), or null when it stores none. */
+export function getConnectionSecretLabel(connection: ServiceBusConnection): string | null {
+  if (connection.providerType === ProviderType.RabbitMQ) return 'password';
+  switch (connection.authType ?? 'ConnectionString') {
+    case 'ConnectionString': return 'connection string';
+    case 'ServicePrincipal': return 'client secret';
+    default: return null;
+  }
 }
 
 /**

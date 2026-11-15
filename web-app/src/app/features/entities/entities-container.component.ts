@@ -29,8 +29,8 @@ import { EntityDetailsComponent } from './entity-details.component';
     }
 
     .entities-sidenav {
-      flex: 0 0 26%;
-      min-width: 264px;
+      flex: 0 0 23.2%;
+      min-width: 232px;
       max-width: 340px;
       border-right: 1px solid var(--mat-sys-outline-variant);
     }

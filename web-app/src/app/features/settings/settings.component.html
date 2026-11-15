@@ -1,8 +1,26 @@
 <main class="settings">
   <header class="page-head">
     <h1>Settings</h1>
-    <p class="muted">The update channel, the data saved on this computer, developer mode and About. The window has no menu bar, so they live here.</p>
+    <p class="muted">What the theme button, the version label and the File, View and Help menus held. The window has no menu bar, so it all lives here.</p>
   </header>
+
+  <section class="group" aria-labelledby="appearance-heading">
+    <div class="group-head">
+      <h2 id="appearance-heading">Appearance</h2>
+    </div>
+    <div class="group-body">
+      <div class="setting-row">
+        <span class="row-label" id="theme-label">Theme</span>
+        <mat-button-toggle-group aria-labelledby="theme-label" [value]="theme.mode()"
+                                 (change)="theme.setMode($event.value)" data-testid="theme">
+          <mat-button-toggle value="system">System</mat-button-toggle>
+          <mat-button-toggle value="light">Light</mat-button-toggle>
+          <mat-button-toggle value="dark">Dark</mat-button-toggle>
+        </mat-button-toggle-group>
+      </div>
+      <p class="note">System follows the light or dark setting of this computer and changes with it.</p>
+    </div>
+  </section>
 
   <section class="group" aria-labelledby="updates-heading">
     <div class="group-head">
@@ -36,7 +54,8 @@
           <p class="inline-error" role="alert">The channel was not changed: {{ updates.channelError() }}</p>
         }
         <div class="setting-row">
-          <span class="row-label">Check</span>
+          <span class="row-label">Last check</span>
+          <span class="tabular" data-testid="last-check">{{ updates.lastChecked() ? (updates.lastChecked() | date: 'medium') : 'Not in this session' }}</span>
           <button mat-stroked-button type="button" (click)="updates.check()" [disabled]="updates.status() === 'checking'">
             <mat-icon>refresh</mat-icon>Check now
           </button>
@@ -64,7 +83,7 @@
             }
             @case ('up-to-date') {
               <div class="panel">
-                <h3><mat-icon class="ok" aria-hidden="true">check_circle</mat-icon>You are up to date</h3>
+                <h3><mat-icon class="success" aria-hidden="true">check_circle</mat-icon>You are up to date</h3>
                 <p>{{ updates.version() }} is the newest version on the {{ channelName() }} channel.</p>
               </div>
             }
@@ -80,7 +99,12 @@
                 <div class="actions">
                   <button mat-stroked-button type="button" (click)="retry()"><mat-icon>refresh</mat-icon>Retry</button>
                   <a mat-button [href]="releaseOfVersion()" target="_blank" rel="noopener noreferrer">
-                    Open the release page<mat-icon iconPositionEnd aria-hidden="true">open_in_new</mat-icon>
+                    @if (updates.availableVersion()) {
+                      Open the release page of {{ updates.availableVersion() }}
+                    } @else {
+                      Open the release page
+                    }
+                    <mat-icon iconPositionEnd aria-hidden="true">open_in_new</mat-icon>
                   </a>
                 </div>
               </section>
@@ -107,6 +131,16 @@
                     <div class="panel available-panel">
                       <h3><mat-icon aria-hidden="true">download</mat-icon>Version {{ updates.availableVersion() }} is available</h3>
                       <p>You have {{ updates.version() }}. It is downloading in the background and installs the next time you quit the app.</p>
+                      @if (updates.releaseNotes().length) {
+                        <div class="release-notes" data-testid="release-notes">
+                          <span class="notes-title">Release notes of {{ updates.availableVersion() }}</span>
+                          <ul>
+                            @for (line of updates.releaseNotes(); track $index) {
+                              <li>{{ line }}</li>
+                            }
+                          </ul>
+                        </div>
+                      }
                       <div class="actions">
                         <button mat-flat-button type="button" (click)="updates.download()"><mat-icon>download</mat-icon>Download</button>
                         <a mat-button [href]="releaseOfVersion()" target="_blank" rel="noopener noreferrer">
@@ -151,7 +185,25 @@
     <div class="group-body">
       <div class="setting-row">
         <span class="row-label">Connections file</span>
-        <span>data/workspace.json in the user data folder of the app. <strong>Plain text, secrets included:</strong> protect it like a password file.</span>
+        <span class="data-file" data-testid="data-file">
+          @if (dataFile()) {
+            <span class="mono">{{ dataFile() }}</span>
+          }
+          <span>The file is data/workspace.json in the user data folder of the app.</span>
+          <span><strong>Plain text, secrets included.</strong> Connection strings, passwords and client secrets in it are not encrypted. Protect it like a password file.</span>
+          @if (showFileError()) {
+            <span class="inline-error" role="alert">{{ showFileError() }}</span>
+          }
+        </span>
+        @if (canShowFile) {
+          <button mat-stroked-button type="button" (click)="showDataFile()"><mat-icon>folder</mat-icon>Show in folder</button>
+        }
+      </div>
+      <div class="setting-row" data-testid="move-connections">
+        <span class="row-label">Move connections</span>
+        <a mat-stroked-button routerLink="/connections"><mat-icon aria-hidden="true">download</mat-icon>Export</a>
+        <a mat-stroked-button routerLink="/connections"><mat-icon aria-hidden="true">upload</mat-icon>Import</a>
+        <span class="muted">An export masks the secrets unless you ask for them.</span>
       </div>
       <div class="danger-zone">
         <h3><mat-icon aria-hidden="true">warning</mat-icon>Danger zone</h3>
@@ -175,11 +227,18 @@
     <div class="group-body">
       <div class="setting-row">
         <span class="row-label">Developer mode</span>
-        <mat-slide-toggle [checked]="devSettings.devMode()" (change)="devSettings.toggle()">
+        <mat-checkbox [checked]="devSettings.devMode()" (change)="devSettings.toggle()">
           Show the Debug button on the Connections screen
-        </mat-slide-toggle>
+        </mat-checkbox>
         <span class="keys" aria-label="Shortcut Ctrl+Shift+D, or Cmd+Shift+D on a Mac"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>D</kbd></span>
       </div>
+      @if (canOpenDevTools) {
+        <div class="setting-row" data-testid="developer-tools">
+          <span class="row-label">Developer tools</span>
+          <button mat-stroked-button type="button" (click)="openDevTools()">Open developer tools</button>
+        </div>
+        <p class="note" data-testid="developer-tools-note">The developer tools show every request the page makes to the local API, with its key. Close them before you share your screen.</p>
+      }
     </div>
   </section>
 
@@ -192,14 +251,23 @@
       <div class="muted">A universal multi-platform messaging management tool.</div>
       <dl class="facts" data-testid="about">
         <div><dt>Version</dt><dd class="tabular">{{ updates.version() || 'Unknown' }}, {{ channelName() }} channel</dd></div>
-        <div><dt>API</dt><dd>Local, on this computer</dd></div>
         <div><dt>Licence</dt><dd>MIT, open source</dd></div>
         <div><dt>Built with</dt><dd>Angular, Electron and .NET</dd></div>
       </dl>
+      <div class="setting-row" data-testid="project">
+        <span class="row-label">Project</span>
+        <a mat-stroked-button [href]="repositoryUrl" target="_blank" rel="noopener noreferrer">Repository<mat-icon iconPositionEnd aria-hidden="true">open_in_new</mat-icon></a>
+        <a mat-stroked-button [href]="changelogUrl" target="_blank" rel="noopener noreferrer">Changelog<mat-icon iconPositionEnd aria-hidden="true">open_in_new</mat-icon></a>
+      </div>
       <div class="setting-row">
         <span class="row-label">Feedback</span>
         <button mat-stroked-button type="button" (click)="openBugReport('bug')"><mat-icon>bug_report</mat-icon>Report a bug</button>
-        <button mat-stroked-button type="button" (click)="openBugReport('feature')"><mat-icon>lightbulb</mat-icon>Suggest a feature</button>
+        <button mat-stroked-button type="button" (click)="openBugReport('feature')">Suggest a feature</button>
+      </div>
+      <div class="setting-row" data-testid="security">
+        <span class="row-label">Security</span>
+        <a mat-stroked-button [href]="securityReportUrl" target="_blank" rel="noopener noreferrer">Report a security problem privately<mat-icon iconPositionEnd aria-hidden="true">open_in_new</mat-icon></a>
+        <span class="muted">A private report to the maintainers, never a public issue.</span>
       </div>
       <p class="note">Links open in your browser.</p>
     </div>

@@ -11,7 +11,7 @@ describe('EntityAdminActionsComponent', () => {
   let open: ReturnType<typeof vi.fn>;
   const text = (e: Element | null) => (e?.textContent ?? '').replace(/\s+/g, ' ').trim();
 
-  function render(kind: string, entity: object | null, capabilities: Partial<ProviderCapabilities> | null) {
+  function render(kind: string, entity: object | null, capabilities: Partial<ProviderCapabilities> | null, part: 'status' | 'edit' = 'edit') {
     open = vi.fn();
     TestBed.configureTestingModule({
       imports: [EntityAdminActionsComponent],
@@ -23,18 +23,21 @@ describe('EntityAdminActionsComponent', () => {
     const fixture = TestBed.createComponent(EntityAdminActionsComponent);
     fixture.componentRef.setInput('kind', kind);
     fixture.componentRef.setInput('entity', entity);
+    fixture.componentRef.setInput('part', part);
     fixture.detectChanges();
     return fixture.nativeElement as HTMLElement;
   }
   const button = (el: HTMLElement, label: string) =>
     Array.from(el.querySelectorAll('button')).find(b => text(b).endsWith(label)) as HTMLButtonElement;
 
-  it('the status chip says the status in words with an icon, not by colour alone', () => {
-    const el = render('queue', { name: 'orders', status: 'SendDisabled' }, { supportsEntityUpdate: true });
+  it('the status chip says the status in words with an icon, not by colour alone, and is named "Status: <status>. Change status"', () => {
+    const el = render('queue', { name: 'orders', status: 'SendDisabled' }, { supportsEntityUpdate: true }, 'status');
+    const chip = el.querySelector('button.status-chip')!;
 
-    expect(text(el.querySelector('mat-chip .label'))).toBe('Send disabled');
-    expect(text(el.querySelector('mat-chip mat-icon'))).toBe('cancel_schedule_send');
-    expect(el.querySelector('mat-chip-set')!.getAttribute('aria-label')).toBe('Status');
+    expect(text(chip)).toBe('Send disabled');
+    expect(chip.querySelector('mat-icon')!.getAttribute('fontIcon')).toBe('cancel_schedule_send');
+    expect(chip.getAttribute('aria-label')).toBe('Status: Send disabled. Change status');
+    expect(el.querySelectorAll('button').length, 'only the chip in the status part').toBe(1);
   });
 
   it('Edit opens the form dialog in edit mode with the entity as read', () => {
@@ -48,10 +51,10 @@ describe('EntityAdminActionsComponent', () => {
     expect(open.mock.calls[0][1].data).toStrictEqual({ mode: 'edit', kind: 'queue', entity, topicName: undefined });
   });
 
-  it('Status opens the status dialog for the subscription under its topic, with the status as read', () => {
-    const el = render('subscription', { topicName: 'events', name: 'billing', status: 'Active' }, { supportsEntityUpdate: true });
+  it('the status chip opens the status dialog for the subscription under its topic, with the status as read', () => {
+    const el = render('subscription', { topicName: 'events', name: 'billing', status: 'Active' }, { supportsEntityUpdate: true }, 'status');
 
-    button(el, 'Status').click();
+    el.querySelector<HTMLButtonElement>('button.status-chip')!.click();
 
     expect(open.mock.calls[0][0]).toBe(EntityStatusDialogComponent);
     expect(open.mock.calls[0][1].data).toStrictEqual({ kind: 'subscription', entityName: 'billing', topicName: 'events', status: 'Active' });
@@ -59,9 +62,11 @@ describe('EntityAdminActionsComponent', () => {
 
   it('nothing is rendered unless the capability is explicitly true', () => {
     for (const capabilities of [null, {}, { supportsEntityUpdate: false }]) {
-      const el = render('queue', { name: 'orders', status: 'Active' }, capabilities);
-      expect(el.querySelectorAll('button, mat-chip').length).toBe(0);
-      TestBed.resetTestingModule();
+      for (const part of ['status', 'edit'] as const) {
+        const el = render('queue', { name: 'orders', status: 'Active' }, capabilities, part);
+        expect(el.querySelectorAll('button').length).toBe(0);
+        TestBed.resetTestingModule();
+      }
     }
   });
 });

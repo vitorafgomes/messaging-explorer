@@ -109,6 +109,28 @@ public sealed class AzureServiceBusSessionTests(AzureServiceBusFixture fixture) 
     }
 
     [Fact]
+    public async Task A_session_read_the_caller_abandons_at_any_moment_leaves_the_session_acceptable_at_once()
+    {
+        var queue = await CreateSessionQueueAsync("abandon");
+        await SendToSessionsAsync(queue, ("order-1", "a"));
+
+        for (var delayMs = 1; delayMs <= 40; delayMs += 2)
+        {
+            using var abandon = new CancellationTokenSource(TimeSpan.FromMilliseconds(delayMs));
+            try
+            {
+                await _messaging.GetSessionAsync(queue, null, "order-1", 0, abandon.Token);
+            }
+            catch (OperationCanceledException)
+            {
+            }
+
+            await using var next = await AcceptWithinFiveSecondsAsync(queue, "order-1");
+            Assert.Equal("order-1", next.SessionId);
+        }
+    }
+
+    [Fact]
     public async Task Listing_lists_a_session_a_consumer_holds_leaves_that_consumer_its_lock_and_leaves_every_other_session_acceptable_at_once()
     {
         var queue = await CreateSessionQueueAsync("list-regression");

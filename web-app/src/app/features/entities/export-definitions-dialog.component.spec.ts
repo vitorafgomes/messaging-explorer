@@ -2,7 +2,7 @@ import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Subject, of, throwError } from 'rxjs';
 import { MatDialogRef } from '@angular/material/dialog';
-import { ConnectionGroupService, ConnectionService, DefinitionsService, MessageExportService } from '../../core/services';
+import { ConnectionGroupService, ConnectionService, DefinitionsService, MessageExportService, TreeDataBuilderService } from '../../core/services';
 import { EntityDefinitionsDocument } from '../../core/models';
 import { ExportDefinitionsDialogComponent, definitionsFileName } from './export-definitions-dialog.component';
 
@@ -22,7 +22,7 @@ describe('ExportDefinitionsDialogComponent: the definitions of the namespace to 
     }
   };
 
-  function open(answer: () => unknown) {
+  function open(answer: () => unknown, treeCounts: { queues: number; topics: number; subscriptions: number } | null = null) {
     exportFn = vi.fn(answer);
     downloadFile = vi.fn();
     close = vi.fn();
@@ -32,11 +32,12 @@ describe('ExportDefinitionsDialogComponent: the definitions of the namespace to 
         { provide: MatDialogRef, useValue: { close } },
         { provide: DefinitionsService, useValue: { export: exportFn } },
         { provide: MessageExportService, useValue: { downloadFile } },
+        { provide: TreeDataBuilderService, useValue: { wholeCounts: () => treeCounts } },
         {
           provide: ConnectionService,
           useValue: { currentTarget: 'contoso-prod', currentConnectionId: 'c-1', getConnections: () => of([{ id: 'c-1', name: 'contoso', environmentId: 'g-env' }]) }
         },
-        { provide: ConnectionGroupService, useValue: { getGroups: () => of([{ id: 'g-env', name: 'Production', type: 'environment' }]) } }
+        { provide: ConnectionGroupService, useValue: { getGroups: () => of([{ id: 'g-env', name: 'Production', type: 'environment', isProduction: true }]) } }
       ]
     });
     fixture = TestBed.createComponent(ExportDefinitionsDialogComponent);
@@ -46,6 +47,7 @@ describe('ExportDefinitionsDialogComponent: the definitions of the namespace to 
 
   const text = (e: Element | null | undefined) => (e?.textContent ?? '').replace(/\s+/g, ' ').trim();
   const button = (label: string) => Array.from(el.querySelectorAll('button')).find(b => text(b).endsWith(label)) as HTMLButtonElement | undefined;
+  const facts = () => Array.from(el.querySelectorAll('.fact')).map(f => `${text(f.querySelector('dt'))}: ${text(f.querySelector('dd'))}`);
   const click = (label: string) => {
     button(label)!.click();
     fixture.detectChanges();
@@ -54,13 +56,28 @@ describe('ExportDefinitionsDialogComponent: the definitions of the namespace to 
   it('names the connection and its environment, says messages and secrets are not in the file, and reads nothing until asked', () => {
     open(() => of(DOCUMENT));
 
-    expect([text(el.querySelector('.context mat-chip')), text(el.querySelector('.context > span'))]).toStrictEqual(['Production', 'From contoso (contoso-prod)']);
-    expect(Array.from(el.querySelectorAll('.fact')).map(f => `${text(f.querySelector('dt'))}: ${text(f.querySelector('dd'))}`)).toStrictEqual([
-      'File: contoso-prod.definitions.json',
+    expect([text(el.querySelector('.environment-line .environment-chip')), text(el.querySelector('.environment-line .where'))]).toStrictEqual(['warning PRODUCTION', 'From contoso (contoso-prod)']);
+    expect(facts(), 'the counts are known only after the read, so none is shown before it').toStrictEqual([
+      'Queues: Counted when exported',
+      'Topics: Counted when exported',
+      'Subscriptions: Counted when exported',
+      'Rules: Counted when exported',
       'Messages: Not included',
       'Secrets: None: an entity definition holds no secret'
     ]);
+    expect(text(el.querySelector('.note')), 'the drawn sentence about the slowest read, its progress and cancel').toBe(
+      'This is the slowest read in the app: every entity, and the rules of every subscription. It shows its progress and can be cancelled.');
     expect(exportFn).not.toHaveBeenCalled();
+  });
+
+  it('as Monitoring.dc.html draws it: Queues, Topics, Subscriptions and Rules with the counts the read gave', () => {
+    open(() => of(DOCUMENT));
+
+    click('Export to a file');
+
+    expect(facts().slice(0, 4), 'the four counts come from the document the API returned').toStrictEqual([
+      'Queues: 2', 'Topics: 1', 'Subscriptions: 1', 'Rules: 1'
+    ]);
   });
 
   it('Export downloads the document as <namespace>.definitions.json and says what it holds', () => {
@@ -92,6 +109,7 @@ describe('ExportDefinitionsDialogComponent: the definitions of the namespace to 
 
     expect(button('Export to a file')!.disabled).toBe(true);
     expect(el.querySelector('mat-progress-bar')?.getAttribute('aria-label')).toBe('Exporting');
+    expect(button('Cancel')!.disabled, 'the export can be cancelled while it runs').toBe(false);
     click('Cancel');
     expect(pending.observed).toBe(false);
     expect(close).toHaveBeenCalledTimes(1);
@@ -116,5 +134,12 @@ describe('ExportDefinitionsDialogComponent: the definitions of the namespace to 
     expect(definitionsFileName('orders.example')).toBe('orders.example.definitions.json');
     expect(definitionsFileName('a/b c')).toBe('a-b-c.definitions.json');
     expect(definitionsFileName(undefined)).toBe('namespace.definitions.json');
+  });
+  it('as Monitoring.dc.html draws it: before the export, Queues, Topics and Subscriptions show what a whole read of the tree counted; Rules waits for the export', () => {
+    open(() => of(DOCUMENT), { queues: 4, topics: 1, subscriptions: 2 });
+
+    expect(facts().slice(0, 4), 'the tree knows three counts; only the export reads the rules').toStrictEqual([
+      'Queues: 4', 'Topics: 1', 'Subscriptions: 2', 'Rules: Counted when exported'
+    ]);
   });
 });

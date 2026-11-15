@@ -1,3 +1,86 @@
+## [2026-11-15] feature | No broker screen without a connection; Connections dialogs as drawn
+The guard reads the status again before it sends the user back. [[pages/services/web-app/features-connections]]
+
+## [2026-11-15] feature | The connection list shows the target of a connection string connection
+The host is read from the endpoint, never the key. [[pages/services/api/connections-and-secrets]]
+
+## [2026-11-15] fix | Connections list names its brokers; topics open and close in the tree
+The provider type was numeric in the app and a name on the wire. [[pages/services/web-app/features-entities-main]]
+
+## [2026-11-14] feature | Azure Monitor metrics and status markers in the tree
+Metrics need an Entra ID sign-in and the namespace's resource ID; nothing is made up on a failure. [[pages/services/api/monitoring]]
+
+## [2026-11-14] feature | Scheduled messages of a topic are cancelled by sequence number
+A scheduled send answers its number so it can be cancelled later. [[pages/services/core/azure-sub-queues]]
+
+## [2026-11-14] feature | Binary bodies and single-message actions on Azure
+No byte of a body is replaced; one message is dead-lettered or deferred by a bounded scan. [[pages/services/core/azure-single-message-actions]]
+
+## [2026-11-14] feature | Deferred messages and paging past 1000 on Azure
+A deferred message is handled by its sequence number; the active peek takes a position. [[pages/services/core/azure-deferred]]
+
+## [2026-11-14] fix | Bulk operations no longer lose a message silently into duplicate detection or a delivery limit
+The single resubmit runs the same check as the batch, the Manage text, the opt-in new message id in every dialog, and the results dialog's unselected-message lines. [[pages/services/core/azure-bulk-operations]], [[pages/services/core/azure-bulk-safety-checks]], [[pages/services/web-app/bulk-new-message-id]].
+
+## [2026-11-14] audit | The prototype counted again: 765 of 802
+After lanes L17 to L21; what is left and what cannot be built in [[pages/roadmap/prototype-coverage-2026-11-14]].
+
+## [2026-11-14] audit | The prototype counted row by row: 548 of 670
+What is left, by kind, in [[pages/roadmap/prototype-coverage-2026-11-14]].
+
+## [2026-11-14] chore | Bootstrap, Font Awesome and ng-bootstrap removed; a lint keeps them out
+The styles bundle went from 528.85 kB to 35.67 kB; the dead message body editor is deleted. [[pages/roadmap/ui-material-migration]].
+
+## [2026-11-14] feat | The environment on the toolbar and in every dialog; the topic read with status and rule count
+The environment line says the client as the artboards draw it; the Azure topic read counts rules bounded at 200, eight at once; a subscription has no size on Azure. [[pages/services/web-app/providers-and-shared]], [[pages/services/core/azure-provider]].
+
+## [2026-11-14] feat | The add and edit connection dialog as the Connections artboard draws it
+Authentication as a radio group with Default credential, a masked connection string, the plain-text notice, no prefilled RabbitMQ password. [[pages/services/web-app/features-connections]].
+
+## [2026-11-14] chore | The tracked entity-details backup file is deleted
+Nothing imported it; the follow-up and the known gap that recorded it are closed. [[pages/roadmap/followups]].
+
+## [2026-11-14] test | End-to-end: resubmit, delete of a selection and purge, and a nightly run
+The three Phase 0 flows are written; purge runs on RabbitMQ because the emulator counts zero. [[pages/conventions/testing]].
+
+## [2026-11-14] feat | Connections, lane L5: Production mark, Last used, TLS, Stored and Replace, import preview
+A dry-run import route that writes nothing and carries no secret; an edit keeps every secret it does not replace. [[pages/services/api/connections-and-secrets]].
+
+## [2026-11-14] feat | The toolbar as drawn, and every purge and delete confirmed by the typed name
+Three nav links, the broker as text, three icon buttons; the acknowledgement checkbox is gone from the confirmation dialog. [[pages/services/web-app/stack-and-bootstrap]].
+
+## [2026-11-14] feat | Show in folder and the real path of the data file
+Two shell channels with no argument, `get-data-file` and `show-data-file`; Settings shows the path and says why a show fails. [[pages/services/electron-shell/ipc-and-tray]].
+
+## [2026-11-14] feat | The entities screen, EntityAdmin and Rules brought to their artboards
+Main 49 of 88, Rules 25 of 60, EntityAdmin 9 of 61; delete of an entity and a queue's dead-letter purge go through the acknowledged confirmation. [[pages/services/web-app/features-entities-main]].
+
+## [2026-11-14] feat | Monitoring and the auto resubmit dialog brought to their artboards
+Monitoring 37 of 73 rows, AutoResubmit 28 of 52; the run service is unchanged; two drawn sentences left out because they would be false. [[pages/services/web-app/features-monitoring]], [[pages/services/web-app/bulk-automatic-resubmit]].
+
+## [2026-11-14] feat | Send dialog, lane L9: three columns, templates asked on the dialog
+No browser prompt or confirm is left in the send dialog; the send itself is unchanged. [[pages/services/web-app/features-messages-and-sessions]].
+
+## [2026-11-14] feat | Bulk dialogs, lane L8: Delete {count} last and apart, a results table with the duplicate as a chip
+The selection bar follows the artboard's order; the results name what Retry takes; what is retried is unchanged. [[pages/services/web-app/bulk-operations]].
+
+## [2026-11-14] feat | Messages dialog, lane L7: load errors on screen, header Send and Close, detail reason and copy
+A failed first load is an error or a disabled panel with no message shown; a failed refresh keeps the list and the selection. [[pages/services/web-app/features-messages-and-sessions]].
+
+## [2026-11-14] feat | Connections, lane L4: connect errors on screen, app confirmations, sign-in line
+A failed connect is an error with Retry and Edit; deleting a connection or a group asks in the shared confirmation, which now carries facts and a notice, and the active connection is disconnected before it is deleted. [[pages/services/web-app/features-settings-and-folders]].
+
+## [2026-11-14] feat | Settings, lane L2b: the bug report preview and the clear dialog
+The bug report previews the issue body exactly as it is posted and says the issue is public; the clear dialog names clients and environments apart and offers an export first. The artboard's "no namespace" caption is left out because a caught error can carry an entity path. [[pages/services/web-app/features-settings-and-folders]].
+
+## [2026-11-14] feat | Settings, lane L2a: Appearance, last check, release notes, status tokens
+The Settings screen gains Appearance with System, the time of the last check, release notes shown as text, the status tokens in styles.scss, Move connections and the About links; the bug report and clear dialog rows stay for L2b. [[pages/services/web-app/features-settings-and-folders]], [[pages/history/web-app]].
+
+## [2026-11-14] decision | Status colours are custom tokens
+The owner chose custom warning and success tokens over icons on the existing colours: five `--app-*` properties per theme in `web-app/src/styles.scss`, with the artboards' values, recorded in [[pages/roadmap/ui-material-migration]] Decisions; they are the first step of lane L2.
+
+## [2026-11-14] plan | What the prototype still draws, in lanes
+The status strips of the eleven artboards, checked against the code, became Phase 5 of [[pages/roadmap/ui-material-migration]]: owner decisions first, then seventeen lanes, one screen per pull request, each with its risk class and lenses. The sessions of a queue and the session state write are built; the Monitoring strip that says planned is stale.
 ## [2026-11-14] chore | The graphify code graph is kept fresh at every session start
 The owner asked for graphify to start with each session. `.claude/hooks/session-start-graph.sh` rebuilds the graph of the checkout in the background when it is missing, not built from HEAD or older than a source file, one rebuild at a time, and tells the session whether to trust it yet; it is silent where graphify is not installed, so CI and contributors are unaffected. Case matrix with thirteen cases, each guard proven by a mutation; the review confirmed one finding (an unwritable checkout was told a rebuild ran), fixed. Pages updated: conventions/hooks-and-checks, conventions/tooling.
 ## [2026-11-13] feat | An update downloads and installs on its own where the package can replace itself
