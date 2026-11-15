@@ -353,12 +353,10 @@ const SCAN_NOTICE = 'The broker cannot lock one message by its number, so the ap
               <mat-icon fontIcon="refresh" aria-hidden="true"></mat-icon>
               Refresh
             </button>
-            @if (bulkOperations()) {
-              <button mat-flat-button type="button" class="tonal" (click)="openAutoResubmit()">
-                <mat-icon fontIcon="replay" aria-hidden="true"></mat-icon>
-                Auto resubmit
-              </button>
-            }
+            <button mat-flat-button type="button" class="tonal" (click)="openAutoResubmit()">
+              <mat-icon fontIcon="replay" aria-hidden="true"></mat-icon>
+              Auto resubmit
+            </button>
           </div>
           @if (dlRegexError) {
             <p class="regex-error" role="alert">
@@ -694,12 +692,14 @@ const SCAN_NOTICE = 'The broker cannot lock one message by its number, so the ap
             </div>
           }
 
-          @if (subQueue === 'deadletter' && bulkOperations()) {
+          @if (subQueue === 'deadletter') {
             <div class="message-actions">
-              <button mat-stroked-button type="button" (click)="editAndResubmit(selectedMessage)">
-                <mat-icon fontIcon="edit" aria-hidden="true"></mat-icon>
-                Edit & Resubmit
-              </button>
+              @if (bulkOperations()) {
+                <button mat-stroked-button type="button" (click)="editAndResubmit(selectedMessage)">
+                  <mat-icon fontIcon="edit" aria-hidden="true"></mat-icon>
+                  Edit & Resubmit
+                </button>
+              }
               <button mat-flat-button type="button" class="tonal" (click)="resubmit(selectedMessage)">
                 <mat-icon fontIcon="replay" aria-hidden="true"></mat-icon>
                 Resubmit
@@ -736,7 +736,7 @@ const SCAN_NOTICE = 'The broker cannot lock one message by its number, so the ap
     <app-bulk-actions-toolbar
       [selectedCount]="getSelectedCount()"
       [detail]="getSelectionSummary()"
-      [showResubmit]="subQueue !== 'active' && bulkOperations()"
+      [showResubmit]="subQueue !== 'active'"
       [showCompare]="getSelectedCount() === 2 && subQueue !== 'transferdeadletter'"
       [showMove]="subQueue !== 'transferdeadletter' && bulkOperations()"
       [showDelete]="bulkOperations()"
@@ -752,7 +752,7 @@ const SCAN_NOTICE = 'The broker cannot lock one message by its number, so the ap
   styleUrl: './view-messages-dialog.component.scss'
 })
 export class ViewMessagesDialogComponent implements OnInit {
-  /** Delete, move and resubmit are offered unless the broker declares it cannot do them safely, as RabbitMQ does. */
+  /** Delete, Move and Edit & Resubmit are offered unless the broker declares it cannot do them safely, as RabbitMQ does. */
   bulkOperations(): boolean {
     return this.capabilities()?.supportsBulkMessageOperations !== false;
   }
@@ -1476,6 +1476,10 @@ export class ViewMessagesDialogComponent implements OnInit {
   }
 
   resubmit(msg: MessageInfo) {
+    if (!this.bulkOperations()) {
+      this.resubmitAsBatchOfOne(msg);
+      return;
+    }
     const observable = this.data.entityType === 'queue'
       ? this.queueService.resubmitDeadLetterMessage(this.data.entityName, msg.sequenceNumber, this.newMessageId())
       : this.topicService.resubmitDeadLetterMessage(this.data.topicName!, this.data.entityName, msg.sequenceNumber, this.newMessageId());
@@ -1493,6 +1497,27 @@ export class ViewMessagesDialogComponent implements OnInit {
         }
         this.snackBar.open(messageCallFailure(err, 'Failed to resubmit message'), 'Close', { duration: 3000 });
       }
+    });
+  }
+
+  /** Where the single route answers a failure without its reason, as on RabbitMQ, the batch route says why, a possible duplicate included. */
+  private resubmitAsBatchOfOne(msg: MessageInfo) {
+    const sequenceNumbers = [msg.sequenceNumber];
+    const observable = this.data.entityType === 'queue'
+      ? this.queueService.resubmitDeadLetterMessages(this.data.entityName, sequenceNumbers, this.newMessageId())
+      : this.topicService.resubmitDeadLetterMessages(this.data.topicName!, this.data.entityName, sequenceNumbers, this.newMessageId());
+
+    observable.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: result => {
+        const failure = result.failures?.[0];
+        if (failure) {
+          this.snackBar.open(failure.error, 'Close', { duration: 8000 });
+        } else {
+          this.snackBar.open('Message resubmitted', 'Close', { duration: 3000 });
+        }
+        this.loadDeadLetterMessages();
+      },
+      error: err => this.snackBar.open(messageCallFailure(err, 'Failed to resubmit message'), 'Close', { duration: 3000 })
     });
   }
 

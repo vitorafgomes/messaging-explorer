@@ -514,15 +514,16 @@ describe('ViewMessagesDialogComponent: transfer dead-letter queue, message state
   afterEach(() => vi.useRealTimers());
 
   describe('the transfer dead-letter queue is reachable', () => {
-    it('RabbitMQ, which declares no safe bulk operations, offers no Delete, Move or Resubmit, in the toolbar or the detail pane; Azure offers them', () => {
+    it('RabbitMQ offers Resubmit of the ticked messages, Resubmit of the open one and Auto resubmit, and no Delete, Move or Edit & Resubmit; Azure offers them all', () => {
       const rabbit = render({ initialTab: 1 }, { deadLetter: messages(2) }, DEFAULT_RABBITMQ_CAPABILITIES);
-      expect(Array.from(rabbit.el.querySelectorAll('button')).map(b => text(b)).filter(t => t.includes('Auto resubmit')), 'no Auto resubmit beside the dead-letter search').toStrictEqual([]);
-      expect(text(rabbit.el.querySelector('app-bulk-actions-toolbar')), 'the empty selection bar names only what RabbitMQ offers').not.toMatch(/resubmit|move|delete/i);
+      expect(text(rabbit.el.querySelector('app-bulk-actions-toolbar'))).toBe('No message selected. Tick rows to resubmit, compare or export them.');
+      expect(Array.from(rabbit.el.querySelectorAll('button')).some(b => text(b).endsWith('Auto resubmit')), 'Auto resubmit beside the dead-letter search').toBe(true);
       rabbit.component.toggleAllDeadLetter(true);
       rabbit.component.selectMessage(rabbit.component.filteredDeadLetterMessages[0]);
       rabbit.refresh();
-      const rabbitButtons = [...toolbarButtons(rabbit.el), ...Array.from(rabbit.el.querySelectorAll('.message-actions button')).map(b => text(b))];
-      expect(rabbitButtons.filter(t => /Delete|Move|Resubmit/.test(t)), 'nothing that deletes, moves or resubmits').toStrictEqual([]);
+      const strip = (t: string) => t.replace(/^[a-z_]+ /, '');
+      expect(toolbarButtons(rabbit.el).map(strip).filter(t => /Delete|Move|Resubmit/.test(t)), 'the selection bar').toStrictEqual(['Resubmit']);
+      expect(Array.from(rabbit.el.querySelectorAll('.message-actions button')).map(b => strip(text(b))), 'the detail pane').toStrictEqual(['Resubmit']);
 
       TestBed.resetTestingModule();
       const azure = render({ initialTab: 1 }, { deadLetter: messages(2) }, withTransfer);
@@ -1402,6 +1403,23 @@ describe('ViewMessagesDialogComponent: transfer dead-letter queue, message state
       expect(run?.data, 'the same data the entity panel passes').toEqual({ entityType: 'queue', entityName: 'orders', topicName: undefined, deadLetterMessageCount: 7 });
       run!.closed.next({ totalProcessed: 7, totalSuccess: 7, totalFailure: 0, stopped: false, completed: true });
       expect(queue['peekDeadLetterMessages'], 'the dead-letter tab is read again after the run').toHaveBeenCalledTimes(reads + 1);
+    });
+
+    it('on RabbitMQ the detail pane resubmits its message as a batch of one and shows the reason a message was not resubmitted, a possible duplicate included', () => {
+      const component = create({ initialTab: 1 }, { deadLetter: messages(2) }, DEFAULT_RABBITMQ_CAPABILITIES);
+      const duplicate = 'Sent, but not removed from the dead-letter queue. Possible duplicate.';
+      queue['resubmitDeadLetterMessages'] = vi.fn()
+        .mockReturnValueOnce(of({ success: false, successCount: 0, failureCount: 1, failures: [{ sequenceNumber: 2, error: duplicate }] }))
+        .mockReturnValueOnce(of(ok(1)));
+      queue['resubmitDeadLetterMessage'] = vi.fn();
+
+      component.resubmit(messages(2)[1]);
+      expect(queue['resubmitDeadLetterMessages']).toHaveBeenLastCalledWith('orders', [2], false);
+      expect(snackBar.open.mock.calls.at(-1)?.[0]).toBe(duplicate);
+
+      component.resubmit(messages(2)[1]);
+      expect(snackBar.open.mock.calls.at(-1)?.[0]).toBe('Message resubmitted');
+      expect(queue['resubmitDeadLetterMessage'], 'the single route answers a failure without its reason').not.toHaveBeenCalled();
     });
 
     function runAutoResubmit(counts: () => unknown) {

@@ -1,4 +1,5 @@
 using RabbitMQ.Client;
+using RabbitMQ.Client.Exceptions;
 using ServiceBusExplorer.Core.Abstractions;
 using ServiceBusExplorer.Core.Models;
 using ServiceBusExplorer.Core.Providers.RabbitMQ.Models;
@@ -13,6 +14,8 @@ namespace ServiceBusExplorer.Core.Providers.RabbitMQ;
 /// </summary>
 public class RabbitMQProvider : IMessagingProvider
 {
+    private static readonly TimeSpan ConfirmTimeout = TimeSpan.FromSeconds(10);
+
     private IConnection? _connection;
     private IModel? _channel;
     private RabbitMQManagementClient? _managementClient;
@@ -675,37 +678,15 @@ public class RabbitMQProvider : IMessagingProvider
     }
 
     /// <inheritdoc />
-    /// <remarks>RabbitMQ has no duplicate detection, so <paramref name="newMessageIdOnDuplicateDetection"/> changes nothing.</remarks>
+    /// <remarks>
+    /// Runs the batch resubmit with the one position, so the chosen message is the one sent. RabbitMQ has no duplicate
+    /// detection, so <paramref name="newMessageIdOnDuplicateDetection"/> changes nothing.
+    /// </remarks>
     public async Task ResubmitDeadLetterMessageAsync(string entityName, long sequenceNumber, string? subscriptionName = null, bool newMessageIdOnDuplicateDetection = false)
     {
-        EnsureConnected();
-
-        var queueName = subscriptionName ?? entityName;
-        var dlqName = $"{queueName}.dlq";
-
-        // Consume 1 message from the DLQ
-        var messages = (await _managementClient!.GetMessagesAsync(dlqName, 1, "ack_requeue_false", "auto")).ToList();
-        if (messages.Count == 0)
-        {
-            throw new InvalidOperationException("No messages available in the dead letter queue.");
-        }
-
-        var msg = messages[0];
-        var properties = MapPropertiesToPublishDictionary(msg.Properties);
-        var payload = msg.Payload ?? string.Empty;
-        var encoding = msg.PayloadEncoding == "base64" ? "base64" : "string";
-
-        // Republish to the original queue
-        if (subscriptionName != null)
-        {
-            // Subscription scenario: entityName is the topic/exchange, resubmit through the exchange
-            await _managementClient.PublishMessageAsync(entityName, msg.RoutingKey ?? subscriptionName, payload, properties, encoding);
-        }
-        else
-        {
-            // Queue scenario: publish directly to the queue via default exchange
-            await _managementClient.PublishToQueueAsync(queueName, payload, properties, encoding);
-        }
+        var result = await ResubmitDeadLetterMessagesAsync(entityName, [sequenceNumber], MessageSubQueue.DeadLetter, subscriptionName, newMessageIdOnDuplicateDetection);
+        if (result.Failures.Count > 0)
+            throw new InvalidOperationException(result.Failures[0].Error);
     }
 
     /// <inheritdoc />
@@ -775,7 +756,13 @@ public class RabbitMQProvider : IMessagingProvider
     }
 
     /// <inheritdoc />
-    /// <remarks>RabbitMQ has no duplicate detection, so <paramref name="newMessageIdOnDuplicateDetection"/> changes nothing.</remarks>
+    /// <remarks>
+    /// Send first, remove after: each chosen message is published to its queue with a publisher confirm and is removed
+    /// from the dead-letter queue only once the broker confirmed it. The messages are held unacknowledged meanwhile and
+    /// the ones not chosen go back in their order. A dead-letter queue with a consumer is refused, since a position may
+    /// no longer name the message that was shown. RabbitMQ has no duplicate detection, so
+    /// <paramref name="newMessageIdOnDuplicateDetection"/> changes nothing.
+    /// </remarks>
     public async Task<BatchOperationResult> ResubmitDeadLetterMessagesAsync(string entityName, long[] sequenceNumbers, MessageSubQueue subQueue = MessageSubQueue.DeadLetter, string? subscriptionName = null, bool newMessageIdOnDuplicateDetection = false, CancellationToken cancellationToken = default)
     {
         if (subQueue == MessageSubQueue.TransferDeadLetter)
@@ -785,65 +772,181 @@ public class RabbitMQProvider : IMessagingProvider
 
         EnsureConnected();
 
-        var result = new BatchOperationResult();
-
         if (sequenceNumbers == null || sequenceNumbers.Length == 0)
+            return new BatchOperationResult();
+
+        var queueName = subscriptionName ?? entityName;
+        var positions = sequenceNumbers.Distinct().Order().ToArray();
+        return await Task.Run(() => ResubmitConfirmed(queueName, $"{queueName}.dlq", positions, cancellationToken), cancellationToken);
+    }
+
+    /// <summary>A channel closed by the broker for access refused (403) or a failed precondition (406): the message was not taken.</summary>
+    private static bool IsBrokerRefusal(Exception ex)
+    {
+        var reason = ex switch
         {
+            AlreadyClosedException closed => closed.ShutdownReason,
+            OperationInterruptedException interrupted => interrupted.ShutdownReason,
+            _ => null
+        };
+        return reason is { Initiator: ShutdownInitiator.Peer, ReplyCode: 403 or 406 }
+            && !reason.ReplyText.Contains("delivery acknowledgement", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private BatchOperationResult ResubmitConfirmed(string queueName, string deadLetterQueue, long[] positions, CancellationToken cancellationToken)
+    {
+        var result = new BatchOperationResult();
+        void Fail(long position, string error)
+        {
+            result.FailureCount++;
+            result.Failures.Add(new BatchOperationFailure { SequenceNumber = position, Error = error });
+        }
+        BatchOperationResult FailAll(string error)
+        {
+            foreach (var position in positions) Fail(position, error);
             return result;
         }
 
-        var queueName = subscriptionName ?? entityName;
-        var dlqName = $"{queueName}.dlq";
-
-        var targetIndices = new HashSet<long>(sequenceNumbers);
-        var maxIndex = sequenceNumbers.Max();
-
-        // Consume up to maxIndex messages from the DLQ
-        var messages = (await _managementClient!.GetMessagesAsync(dlqName, (int)maxIndex, "ack_requeue_false", "auto")).ToList();
-
-        for (int i = 0; i < messages.Count; i++)
+        using var channel = _connection!.CreateModel();
+        uint consumers;
+        try
         {
-            var position = i + 1;
-            var msg = messages[i];
-            var properties = MapPropertiesToPublishDictionary(msg.Properties);
-            var payload = msg.Payload ?? string.Empty;
-            var encoding = msg.PayloadEncoding == "base64" ? "base64" : "string";
+            consumers = channel.QueueDeclarePassive(deadLetterQueue).ConsumerCount;
+        }
+        catch (OperationInterruptedException)
+        {
+            return FailAll("Not resubmitted: this queue has no dead-letter queue.");
+        }
+        if (consumers > 0)
+            return FailAll("Not resubmitted: the dead-letter queue has a consumer, so the position of a message may have changed. Nothing was sent or removed.");
 
-            try
+        var returned = 0;
+        channel.BasicReturn += (_, _) => Volatile.Write(ref returned, 1);
+        channel.ConfirmSelect();
+        var held = new List<BasicGetResult?>();
+        var sent = new List<long>();
+        string? stopped = null;
+        try
+        {
+            while (held.Count < positions[^1])
             {
-                if (targetIndices.Contains(position))
+                cancellationToken.ThrowIfCancellationRequested();
+                var delivery = channel.BasicGet(deadLetterQueue, autoAck: false);
+                if (delivery == null) break;
+                held.Add(delivery);
+            }
+
+            foreach (var position in positions)
+            {
+                if (stopped != null)
                 {
-                    // Target message: resubmit to original queue/exchange
-                    if (subscriptionName != null)
-                    {
-                        // Subscription scenario: entityName is the topic/exchange
-                        await _managementClient.PublishMessageAsync(entityName, msg.RoutingKey ?? subscriptionName, payload, properties, encoding);
-                    }
-                    else
-                    {
-                        // Queue scenario: publish directly to the queue
-                        await _managementClient.PublishToQueueAsync(queueName, payload, properties, encoding);
-                    }
-                    result.SuccessCount++;
+                    Fail(position, stopped);
+                    continue;
                 }
-                else
+                if (cancellationToken.IsCancellationRequested)
                 {
-                    // Non-target message: republish back to the DLQ
-                    await _managementClient.PublishToQueueAsync(dlqName, payload, properties, encoding);
+                    Fail(position, "Not resubmitted: the operation was cancelled. The message is still in the dead-letter queue.");
+                    continue;
+                }
+                if (position < 1 || position > held.Count)
+                {
+                    Fail(position, "Not resubmitted: no message at this position in the dead-letter queue.");
+                    continue;
+                }
+
+                var message = held[(int)position - 1]!;
+                try
+                {
+                    Volatile.Write(ref returned, 0);
+                    channel.BasicPublish("", queueName, mandatory: true, message.BasicProperties, message.Body);
+                }
+                catch (Exception ex) when (ex is AlreadyClosedException or OperationInterruptedException or IOException)
+                {
+                    Fail(position, $"Not resubmitted: {ex.Message}. The message is still in the dead-letter queue.");
+                    stopped = StoppedAfterAFailure;
+                    continue;
+                }
+
+                bool confirmed, timedOut;
+                try
+                {
+                    confirmed = channel.WaitForConfirms(ConfirmTimeout, out timedOut);
+                }
+                catch (Exception ex) when (ex is AlreadyClosedException or OperationInterruptedException or IOException)
+                {
+                    Fail(position, IsBrokerRefusal(ex)
+                        ? $"Not resubmitted: the broker refused the message ({ex.Message}). It is still in the dead-letter queue."
+                        : "The connection failed before the broker confirmed: the message may have been sent and is still in the dead-letter queue. Possible duplicate.");
+                    stopped = StoppedAfterAFailure;
+                    continue;
+                }
+                if (timedOut)
+                {
+                    Fail(position, "The broker did not confirm in time: the message may have been sent and is still in the dead-letter queue. Possible duplicate.");
+                    stopped = StoppedAfterAFailure;
+                    continue;
+                }
+                if (!confirmed || Volatile.Read(ref returned) == 1)
+                {
+                    Fail(position, "Not resubmitted: the broker did not accept the message. It is still in the dead-letter queue.");
+                    stopped = StoppedAfterAFailure;
+                    continue;
+                }
+
+                try
+                {
+                    channel.BasicAck(message.DeliveryTag, multiple: false);
+                    held[(int)position - 1] = null;
+                    sent.Add(position);
+                }
+                catch (Exception ex) when (ex is AlreadyClosedException or OperationInterruptedException or IOException)
+                {
+                    Fail(position, "Sent, but not removed from the dead-letter queue. Possible duplicate.");
+                    stopped = StoppedAfterAFailure;
                 }
             }
-            catch (Exception ex)
+        }
+        finally
+        {
+            try
             {
-                result.FailureCount++;
-                result.Failures.Add(new BatchOperationFailure
-                {
-                    SequenceNumber = position,
-                    Error = ex.Message
-                });
+                if (held.FindLast(kept => kept != null) is { } last && channel.IsOpen)
+                    channel.BasicNack(last.DeliveryTag, multiple: true, requeue: true);
+            }
+            catch (Exception ex) when (ex is AlreadyClosedException or OperationInterruptedException or IOException)
+            {
+                // A channel that closes requeues every delivery it still holds.
             }
         }
 
+        if (RemovalsSettled(channel))
+            result.SuccessCount += sent.Count;
+        else
+            foreach (var position in sent)
+                Fail(position, "Sent, but its removal from the dead-letter queue was not confirmed. Possible duplicate.");
+
         return result;
+    }
+
+    private const string StoppedAfterAFailure = "Not resubmitted: the batch stopped after an earlier message failed. The message is still in the dead-letter queue.";
+
+    /// <summary>
+    /// Whether the broker processed every acknowledgement sent on the channel: a close it answered comes after them, and a
+    /// channel it closed for a refusal processed the frames before the one it refused.
+    /// </summary>
+    private static bool RemovalsSettled(IModel channel)
+    {
+        if (!channel.IsOpen)
+            return channel.CloseReason is { Initiator: ShutdownInitiator.Peer, ReplyCode: 403 or 406 };
+        try
+        {
+            channel.Close();
+            return true;
+        }
+        catch (Exception ex) when (ex is AlreadyClosedException or OperationInterruptedException or IOException)
+        {
+            return false;
+        }
     }
 
     /// <inheritdoc />

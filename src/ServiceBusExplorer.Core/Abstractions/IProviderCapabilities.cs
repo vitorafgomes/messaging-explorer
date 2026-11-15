@@ -174,9 +174,9 @@ public interface IProviderCapabilities
     bool SupportsManualDeadLetter { get; }
 
     /// <summary>
-    /// Indicates whether chosen messages can be deleted, moved and resubmitted, one or many, with no known way to lose
-    /// one. For Azure Service Bus: true. For RabbitMQ: false, because its bulk calls consume before they republish
-    /// and address messages by a position that can shift; the screen offers purge and peek only.
+    /// Indicates whether chosen messages can be deleted, moved, and edited and resubmitted, with no known way to lose
+    /// one. For Azure Service Bus: true. For RabbitMQ: false, because its delete and move consume before they
+    /// republish; its resubmit sends first and removes after, and is offered.
     /// </summary>
     bool SupportsBulkMessageOperations { get; }
 
