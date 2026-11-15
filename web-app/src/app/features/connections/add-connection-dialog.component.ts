@@ -832,6 +832,7 @@ export class AddConnectionDialogComponent {
 
   private buildTestRequest() {
     const baseRequest = {
+      id: this.isEditing ? this.connectionId : undefined,
       name: this.name || 'Test Connection',
       providerType: this.providerType,
       clientId: this.clientId || undefined,
