@@ -225,12 +225,34 @@ public sealed class AzureServiceBusSessionTests(AzureServiceBusFixture fixture) 
         Assert.Equal("order-1", again.SessionId);
     }
 
+    /// <summary>
+    /// Waits until the provider can open a session another connection just closed: the emulator releases the lock
+    /// for other connections a moment after the close, and a call in between finds the session in use.
+    /// </summary>
+    private async Task WaitUntilTheSessionIsFreeAsync(string entity, string? subscription, string sessionId)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        while (true)
+        {
+            try
+            {
+                await _messaging.GetSessionAsync(entity, subscription, sessionId);
+                return;
+            }
+            catch (SessionInUseException) when (DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(250);
+            }
+        }
+    }
+
     [Fact]
     public async Task A_state_write_on_a_subscription_replaces_the_state_it_was_shown_and_refuses_one_that_changed()
     {
         var (topic, subscription) = await CreateSessionSubscriptionAsync("state-write");
         await using (var arrange = await fixture.Client.AcceptSessionAsync(topic, subscription, "order-1"))
             await arrange.SetSessionStateAsync(BinaryData.FromString("{\"step\":5}"));
+        await WaitUntilTheSessionIsFreeAsync(topic, subscription, "order-1");
 
         var refused = await Assert.ThrowsAsync<SessionStateChangedException>(() =>
             _messaging.SetSessionStateAsync(topic, subscription, "order-1", "{\"step\":4}", "{\"step\":3}"));
