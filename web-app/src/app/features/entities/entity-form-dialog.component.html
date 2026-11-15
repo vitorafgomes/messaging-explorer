@@ -17,9 +17,9 @@
 
   <form [formGroup]="form" (ngSubmit)="save()" id="entity-form">
     @if (creating) {
-      <mat-form-field class="name">
+      <mat-form-field subscriptSizing="dynamic" class="name">
         <mat-label>{{ kindLabel }} name</mat-label>
-        <input matInput formControlName="name" autocomplete="off" [errorStateMatcher]="showErrors">
+        <input matInput id="field-name" formControlName="name" autocomplete="off" [errorStateMatcher]="showErrors">
         <mat-hint>
           {{ kind === 'subscription'
             ? 'Letters, digits, dot, dash and underscore. 50 characters at most.'
@@ -36,15 +36,15 @@
         @switch (f.type) {
           @case ('duration') {
             <div class="duration" [formGroupName]="f.key">
-              <mat-form-field>
+              <mat-form-field subscriptSizing="dynamic">
                 <mat-label>{{ f.label }}</mat-label>
-                <input matInput type="number" min="0" formControlName="amount" [errorStateMatcher]="showErrors">
+                <input matInput [id]="'field-' + f.key" type="number" min="0" formControlName="amount" [errorStateMatcher]="showErrors">
                 @if (neverHint(f.key)) {
                   <mat-hint>Now: never. Leave empty to keep it.</mat-hint>
                 }
                 <mat-error><mat-icon aria-hidden="true">error_outline</mat-icon>{{ errorOf(f.key + '.amount') }}</mat-error>
               </mat-form-field>
-              <mat-form-field class="unit">
+              <mat-form-field subscriptSizing="dynamic" class="unit">
                 <mat-label>Unit</mat-label>
                 <mat-select formControlName="unit" [aria-label]="'Unit of ' + f.label">
                   @for (unit of units; track unit) {
@@ -55,16 +55,16 @@
             </div>
           }
           @case ('number') {
-            <mat-form-field>
+            <mat-form-field subscriptSizing="dynamic">
               <mat-label>{{ f.label }}</mat-label>
-              <input matInput type="number" min="1" step="1" [formControlName]="f.key" [errorStateMatcher]="showErrors">
+              <input matInput [id]="'field-' + f.key" type="number" min="1" step="1" [formControlName]="f.key" [errorStateMatcher]="showErrors">
               <mat-error><mat-icon aria-hidden="true">error_outline</mat-icon>{{ errorOf(f.key) }}</mat-error>
             </mat-form-field>
           }
           @case ('target') {
-            <mat-form-field>
+            <mat-form-field subscriptSizing="dynamic">
               <mat-label>{{ f.label }}</mat-label>
-              <mat-select [formControlName]="f.key" [errorStateMatcher]="showErrors">
+              <mat-select [id]="'field-' + f.key" [formControlName]="f.key" [errorStateMatcher]="showErrors">
                 <mat-option value="">None</mat-option>
                 @for (target of targets; track target) {
                   <mat-option [value]="target">{{ target }}</mat-option>
@@ -75,9 +75,9 @@
             </mat-form-field>
           }
           @default {
-            <mat-form-field class="wide">
+            <mat-form-field subscriptSizing="dynamic" class="wide">
               <mat-label>{{ f.label }}</mat-label>
-              <textarea matInput rows="2" [formControlName]="f.key" [errorStateMatcher]="showErrors"></textarea>
+              <textarea matInput [id]="'field-' + f.key" rows="2" [formControlName]="f.key" [errorStateMatcher]="showErrors"></textarea>
               <mat-error><mat-icon aria-hidden="true">error_outline</mat-icon>{{ errorOf(f.key) }}</mat-error>
             </mat-form-field>
           }
@@ -87,7 +87,7 @@
 
     <div class="grid">
       @for (f of flagFields; track f.key) {
-        <mat-form-field>
+        <mat-form-field subscriptSizing="dynamic">
           <mat-label>{{ f.label }}</mat-label>
           <mat-select [formControlName]="f.key">
             @if (startsUnset(f.key)) {
@@ -146,6 +146,19 @@
     <mat-progress-bar mode="indeterminate" aria-label="Saving"></mat-progress-bar>
   }
 </mat-dialog-content>
+
+@if (fieldErrors(); as errors) {
+  @if (errors.length) {
+    <section class="field-errors" role="alert" aria-labelledby="field-errors-title">
+      <p class="field-errors-title" id="field-errors-title"><mat-icon fontIcon="error_outline" aria-hidden="true" />Fix {{ errors.length === 1 ? '1 field' : errors.length + ' fields' }} to save:</p>
+      <ul>
+        @for (e of errors; track e.key) {
+          <li><button type="button" class="field-error-link" (click)="focusField(e.key)">{{ e.message }}</button></li>
+        }
+      </ul>
+    </section>
+  }
+}
 
 <mat-dialog-actions align="end">
   <button mat-button mat-dialog-close type="button">Cancel</button>

@@ -91,6 +91,35 @@ describe('EntityFormDialogComponent', () => {
   };
   const fail = (status: number, body: unknown = null) => () => throwError(() => new HttpErrorResponse({ status, error: body }));
 
+  describe('a value out of range is said where it can be read', () => {
+    it('Lock duration of 5 hours: the whole message under the field, and a summary beside Save that lists it and takes the user to the field', () => {
+      open({ mode: 'create', kind: 'queue' });
+      type('Queue name', 'orders-archive');
+      type('Lock duration', '5');
+      set('lockDuration.unit', 'hours');
+
+      expect(fieldError('Lock duration')).toBe('Lock duration must be between 5 seconds and 5 minutes.');
+      expect(field('Lock duration')!.querySelector('.mat-mdc-form-field-subscript-dynamic-size'), 'the error line grows with its text').not.toBeNull();
+      const summary = el.querySelector('.field-errors[role="alert"]');
+      expect(text(summary?.querySelector('.field-errors-title'))).toBe('Fix 1 field to save:');
+      const items = Array.from(summary!.querySelectorAll('li button')) as HTMLButtonElement[];
+      expect(items.map(i => text(i))).toStrictEqual(['Lock duration must be between 5 seconds and 5 minutes.']);
+      expect(button('Create')?.disabled, 'Save stays disabled while a field is wrong').toBe(true);
+
+      items[0].click();
+      expect(document.activeElement, 'the summary takes the user to the field').toBe(field('Lock duration')!.querySelector('input'));
+    });
+
+    it('no summary while every field is valid or untouched', () => {
+      open({ mode: 'create', kind: 'queue' });
+      expect(el.querySelector('.field-errors')).toBeNull();
+      type('Queue name', 'orders-archive');
+      type('Lock duration', '30');
+      set('lockDuration.unit', 'seconds');
+      expect(el.querySelector('.field-errors')).toBeNull();
+    });
+  });
+
   describe('create a queue, a topic and a subscription', () => {
     it('create a queue: posts the name and only the options the user set; the tree refreshes and the new queue is selected', () => {
       open({ mode: 'create', kind: 'queue' });
