@@ -104,6 +104,8 @@ export interface MoveBatchRequest {
 export interface BatchOperationFailure {
   sequenceNumber: number;
   error: string;
+  /** The message was sent, or may have been, and was not removed from its source: it is never retried. */
+  possibleDuplicate?: boolean;
 }
 
 export interface BatchOperationResult {

@@ -82,6 +82,239 @@ describe('SettingsComponent', () => {
     };
   }
 
+  describe('the versions of the channel', () => {
+    const versions = [
+      { version: '2.4.4', date: '2026-11-14T10:00:00Z', notes: '- a fix\n<script>alert(1)</script>', installed: false },
+      { version: '2.4.2', date: '2026-11-01T10:00:00Z', notes: '', installed: true },
+    ];
+    const shown = (el: HTMLElement) => words(el.querySelector('[data-testid="version-list"] .mat-mdc-select-value'));
+    const openList = async (el: HTMLElement, refresh: () => Promise<void>) => {
+      (el.querySelector('[data-testid="version-list"]') as HTMLElement).click();
+      await refresh();
+      return Array.from(document.querySelectorAll<HTMLElement>('mat-option'));
+    };
+
+    it('lists the versions the shell read for the channel, marks the installed one, and shows the notes of the one picked as text', async () => {
+      const listUpdateVersions = vi.fn(async () => ({ status: 'ok', channel: 'latest', versions }));
+      const { el, refresh } = await render({ listUpdateVersions });
+      await refresh();
+      await refresh();
+
+      expect(listUpdateVersions, 'the shell is asked with no argument').toHaveBeenCalledWith();
+      const list = el.querySelector('[data-testid="version-list"]') as HTMLElement;
+      expect(list.tagName, 'the versions are a dropdown').toBe('MAT-SELECT');
+      expect(list.getAttribute('aria-labelledby')).toContain('version-label');
+      expect(shown(el), 'the newest is picked first').toBe('2.4.4 · Nov 14, 2026');
+      const options = await openList(el, refresh);
+      expect(options.map(words)).toStrictEqual(['2.4.4 · Nov 14, 2026', '2.4.2 · Nov 1, 2026 · Installed']);
+      const notes = el.querySelector('[data-testid="version-notes"]') as HTMLElement;
+      expect(words(notes.querySelector('h3'))).toBe('What version 2.4.4 has');
+      expect(notes.querySelector('pre')?.textContent, 'the notes as the text the release holds').toBe('- a fix\n<script>alert(1)</script>');
+      expect(notes.querySelector('script'), 'the notes are never markup').toBeNull();
+
+      options[1].click();
+      await refresh();
+      expect(shown(el)).toBe('2.4.2 · Nov 1, 2026 · Installed');
+      const picked = el.querySelector('[data-testid="version-notes"]') as HTMLElement;
+      expect(words(picked.querySelector('h3'))).toBe('What version 2.4.2 has');
+      expect(words(picked)).toContain('No notes were written for this version.');
+      expect(words(picked)).toContain('This is the version you have.');
+      expect(Array.from(el.querySelectorAll('[data-testid="version-notes"] button')).length, 'picking a version offers no install').toBe(0);
+    });
+
+    it('a list the shell could not read is an error with its reason and Retry, never an empty list', async () => {
+      const listUpdateVersions = vi.fn()
+        .mockResolvedValueOnce({ status: 'error', message: 'The release list could not be reached. Check the connection to the internet.' })
+        .mockResolvedValueOnce({ status: 'ok', channel: 'latest', versions });
+      const { el, refresh } = await render({ listUpdateVersions });
+      await refresh();
+
+      const error = el.querySelector('[data-testid="versions-error"]') as HTMLElement;
+      expect(error.getAttribute('role')).toBe('alert');
+      expect(words(error)).toContain('The versions could not be read: The release list could not be reached. Check the connection to the internet.');
+      expect(el.querySelector('[data-testid="version-list"]')).toBeNull();
+
+      (Array.from(error.querySelectorAll('button')).find(b => words(b).endsWith('Retry')) as HTMLElement).click();
+      await refresh();
+      expect(shown(el)).toBe('2.4.4 · Nov 14, 2026');
+      expect(el.querySelector('[data-testid="versions-error"]')).toBeNull();
+    });
+
+    it('a channel with no release says so, and an answer that is not a list is an error', async () => {
+      const none = await render({ listUpdateVersions: vi.fn(async () => ({ status: 'ok', channel: 'latest', versions: [] })) });
+      await none.refresh();
+      expect(words(none.el.querySelector('[data-testid="versions-empty"]'))).toBe('No version was released on the Stable channel yet.');
+      TestBed.resetTestingModule();
+      await TestBed.configureTestingModule({
+        imports: [SettingsComponent],
+        providers: [provideNoopAnimations(), provideRouter([]), { provide: MatDialog, useValue: dialog }, { provide: ConnectionService, useValue: connectionService }],
+      }).compileComponents();
+
+      const odd = await render({ listUpdateVersions: vi.fn(async () => ({ status: 'ok', versions: 'not a list' })) });
+      await odd.refresh();
+      expect(words(odd.el.querySelector('[data-testid="versions-error"]'))).toContain('The versions could not be read: The desktop app gave no list.');
+    });
+
+    it('changing the channel reads the versions of the new channel', async () => {
+      const listUpdateVersions = vi.fn(async () => ({ status: 'ok', channel: 'latest', versions }));
+      const { el, refresh } = await render({ listUpdateVersions });
+      await refresh();
+
+      (Array.from(el.querySelectorAll('mat-button-toggle button')).find(b => b.textContent?.trim() === 'Beta') as HTMLElement).click();
+      await new Promise(resolve => setTimeout(resolve));
+      await refresh();
+
+      expect(listUpdateVersions).toHaveBeenCalledTimes(2);
+    });
+
+    it('an answer for the channel left behind never replaces the list of the channel shown, and the old list is not shown under the new channel', async () => {
+      const beta = [{ version: '2.4.5-beta.7', date: '2026-11-15T10:00:00Z', notes: 'beta notes', installed: false }];
+      let answerStable: (value: unknown) => void = () => {};
+      const listUpdateVersions = vi.fn()
+        .mockImplementationOnce(() => new Promise(resolve => { answerStable = resolve; }))
+        .mockResolvedValueOnce({ status: 'ok', channel: 'beta', versions: beta });
+      const { el, refresh } = await render({ listUpdateVersions });
+
+      (Array.from(el.querySelectorAll('mat-button-toggle button')).find(b => b.textContent?.trim() === 'Beta') as HTMLElement).click();
+      await new Promise(resolve => setTimeout(resolve));
+      await refresh();
+      expect(shown(el), 'the list of Beta').toBe('2.4.5-beta.7 · Nov 15, 2026');
+
+      answerStable({ status: 'ok', channel: 'latest', versions });
+      await new Promise(resolve => setTimeout(resolve));
+      await refresh();
+      expect(shown(el), 'the late answer for Stable is dropped').toBe('2.4.5-beta.7 · Nov 15, 2026');
+    });
+
+    it('a version the user picked is kept: a newer one is announced, downloads nothing by itself and waits for Download', async () => {
+      const { el, push, state, shell } = await render();
+      const button = (label: string) => Array.from(el.querySelectorAll('button')).find(b => words(b).endsWith(label));
+
+      await push({ status: 'available', version: '2.4.4', downloads: false });
+
+      expect(words(el.querySelector('[data-testid="kept-version-note"]'))).toBe('You have 2.4.2, a version you picked, so it is kept: nothing downloads or installs until you ask for it.');
+      expect(state()).not.toContain('downloading in the background');
+      expect(shell.downloadUpdate).not.toHaveBeenCalled();
+      button('Download')!.click();
+      expect(shell.downloadUpdate).toHaveBeenCalledTimes(1);
+    });
+
+    describe('installing the version picked', () => {
+      const picks = [
+        { version: '2.4.4', date: '2026-11-14T10:00:00Z', notes: '- a fix', installed: false, older: false, installable: true },
+        { version: '2.4.2', date: '2026-11-01T10:00:00Z', notes: '', installed: true, older: false, installable: true },
+        { version: '2.4.1', date: '2026-10-20T10:00:00Z', notes: '- older', installed: false, older: true, installable: true },
+        { version: '2.4.0', date: '2026-10-01T10:00:00Z', notes: '', installed: false, older: true, installable: false },
+      ];
+      const block = (el: HTMLElement) => el.querySelector('[data-testid="version-install"]') as HTMLElement | null;
+      const installButton = (el: HTMLElement) => Array.from(block(el)?.querySelectorAll('button') ?? []).find(b => words(b).includes('Install ')) as HTMLButtonElement | undefined;
+      const agree = (el: HTMLElement) => (block(el)!.querySelector('mat-checkbox input') as HTMLInputElement).click();
+      const pick = async (el: HTMLElement, refresh: () => Promise<void>, index: number) => {
+        (await openList(el, refresh))[index].click();
+        await refresh();
+      };
+      const open = async (overrides: Record<string, unknown> = {}) => {
+        const installUpdateVersion = vi.fn(async (..._args: unknown[]): Promise<unknown> => ({ status: 'ok', version: '2.4.4' }));
+        const rendered = await render({ listUpdateVersions: vi.fn(async () => ({ status: 'ok', channel: 'latest', versions: picks })), installUpdateVersion, ...overrides });
+        await rendered.refresh();
+        await rendered.refresh();
+        return { ...rendered, installUpdateVersion };
+      };
+
+      it('a version other than the installed one can be installed only after the user agrees, and the shell is given the version and the agreement alone', async () => {
+        const { el, refresh, installUpdateVersion } = await open();
+
+        expect(words(block(el)!.querySelector('p')), 'the newest, not installed, is picked first').toBe('Install 2.4.4. You have 2.4.2.');
+        expect(block(el)!.querySelector('[data-testid="downgrade-note"]'), 'a newer version is no downgrade').toBeNull();
+        expect(installButton(el)!.disabled, 'Install waits for the agreement').toBe(true);
+        installButton(el)!.click();
+        expect(installUpdateVersion).not.toHaveBeenCalled();
+
+        agree(el);
+        await refresh();
+        expect(installButton(el)!.disabled).toBe(false);
+        installButton(el)!.click();
+        await refresh();
+
+        expect(installUpdateVersion.mock.calls).toStrictEqual([['2.4.4', true]]);
+      });
+
+      it('the installed version shows its notes and nothing to install, and picking another version withdraws the agreement', async () => {
+        const { el, refresh } = await open();
+        agree(el);
+        await refresh();
+
+        await pick(el, refresh, 1);
+        expect(block(el), 'the installed version offers no install').toBeNull();
+        expect(words(el.querySelector('[data-testid="version-notes"]'))).toContain('This is the version you have.');
+
+        await pick(el, refresh, 2);
+        expect(installButton(el)!.disabled, 'the agreement given for 2.4.4 does not carry to 2.4.1').toBe(true);
+        expect(words(block(el)!.querySelector('[data-testid="downgrade-note"]'))).toContain('This goes back to an older version.');
+      });
+
+      it('the agreement is for the version it was given for: when the list is read again and shows another version, Install waits for a new agreement', async () => {
+        const beta = [{ version: '2.4.5-beta.7', date: '2026-11-15T10:00:00Z', notes: 'beta notes', installed: false, older: false, installable: true }];
+        const listUpdateVersions = vi.fn()
+          .mockResolvedValueOnce({ status: 'ok', channel: 'latest', versions: picks })
+          .mockResolvedValueOnce({ status: 'ok', channel: 'beta', versions: beta });
+        const { el, refresh, installUpdateVersion } = await open({ listUpdateVersions });
+        agree(el);
+        await refresh();
+        expect(installButton(el)!.disabled).toBe(false);
+
+        (Array.from(el.querySelectorAll('mat-button-toggle button')).find(b => b.textContent?.trim() === 'Beta') as HTMLElement).click();
+        await new Promise(resolve => setTimeout(resolve));
+        await refresh();
+        await refresh();
+
+        expect(words(block(el)!.querySelector('p'))).toBe('Install 2.4.5-beta.7. You have 2.4.2.');
+        expect(installButton(el)!.disabled, 'the agreement given for 2.4.4 is not one for 2.4.5-beta.7').toBe(true);
+        expect((block(el)!.querySelector('mat-checkbox input') as HTMLInputElement).checked).toBe(false);
+        installButton(el)!.click();
+        expect(installUpdateVersion).not.toHaveBeenCalled();
+      });
+
+      it('an install the shell refuses or cannot finish says why, as an error', async () => {
+        const { el, refresh } = await open({ installUpdateVersion: vi.fn(async () => ({ status: 'error', message: 'Version 2.4.4 was not installed: disk full' })) });
+        agree(el);
+        await refresh();
+        installButton(el)!.click();
+        await refresh();
+        await refresh();
+
+        const error = el.querySelector('[data-testid="install-error"]') as HTMLElement;
+        expect(error.getAttribute('role')).toBe('alert');
+        expect(words(error)).toBe('Version 2.4.4 was not installed: disk full');
+      });
+
+      it('a release with no package for this system, and a package that cannot replace itself, show the page of the version and no Install', async () => {
+        const noPackage = await open();
+        await pick(noPackage.el, noPackage.refresh, 3);
+        expect(installButton(noPackage.el), 'no Install without a package').toBeUndefined();
+        expect(block(noPackage.el)!.querySelector('mat-checkbox')).toBeNull();
+        expect(block(noPackage.el)!.querySelector('a')!.getAttribute('href')).toBe('https://github.com/vitorafgomes/messaging-explorer/releases/tag/v2.4.0');
+
+        TestBed.resetTestingModule();
+        await TestBed.configureTestingModule({
+          imports: [SettingsComponent],
+          providers: [provideNoopAnimations(), provideRouter([]), { provide: MatDialog, useValue: dialog }, { provide: ConnectionService, useValue: connectionService }],
+        }).compileComponents();
+        const blocked = await open({ getSelfUpdateBlocker: vi.fn(async () => 'linux-package') });
+        expect(installButton(blocked.el), 'no Install on a package that cannot replace itself').toBeUndefined();
+        expect(block(blocked.el)!.querySelector('a')!.getAttribute('href')).toBe('https://github.com/vitorafgomes/messaging-explorer/releases/tag/v2.4.4');
+        expect(blocked.installUpdateVersion).not.toHaveBeenCalled();
+      });
+    });
+
+    it('a desktop app that cannot list versions shows no version list at all', async () => {
+      const { el, refresh } = await render();
+      await refresh();
+
+      expect(el.querySelector('[data-testid="version-list"], [data-testid="versions-error"], [data-testid="versions-empty"]')).toBeNull();
+    });
+  });
+
   it('About lists the version, the licence and what it is built with, as drawn, and never the API port or secret', async () => {
     const { el } = await render();
     const about = words(el.querySelector('[data-testid="about"]'));

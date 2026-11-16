@@ -1,9 +1,9 @@
 ---
 title: "Web App history"
-version: "1.1"
+version: "1.2"
 date: 2026-11-13
-updated: 2026-11-14
-changes: "v1.1: dated entries above the version notes"
+updated: 2026-11-16
+changes: "v1.2: 2026-11-16, a resubmit by position after a cancel or a failed call. v1.1: dated entries above the version notes"
 page_type: reference
 status: active
 description: "What changed in the Web App project and when, newest first, as the service page header recorded it until 2026-11-13."
@@ -15,6 +15,36 @@ reliability: high
 # Web App history
 
 What changed when in the project [[pages/services/web-app|Web App]] describes, newest first.
+
+## 2026-11-16
+
+- **The panel lists only the rows a broker has.** Sessions, forwarding and duplicate detection follow the capabilities; a delivery limit, a lock or a size limit of zero is left out. [[pages/services/web-app/features-entities-panel-and-definitions]]
+
+- **Every display of a count agrees, and the screen redraws by itself.** The bell and the Queues and Topics pages read the shared counts; the messages dialog empties on screen when the count is set to 0; the tree's list and selection are signals. [[pages/roadmap/rabbitmq-and-service-bus-completion]]
+
+- **Settings installs the version picked, after the agreement.** [[pages/services/web-app/features-settings-and-folders]]
+
+- **No number where the broker gives none, and no card with nothing in it.** On the emulator the tree, the panel and the messages dialog show no false 0; the Scheduled and Transfer dead-letter cards show only with messages. [[pages/services/web-app/features-entities-panel-and-definitions]]
+
+- **The body of an opened message is read without scrolling.** The owner could not see it: it sat under fourteen fields in a pane about 380 px tall, and the pane squeezed it. Body is now the first block of Message Details and as tall as the message, the pane grows to 70% of the window and scrolls as one, and the artboard `Messages.dc.html` draws the same order. Pinned by `web-app/e2e/rabbitmq.e2e.ts#the whole body is on screen when a message is opened`. [[pages/services/web-app/features-messages-and-sessions]]
+
+- **A queue under its exchange is one row, named without the exchange.** The owner asked for it on seeing `direct_logs.all` three times, once per routing key. The tree lists one row for each bound queue and cuts the exchange's name and the dot from the front of the queue's name; the keys and the broker's name moved to the tooltip. [[pages/services/web-app/providers-and-shared]]
+
+- **Settings lists the versions of the channel** and shows the notes of the one picked; nothing installs from the list yet ([[pages/services/web-app/features-settings-and-folders]]).
+
+- **A RabbitMQ queue bound to an exchange is listed once, under the exchange.** Asked by the owner. Was: under Queues and again under each exchange it is bound to. Is: only under its exchanges; a queue with no binding stays under Queues ([[pages/services/web-app/providers-and-shared]]).
+
+- **A purge the API refuses says why,** in the panel and on the Queues and Topics pages; it said only that it failed. The poller of counts skips a read that throws at once (`web-app/src/app/features/entities/transfer-monitor.component.spec.ts#a read that throws at once is skipped like a failed read, and the next one still comes`).
+
+- **A possible duplicate is read from the flag the API answers,** not from the words of the failure; the words stay as a second guard ([[pages/services/web-app/bulk-operations]]).
+
+- **The number beside an entity in the tree follows the panel in real time.** Reported by the owner. Was: the panel polled a subscription every 3 seconds and wrote the counts into the tree node in place, which the tree, holding its nodes in a plain field, never redrew without zone.js; after the messages dialog closed the tree was rebuilt and the panel wrote into a node the tree no longer held; a queue was never polled; the dialog kept a copy of its own. Is: one signal per entity, written by the poller and the dialog and read by the tree, the panel and the dialog ([[pages/services/web-app/features-entities-panel-and-definitions]]). The spec of `TransferMonitorComponent` and one line of `entity-details.component.spec.ts` changed on purpose: the poller's inputs and output were renamed.
+
+- **RabbitMQ offers Delete, Move and Edit & Resubmit.** Was: hidden, and one capability decided both the buttons and the position rules. Is: the buttons follow `supportsBulkMessageOperations`, the position rules `supportsSequenceNumbers`, and a delete or a move by position unticks and reads again after a cancel or a failed call, with no Retry ([[pages/services/web-app/bulk-operations]]). The spec `RabbitMQ offers Resubmit of the ticked messages ... and no Delete, Move or Edit & Resubmit` changed on purpose.
+
+- **A first load the broker did not answer.** Was: "The local API answered with an error." for every failure but a disabled entity. Is: for a 502 the API's sentence, "The broker did not return the messages of this entity (cause)." ([[pages/services/web-app/features-messages-and-sessions]]).
+
+- **A RabbitMQ resubmit after a cancel or a failed call.** Was: the rows stayed ticked and the list was not read again, so a second Resubmit sent positions that could by then name other messages, or messages already sent. Is: the rows are unticked at once and the list is read again, after a cancel when the cancelled progress dialog is closed; the results dialog reads "may be duplicated" as a possible duplicate and offers no Retry of a resubmit by position. Azure Service Bus keeps its ticked rows. `web-app/src/app/features/messages/view-messages-dialog.component.ts#resubmitSelected`; three specs added in `web-app/src/app/features/messages/view-messages-dialog.component.spec.ts#a possible duplicate from a transfer dead-letter resubmit is never retried` ([[pages/services/web-app/bulk-operations]]).
 
 ## 2026-11-14
 

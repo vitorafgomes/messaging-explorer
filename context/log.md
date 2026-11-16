@@ -1,3 +1,63 @@
+## [2026-11-16] fix | RabbitMQ logs through the application and shows no invented date or Azure-only row
+Eight console writes became log entries; the dates are not set; the panel leaves out rows the broker lacks. [[pages/history/core]]
+
+## [2026-11-16] fix | A version the user picked is kept, and every display of a count agrees
+The updater stands aside while a picked version runs; the bell and the list pages read the shared counts; one stale path of the messages dialog fixed. [[pages/roadmap/rabbitmq-and-service-bus-completion]]
+
+## [2026-11-16] feature | Settings installs the version picked, after the user's agreement
+Only a version of the list read, the connections file copied before a downgrade, the updater put back after. A real downgrade was not run yet. [[pages/services/electron-shell/updates-packaging-and-release]]
+
+## [2026-11-16] fix | The Service Bus emulator shows no false count and offers no transfer dead-letter queue
+The capabilities follow the connection; the Scheduled and Transfer dead-letter cards show only with messages. [[pages/services/core/azure-sub-queues]]
+
+## [2026-11-16] fix | The body of an opened message is the first block of Message Details and as tall as the message
+It sat under the fields and was squeezed by the pane. [[pages/history/web-app]]
+
+## [2026-11-16] feature | A RabbitMQ queue under its exchange is one row, named without the exchange
+One row for each bound queue instead of one for each routing key; the keys and the broker's name are in the tooltip. [[pages/services/web-app/providers-and-shared]]
+
+## [2026-11-16] feature | Settings lists the versions of the channel and shows the notes of the one picked
+Read by the main process from the release page at a fixed address; nothing installs from the list yet. [[pages/services/electron-shell/updates-packaging-and-release]], [[pages/services/web-app/features-settings-and-folders]]
+
+## [2026-11-16] docs | The Settings and Monitoring artboards draw the version picker, the Monitoring history and the processed totals
+The drawing the owner approved, each new part marked as not built. [[pages/roadmap/settings-data-and-updates]]
+
+## [2026-11-16] feature | A RabbitMQ queue bound to an exchange is listed once, under the exchange
+The tree leaves it out of Queues; a queue with no binding stays there. [[pages/services/web-app/providers-and-shared]]
+
+## [2026-11-16] chore | The local RabbitMQ holds one set per tutorial scenario, with sample messages
+Seven queues, three exchanges and a stream beside what was there, and a script that publishes to each. [[pages/runbooks/local-brokers]]
+
+## [2026-11-16] fix | RabbitMQ: a stream is never asked for a receive or a purge, and a search is refused, not empty
+Both closed the whole connection; the search answered no results without searching. [[pages/services/core/rabbitmq-and-legacy]], [[pages/services/api/cancellation-and-errors]]
+
+## [2026-11-16] integrate | Settings: a version picker in Updates and a Monitoring history in Data
+The plan for the two, after the owner approved the drawing: seven lanes and six open decisions. [[pages/roadmap/settings-data-and-updates]]
+
+## [2026-11-16] fix | A possible duplicate is a flag on the failure, and the single resubmit no longer returns in silence
+Both providers set the flag, the API answers it and the web app reads it; an original the single resubmit could not remove is reported. [[pages/invariants/bulk-operations-are-at-least-once]], [[pages/services/web-app/bulk-operations]]
+
+## [2026-11-16] fix | The count beside an entity in the tree follows the panel and the messages dialog in real time
+One signal per entity, written by the poller and the dialog; a queue is polled too. [[pages/services/web-app/features-entities-panel-and-definitions]]
+
+## [2026-11-16] fix | A RabbitMQ send is confirmed, and a refused peek says why
+A send no queue receives fails instead of being dropped; a stream is refused before the broker is asked. [[pages/services/core/rabbitmq-and-legacy]], [[pages/services/api/cancellation-and-errors]]
+
+## [2026-11-16] feature | RabbitMQ offers Delete, Move and Edit & Resubmit, as Azure Service Bus does
+The buttons follow one capability and the position rules another; a delete or a move by position unticks and reads again after a cancel or a failed call. [[pages/services/web-app/bulk-operations]], [[pages/services/web-app/providers-and-shared]]
+
+## [2026-11-16] fix | RabbitMQ bulk delete and move send first and remove after
+Both run on the resubmit's path over AMQP; nothing is consumed before it is safe elsewhere, and the token stops the batch. [[pages/services/core/rabbitmq-and-legacy]], [[pages/invariants/bulk-operations-are-at-least-once]]
+
+## [2026-11-16] fix | A peek the broker did not answer says so, on the API and on the screen
+The Azure provider answers a neutral read failure, the six peek routes a 502 with a fixed sentence, the dialog that sentence. [[pages/services/core/azure-sub-queues]], [[pages/services/api/cancellation-and-errors]], [[pages/services/web-app/features-messages-and-sessions]]
+
+## [2026-11-16] integrate | RabbitMQ and Azure Service Bus: what is left to call both complete
+Ten phases in order, and two findings written on the follow-ups page: a subscription's transfer dead-letter tab fails to load, and the reload after a cancelled RabbitMQ resubmit. [[pages/roadmap/rabbitmq-and-service-bus-completion]], [[pages/roadmap/followups]]
+
+## [2026-11-16] fix | A RabbitMQ resubmit never sends a stale position again, and a close that throws is a possible duplicate
+After a cancel or a failed call the rows are unticked and the list is read again; no Retry by position. [[pages/services/core/rabbitmq-and-legacy]], [[pages/services/web-app/bulk-operations]]
+
 ## [2026-11-15] chore | A pull request description fills every section of the template
 The template gained what was asked, done, not done, the tests and the risk; the safety boxes stay. `.github/PULL_REQUEST_TEMPLATE.md`, `CLAUDE.md`.
 

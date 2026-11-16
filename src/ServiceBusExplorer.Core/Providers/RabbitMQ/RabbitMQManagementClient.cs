@@ -4,6 +4,8 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using ServiceBusExplorer.Core.Providers.RabbitMQ.Models;
 
 namespace ServiceBusExplorer.Core.Providers.RabbitMQ;
@@ -17,6 +19,8 @@ public class RabbitMQManagementClient : IDisposable
     private readonly HttpClient _httpClient;
     private readonly string _baseUrl;
     private readonly string _virtualHost;
+    private readonly ILogger _logger = NullLogger.Instance;
+    private readonly string _address = string.Empty;
     private readonly JsonSerializerOptions _jsonOptions;
     private bool _disposed;
 
@@ -24,9 +28,12 @@ public class RabbitMQManagementClient : IDisposable
     /// Initializes a new instance of the <see cref="RabbitMQManagementClient"/> class.
     /// </summary>
     /// <param name="config">The RabbitMQ connection configuration.</param>
-    public RabbitMQManagementClient(RabbitMQConnectionConfig config)
+    /// <param name="logger">Where a connection test that fails is written; none when omitted.</param>
+    public RabbitMQManagementClient(RabbitMQConnectionConfig config, ILogger? logger = null)
     {
         ArgumentNullException.ThrowIfNull(config);
+        _logger = logger ?? NullLogger.Instance;
+        _address = $"{config.HostName}:{config.ManagementPort}";
 
         _baseUrl = config.GetManagementApiUrl();
         _virtualHost = config.VirtualHost;
@@ -88,14 +95,14 @@ public class RabbitMQManagementClient : IDisposable
 
             if (!response.IsSuccessStatusCode)
             {
-                Console.WriteLine($"[RabbitMQ] Management API returned {response.StatusCode}");
+                _logger.LogWarning("The RabbitMQ management API at {Address} did not answer the connection test: it answered {Status}.", _address, (int)response.StatusCode);
             }
 
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[RabbitMQ] Management API error: {ex.Message}");
+            _logger.LogWarning(ex, "The RabbitMQ management API at {Address} did not answer the connection test.", _address);
             return false;
         }
     }
@@ -573,9 +580,9 @@ public class RabbitMQManagementClient : IDisposable
             // Abstract interface properties
             Status = response.State ?? "running",
             SizeInBytes = response.MessageBytes,
-            CreatedAt = DateTimeOffset.UtcNow, // Not available from API
-            UpdatedAt = DateTimeOffset.UtcNow,
-            AccessedAt = DateTimeOffset.UtcNow,
+            CreatedAt = default,
+            UpdatedAt = default,
+            AccessedAt = default,
 
             // Default values for unsupported features
             DeadLetterMessageCount = 0, // Would need to query DLX queue
@@ -617,9 +624,9 @@ public class RabbitMQManagementClient : IDisposable
             // Abstract interface properties
             Status = "Active",
             SizeInBytes = 0, // Exchanges don't have size
-            CreatedAt = DateTimeOffset.UtcNow, // Not available from API
-            UpdatedAt = DateTimeOffset.UtcNow,
-            AccessedAt = DateTimeOffset.UtcNow,
+            CreatedAt = default,
+            UpdatedAt = default,
+            AccessedAt = default,
 
             // Default values for topic-specific properties
             SubscriptionCount = 0, // Would need to count bindings

@@ -367,9 +367,13 @@ input[type='checkbox'] {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-height: calc(clamp(200px, 42vh, 520px) + 41px);
+  max-height: max(calc(clamp(200px, 42vh, 520px) + 41px), 70vh);
   padding: 16px;
   overflow: auto;
+
+  > * {
+    flex: none;
+  }
 }
 
 .pane-title {
@@ -408,9 +412,8 @@ input[type='checkbox'] {
 
 .body-content {
   margin: 0;
-  max-height: 240px;
   padding: 10px 12px;
-  overflow: auto;
+  overflow-x: auto;
   border-radius: 8px;
   background: var(--mat-sys-surface-container);
   color: var(--mat-sys-on-surface);

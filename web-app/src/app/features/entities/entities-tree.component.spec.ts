@@ -5,7 +5,7 @@ import { signal } from '@angular/core';
 import { BehaviorSubject, NEVER, Subject, of, throwError } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
 import {
-  ConnectionService, DeadLetterNotificationService, EntitySelectionService, LoggerService, ResubmitRun, ResubmitRunService, ResubmitRunTarget, TreeDataBuilderService
+  ConnectionService, DeadLetterNotificationService, EntityCountsService, EntitySelectionService, LoggerService, ResubmitRun, ResubmitRunService, ResubmitRunTarget, TreeDataBuilderService
 } from '../../core/services';
 
 let activeRunOn: string | undefined;
@@ -396,6 +396,31 @@ describe('EntitiesTreeComponent as Main.dc.html draws the tree', () => {
     expect(invoicesRow.querySelectorAll('.count-chip').length, 'badges on a queue with no messages').toBe(0);
   });
 
+  it('the badge of a row follows the counts read for its entity with no click and no reload, for a queue and for a subscription', async () => {
+    const { fixture, el } = render(warehouse);
+    const counts = TestBed.inject(EntityCountsService);
+    const badges = (name: string) => Array.from(rows(el).find(r => text(r.querySelector('.node-name')) === name)!.querySelectorAll('.count-chip .count')).map(text);
+    expect([badges('orders'), badges('warehouse')], 'as loaded').toStrictEqual([['1,204', '37'], ['12']]);
+
+    counts.put(EntityCountsService.key('orders'), { activeMessageCount: 1100, deadLetterMessageCount: 40 });
+    counts.put(EntityCountsService.key('warehouse', 'order-events'), { activeMessageCount: 7, deadLetterMessageCount: 2 });
+    await fixture.whenStable();
+
+    expect([badges('orders'), badges('warehouse')], 'the counts just read').toStrictEqual([['1,100', '40'], ['7', '2']]);
+  });
+
+  it('reading the entities again forgets the counts read before, so a row never shows a number older than its load', async () => {
+    const { fixture, el } = render();
+    const counts = TestBed.inject(EntityCountsService);
+    counts.put(EntityCountsService.key('orders'), { activeMessageCount: 1, deadLetterMessageCount: 1 });
+    await fixture.whenStable();
+
+    fixture.componentInstance.loadTree();
+    await fixture.whenStable();
+
+    expect(Array.from(rows(el)[0].querySelectorAll('.count-chip .count')).map(text)).toStrictEqual(['1,204', '37']);
+  });
+
   it('an opened topic shows its subscriptions under it, and its row carries no count, only the chip of its pattern', () => {
     const { fixture, el } = render();
     const topicRow = rows(el)[2];
@@ -594,7 +619,7 @@ describe('EntitiesTreeComponent on a RabbitMQ connection names exchanges and bin
     ] }
   ];
 
-  function render(provider: ProviderType) {
+  function render(provider: ProviderType, capabilities: Partial<typeof DEFAULT_AZURE_CAPABILITIES> = {}) {
     TestBed.configureTestingModule({
       imports: [EntitiesTreeComponent],
       providers: [
@@ -604,7 +629,7 @@ describe('EntitiesTreeComponent on a RabbitMQ connection names exchanges and bin
         resubmitRuns,
         { provide: LoggerService, useValue: { log: () => undefined, error: () => undefined } },
         { provide: DeadLetterNotificationService, useValue: { clear: () => undefined } },
-        { provide: ProviderService, useValue: { capabilities: signal({ ...DEFAULT_AZURE_CAPABILITIES, supportsEntityUpdate: true }), selectedProvider: provider } },
+        { provide: ProviderService, useValue: { capabilities: signal({ ...DEFAULT_AZURE_CAPABILITIES, supportsEntityUpdate: true, ...capabilities }), selectedProvider: provider } },
         { provide: MatDialog, useValue: { open: vi.fn() } }
       ]
     });
@@ -617,14 +642,46 @@ describe('EntitiesTreeComponent on a RabbitMQ connection names exchanges and bin
   }
   const text = (e: Element | null) => (e?.textContent ?? '').replace(/\s+/g, ' ').trim();
 
+  it('a disconnection empties the tree on screen by itself, with nothing else to redraw it', async () => {
+    const status$ = new Subject<{ connected: boolean }>();
+    TestBed.configureTestingModule({
+      imports: [EntitiesTreeComponent],
+      providers: [
+        { provide: TreeDataBuilderService, useValue: { buildTree: () => of(tree()) } },
+        { provide: EntitySelectionService, useValue: { selection$: NEVER, treeRefresh$: NEVER, select: vi.fn() } },
+        { provide: ConnectionService, useValue: { isConnected: true, connectionStatus$: status$ } },
+        resubmitRuns,
+        { provide: LoggerService, useValue: { log: () => undefined, error: () => undefined } },
+        { provide: DeadLetterNotificationService, useValue: { clear: () => undefined } },
+        { provide: ProviderService, useValue: { capabilities: signal(DEFAULT_AZURE_CAPABILITIES), selectedProvider: ProviderType.AzureServiceBus } },
+        { provide: MatDialog, useValue: { open: vi.fn() } }
+      ]
+    });
+    const fixture = TestBed.createComponent(EntitiesTreeComponent);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelectorAll('.entity-tree button.tree-node').length, 'entities before').toBeGreaterThan(0);
+
+    status$.next({ connected: false });
+    await fixture.whenStable();
+
+    expect(el.querySelectorAll('.entity-tree button.tree-node').length, 'no entity is left on screen').toBe(0);
+  });
+
+  it('a broker that reports no message counts shows no count beside a row, and one that reports them shows the count', () => {
+    expect(render(ProviderType.AzureServiceBus, { supportsMessageCounts: false }).querySelectorAll('.count-chip').length).toBe(0);
+    TestBed.resetTestingModule();
+    expect(render(ProviderType.AzureServiceBus).querySelectorAll('.count-chip').length).toBeGreaterThan(0);
+  });
+
   it('RabbitMQ: the section is Exchanges, create is "Create exchange" and "Create binding in orders", and a bound queue shows its routing key', () => {
     const el = render(ProviderType.RabbitMQ);
 
-    expect(Array.from(el.querySelectorAll('.entity-tree h2.section-head')).map(text)).toStrictEqual(['Queues 1', 'Exchanges 1']);
+    expect(Array.from(el.querySelectorAll('.entity-tree h2.section-head')).map(text), 'the one queue is bound, so Queues lists none').toStrictEqual(['Queues 0', 'Exchanges 1']);
     expect(Array.from(el.querySelectorAll('.create-btn')).map(b => b.getAttribute('aria-label'))).toStrictEqual(['Create queue', 'Create exchange', 'Create binding in orders']);
     const bound = el.querySelector('.tree-children button.tree-node')!;
-    expect(text(bound.querySelector('.node-name'))).toBe('orders.created');
-    expect(text(bound.querySelector('.binding-key'))).toBe('order.created');
+    expect(text(bound.querySelector('.node-name')), 'under orders the queue orders.created is shown without the name of its exchange').toBe('created');
+    expect(bound.querySelector('.binding-key'), 'the row shows the queue, not a routing-key label').toBeNull();
   });
 
   it('an exchange and a queue that carry a pattern show it as a chip on their row; a row without one shows none', () => {
@@ -659,7 +716,100 @@ describe('EntitiesTreeComponent on a RabbitMQ connection names exchanges and bin
       .toStrictEqual([['tasks', 'Work queue, 3 consumers'], ['plain', ''], ['orders.dlx', 'Pub/Sub']]);
   });
 
-  it('RabbitMQ: under an exchange a row is a binding, "routing key -> queue", named as one, and a click selects the queue in Queues, not a second copy of it', () => {
+  it('RabbitMQ: a queue bound to an exchange is listed once, under the exchange; a queue with no binding is listed under Queues; Azure Service Bus lists a queue and a subscription of one name apart', () => {
+    const withUnbound = (): TreeNode[] => {
+      const [queues, topics] = tree();
+      queues.children!.push({ id: 'queue-hello', name: 'hello', type: 'queue', icon: 'inbox', expandable: false, level: 1, data: { activeMessageCount: 1, deadLetterMessageCount: 0 } as never });
+      return [queues, topics];
+    };
+    const listedUnderQueues = (provider: ProviderType) => {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        imports: [EntitiesTreeComponent],
+        providers: [
+          { provide: TreeDataBuilderService, useValue: { buildTree: () => of(withUnbound()) } },
+          { provide: EntitySelectionService, useValue: { selection$: of(null), treeRefresh$: NEVER, select: vi.fn() } },
+          { provide: ConnectionService, useValue: { isConnected: true, connectionStatus$: NEVER } },
+          resubmitRuns,
+          { provide: LoggerService, useValue: { log: () => undefined, error: () => undefined } },
+          { provide: DeadLetterNotificationService, useValue: { clear: () => undefined } },
+          { provide: ProviderService, useValue: { capabilities: signal(DEFAULT_RABBITMQ_CAPABILITIES), selectedProvider: provider } },
+          { provide: MatDialog, useValue: { open: vi.fn() } }
+        ]
+      });
+      const fixture = TestBed.createComponent(EntitiesTreeComponent);
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+      return {
+        queues: Array.from(el.querySelectorAll('.entity-tree > button.node-queue, .entity-tree > .tree-row > button.node-queue')).map(b => text(b.querySelector('.node-name'))),
+        heads: Array.from(el.querySelectorAll('.entity-tree h2.section-head')).map(text)
+      };
+    };
+
+    expect(listedUnderQueues(ProviderType.RabbitMQ)).toStrictEqual({ queues: ['hello'], heads: ['Queues 1', 'Exchanges 1'] });
+    expect(listedUnderQueues(ProviderType.AzureServiceBus)).toStrictEqual({ queues: ['orders.created', 'hello'], heads: ['Queues 2', 'Topics 1'] });
+  });
+
+  it('RabbitMQ: the filter counts a bound queue once, as its binding', () => {
+    const el = render(ProviderType.RabbitMQ);
+    const input = el.querySelector<HTMLInputElement>('input[aria-label="Filter entities by name"]')!;
+    input.value = 'nothing-has-this-name';
+    input.dispatchEvent(new Event('input'));
+    TestBed.tick();
+
+    expect(text(el.querySelector('.hidden-note')), 'one exchange and one binding, the queue not counted again').toBe('2 of 2 entities hidden by the filter');
+  });
+
+  it('RabbitMQ: a queue bound to one exchange with three routing keys is one row under it, named for the queue, with the keys in its name for assistive technology and in its tooltip', () => {
+    const key = (routingKey: string): TreeNode => ({ id: `subscription-direct_logs-all-${routingKey}`, name: 'all', type: 'subscription', icon: 'subscriptions', expandable: false, level: 2,
+      data: { topicName: 'direct_logs', activeMessageCount: 3, deadLetterMessageCount: 0, routingKey } as never });
+    const errors: TreeNode = { id: 'subscription-direct_logs-errors', name: 'errors', type: 'subscription', icon: 'subscriptions', expandable: false, level: 2,
+      data: { topicName: 'direct_logs', activeMessageCount: 1, deadLetterMessageCount: 0, routingKey: 'error' } as never };
+    const threeKeys = (): TreeNode[] => {
+      const exchange: TreeNode = { id: 'topic-direct_logs', name: 'direct_logs', type: 'topic', icon: 'topic', expandable: true, level: 1, data: { subscriptionCount: 4 } as never,
+        children: [key('error'), key('info'), key('warning'), errors] };
+      exchange.children!.forEach(child => (child.parent = exchange));
+      return [
+        { id: 'category-queues', name: 'Queues', type: 'category', icon: 'folder', expandable: true, level: 0, children: [
+          { id: 'queue-all', name: 'all', type: 'queue', icon: 'inbox', expandable: false, level: 1, data: { activeMessageCount: 3, deadLetterMessageCount: 0 } as never },
+          { id: 'queue-errors', name: 'errors', type: 'queue', icon: 'inbox', expandable: false, level: 1, data: { activeMessageCount: 1, deadLetterMessageCount: 0 } as never }
+        ] },
+        { id: 'category-topics', name: 'Topics', type: 'category', icon: 'folder', expandable: true, level: 0, children: [exchange] }
+      ];
+    };
+    TestBed.configureTestingModule({
+      imports: [EntitiesTreeComponent],
+      providers: [
+        { provide: TreeDataBuilderService, useValue: { buildTree: () => of(threeKeys()) } },
+        { provide: EntitySelectionService, useValue: { selection$: of(null), treeRefresh$: NEVER, select: vi.fn() } },
+        { provide: ConnectionService, useValue: { isConnected: true, connectionStatus$: NEVER } },
+        resubmitRuns,
+        { provide: LoggerService, useValue: { log: () => undefined, error: () => undefined } },
+        { provide: DeadLetterNotificationService, useValue: { clear: () => undefined } },
+        { provide: ProviderService, useValue: { capabilities: signal(DEFAULT_RABBITMQ_CAPABILITIES), selectedProvider: ProviderType.RabbitMQ } },
+        { provide: MatDialog, useValue: { open: vi.fn() } }
+      ]
+    });
+    const fixture = TestBed.createComponent(EntitiesTreeComponent);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    Array.from(el.querySelectorAll<HTMLButtonElement>('.entity-tree button.tree-node')).find(b => b.classList.contains('node-topic'))!.click();
+    fixture.detectChanges();
+    const rows = Array.from(el.querySelectorAll<HTMLButtonElement>('.tree-children button.tree-node'));
+
+    expect(rows.map(r => text(r.querySelector('.node-name'))), 'one row for each queue, not for each key').toStrictEqual(['all', 'errors']);
+    expect(rows.map(r => r.getAttribute('aria-label'))).toStrictEqual([
+      'Queue all, bound with the routing keys error, info, warning: open the queue',
+      'Queue errors, bound with the routing key error: open the queue'
+    ]);
+    expect(el.querySelectorAll('.binding-key, .binding-arrow').length, 'no routing-key label on a row').toBe(0);
+    expect(rows.map(r => Array.from(r.querySelectorAll('.count-chip .count')).map(text)), 'the counts of the queue, once').toStrictEqual([['3'], ['1']]);
+    const tooltips = fixture.debugElement.queryAll(By.directive(MatTooltip)).map(d => d.injector.get(MatTooltip).message).filter(m => m.startsWith('Queue '));
+    expect(tooltips).toStrictEqual(['Queue all. Routing keys: error, info, warning', 'Queue errors. Routing key: error']);
+    expect(text(el.querySelector('.hidden-note')), 'no filter, nothing hidden').toBe('');
+  });
+
+  it('RabbitMQ: under an exchange a row is the queue that exchange is bound to; it shows the counts of its queue, a click opens that queue as a queue, and the row is then the selected one', () => {
     const select = vi.fn();
     TestBed.configureTestingModule({
       imports: [EntitiesTreeComponent],
@@ -683,14 +833,37 @@ describe('EntitiesTreeComponent on a RabbitMQ connection names exchanges and bin
 
     const binding = el.querySelector<HTMLButtonElement>('.tree-children button.tree-node')!;
     expect(binding.classList.contains('node-binding')).toBe(true);
-    expect(text(binding.querySelector('.binding-key'))).toBe('order.created');
-    expect(text(binding.querySelector('.node-name'))).toBe('orders.created');
-    expect(binding.getAttribute('aria-label')).toBe('Binding order.created to queue orders.created: open the queue');
-    expect(binding.querySelectorAll('.count-chip').length, 'a binding holds no messages: the counts are on the queue').toBe(0);
+    expect(text(binding.querySelector('.node-name'))).toBe('created');
+    expect(binding.getAttribute('aria-label'), 'the name the broker has is still said').toBe('Queue orders.created, bound with the routing key order.created: open the queue');
+    expect(Array.from(binding.querySelectorAll('.count-chip .count')).map(text), 'the counts of the queue, which is listed nowhere else').toStrictEqual(['4']);
+    expect(binding.getAttribute('aria-current')).toBe('false');
 
     binding.click();
     expect(select).toHaveBeenCalledTimes(1);
     expect(select.mock.calls[0][0]).toEqual(expect.objectContaining({ id: 'queue-orders.created', type: 'queue' }));
+  });
+
+  it('RabbitMQ: the binding row of the queue that is selected is the current row, and its exchange stays open', () => {
+    const queueNode = tree()[0].children![0];
+    TestBed.configureTestingModule({
+      imports: [EntitiesTreeComponent],
+      providers: [
+        { provide: TreeDataBuilderService, useValue: { buildTree: () => of(tree()) } },
+        { provide: EntitySelectionService, useValue: { selection$: of({ node: queueNode }), treeRefresh$: NEVER, select: vi.fn() } },
+        { provide: ConnectionService, useValue: { isConnected: true, connectionStatus$: NEVER } },
+        resubmitRuns,
+        { provide: LoggerService, useValue: { log: () => undefined, error: () => undefined } },
+        { provide: DeadLetterNotificationService, useValue: { clear: () => undefined } },
+        { provide: ProviderService, useValue: { capabilities: signal(DEFAULT_RABBITMQ_CAPABILITIES), selectedProvider: ProviderType.RabbitMQ } },
+        { provide: MatDialog, useValue: { open: vi.fn() } }
+      ]
+    });
+    const fixture = TestBed.createComponent(EntitiesTreeComponent);
+    fixture.detectChanges();
+    const binding = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('.tree-children button.node-binding');
+
+    expect(binding, 'the exchange of the selected queue is open').not.toBeNull();
+    expect(binding!.getAttribute('aria-current')).toBe('true');
   });
 
   it('Azure Service Bus keeps Topics and subscriptions', () => {

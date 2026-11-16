@@ -1,9 +1,9 @@
 ---
 title: "Api history"
-version: "1.1"
+version: "1.2"
 date: 2026-11-13
-updated: 2026-11-14
-changes: "v1.1: dated entries above the version notes"
+updated: 2026-11-16
+changes: "v1.2: 2026-11-16, a peek the broker did not answer. v1.1: dated entries above the version notes"
 page_type: reference
 status: active
 description: "What changed in the Api project and when, newest first, as the service page header recorded it until 2026-11-13."
@@ -15,6 +15,18 @@ reliability: high
 # Api history
 
 What changed when in the project [[pages/services/api|Api]] describes, newest first.
+
+## 2026-11-16
+
+- The capabilities route answers for the connected provider and carries `supportsMessageCounts`. [[pages/services/api/controllers]]
+
+- The receive routes answer 502 for a read the broker did not give, the purge routes 400 with the provider's sentence, and the search routes 400 where the provider cannot search; each answered the constant 500 or an empty result ([[pages/services/api/cancellation-and-errors]]). The capabilities answer carries `supportsMessageSearch`.
+
+- Every batch route answers `possibleDuplicate` for each failure (`src/ServiceBusExplorer.Api.Tests/MessageRouteTests.cs#A_message_sent_and_not_removed_is_answered_with_the_possible_duplicate_flag_so_no_client_reads_it_from_the_text`); three tests that compare the whole body changed on purpose.
+
+- The single send of a queue and of a topic answers 400 with the provider's own sentence when the broker did not take the message (`src/ServiceBusExplorer.Api.Tests/MessageRouteTests.cs#A_send_the_broker_did_not_take_answers_400_with_the_reason_the_provider_wrote`); it answered the constant 500.
+
+- The six peek routes answer 502 with a fixed sentence when the broker did not return the messages; they answered the constant 500 ([[pages/services/api/cancellation-and-errors]]). Found by the owner on the transfer dead-letter tab of a subscription.
 
 ## 2026-11-15
 

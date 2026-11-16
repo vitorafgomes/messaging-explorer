@@ -188,7 +188,7 @@ public class MessageRouteTests
                 : null);
 
         Assert.Equal(HttpStatusCode.OK, answered.Status);
-        Assert.Equal("""{"successCount":1,"failureCount":1,"failures":[{"sequenceNumber":13,"error":"This message is not scheduled any more."}],"newMessageIds":{},"unselectedDeliveryCountRaised":0,"unselectedDeadLettered":[],"success":false}""", answered.Body);
+        Assert.Equal("""{"successCount":1,"failureCount":1,"failures":[{"sequenceNumber":13,"error":"This message is not scheduled any more.","possibleDuplicate":false}],"newMessageIds":{},"unselectedDeliveryCountRaised":0,"unselectedDeadLettered":[],"success":false}""", answered.Body);
         var call = Assert.Single(answered.Calls);
         Assert.Equal((nameof(IMessagingProvider.CancelScheduledMessagesAsync), entity), (call.Method, call.Args[0]));
         Assert.Equal(new long[] { 12, 13 }, call.Args[1]);
@@ -263,6 +263,72 @@ public class MessageRouteTests
 
         Assert.Equal(HttpStatusCode.Conflict, answered.Status);
         Assert.Equal("""{"message":"The entity is disabled for this operation."}""", answered.Body);
+    }
+
+    [Theory]
+    [InlineData("/api/queues/orders/messages/search")]
+    [InlineData("/api/queues/orders/deadletter/search")]
+    [InlineData(Subscription + "/messages/search")]
+    [InlineData(Subscription + "/deadletter/search")]
+    public async Task A_provider_that_cannot_search_messages_answers_400_and_is_never_called_instead_of_an_empty_result(string path)
+    {
+        var answered = await SendAsync("POST", path, Search, ProviderAnswers, ProviderType.RabbitMQ);
+
+        Assert.Equal(HttpStatusCode.BadRequest, answered.Status);
+        Assert.Equal("""{"message":"This provider does not support searching messages."}""", answered.Body);
+        Assert.Empty(answered.Calls);
+    }
+
+    [Theory]
+    [InlineData("/api/queues/orders/messages/receive")]
+    [InlineData(Subscription + "/messages/receive")]
+    public async Task A_receive_the_broker_did_not_answer_says_so_with_502_and_the_cause(string path)
+    {
+        var answered = await SendAsync("POST", path, null,
+            Fails(nameof(IMessagingProvider.ReceiveMessagesAsync), new MessageReadFailedException("a stream is not read this way", new Exception(Sentinel))));
+
+        Assert.Equal(HttpStatusCode.BadGateway, answered.Status);
+        Assert.Equal("""{"message":"The broker did not return the messages of this entity (a stream is not read this way)."}""", answered.Body);
+    }
+
+    [Theory]
+    [InlineData("/api/queues/orders/messages")]
+    [InlineData(Subscription + "/deadletter")]
+    public async Task A_purge_the_provider_refuses_answers_400_with_the_reason_the_provider_wrote(string path)
+    {
+        var answered = await SendAsync("DELETE", path, null,
+            Fails(nameof(IMessagingProvider.PurgeMessagesAsync), new InvalidEntityConfigurationException(["A stream cannot be purged: it keeps its messages until its retention removes them."])));
+
+        Assert.Equal(HttpStatusCode.BadRequest, answered.Status);
+        Assert.Equal("""{"message":"A stream cannot be purged: it keeps its messages until its retention removes them."}""", answered.Body);
+    }
+
+    [Theory]
+    [InlineData("/api/queues/orders/messages")]
+    [InlineData("/api/topics/events/messages")]
+    public async Task A_send_the_broker_did_not_take_answers_400_with_the_reason_the_provider_wrote(string path)
+    {
+        var answered = await SendAsync("POST", path, """{"body":"b"}""",
+            Fails(nameof(IMessagingProvider.SendMessageAsync), new InvalidEntityConfigurationException(["The broker could not route the message: no queue receives it."])));
+
+        Assert.Equal(HttpStatusCode.BadRequest, answered.Status);
+        Assert.Equal("""{"message":"The broker could not route the message: no queue receives it."}""", answered.Body);
+    }
+
+    [Theory]
+    [InlineData("/api/queues/orders/messages")]
+    [InlineData("/api/queues/orders/deadletter")]
+    [InlineData("/api/queues/orders/transferdeadletter")]
+    [InlineData(Subscription + "/messages")]
+    [InlineData(Subscription + "/deadletter")]
+    [InlineData(Subscription + "/transferdeadletter")]
+    public async Task A_peek_the_broker_did_not_answer_says_so_with_502_and_the_cause_and_nothing_of_the_broker(string path)
+    {
+        var answered = await SendAsync("GET", path, null,
+            Fails(nameof(IMessagingProvider.PeekMessagesAsync), new MessageReadFailedException("GeneralError", new Exception(Sentinel))));
+
+        Assert.Equal(HttpStatusCode.BadGateway, answered.Status);
+        Assert.Equal("""{"message":"The broker did not return the messages of this entity (GeneralError)."}""", answered.Body);
     }
 
     [Theory]
@@ -535,6 +601,75 @@ public class MessageRouteTests
         Assert.Equal(3L, Assert.Single(Assert.Single(fromPosition.Calls).Args.OfType<long>()));
     }
 
+    private static readonly IProviderCapabilities EmulatorCapabilities = ServiceBusExplorer.Core.Providers.Azure.AzureProviderCapabilities.For(
+        new ServiceBusExplorer.Core.Providers.Azure.AzureConnectionConfig { ConnectionString = "Endpoint=sb://localhost;SharedAccessKeyName=K;SharedAccessKey=S;UseDevelopmentEmulator=true" });
+
+    [Fact]
+    public async Task The_capabilities_of_the_connected_provider_are_those_of_its_connection_so_the_emulator_says_it_reports_no_counts_and_has_no_transfer_dead_letter_queue()
+    {
+        var emulator = await SendAsync("GET", "/api/connections/providers/AzureServiceBus/capabilities", null, capabilities: EmulatorCapabilities);
+
+        Assert.Equal(HttpStatusCode.OK, emulator.Status);
+        using var json = JsonDocument.Parse(emulator.Body);
+        Assert.False(json.RootElement.GetProperty("supportsMessageCounts").GetBoolean());
+        Assert.False(json.RootElement.GetProperty("supportsTransferDeadLetter").GetBoolean());
+    }
+
+    [Theory]
+    [InlineData("AzureServiceBus")]
+    [InlineData("RabbitMQ")]
+    public async Task With_no_connection_the_capabilities_say_the_provider_reports_message_counts(string providerType)
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Api-Key", ApiFactory.TestApiSecret);
+
+        using var response = await client.GetAsync($"/api/connections/providers/{providerType}/capabilities");
+
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.True(json.RootElement.GetProperty("supportsMessageCounts").GetBoolean());
+    }
+
+    [Theory]
+    [InlineData("/api/queues/orders/transferdeadletter?count=5")]
+    [InlineData(Subscription + "/transferdeadletter?count=5")]
+    public async Task On_the_emulator_the_transfer_dead_letter_queue_is_refused_with_400_and_the_broker_is_not_called(string path)
+    {
+        var answered = await SendAsync("GET", path, null, ProviderAnswers, capabilities: EmulatorCapabilities);
+
+        Assert.Equal((HttpStatusCode.BadRequest, "{\"message\":\"This provider does not support the transfer dead-letter queue.\"}"), (answered.Status, answered.Body));
+        Assert.Empty(answered.Calls);
+    }
+
+    [Theory]
+    [InlineData("AzureServiceBus", true)]
+    [InlineData("RabbitMQ", false)]
+    public async Task The_capabilities_say_whether_the_provider_can_search_messages(string providerType, bool expected)
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Api-Key", ApiFactory.TestApiSecret);
+
+        using var response = await client.GetAsync($"/api/connections/providers/{providerType}/capabilities");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.True(json.RootElement.TryGetProperty("supportsMessageSearch", out var flag), "the capabilities answer has no supportsMessageSearch");
+        Assert.Equal(expected, flag.GetBoolean());
+    }
+
+    [Theory]
+    [InlineData("/api/queues/orders/messages/delete-batch")]
+    [InlineData(Subscription + "/deadletter/delete-batch")]
+    public async Task A_delete_the_provider_refuses_answers_400_with_the_reason_the_provider_wrote(string path)
+    {
+        var answered = await SendAsync("POST", path, """{"sequenceNumbers":[],"all":true}""",
+            Fails(nameof(IMessagingProvider.DeleteMessagesAsync), new InvalidEntityConfigurationException(["A stream cannot be purged: it keeps its messages until its retention removes them."])));
+
+        Assert.Equal(HttpStatusCode.BadRequest, answered.Status);
+        Assert.Equal("""{"message":"A stream cannot be purged: it keeps its messages until its retention removes them."}""", answered.Body);
+    }
+
     [Theory]
     [InlineData("AzureServiceBus", true)]
     [InlineData("RabbitMQ", false)]
@@ -685,12 +820,26 @@ public class MessageRouteTests
         var answered = await SendAsync("POST", path, Batch, ProviderAnswers);
 
         Assert.Equal(HttpStatusCode.OK, answered.Status);
-        Assert.Equal("""{"successCount":1,"failureCount":1,"failures":[{"sequenceNumber":2,"error":"Not found within scan window"}],"newMessageIds":{},"unselectedDeliveryCountRaised":0,"unselectedDeadLettered":[],"success":false}""", answered.Body);
+        Assert.Equal("""{"successCount":1,"failureCount":1,"failures":[{"sequenceNumber":2,"error":"Not found within scan window","possibleDuplicate":false}],"newMessageIds":{},"unselectedDeliveryCountRaised":0,"unselectedDeadLettered":[],"success":false}""", answered.Body);
         var call = Assert.Single(answered.Calls);
         Assert.Equal(providerMethod, call.Method);
         Assert.Equal(names, call.Args.OfType<string>().ToArray());
         Assert.Equal(new long[] { 1, 2 }, call.Args.OfType<long[]>().Single());
         Assert.True(call.Args.OfType<CancellationToken>().Single().CanBeCanceled, "The request token must reach the provider so an aborted request stops the batch.");
+    }
+
+    [Theory]
+    [InlineData("/api/queues/orders/deadletter/resubmit-batch", "ResubmitDeadLetterMessagesAsync")]
+    [InlineData("/api/queues/orders/messages/move-batch", "MoveMessagesAsync")]
+    public async Task A_message_sent_and_not_removed_is_answered_with_the_possible_duplicate_flag_so_no_client_reads_it_from_the_text(string path, string providerMethod)
+    {
+        var result = new BatchOperationResult { FailureCount = 1 };
+        result.Failures.Add(new BatchOperationFailure { SequenceNumber = 7, Error = "any wording", PossibleDuplicate = true });
+        var body = path.EndsWith("move-batch", StringComparison.Ordinal) ? """{"targetQueueName":"archive","sequenceNumbers":[7]}""" : """{"sequenceNumbers":[7]}""";
+
+        var answered = await SendAsync("POST", path, body, (m, _) => m.Name == providerMethod ? Task.FromResult(result) : null);
+
+        Assert.Contains("""{"sequenceNumber":7,"error":"any wording","possibleDuplicate":true}""", answered.Body, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -828,7 +977,7 @@ public class MessageRouteTests
         var answered = await SendAsync("POST", path, Batch, ActiveSettleAnswers);
 
         Assert.Equal(HttpStatusCode.OK, answered.Status);
-        Assert.Equal("""{"successCount":1,"failureCount":1,"failures":[{"sequenceNumber":2,"error":"Not found within scan window"}],"newMessageIds":{},"unselectedDeliveryCountRaised":0,"unselectedDeadLettered":[],"success":false}""", answered.Body);
+        Assert.Equal("""{"successCount":1,"failureCount":1,"failures":[{"sequenceNumber":2,"error":"Not found within scan window","possibleDuplicate":false}],"newMessageIds":{},"unselectedDeliveryCountRaised":0,"unselectedDeadLettered":[],"success":false}""", answered.Body);
         var call = Assert.Single(answered.Calls);
         Assert.Equal(providerMethod, call.Method);
         Assert.Equal(names, call.Args.OfType<string>().Take(names.Length).ToArray());

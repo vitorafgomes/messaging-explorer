@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal, DestroyRef } from '@angular/core';
+import { Component, OnInit, computed, inject, signal, DestroyRef } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
@@ -8,11 +8,13 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { finalize } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { QueueService, ConnectionService } from '../../core/services';
+import { QueueService, ConnectionService, EntityCounts, EntityCountsService } from '../../core/services';
+import { ProviderService } from '../../core/services/provider.service';
 import { QueueInfo } from '../../core/models';
 import { SendMessageDialogComponent } from '../messages/send-message-dialog.component';
 import { ViewMessagesDialogComponent } from '../messages/view-messages-dialog.component';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
+import { messageCallFailure } from '../messages/message-call-failure';
 
 @Component({
   selector: 'app-queues',
@@ -76,19 +78,19 @@ import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
               <th mat-header-cell *matHeaderCellDef class="number">Active</th>
               <td mat-cell *matCellDef="let queue" class="number">
                 <button matButton type="button" class="count" (click)="viewMessages(queue, 0)"
-                        [attr.aria-label]="'View the ' + queue.activeMessageCount + ' active messages of ' + queue.name">{{ queue.activeMessageCount }}</button>
+                        [attr.aria-label]="countsReported() ? 'View the ' + countsOf(queue).activeMessageCount + ' active messages of ' + queue.name : 'View the active messages of ' + queue.name">{{ countsReported() ? countsOf(queue).activeMessageCount : '—' }}</button>
               </td>
             </ng-container>
             <ng-container matColumnDef="deadLetter">
               <th mat-header-cell *matHeaderCellDef class="number">Dead Letter</th>
               <td mat-cell *matCellDef="let queue" class="number">
-                <button matButton type="button" class="count" [class.dead-letter]="queue.deadLetterMessageCount > 0" (click)="viewMessages(queue, 1)"
-                        [attr.aria-label]="'View the ' + queue.deadLetterMessageCount + ' dead-letter messages of ' + queue.name">{{ queue.deadLetterMessageCount }}</button>
+                <button matButton type="button" class="count" [class.dead-letter]="countsReported() && countsOf(queue).deadLetterMessageCount > 0" (click)="viewMessages(queue, 1)"
+                        [attr.aria-label]="countsReported() ? 'View the ' + countsOf(queue).deadLetterMessageCount + ' dead-letter messages of ' + queue.name : 'View the dead-letter messages of ' + queue.name">{{ countsReported() ? countsOf(queue).deadLetterMessageCount : '—' }}</button>
               </td>
             </ng-container>
             <ng-container matColumnDef="scheduled">
               <th mat-header-cell *matHeaderCellDef class="number">Scheduled</th>
-              <td mat-cell *matCellDef="let queue" class="number">{{ queue.scheduledMessageCount }}</td>
+              <td mat-cell *matCellDef="let queue" class="number">{{ countsReported() ? queue.scheduledMessageCount : '—' }}</td>
             </ng-container>
             <ng-container matColumnDef="size">
               <th mat-header-cell *matHeaderCellDef class="number">Size</th>
@@ -107,11 +109,11 @@ import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
                   <mat-icon fontIcon="more_vert" aria-hidden="true"></mat-icon>
                 </button>
                 <mat-menu #purgeMenu="matMenu">
-                  <button mat-menu-item class="danger" (click)="purgeMessages(queue)" [disabled]="queue.activeMessageCount === 0">
+                  <button mat-menu-item class="danger" (click)="purgeMessages(queue)" [disabled]="countsReported() && countsOf(queue).activeMessageCount === 0">
                     <mat-icon fontIcon="delete_sweep" aria-hidden="true"></mat-icon>
                     Purge Messages
                   </button>
-                  <button mat-menu-item class="danger" (click)="purgeDeadLetter(queue)" [disabled]="queue.deadLetterMessageCount === 0">
+                  <button mat-menu-item class="danger" (click)="purgeDeadLetter(queue)" [disabled]="countsReported() && countsOf(queue).deadLetterMessageCount === 0">
                     <mat-icon fontIcon="delete_forever" aria-hidden="true"></mat-icon>
                     Purge Dead Letter
                   </button>
@@ -133,6 +135,16 @@ export class QueuesComponent implements OnInit {
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly counts = inject(EntityCountsService);
+  private readonly providerService = inject(ProviderService);
+
+  /** False on a broker that answers no message counts: a row then shows no number and a purge is not held back by a count. */
+  readonly countsReported = computed(() => this.providerService.capabilities()?.supportsMessageCounts !== false);
+
+  /** The counts a row shows: the latest read for its queue anywhere in the app, or the ones it was listed with. */
+  countsOf(queue: QueueInfo): EntityCounts {
+    return this.counts.of(EntityCountsService.key(queue.name)) ?? queue;
+  }
 
   queues = signal<QueueInfo[]>([]);
   loading = signal(false);
@@ -170,6 +182,7 @@ export class QueuesComponent implements OnInit {
       takeUntilDestroyed(this.destroyRef)
     ).subscribe({
       next: (queues) => {
+        queues.forEach(queue => this.counts.put(EntityCountsService.key(queue.name), queue));
         this.queues.set(queues);
       },
       error: () => {
@@ -195,8 +208,8 @@ export class QueuesComponent implements OnInit {
       data: {
         entityType: 'queue',
         entityName: queue.name,
-        activeMessageCount: queue.activeMessageCount,
-        deadLetterMessageCount: queue.deadLetterMessageCount,
+        activeMessageCount: this.countsOf(queue).activeMessageCount,
+        deadLetterMessageCount: this.countsOf(queue).deadLetterMessageCount,
         targetDetectsDuplicates: queue.requiresDuplicateDetection,
         initialTab
       }
@@ -246,8 +259,8 @@ export class QueuesComponent implements OnInit {
             this.snackBar.open(`Purged all messages from ${queue.name}`, 'Close', { duration: 3000 });
             this.loadQueues();
           },
-          error: () => {
-            this.snackBar.open('Failed to purge messages', 'Close', { duration: 3000 });
+          error: err => {
+            this.snackBar.open(messageCallFailure(err, 'Failed to purge messages'), 'Close', { duration: 5000 });
           }
         });
       }
@@ -279,8 +292,8 @@ export class QueuesComponent implements OnInit {
             this.snackBar.open(`Purged all dead letter messages from ${queue.name}`, 'Close', { duration: 3000 });
             this.loadQueues();
           },
-          error: () => {
-            this.snackBar.open('Failed to purge dead letter messages', 'Close', { duration: 3000 });
+          error: err => {
+            this.snackBar.open(messageCallFailure(err, 'Failed to purge dead letter messages'), 'Close', { duration: 5000 });
           }
         });
       }

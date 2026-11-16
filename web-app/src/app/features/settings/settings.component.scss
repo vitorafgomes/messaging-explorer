@@ -259,3 +259,50 @@
 .inline-error {
   color: var(--mat-sys-error);
 }
+
+.versions-row {
+  align-items: flex-start;
+}
+
+.version-list {
+  display: flex;
+  flex: 1 1 320px;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.version-field {
+  width: min(100%, 360px);
+}
+
+.version-notes .notes-text {
+  width: 100%;
+  max-height: 320px;
+  margin: 0;
+  overflow: auto;
+  font: var(--mat-sys-body-medium);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.version-install {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--mat-sys-outline-variant);
+
+  p {
+    margin: 0;
+  }
+}
+
+.install-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}

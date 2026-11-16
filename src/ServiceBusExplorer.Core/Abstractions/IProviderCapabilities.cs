@@ -106,6 +106,13 @@ public interface IProviderCapabilities
     bool SupportsSubscriptionRules { get; }
 
     /// <summary>
+    /// Indicates whether the broker reports how many messages an entity holds.
+    /// For Azure Service Bus: true on a namespace, false on the development emulator, which answers zero for every count.
+    /// For RabbitMQ: true.
+    /// </summary>
+    bool SupportsMessageCounts { get; }
+
+    /// <summary>
     /// Indicates whether the provider can peek, search, delete and resubmit the messages of the transfer
     /// dead-letter queue, where the broker puts the messages it could not forward to another entity.
     /// For Azure Service Bus: true.
@@ -174,9 +181,14 @@ public interface IProviderCapabilities
     bool SupportsManualDeadLetter { get; }
 
     /// <summary>
+    /// Indicates whether the messages of an entity can be searched on the server. For Azure Service Bus: true.
+    /// For RabbitMQ: false; a search is refused, never answered as an empty result.
+    /// </summary>
+    bool SupportsMessageSearch { get; }
+
+    /// <summary>
     /// Indicates whether chosen messages can be deleted, moved, and edited and resubmitted, with no known way to lose
-    /// one. For Azure Service Bus: true. For RabbitMQ: false, because its delete and move consume before they
-    /// republish; its resubmit sends first and removes after, and is offered.
+    /// one. True for Azure Service Bus and for RabbitMQ, whose delete, move and resubmit send first and remove after.
     /// </summary>
     bool SupportsBulkMessageOperations { get; }
 

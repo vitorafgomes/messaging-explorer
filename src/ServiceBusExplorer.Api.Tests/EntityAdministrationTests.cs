@@ -31,6 +31,7 @@ public class EntityAdministrationTests
         public List<(string Method, object?[] Args)> Calls { get; } = new();
         public Func<MethodInfo, object?[], object?>? Answer { get; set; }
         public ProviderType Type { get; set; } = ProviderType.AzureServiceBus;
+        public IProviderCapabilities? DeclaredCapabilities { get; set; }
 
         protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
         {
@@ -38,7 +39,7 @@ public class EntityAdministrationTests
             switch (m.Name)
             {
                 case "get_ProviderType": return Type;
-                case "get_Capabilities": return Type == ProviderType.RabbitMQ ? RabbitMQProviderCapabilities.Instance : AzureProviderCapabilities.Instance;
+                case "get_Capabilities": return DeclaredCapabilities ?? (Type == ProviderType.RabbitMQ ? RabbitMQProviderCapabilities.Instance : AzureProviderCapabilities.Instance);
                 case "get_CurrentTarget": return "fake-target";
                 case "get_IsConnected": return false;
                 case "DisconnectAsync": return Task.CompletedTask;
@@ -56,12 +57,13 @@ public class EntityAdministrationTests
 
     internal sealed record Answered(HttpStatusCode Status, string Body, Uri? Location, List<(string Method, object?[] Args)> Calls);
 
-    internal static async Task<Answered> SendAsync(string method, string path, string? json, Func<MethodInfo, object?[], object?>? answer = null, ProviderType providerType = ProviderType.AzureServiceBus, Func<HttpContent>? content = null)
+    internal static async Task<Answered> SendAsync(string method, string path, string? json, Func<MethodInfo, object?[], object?>? answer = null, ProviderType providerType = ProviderType.AzureServiceBus, Func<HttpContent>? content = null, IProviderCapabilities? capabilities = null)
     {
         var provider = DispatchProxy.Create<IMessagingProvider, RecordingProvider>();
         var recorder = (RecordingProvider)(object)provider;
         recorder.Answer = answer;
         recorder.Type = providerType;
+        recorder.DeclaredCapabilities = capabilities;
         var providerFactory = StubProxy.For<IProviderFactory>(m => m.Name == nameof(IProviderFactory.CreateConnectedProviderAsync)
             ? Task.FromResult(provider)
             : throw new NotSupportedException());

@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { BulkOperationsService, TabType, BulkOperationsState } from './bulk-operations.service';
+import { BulkOperationsService, TabType, BulkOperationsState, isPossibleDuplicate } from './bulk-operations.service';
 import { MessageInfo } from '../models';
 
 describe('BulkOperationsService', () => {
@@ -533,5 +533,25 @@ describe('BulkOperationsService', () => {
       service.clearAllSelections();
       expect(service.getSelectionCount('transferdeadletter')).toBe(0);
     });
+  });
+});
+
+describe('isPossibleDuplicate reads the flag the API answers, whatever the wording', () => {
+  it('a failure flagged as a possible duplicate is one even when its text says nothing of it, and an unflagged one with other words is not', () => {
+    expect(isPossibleDuplicate({ sequenceNumber: 1, error: 'Enviada, mas nao removida.', possibleDuplicate: true })).toBe(true);
+    expect(isPossibleDuplicate({ sequenceNumber: 1, error: 'Not found within scan window', possibleDuplicate: false })).toBe(false);
+  });
+});
+
+describe('isPossibleDuplicate reads the possible duplicates of every provider', () => {
+  it('the four texts the RabbitMQ resubmit writes for a message that may have been sent are possible duplicates, and its not-sent texts are not', () => {
+    const rabbit = [
+      'The broker did not confirm in time: the message may have been sent and is still in the dead-letter queue. It may be duplicated.',
+      'The connection failed before the broker confirmed: the message may have been sent and is still in the dead-letter queue. It may be duplicated.',
+      'Sent, but not removed from the dead-letter queue. It may be duplicated.',
+      'Sent, but its removal from the dead-letter queue was not confirmed. It may be duplicated.'
+    ];
+    expect(rabbit.map(error => isPossibleDuplicate({ sequenceNumber: 1, error }))).toStrictEqual([true, true, true, true]);
+    expect(isPossibleDuplicate({ sequenceNumber: 1, error: 'Not resubmitted: the batch stopped after an earlier message failed. The message is still in the dead-letter queue.' })).toBe(false);
   });
 });

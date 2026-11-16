@@ -1,5 +1,3 @@
-using System.Net;
-using System.Text;
 using Moq;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Exceptions;
@@ -9,122 +7,185 @@ using ServiceBusExplorer.Core.Providers.RabbitMQ;
 namespace ServiceBusExplorer.Core.Tests.Providers;
 
 /// <summary>
-/// The calls a RabbitMQ peek adds before it reads: the management lookup of the dead-letter queue and the reopening of a
-/// channel the broker closed. When either fails, the peek fails with that error and reads nothing.
+/// A RabbitMQ peek the broker refuses leaves the provider as the neutral read failure, with a cause this application
+/// wrote, never as an exception of the RabbitMQ client.
 /// </summary>
 public class RabbitMQPeekFailureTests
 {
-    private sealed class StatusHandler(HttpStatusCode status) : HttpMessageHandler
+    private sealed class Management(string body) : HttpMessageHandler
     {
-        public int Calls { get; private set; }
-
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            Calls++;
-            return Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent("broker failure", Encoding.UTF8, "text/plain") });
-        }
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json") });
     }
 
-    private static RabbitMQManagementClient Client(HttpMessageHandler handler) =>
-        new(new HttpClient(handler), "http://127.0.0.1:15672/api", "/", "user", "password");
-
-    [Fact]
-    public async Task A_dead_letter_peek_whose_lookup_of_the_dead_letter_queue_answers_500_fails_with_that_error_and_reads_nothing()
+    private sealed class Failing(Func<Task<HttpResponseMessage>> answer) : HttpMessageHandler
     {
-        var connection = new Mock<IConnection>();
-        connection.Setup(c => c.IsOpen).Returns(true);
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => answer();
+    }
+
+    public static TheoryData<string> ManagementFailures => new("a 500", "a timeout", "a body that is not JSON");
+
+    [Theory]
+    [MemberData(nameof(ManagementFailures))]
+    public async Task When_the_management_api_cannot_say_the_type_of_the_queue_the_peek_still_asks_the_broker(string failure)
+    {
+        HttpMessageHandler handler = failure switch
+        {
+            "a 500" => new Failing(() => Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.InternalServerError))),
+            "a timeout" => new Failing(() => Task.FromException<HttpResponseMessage>(new TaskCanceledException("The request timed out."))),
+            _ => new Management("<html>proxy</html>")
+        };
         var channel = new Mock<IModel>();
         channel.Setup(c => c.IsOpen).Returns(true);
-        var handler = new StatusHandler(HttpStatusCode.InternalServerError);
-        var provider = new RabbitMQProvider(connection.Object, Client(handler), channel.Object);
+        var connection = new Mock<IConnection>();
+        connection.Setup(c => c.IsOpen).Returns(true);
+        var provider = new RabbitMQProvider(connection.Object, new RabbitMQManagementClient(new HttpClient(handler), "http://127.0.0.1:1/api", "/", "user", "password"), channel.Object);
 
-        await Assert.ThrowsAsync<HttpRequestException>(() => provider.PeekMessagesAsync("orders", 10, MessageSubQueue.DeadLetter));
+        Assert.Empty(await provider.PeekMessagesAsync("orders", 5));
 
-        Assert.Equal(1, handler.Calls);
+        channel.Verify(c => c.BasicGet("orders", false), Times.Once);
+    }
+
+    [Fact]
+    public async Task A_peek_the_caller_cancels_while_the_type_is_read_is_cancelled_and_the_broker_is_not_asked()
+    {
+        using var cancel = new CancellationTokenSource();
+        var channel = new Mock<IModel>();
+        channel.Setup(c => c.IsOpen).Returns(true);
+        var connection = new Mock<IConnection>();
+        connection.Setup(c => c.IsOpen).Returns(true);
+        var handler = new Failing(() => { cancel.Cancel(); return Task.FromException<HttpResponseMessage>(new TaskCanceledException()); });
+        var provider = new RabbitMQProvider(connection.Object, new RabbitMQManagementClient(new HttpClient(handler), "http://127.0.0.1:1/api", "/", "user", "password"), channel.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => provider.PeekMessagesAsync("orders", 5, cancellationToken: cancel.Token));
+
+        channel.Verify(c => c.BasicGet(It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    private static (RabbitMQProvider Provider, Mock<IModel> Channel) OnAStream()
+    {
+        var channel = new Mock<IModel>();
+        channel.Setup(c => c.IsOpen).Returns(true);
+        var connection = new Mock<IConnection>();
+        connection.Setup(c => c.IsOpen).Returns(true);
+        connection.Setup(c => c.CreateModel()).Returns(channel.Object);
+        var management = new RabbitMQManagementClient(new HttpClient(new Management("""{"name":"orders","type":"stream"}""")), "http://127.0.0.1:1/api", "/", "user", "password");
+        return (new RabbitMQProvider(connection.Object, management, channel.Object), channel);
+    }
+
+    [Fact]
+    public async Task A_peek_of_a_stream_is_refused_before_the_broker_is_asked_because_a_stream_closes_the_connection_on_a_get()
+    {
+        var (provider, channel) = OnAStream();
+
+        var failed = await Assert.ThrowsAsync<MessageReadFailedException>(() => provider.PeekMessagesAsync("orders", 5));
+
+        Assert.Equal("The broker did not return the messages of this entity (a stream is not read this way).", failed.Message);
         channel.Verify(c => c.BasicGet(It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
     }
 
     [Fact]
-    public async Task A_channel_that_cannot_be_opened_again_fails_the_peek_with_that_error_and_the_next_call_tries_again()
+    public async Task A_delete_of_every_message_of_a_stream_is_refused_before_the_broker_is_asked_as_a_purge_is()
     {
-        var connection = new Mock<IConnection>();
-        connection.Setup(c => c.IsOpen).Returns(true);
-        var closed = new Mock<IModel>();
-        closed.Setup(c => c.IsOpen).Returns(false);
-        var reopened = new Mock<IModel>();
-        reopened.Setup(c => c.IsOpen).Returns(true);
-        connection.SetupSequence(c => c.CreateModel())
-            .Throws(new AlreadyClosedException(new ShutdownEventArgs(ShutdownInitiator.Peer, 320, "CONNECTION_FORCED")))
-            .Returns(reopened.Object);
-        var provider = new RabbitMQProvider(connection.Object, Client(new StatusHandler(HttpStatusCode.OK)), closed.Object);
+        var (provider, channel) = OnAStream();
 
-        await Assert.ThrowsAsync<AlreadyClosedException>(() => provider.PeekMessagesAsync("orders", 1));
-        closed.Verify(c => c.BasicGet(It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
+        var refused = await Assert.ThrowsAsync<InvalidEntityConfigurationException>(() => provider.DeleteMessagesAsync("orders", [], all: true));
 
-        Assert.Empty(await provider.PeekMessagesAsync("orders", 1));
-        reopened.Verify(c => c.BasicGet("orders", false), Times.Once);
+        Assert.Equal("A stream cannot be purged: it keeps its messages until its retention removes them.", refused.Message);
+        channel.Verify(c => c.QueuePurge(It.IsAny<string>()), Times.Never);
     }
 
-    private static BasicGetResult Delivery(ulong tag, string body) =>
-        new(tag, false, "", "orders", 0, new Mock<IBasicProperties>().SetupAllProperties().Object, System.Text.Encoding.UTF8.GetBytes(body));
-
-    private static (RabbitMQProvider Provider, Mock<IModel> Channel) HoldingProvider(Func<int, BasicGetResult?> get, bool channelOpen = true)
+    [Theory]
+    [InlineData("receive")]
+    [InlineData("purge")]
+    [InlineData("delete all")]
+    public async Task When_the_management_api_cannot_say_the_type_of_the_queue_a_receive_a_purge_and_a_delete_of_all_still_ask_the_broker(string operation)
     {
-        var connection = new Mock<IConnection>();
-        connection.Setup(c => c.IsOpen).Returns(true);
         var channel = new Mock<IModel>();
-        var open = true;
-        channel.Setup(c => c.IsOpen).Returns(() => open);
-        var call = 0;
-        channel.Setup(c => c.BasicGet("orders", false)).Returns(() =>
-        {
-            call++;
-            var result = get(call);
-            if (!channelOpen && call > 1) open = false;
-            return result!;
-        });
-        return (new RabbitMQProvider(connection.Object, Client(new StatusHandler(HttpStatusCode.OK)), channel.Object), channel);
+        channel.Setup(c => c.IsOpen).Returns(true);
+        var connection = new Mock<IConnection>();
+        connection.Setup(c => c.IsOpen).Returns(true);
+        var handler = new Failing(() => Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.InternalServerError)));
+        var provider = new RabbitMQProvider(connection.Object, new RabbitMQManagementClient(new HttpClient(handler), "http://127.0.0.1:1/api", "/", "user", "password"), channel.Object);
+
+        if (operation == "receive") await provider.ReceiveMessagesAsync("orders", 1);
+        else if (operation == "purge") await provider.PurgeMessagesAsync("orders");
+        else await provider.DeleteMessagesAsync("orders", [], all: true);
+
+        if (operation == "receive") channel.Verify(c => c.BasicGet("orders", false), Times.Once);
+        else channel.Verify(c => c.QueuePurge("orders"), Times.Once);
+    }
+
+    [Theory]
+    [InlineData(MessageSubQueue.Active)]
+    [InlineData(MessageSubQueue.DeadLetter)]
+    public async Task A_search_is_refused_as_not_supported_never_answered_as_an_empty_result(MessageSubQueue subQueue)
+    {
+        var (provider, _) = OnAStream();
+
+        var refused = await Assert.ThrowsAsync<NotSupportedException>(() => provider.SearchMessagesAsync("orders", new ServiceBusExplorer.Core.Models.MessageSearchRequest(), subQueue));
+
+        Assert.Equal("RabbitMQ does not support searching messages.", refused.Message);
     }
 
     [Fact]
-    public async Task A_peek_that_fails_after_reading_two_messages_requeues_both_with_one_nack_and_fails_with_the_error()
+    public async Task A_receive_on_a_stream_is_refused_before_the_broker_is_asked()
     {
-        var (provider, channel) = HoldingProvider(call => call switch
-        {
-            1 => Delivery(1, "m1"),
-            2 => Delivery(2, "m2"),
-            _ => throw new IOException("BROKER-DETAIL-SENTINEL")
-        });
+        var (provider, channel) = OnAStream();
 
-        await Assert.ThrowsAsync<IOException>(() => provider.PeekMessagesAsync("orders", 5));
+        var failed = await Assert.ThrowsAsync<MessageReadFailedException>(() => provider.ReceiveMessagesAsync("orders", 5));
 
-        channel.Verify(c => c.BasicNack(2, true, true), Times.Once);
-        channel.Verify(c => c.BasicNack(It.IsAny<ulong>(), It.IsAny<bool>(), It.IsAny<bool>()), Times.Once);
+        Assert.Equal("The broker did not return the messages of this entity (a stream is not read this way).", failed.Message);
+        channel.Verify(c => c.BasicGet(It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
     }
 
     [Fact]
-    public async Task A_peek_cancelled_after_reading_one_message_requeues_it_and_is_cancelled()
+    public async Task A_purge_of_a_stream_is_refused_before_the_broker_is_asked_and_says_a_stream_cannot_be_purged()
     {
-        using var cts = new CancellationTokenSource();
-        var (provider, channel) = HoldingProvider(call =>
-        {
-            if (call == 1) { cts.Cancel(); return Delivery(1, "m1"); }
-            return Delivery((ulong)call, $"m{call}");
-        });
+        var (provider, channel) = OnAStream();
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => provider.PeekMessagesAsync("orders", 5, cancellationToken: cts.Token));
+        var refused = await Assert.ThrowsAsync<InvalidEntityConfigurationException>(() => provider.PurgeMessagesAsync("orders"));
 
-        channel.Verify(c => c.BasicNack(1, true, true), Times.Once);
+        Assert.Equal("A stream cannot be purged: it keeps its messages until its retention removes them.", refused.Message);
+        channel.Verify(c => c.QueuePurge(It.IsAny<string>()), Times.Never);
     }
 
-    [Fact]
-    public async Task A_peek_whose_channel_closed_while_reading_sends_no_nack_since_the_broker_requeues_what_it_held()
+    [Theory]
+    [InlineData("delete", "Not deleted")]
+    [InlineData("move", "Not moved")]
+    public async Task A_delete_or_a_move_on_a_stream_fails_every_position_before_the_broker_is_asked(string operation, string not)
     {
-        var (provider, channel) = HoldingProvider(call => call == 1 ? Delivery(1, "m1") : null, channelOpen: false);
+        var (provider, channel) = OnAStream();
 
-        var peeked = await provider.PeekMessagesAsync("orders", 5);
+        var result = operation == "delete"
+            ? await provider.DeleteMessagesAsync("orders", [1, 2])
+            : await provider.MoveMessagesAsync("orders", "archive", [1, 2]);
 
-        Assert.Single(peeked);
-        channel.Verify(c => c.BasicNack(It.IsAny<ulong>(), It.IsAny<bool>(), It.IsAny<bool>()), Times.Never);
+        Assert.Equal(0, result.SuccessCount);
+        Assert.Equal([1L, 2L], result.Failures.Select(f => f.SequenceNumber));
+        Assert.All(result.Failures, f => Assert.Equal($"{not}: a stream is not read this way. Nothing was sent or removed.", f.Error));
+        channel.Verify(c => c.QueueDeclarePassive(It.IsAny<string>()), Times.Never);
+        channel.Verify(c => c.BasicGet(It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(405, "RESOURCE_LOCKED - cannot obtain exclusive access", "the queue is exclusive to another connection")]
+    [InlineData(540, "NOT_IMPLEMENTED - basic.get not supported by stream queues", "a stream is not read this way")]
+    [InlineData(404, "NOT_FOUND - no queue 'orders'", "the queue does not exist")]
+    [InlineData(320, "CONNECTION_FORCED - broker shutdown", "AMQP 320")]
+    public async Task A_peek_the_broker_refuses_is_the_neutral_read_failure_with_a_cause_and_nothing_of_the_broker_text(ushort code, string brokerText, string cause)
+    {
+        var channel = new Mock<IModel>();
+        channel.Setup(c => c.IsOpen).Returns(true);
+        var refusal = new OperationInterruptedException(new ShutdownEventArgs(ShutdownInitiator.Peer, code, brokerText));
+        channel.Setup(c => c.BasicGet("orders", false)).Throws(refusal);
+        var connection = new Mock<IConnection>();
+        connection.Setup(c => c.IsOpen).Returns(true);
+        var provider = new RabbitMQProvider(connection.Object, new RabbitMQManagementClient(new HttpClient(), "http://127.0.0.1:1/api", "/", "user", "password"), channel.Object);
+
+        var failed = await Assert.ThrowsAsync<MessageReadFailedException>(() => provider.PeekMessagesAsync("orders", 5));
+
+        Assert.Equal($"The broker did not return the messages of this entity ({cause}).", failed.Message);
+        Assert.Same(refusal, failed.InnerException);
     }
 }

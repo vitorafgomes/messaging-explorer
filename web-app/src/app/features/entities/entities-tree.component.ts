@@ -9,7 +9,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import {finalize, Subject, Subscription} from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { SubscriptionNodeData, TreeNode, getProviderMetadata } from '../../core/models';
-import { TreeDataBuilderService, EntitySelectionService, ConnectionService, LoggerService, DeadLetterNotificationService, ResubmitRunService } from '../../core/services';
+import { TreeDataBuilderService, EntitySelectionService, ConnectionService, LoggerService, DeadLetterNotificationService, ResubmitRunService, EntityCounts, EntityCountsService } from '../../core/services';
 import { ProviderService } from '../../core/services/provider.service';
 import { EntityFormDialogComponent, EntityFormDialogData } from './entity-form-dialog.component';
 import { ExportDefinitionsDialogComponent } from './export-definitions-dialog.component';
@@ -62,31 +62,39 @@ export const STATUS_MARKERS: Partial<Record<string, { icon: string; text: string
           @if (forwardMarker(node); as marker) {
             <mat-icon class="node-marker" fontIcon="forward" [matTooltip]="marker" [attr.aria-label]="marker" role="img" />
           }
-          @if (node.type !== 'topic' && node.data; as data) {
-            @if ($any(data).activeMessageCount > 0) {
-              <span class="count-chip"><span class="count" aria-hidden="true">{{ $any(data).activeMessageCount | number }}</span><span class="visually-hidden">, {{ $any(data).activeMessageCount | number }} active messages</span></span>
-            }
-            @if ($any(data).deadLetterMessageCount > 0) {
-              <span class="count-chip dead-letter"><mat-icon class="chip-icon" fontIcon="warning" aria-hidden="true" /><span class="count" aria-hidden="true">{{ $any(data).deadLetterMessageCount | number }}</span><span class="visually-hidden">, {{ $any(data).deadLetterMessageCount | number }} dead-letter messages</span></span>
-            }
-            @if (resubmitRunning(node)) {
-              <mat-progress-spinner class="resubmit-spinner" mode="indeterminate" diameter="14" aria-hidden="true" /><span class="visually-hidden">, resubmit running</span>
-            }
-          }
+          <ng-container *ngTemplateOutlet="chips; context: { $implicit: node }" />
         </button>
         @if (node.type === 'topic') {
           <ng-container *ngTemplateOutlet="createAction; context: { $implicit: node }" />
         }
       </div>
     </ng-template>
+    <ng-template #chips let-node>
+      @if (node.type !== 'topic' && countsOf(node); as data) {
+        @if ($any(data).activeMessageCount > 0) {
+          <span class="count-chip"><span class="count" aria-hidden="true">{{ $any(data).activeMessageCount | number }}</span><span class="visually-hidden">, {{ $any(data).activeMessageCount | number }} active messages</span></span>
+        }
+        @if ($any(data).deadLetterMessageCount > 0) {
+          <span class="count-chip dead-letter"><mat-icon class="chip-icon" fontIcon="warning" aria-hidden="true" /><span class="count" aria-hidden="true">{{ $any(data).deadLetterMessageCount | number }}</span><span class="visually-hidden">, {{ $any(data).deadLetterMessageCount | number }} dead-letter messages</span></span>
+        }
+        @if (resubmitRunning(node)) {
+          <mat-progress-spinner class="resubmit-spinner" mode="indeterminate" diameter="14" aria-hidden="true" /><span class="visually-hidden">, resubmit running</span>
+        }
+      }
+    </ng-template>
     <ng-template #bindingRow let-node>
       <div class="tree-row">
         <button type="button" class="tree-node node-binding"
-                [attr.aria-label]="'Binding ' + (bindingKey(node) || 'with no routing key') + ' to queue ' + node.name + ': open the queue'"
+                [class.selected]="isBoundQueueSelected(node)"
+                [attr.aria-current]="isBoundQueueSelected(node) ? 'true' : 'false'"
+                [attr.aria-label]="'Queue ' + node.name + ', bound with ' + bindingKeys(node) + ': open the queue'"
+                [matTooltip]="bindingKeysTooltip(node)"
                 (click)="openBoundQueue(node)">
-          <span class="binding-key">{{ bindingKey(node) || '(no key)' }}</span>
-          <mat-icon class="binding-arrow" fontIcon="arrow_forward" aria-hidden="true" />
-          <span class="node-name">{{ node.name }}</span>
+          <mat-icon class="node-icon" fontIcon="subdirectory_arrow_right" aria-hidden="true" />
+          <span class="node-name">{{ boundName(node) }}</span>
+          @if (boundQueue(node); as queue) {
+            <ng-container *ngTemplateOutlet="chips; context: { $implicit: queue }" />
+          }
         </button>
       </div>
     </ng-template>
@@ -132,7 +140,7 @@ export const STATUS_MARKERS: Partial<Record<string, { icon: string; text: string
           <span class="empty-subtitle">The broker did not answer the list of queues and topics.</span>
           <button mat-stroked-button type="button" (click)="loadTree()"><mat-icon fontIcon="refresh" />Retry</button>
         </div>
-      } @else if (treeData.length === 0) {
+      } @else if (treeData().length === 0) {
         <div class="tree-empty">
           <mat-icon class="empty-icon" fontIcon="inbox" aria-hidden="true" />
           <span class="empty-title">No Entities Found</span>
@@ -143,12 +151,12 @@ export const STATUS_MARKERS: Partial<Record<string, { icon: string; text: string
           @if (hiddenCount() > 0) {
             <p class="hidden-note" aria-live="polite">{{ hiddenCount() }} of {{ entityCount() }} entities hidden by the filter</p>
           }
-          @for (category of treeData; track category.id) {
+          @for (category of treeData(); track category.id) {
             <div class="section">
-              <h2 class="section-head">{{ category.id === 'category-topics' ? terms().topics : category.name }} <span class="section-count">{{ category.children?.length || 0 | number }}</span></h2>
+              <h2 class="section-head">{{ category.id === 'category-topics' ? terms().topics : category.name }} <span class="section-count">{{ listed(category).length | number }}</span></h2>
               <ng-container *ngTemplateOutlet="createAction; context: { $implicit: category }" />
             </div>
-            @for (node of shown(category.children); track node.id) {
+            @for (node of shown(listed(category)); track node.id) {
               <ng-container *ngTemplateOutlet="row; context: { $implicit: node }" />
               @if (node.type === 'topic' && isExpanded(node) && subscriptionsFailed().has(node.id)) {
                 <p class="subscriptions-error" role="alert">Could not load the subscriptions of {{ node.name }}.</p>
@@ -173,6 +181,7 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
   private selectionService = inject(EntitySelectionService);
   private connectionService = inject(ConnectionService);
   private readonly resubmitRuns = inject(ResubmitRunService);
+  private readonly counts = inject(EntityCountsService);
 
   /** An automatic dead-letter resubmit is running or paused on this queue or subscription. */
   resubmitRunning(node: TreeNode): boolean {
@@ -201,14 +210,66 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
     return this.terms().subscription === 'binding';
   }
 
-  bindingKey(node: TreeNode): string {
-    return (node.data as SubscriptionNodeData | undefined)?.routingKey ?? '';
+  /** The routing keys an exchange is bound to a queue with: one per binding of that queue under the exchange, without the empty ones. */
+  private keysOf(binding: TreeNode): string[] {
+    return (binding.parent?.children ?? [binding])
+      .filter(other => other.name === binding.name)
+      .map(other => (other.data as SubscriptionNodeData | undefined)?.routingKey ?? '')
+      .filter(key => key !== '');
   }
 
-  /** Selects the queue a binding feeds, where it is listed under Queues; the binding itself when the queue is not listed. */
+  /** The keys of a bound queue as its row says them to assistive technology. */
+  bindingKeys(binding: TreeNode): string {
+    const keys = this.keysOf(binding);
+    return keys.length === 0 ? 'no routing key' : `the routing key${keys.length > 1 ? 's' : ''} ${keys.join(', ')}`;
+  }
+
+  /** A bound queue as its row names it: under its exchange, a name that starts with the exchange's name and a dot is shown without them. */
+  boundName(binding: TreeNode): string {
+    const exchange = (binding.data as SubscriptionNodeData | undefined)?.topicName;
+    const prefix = `${exchange}.`;
+    return exchange && binding.name.length > prefix.length && binding.name.startsWith(prefix) ? binding.name.slice(prefix.length) : binding.name;
+  }
+
+  /** The name the broker has and the routing keys, for a row that may show a shortened name. */
+  bindingKeysTooltip(binding: TreeNode): string {
+    const keys = this.keysOf(binding);
+    return `Queue ${binding.name}. ` + (keys.length === 0 ? 'Routing key: none' : `Routing key${keys.length > 1 ? 's' : ''}: ${keys.join(', ')}`);
+  }
+
+  /** What an exchange lists under it: on RabbitMQ one row for each queue it is bound to, however many keys bind it. */
+  private childrenOf(topic: TreeNode): TreeNode[] {
+    const children = topic.children ?? [];
+    if (!this.isBinding()) return children;
+    const seen = new Set<string>();
+    return children.filter(child => !seen.has(child.name) && !!seen.add(child.name));
+  }
+
+  /** The queue a binding feeds, as the broker listed it; undefined when the broker listed no queue of that name. */
+  boundQueue(binding: TreeNode): TreeNode | undefined {
+    return this.treeData().find(c => c.id === 'category-queues')?.children?.find(q => q.name === binding.name);
+  }
+
+  /** Selects the queue a binding feeds, so it opens as a queue; the binding itself when the broker listed no such queue. */
   openBoundQueue(binding: TreeNode) {
-    const queue = this.treeData.find(c => c.id === 'category-queues')?.children?.find(q => q.name === binding.name);
-    this.selectionService.select(queue ?? binding);
+    this.selectionService.select(this.boundQueue(binding) ?? binding);
+  }
+
+  /** A binding row is the current row when the queue it feeds is the one selected. */
+  isBoundQueueSelected(binding: TreeNode): boolean {
+    const selected = this.selectedNode();
+    return selected?.type === 'queue' && selected.name === binding.name;
+  }
+
+  /**
+   * The entities a section lists. On RabbitMQ a queue an exchange is bound to is listed under that exchange, as its
+   * binding, and not again under Queues; a queue under no exchange shown here stays under Queues.
+   */
+  listed(category: TreeNode): TreeNode[] {
+    const children = category.children ?? [];
+    if (category.id !== 'category-queues' || !this.isBinding()) return children;
+    const bound = new Set(this.treeData().find(c => c.id === 'category-topics')?.children?.flatMap(exchange => (exchange.children ?? []).map(b => b.name)));
+    return children.filter(queue => !bound.has(queue.name));
   }
 
   readonly canCreate = computed(() => this.providerService.capabilities()?.supportsEntityUpdate === true);
@@ -216,13 +277,15 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
   /** Export and import of definitions are offered only when the connected broker's API explicitly declares them. */
   readonly canUseDefinitions = computed(() => this.providerService.capabilities()?.supportsDefinitions === true);
 
-  treeData: TreeNode[] = [];
+  /** The categories and their entities as last read; a signal, because it is written when a request or the connection answers. */
+  readonly treeData = signal<TreeNode[]>([]);
   /** The text typed in the filter; a row is shown when its name holds it, in any case. */
   readonly filter = signal('');
   loading: WritableSignal<boolean> = signal<boolean>(false);
   loadError = signal(false);
   private treeLoad?: Subscription;
-  selectedNode: TreeNode | null = null;
+  /** The entity selected anywhere in the app; a signal, because the selection arrives from a service. */
+  readonly selectedNode = signal<TreeNode | null>(null);
 
   get isConnected(): boolean {
     return this.connectionService.isConnected;
@@ -240,7 +303,7 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
           this.notificationService.clear();
           this.loadTree();
         } else {
-          this.treeData = [];
+          this.treeData.set([]);
           this.notificationService.clear();
         }
       });
@@ -248,7 +311,7 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
     this.selectionService.selection$
       .pipe(takeUntil(this.destroy$))
       .subscribe(selection => {
-        this.selectedNode = selection?.node || null;
+        this.selectedNode.set(selection?.node || null);
       });
 
     this.selectionService.treeRefresh$
@@ -277,7 +340,8 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (data) => {
           this.logger.log('[EntitiesTree] Tree data received:', data);
-          this.treeData = data;
+          this.treeData.set(data);
+          this.counts.clear();
           this.subscriptionsFailed.set(new Set());
           for (const topic of data.find(c => c.id === 'category-topics')?.children ?? []) {
             if (this.opened().has(topic.id) && !topic.children?.length) this.loadSubscriptions(topic);
@@ -285,10 +349,17 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
         },
         error: (err) => {
           this.logger.error('[EntitiesTree] Failed to load entities:', err);
-          this.treeData = [];
+          this.treeData.set([]);
           this.loadError.set(true);
         }
       });
+  }
+
+  /** The counts a row shows: the latest read for its entity, or the ones it was loaded with. */
+  countsOf(node: TreeNode): EntityCounts | undefined {
+    if (this.providerService.capabilities()?.supportsMessageCounts === false) return undefined;
+    const data = node.data as (EntityCounts & { topicName?: string }) | undefined;
+    return this.counts.of(EntityCountsService.key(node.name, node.type === 'subscription' ? data?.topicName : null)) ?? data;
   }
 
   private matches(node: TreeNode): boolean {
@@ -298,7 +369,7 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
 
   /** The children of a topic shown under it: all of them when the topic matches the filter, else those that match. */
   shownChildren(topic: TreeNode): TreeNode[] {
-    const children = topic.children ?? [];
+    const children = this.childrenOf(topic);
     return this.matches(topic) ? children : children.filter(child => this.matches(child));
   }
 
@@ -309,12 +380,12 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
 
   /** Every queue, topic and subscription of the tree. */
   entityCount(): number {
-    return this.treeData.flatMap(category => category.children ?? []).reduce((count, node) => count + 1 + (node.type === 'topic' ? node.children?.length ?? 0 : 0), 0);
+    return this.treeData().flatMap(category => this.listed(category)).reduce((count, node) => count + 1 + (node.type === 'topic' ? this.childrenOf(node).length : 0), 0);
   }
 
   /** How many entities the filter hides. */
   hiddenCount(): number {
-    const visible = this.treeData.flatMap(category => this.shown(category.children))
+    const visible = this.treeData().flatMap(category => this.shown(this.listed(category)))
       .reduce((count, node) => count + 1 + (node.type === 'topic' ? this.shownChildren(node).length : 0), 0);
     return this.entityCount() - visible;
   }
@@ -339,7 +410,7 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
   isExpanded(topic: TreeNode): boolean {
     return this.opened().has(topic.id)
       || this.filter().trim() !== ''
-      || (!!this.selectedNode && (topic.children ?? []).some(child => child.id === this.selectedNode!.id));
+      || (!!this.selectedNode() && (topic.children ?? []).some(child => child.id === this.selectedNode()!.id || (this.isBinding() && this.isBoundQueueSelected(child))));
   }
 
   /** The topics whose subscriptions could not be read when they were opened. */
@@ -397,6 +468,6 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
   }
 
   isSelected(node: TreeNode): boolean {
-    return this.selectedNode?.id === node.id;
+    return this.selectedNode()?.id === node.id;
   }
 }

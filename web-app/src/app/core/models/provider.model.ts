@@ -42,6 +42,8 @@ export interface ProviderCapabilities {
   supportsBulkMessageOperations?: boolean;
   /** A body that is not UTF-8 is read as base64 and a base64 body can be sent. An older API does not send it; only an explicit true enables it. */
   supportsBinaryBody?: boolean;
+  /** False when the broker answers no message counts, as the Service Bus emulator does; absent means it reports them. */
+  supportsMessageCounts?: boolean;
   supportedExchangeTypes: string[];
   maxMessageSizeInBytes: number;
   maxTimeToLive: string;

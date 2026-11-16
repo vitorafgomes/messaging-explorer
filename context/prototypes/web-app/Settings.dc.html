@@ -133,7 +133,52 @@ input::placeholder{color:currentColor;opacity:.72}
           <span style="flex: 1"></span>
           <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built: the time, and Check now outside a failure</span>
         </div>
-        <p style="margin: 8px 0 0; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Checked 5 seconds after the app starts, then every 4 hours. Beta also receives pre-releases; going back to Stable never downgrades, you stay on the beta until a newer stable version is out.</p>
+        <div style="display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; min-height: 48px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}; align-items: flex-start">
+          <span style="flex: 0 0 168px; font-weight: 500; padding-top: 6px">Version</span>
+          <div style="display: flex; flex-direction: column; gap: 6px; flex: 1 1 320px; min-width: 0">
+            <select aria-label="Version" onChange="{{pickVer}}" style="height: 44px; width: min(100%, 360px); box-sizing: border-box; padding: 0 12px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit; font-variant-numeric: tabular-nums; cursor: pointer">
+              <sc-for list="{{versionOpts}}" as="v" hint-placeholder-count="4">
+                <option value="{{v.version}}" selected="{{v.on}}">{{v.label}}</option>
+              </sc-for>
+            </select>
+            <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Pick a version to read what it has. Picking one installs nothing.</span>
+          </div>
+          <span style="display: inline-flex; align-items: center; gap: 4px; flex: none; height: 20px; padding: 0 8px 0 6px; border: 1px solid {{t.outlineVariant}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 12l5 5 9-10"></path></svg>Built: the list and the notes of the one picked</span>
+        </div>
+        <p style="margin: 8px 0 0; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Checked 5 seconds after the app starts, then every 4 hours. Stable lists the releases that are not betas; Beta lists only the betas. An older version is installed only when you pick it above and agree below.</p>
+
+        <section aria-label="The version picked" style="display: flex; flex-direction: column; align-items: flex-start; gap: 10px; margin-top: 16px; padding: 16px; border: 1px solid {{t.outlineVariant}}; border-radius: 8px; background: {{t.surfaceLow}}">
+          <h3 style="margin: 0; font-size: 16px; line-height: 24px; font-weight: 500">What version {{sel.version}} has</h3>
+          <p style="margin: 0; color: {{t.onSurfaceVariant}}">{{sel.relation}}</p>
+          <div style="display: flex; flex-direction: column; gap: 4px; width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}">
+            <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Release notes of {{sel.version}} (sample text)</span>
+            <ul style="display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0 0 0 20px">
+              <sc-for list="{{sel.notes}}" as="n" hint-placeholder-count="3">
+                <li>{{n.text}}</li>
+              </sc-for>
+            </ul>
+          </div>
+          <sc-if value="{{selOlder}}" hint-placeholder-val="{{false}}">
+            <p style="margin: 0; padding: 10px 12px; border-radius: 8px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}">This goes back to an older version. What a newer version saved may not be read by it; your connections file is copied beside the original first.</p>
+          </sc-if>
+          <sc-if value="{{selInstalled}}" hint-placeholder-val="{{false}}">
+            <p style="margin: 0; font-weight: 500">This is the version you have. There is nothing to install.</p>
+          </sc-if>
+          <sc-if value="{{selCanInstall}}" hint-placeholder-val="{{true}}">
+            <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 10px; width: 100%">
+              <label style="display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer">
+                <input type="checkbox" checked="{{agreed}}" onChange="{{toggleAgree}}" style="width: 18px; height: 18px; margin: 0; accent-color: {{t.primary}}">
+                <span>I read what version {{sel.version}} has and I want to install it</span>
+              </label>
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+                <button type="button" disabled="{{cannotInstall}}" onClick="{{install}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px 0 16px; border: 0; border-radius: 999px; background: {{installBg}}; color: {{installFg}}; font: inherit; font-weight: 500; white-space: nowrap; cursor: {{installCursor}}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"></path></svg>Install {{sel.version}}</button>
+                <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer">Open the release page</button>
+              </div>
+              <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Nothing downloads until you tick the box and press Install. The app restarts to finish.</span>
+            </div>
+          </sc-if>
+          <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built</span>
+        </section>
 
         <sc-if value="{{upToDate}}" hint-placeholder-val="{{true}}">
           <div aria-live="polite" style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 16px; padding: 16px; border-radius: 8px; background: {{t.surfaceLow}}">
@@ -261,12 +306,51 @@ input::placeholder{color:currentColor;opacity:.72}
           <span style="flex: 1"></span>
           <span style="display: inline-flex; align-items: center; gap: 4px; flex: none; height: 20px; padding: 0 8px 0 6px; border: 1px solid {{t.outlineVariant}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 12l5 5 9-10"></path></svg>Built: on the Connections screen</span>
         </div>
+        <div style="display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; min-height: 48px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}; align-items: flex-start">
+          <span style="flex: 0 0 168px; font-weight: 500; padding-top: 6px">Monitoring history</span>
+          <div style="display: flex; flex-direction: column; gap: 4px; flex: 1 1 320px; min-width: 0">
+            <label style="display: flex; align-items: center; gap: 10px; min-height: 32px; cursor: pointer">
+              <input type="checkbox" checked="{historyOn}" onChange="{toggleHistory}" style="width: 18px; height: 18px; margin: 0; accent-color: {t.primary}">
+              <span>Keep a history on this computer</span>
+            </label>
+            <span style="font-size: 12px; line-height: 16px; color: {t.onSurfaceVariant}">Off unless you turn it on. With it off, the totals and charts of Monitoring cover only the current session and nothing more is written to disk.</span>
+          </div>
+          <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built</span>
+        </div>
+        <sc-if value="{historyOn}" hint-placeholder-val="{false}">
+          <div style="display: flex; flex-direction: column">
+            <div style="display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; min-height: 48px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+              <span style="flex: 0 0 168px; font-weight: 500">Keep it for</span>
+              <div style="display: inline-flex; border: 1px solid {t.outline}; border-radius: 999px; overflow: hidden">
+                <sc-for list="{keepOpts}" as="o" hint-placeholder-count="4">
+                  <button type="button" onClick="{o.pick}" aria-pressed="{o.pressed}" class="hov" style="display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 16px 0 {o.pad}; border: 0; border-left: {o.line}; background: {o.bg}; color: {o.fg}; font: inherit; font-weight: {o.weight}; cursor: pointer">
+                    <sc-if value="{o.on}" hint-placeholder-val="{false}">
+                      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 12l5 5 9-10"></path></svg>
+                    </sc-if>
+                    {o.label}
+                  </button>
+                </sc-for>
+              </div>
+              <span style="font-size: 12px; line-height: 16px; color: {t.onSurfaceVariant}">Anything older is deleted when the app starts and once an hour while it runs.</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; min-height: 48px; padding: 8px 0; border-bottom: 1px solid {{t.outlineVariant}}; align-items: flex-start">
+              <span style="flex: 0 0 168px; font-weight: 500; padding-top: 6px">History file</span>
+              <div style="display: flex; flex-direction: column; gap: 4px; flex: 1 1 320px; min-width: 0; padding-top: 6px">
+                <span style="font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; overflow-wrap: anywhere">~/.config/Messaging Explorer/data/history.db</span>
+                <span style="font-size: 12px; line-height: 16px; color: {t.onSurfaceVariant}">Sample: 3.2 MB, oldest record Nov 9, 2026, 1,214 operations and 2,016 count readings.</span>
+                <span><strong style="font-weight: 600">Stored:</strong> the name of the connection and of each queue, topic and subscription; counts with their time; each operation this app ran, with how many and what was left behind.</span>
+                <span><strong style="font-weight: 600">Never stored:</strong> the body or the properties of a message, a connection string, a password or a key.</span>
+              </div>
+              <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px 0 12px; border: 1px solid {t.error}; border-radius: 999px; background: transparent; color: {t.error}; font: inherit; font-weight: 500; white-space: nowrap; cursor: pointer">Delete history now</button>
+            </div>
+          </div>
+        </sc-if>
         <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 16px; padding: 16px; border: 1px solid {{t.error}}; border-radius: 8px">
           <h3 style="display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; line-height: 20px; font-weight: 600; color: {{t.error}}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>Danger zone</h3>
           <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
             <div style="flex: 1 1 320px; min-width: 0">
               <div style="font-weight: 500">Clear all data</div>
-              <div style="color: {{t.onSurfaceVariant}}">Deletes every saved connection, client and environment from this computer. No broker is touched. It cannot be undone.</div>
+              <div style="color: {{t.onSurfaceVariant}}">Deletes every saved connection, client and environment, and the Monitoring history, from this computer. No broker is touched. It cannot be undone.</div>
             </div>
             <button type="button" onClick="{{openClear}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: {{t.error}}; font: inherit; font-weight: 500; white-space: nowrap; cursor: pointer; border: 1px solid {{t.error}}; padding: 0 20px 0 16px"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"></path></svg>Clear all data</button>
           </div>
@@ -428,7 +512,7 @@ input::placeholder{color:currentColor;opacity:.72}
   </sc-if>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Preview"},"state":{"editor":"enum","options":["upToDate","available","downloading","ready","failed","cannotSelfUpdate","bugReport","clearConfirm"],"default":"upToDate","section":"Preview"},"environment":{"editor":"enum","options":["production","development"],"default":"production","section":"Preview"},"$preview":{"width":1280,"height":1840}}'>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Preview"},"state":{"editor":"enum","options":["upToDate","available","downloading","ready","failed","cannotSelfUpdate","bugReport","clearConfirm"],"default":"upToDate","section":"Preview"},"environment":{"editor":"enum","options":["production","development"],"default":"production","section":"Preview"},"$preview":{"width":1280,"height":2520}}'>
 const LIGHT = { surface:'#f9f9ff', surfaceLow:'#f2f3fa', surfaceContainer:'#ecedf4', surfaceHigh:'#e6e8ee',
   onSurface:'#191c20', onSurfaceVariant:'#43474e', outline:'#73777f', outlineVariant:'#c3c6cf',
   primary:'#005cbb', onPrimary:'#ffffff', primaryContainer:'#d7e3ff', onPrimaryContainer:'#001b3f',
@@ -446,6 +530,20 @@ const DARK = { surface:'#111318', surfaceLow:'#191c20', surfaceContainer:'#1d202
 
 const UPDATE_STATES = ['upToDate', 'available', 'downloading', 'ready', 'failed', 'cannotSelfUpdate'];
 const CLEAR_WORDS = 'clear all data';
+const VERSIONS = {
+  latest: [
+    { version: '2.4.5', date: 'Nov 20, 2026', tag: 'Newest on Stable', rank: 1, notes: ['RabbitMQ: delete, move and Edit & Resubmit of chosen messages', 'The count beside an entity in the tree follows the panel in real time', 'Fix: the Transfer dead-letter tab says why the broker did not answer'] },
+    { version: '2.4.4', date: 'Nov 14, 2026', tag: 'Newer', rank: 1, notes: ['Automatic resubmit keeps running when its dialog is closed', 'Fix: a queue with a message time to live no longer breaks the tree'] },
+    { version: '2.4.0', date: 'Nov 12, 2026', tag: 'Installed', rank: 0, notes: ['Edit a queue, a topic or a subscription', 'Subscription rules', 'Transfer dead-letter tab'] },
+    { version: '2.3.0', date: 'Sep 7, 2026', tag: 'Older', rank: -1, notes: ['Monitoring screen', 'Export and import of connections'] }
+  ],
+  beta: [
+    { version: '2.5.0-beta.2', date: 'Nov 22, 2026', tag: 'Newest on Beta', rank: 1, notes: ['Monitoring: processed totals and an optional history', 'Sign in with Microsoft lists the namespaces your account sees'] },
+    { version: '2.5.0-beta.1', date: 'Nov 18, 2026', tag: 'Newer', rank: 1, notes: ['Monitoring: what this app did, as a table'] },
+    { version: '2.4.5-beta.7', date: 'Nov 15, 2026', tag: 'Newer', rank: 1, notes: ['RabbitMQ: resubmit sends first and removes after', 'Counts follow an automatic resubmit started from the messages dialog'] },
+    { version: '2.4.0-beta.3', date: 'Nov 10, 2026', tag: 'Older', rank: -1, notes: ['First draft of the Transfer dead-letter tab'] }
+  ]
+};
 
 class Component extends DCLogic {
   componentDidUpdate(prev) {
@@ -488,13 +586,26 @@ class Component extends DCLogic {
     const typed = s.typed ?? '';
     const canClear = typed.trim() === CLEAR_WORDS;
     const devMode = !!s.dev;
+    const historyOn = !!s.history;
+    const keep = s.keep ?? '7';
+    const agreed = !!s.agreed;
+    const list = VERSIONS[channel];
+    const picked = list.find(v => v.version === s.ver) ?? list[0];
+    const sel = {
+      version: picked.version, rank: picked.rank, notes: picked.notes.map(text => ({ text })),
+      relation: picked.rank > 0 ? 'Newer than 2.4.0, the version you have.' : picked.rank < 0 ? 'Older than 2.4.0, the version you have.' : 'The version installed on this computer.'
+    };
+    const versionOpts = list.map(v => {
+      const on = v.version === picked.version;
+      return { version: v.version, on, label: v.version + ' · ' + v.date + (v.rank === 0 ? ' · Installed' : '') };
+    });
 
     return {
       t, bar, env, conn, snack,
       hasConn: true, noConn: false,
       isDefault: upd === 'upToDate' && dlg === 'none', isLoading: upd === 'downloading', isEmpty: false, isError: upd === 'failed',
       themeOpts: seg([['system', 'System'], ['light', 'Light'], ['dark', 'Dark']], themeSel, v => this.setState({ themeSel: v })),
-      channelOpts: seg([['latest', 'Stable'], ['beta', 'Beta']], channel, v => this.setState({ channel: v })),
+      channelOpts: seg([['latest', 'Stable'], ['beta', 'Beta']], channel, v => this.setState({ channel: v, ver: undefined, agreed: false })),
       channelName: channel === 'beta' ? 'Beta' : 'Stable',
       upToDate: upd === 'upToDate', available: upd === 'available', downloading: upd === 'downloading', ready: upd === 'ready',
       failed: upd === 'failed', cannot: upd === 'cannotSelfUpdate',
@@ -502,6 +613,11 @@ class Component extends DCLogic {
       startDownload: () => this.setState({ upd: 'downloading' }),
       retryUpdate: () => this.setState({ upd: 'downloading' }),
       devMode, toggleDev: () => this.setState({ dev: !devMode }),
+      historyOn, toggleHistory: () => this.setState({ history: !historyOn }),
+      keepOpts: seg([['1', '1 day'], ['7', '7 days'], ['30', '30 days'], ['90', '90 days']], keep, v => this.setState({ keep: v })),
+      versionOpts, pickVer: ev => this.setState({ ver: ev.target.value, agreed: false }), sel, selOlder: sel.rank < 0, selInstalled: sel.rank === 0, selCanInstall: sel.rank !== 0,
+      agreed, toggleAgree: () => this.setState({ agreed: !agreed }), cannotInstall: !agreed, install: () => this.setState({ upd: 'downloading', agreed: false }),
+      installBg: agreed ? t.primary : t.surfaceHigh, installFg: agreed ? t.onPrimary : t.onSurfaceVariant, installCursor: agreed ? 'pointer' : 'not-allowed',
       showDialog: dlg !== 'none', dlgBug: dlg === 'bug', dlgClear: dlg === 'clear',
       openBug: () => this.setState({ dlg: 'bug' }),
       openClear: () => this.setState({ dlg: 'clear', typed: '' }),

@@ -17,6 +17,18 @@ export type SelfUpdateBlocker = 'macos-unsigned' | 'windows-portable' | 'linux-p
 const BLOCKERS: SelfUpdateBlocker[] = ['macos-unsigned', 'windows-portable', 'linux-package'];
 const SHELL_STATUSES: UpdateStatus[] = ['checking', 'up-to-date', 'available', 'downloading', 'downloaded', 'error'];
 
+/** A release of the chosen channel, as the desktop app read it from the release page. Its notes are text from outside the app. */
+export interface UpdateVersion {
+  version: string;
+  date: string;
+  notes: string;
+  installed: boolean;
+  /** Whether it comes before the installed version, so installing it goes back. */
+  older: boolean;
+  /** Whether its release holds the package the desktop app can install on this system. */
+  installable: boolean;
+}
+
 export const REPOSITORY_URL = 'https://github.com/vitorafgomes/messaging-explorer';
 export const RELEASES_URL = `${REPOSITORY_URL}/releases`;
 
@@ -41,6 +53,7 @@ export class AppUpdateService {
   private readonly ngZone = inject(NgZone);
   private initialized = false;
   private downloadRequested = false;
+  private versionsRead = 0;
 
   readonly version = signal('');
   readonly channel = signal<UpdateChannel>('latest');
@@ -53,6 +66,15 @@ export class AppUpdateService {
   readonly blocker = signal<SelfUpdateBlocker | null>(null);
   readonly releaseNotes = signal<string[]>([]);
   readonly lastChecked = signal<Date | null>(null);
+  /** The versions of the chosen channel; null until they were read, or where the desktop app cannot list them. */
+  readonly versions = signal<UpdateVersion[] | null>(null);
+  readonly versionsLoading = signal(false);
+  readonly versionsError = signal('');
+  /** The version being downloaded at the user's word, or '' when none is. */
+  readonly installingVersion = signal('');
+  readonly installError = signal('');
+  /** Whether the version found downloads by itself; false while the app keeps a version the user picked. */
+  readonly downloadsByItself = signal(true);
 
   private get shell(): any {
     return typeof window !== 'undefined' ? (window as any).electronAPI : undefined;
@@ -118,17 +140,69 @@ export class AppUpdateService {
       return;
     }
     this.channel.set(channel);
-    await this.check();
+    this.versions.set(null);
+    await Promise.all([this.check(), this.loadVersions()]);
+  }
+
+  /**
+   * Reads the versions of the chosen channel through the desktop app; a list that could not be read is an error,
+   * never an empty list. Only the answer of the latest read is kept, so one that arrives late for a channel left
+   * behind changes nothing.
+   */
+  async loadVersions(): Promise<void> {
+    const shell = this.shell;
+    if (!shell?.listUpdateVersions) return;
+    const read = ++this.versionsRead;
+    this.versionsLoading.set(true);
+    this.versionsError.set('');
+    const result = await Promise.resolve(shell.listUpdateVersions()).catch(() => null);
+    if (read !== this.versionsRead) return;
+    this.versionsLoading.set(false);
+    if (result?.status === 'ok' && Array.isArray(result.versions)) {
+      this.versions.set(result.versions
+        .filter((v: any) => typeof v?.version === 'string' && v.version)
+        .map((v: any) => ({
+          version: v.version,
+          date: typeof v.date === 'string' ? v.date : '',
+          notes: typeof v.notes === 'string' ? v.notes : '',
+          installed: v.installed === true,
+          older: v.older === true,
+          installable: v.installable === true,
+        })));
+      return;
+    }
+    this.versions.set(null);
+    this.versionsError.set(typeof result?.message === 'string' && result.message ? result.message : 'The desktop app gave no list.');
+  }
+
+  /**
+   * Downloads a version the user picked and agreed to; the desktop app installs it on restart. The desktop app
+   * decides whether it may be installed, from a version alone, and says why when it refuses.
+   */
+  async installVersion(version: string): Promise<void> {
+    const shell = this.shell;
+    if (this.blocker() || !shell?.installUpdateVersion || this.installingVersion()) return;
+    this.installError.set('');
+    this.installingVersion.set(version);
+    this.downloadRequested = true;
+    const result = await Promise.resolve(shell.installUpdateVersion(version, true)).catch(() => null);
+    this.installingVersion.set('');
+    if (result?.status !== 'ok') {
+      this.installError.set(typeof result?.message === 'string' && result.message ? result.message : `Version ${version} was not installed: the desktop app gave no answer.`);
+    }
   }
 
   private onShellStatus(data: any): void {
     if (!SHELL_STATUSES.includes(data?.status)) return;
     if (data.version) this.availableVersion.set(data.version);
     if (typeof data.percent === 'number') this.percent.set(data.percent);
-    if (data.status === 'available') this.releaseNotes.set(releaseNoteLines(data.releaseNotes));
+    if (data.status === 'available') {
+      this.releaseNotes.set(releaseNoteLines(data.releaseNotes));
+      this.downloadsByItself.set(data.downloads !== false);
+    }
     if (data.status === 'up-to-date' || data.status === 'available') this.lastChecked.set(new Date());
     if (data.status === 'checking') this.downloadRequested = false;
-    if (data.status === 'downloading' || (data.status === 'available' && !this.blocker())) this.downloadRequested = true;
+    if (data.status === 'downloading' || (data.status === 'available' && !this.blocker() && data.downloads !== false)) this.downloadRequested = true;
     if (data.status === 'error') {
       this.fail(this.downloadRequested ? 'download' : 'check', data.message);
       return;

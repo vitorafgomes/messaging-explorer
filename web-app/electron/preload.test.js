@@ -66,3 +66,17 @@ test('openDevTools reads the open-dev-tools channel and sends no argument, so th
   assert.deepEqual(invoked, ['open-dev-tools'], 'openDevTools must invoke open-dev-tools');
   assert.deepEqual(invokedArgs, [[]], 'openDevTools must send no argument');
 });
+
+test('listUpdateVersions reads the list-update-versions channel and sends no argument, so the renderer cannot name an address or a repository', () => {
+  const { exposed, invoked, invokedArgs } = loadPreload();
+  exposed.electronAPI.listUpdateVersions('https://example.org/releases', 'someone/else');
+  assert.deepEqual(invoked, ['list-update-versions']);
+  assert.deepEqual(invokedArgs, [[]]);
+});
+
+test('installUpdateVersion sends only a version and the agreement on the install-update-version channel, so the renderer cannot name an address', () => {
+  const { exposed, invoked, invokedArgs } = loadPreload();
+  exposed.electronAPI.installUpdateVersion('2.4.3', true, 'https://example.org/package');
+  assert.deepEqual(invoked, ['install-update-version']);
+  assert.deepEqual(invokedArgs, [[{ version: '2.4.3', agreed: true }]]);
+});

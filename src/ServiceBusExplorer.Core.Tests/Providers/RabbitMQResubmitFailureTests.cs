@@ -44,6 +44,7 @@ public class RabbitMQResubmitFailureTests
 
         Assert.Equal((0, 1), (result.SuccessCount, result.FailureCount));
         Assert.Equal("Not resubmitted: the broker did not accept the message. It is still in the dead-letter queue.", Assert.Single(result.Failures).Error);
+        Assert.False(result.Failures[0].PossibleDuplicate);
         channel.Verify(c => c.BasicAck(It.IsAny<ulong>(), It.IsAny<bool>()), Times.Never);
         channel.Verify(c => c.BasicNack(7, true, true), Times.Once);
     }
@@ -56,7 +57,8 @@ public class RabbitMQResubmitFailureTests
         var result = await provider.ResubmitDeadLetterMessagesAsync("orders", [1]);
 
         Assert.Equal((0, 1), (result.SuccessCount, result.FailureCount));
-        Assert.Equal("The broker did not confirm in time: the message may have been sent and is still in the dead-letter queue. Possible duplicate.", Assert.Single(result.Failures).Error);
+        Assert.Equal("The broker did not confirm in time: the message may have been sent and is still in the dead-letter queue. It may be duplicated.", Assert.Single(result.Failures).Error);
+        Assert.True(result.Failures[0].PossibleDuplicate);
         channel.Verify(c => c.BasicAck(It.IsAny<ulong>(), It.IsAny<bool>()), Times.Never);
     }
 
@@ -70,7 +72,8 @@ public class RabbitMQResubmitFailureTests
 
         Assert.Equal((0, 1), (result.SuccessCount, result.FailureCount));
         Assert.Equal(1, Assert.Single(result.Failures).SequenceNumber);
-        Assert.Equal("Sent, but not removed from the dead-letter queue. Possible duplicate.", result.Failures[0].Error);
+        Assert.Equal("Sent, but not removed from the dead-letter queue. It may be duplicated.", result.Failures[0].Error);
+        Assert.True(result.Failures[0].PossibleDuplicate);
     }
 
     [Fact]
@@ -122,7 +125,8 @@ public class RabbitMQResubmitFailureTests
         var result = await provider.ResubmitDeadLetterMessagesAsync("orders", [1]);
 
         Assert.Equal((0, 1), (result.SuccessCount, result.FailureCount));
-        Assert.Equal("The connection failed before the broker confirmed: the message may have been sent and is still in the dead-letter queue. Possible duplicate.", Assert.Single(result.Failures).Error);
+        Assert.Equal("The connection failed before the broker confirmed: the message may have been sent and is still in the dead-letter queue. It may be duplicated.", Assert.Single(result.Failures).Error);
+        Assert.All(result.Failures.Where(f => f.Error.StartsWith("The connection failed", StringComparison.Ordinal)), f => Assert.True(f.PossibleDuplicate));
         channel.Verify(c => c.BasicAck(It.IsAny<ulong>(), It.IsAny<bool>()), Times.Never);
     }
 
@@ -180,7 +184,7 @@ public class RabbitMQResubmitFailureTests
 
         Assert.Equal(0, result.SuccessCount);
         Assert.Equal([1L, 2L], result.Failures.Select(f => f.SequenceNumber));
-        Assert.EndsWith("Possible duplicate.", result.Failures[0].Error);
+        Assert.EndsWith("It may be duplicated.", result.Failures[0].Error);
         Assert.Equal(Stopped, result.Failures[1].Error);
         channel.Verify(c => c.BasicPublish(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<IBasicProperties>(), It.IsAny<ReadOnlyMemory<byte>>()), Times.Once);
         channel.Verify(c => c.BasicAck(It.IsAny<ulong>(), It.IsAny<bool>()), Times.Never);
@@ -211,7 +215,7 @@ public class RabbitMQResubmitFailureTests
 
         var result = await provider.ResubmitDeadLetterMessagesAsync("orders", [1]);
 
-        Assert.EndsWith("Possible duplicate.", Assert.Single(result.Failures).Error);
+        Assert.EndsWith("It may be duplicated.", Assert.Single(result.Failures).Error);
     }
 
     [Fact]
@@ -223,7 +227,22 @@ public class RabbitMQResubmitFailureTests
         var result = await provider.ResubmitDeadLetterMessagesAsync("orders", [1]);
 
         Assert.Equal((0, 1), (result.SuccessCount, result.FailureCount));
-        Assert.Equal("Sent, but its removal from the dead-letter queue was not confirmed. Possible duplicate.", Assert.Single(result.Failures).Error);
+        Assert.Equal("Sent, but its removal from the dead-letter queue was not confirmed. It may be duplicated.", Assert.Single(result.Failures).Error);
+    }
+
+    [Fact]
+    public async Task A_close_that_times_out_leaves_the_removal_unproven_and_reports_the_sent_message_as_a_possible_duplicate()
+    {
+        var (provider, channel) = Provider();
+        channel.Setup(c => c.Close()).Throws(new TimeoutException("The close was not answered in time."));
+
+        var result = await provider.ResubmitDeadLetterMessagesAsync("orders", [1]);
+
+        Assert.Equal((0, 1), (result.SuccessCount, result.FailureCount));
+        var failure = Assert.Single(result.Failures);
+        Assert.Equal(1, failure.SequenceNumber);
+        Assert.Equal("Sent, but its removal from the dead-letter queue was not confirmed. It may be duplicated.", failure.Error);
+        Assert.True(failure.PossibleDuplicate);
     }
 
     [Fact]
@@ -237,5 +256,49 @@ public class RabbitMQResubmitFailureTests
         Assert.Equal((1, 0), (result.SuccessCount, result.FailureCount));
         channel.Verify(c => c.BasicAck(8, false), Times.Once);
         channel.Verify(c => c.BasicNack(7, true, true), Times.Once);
+    }
+
+    /// <summary>Two messages; the first is confirmed and removed, then the broker closes the channel while the second waits on its confirm.</summary>
+    private static async Task<ServiceBusExplorer.Core.Models.BatchOperationResult> ClosedWhileWaitingOnTheSecond(ShutdownEventArgs close)
+    {
+        var (provider, channel) = Provider(messages: 2);
+        var open = true;
+        channel.Setup(c => c.IsOpen).Returns(() => open);
+        channel.Setup(c => c.CloseReason).Returns(() => open ? null! : close);
+        var waits = 0;
+        channel.Setup(c => c.WaitForConfirms(It.IsAny<TimeSpan>(), out It.Ref<bool>.IsAny))
+            .Returns(new Wait((TimeSpan _, out bool timedOut) =>
+            {
+                timedOut = false;
+                if (++waits == 1) return true;
+                open = false;
+                throw new AlreadyClosedException(close);
+            }));
+
+        return await provider.ResubmitDeadLetterMessagesAsync("orders", [1, 2]);
+    }
+
+    [Fact]
+    public async Task A_channel_the_broker_closed_for_a_refusal_had_processed_the_earlier_removal_so_it_counts_as_a_success()
+    {
+        var result = await ClosedWhileWaitingOnTheSecond(new ShutdownEventArgs(ShutdownInitiator.Peer, 406, "PRECONDITION_FAILED"));
+
+        Assert.Equal(1, result.SuccessCount);
+        var refused = Assert.Single(result.Failures);
+        Assert.Equal(2L, refused.SequenceNumber);
+        Assert.StartsWith("Not resubmitted: the broker refused the message", refused.Error);
+    }
+
+    [Theory]
+    [InlineData(406, "PRECONDITION_FAILED - delivery acknowledgement on channel 1 timed out")]
+    [InlineData(320, "CONNECTION_FORCED")]
+    public async Task A_channel_closed_for_an_expired_delivery_or_a_dropped_connection_leaves_the_earlier_removal_unproven_a_possible_duplicate(ushort code, string text)
+    {
+        var result = await ClosedWhileWaitingOnTheSecond(new ShutdownEventArgs(ShutdownInitiator.Peer, code, text));
+
+        Assert.Equal(0, result.SuccessCount);
+        Assert.Equal([1L, 2L], result.Failures.Select(f => f.SequenceNumber).Order());
+        Assert.All(result.Failures, f => Assert.Contains("may be duplicated", f.Error));
+        Assert.All(result.Failures, f => Assert.True(f.PossibleDuplicate));
     }
 }

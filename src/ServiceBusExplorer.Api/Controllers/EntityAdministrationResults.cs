@@ -19,6 +19,16 @@ internal static class EntityAdministrationResults
 
     public static ConflictObjectResult EntityDisabled() => new(new { message = "The entity is disabled for this operation." });
 
+    /// <summary>
+    /// 502 with the exception's own message, which this application authored, when the broker did not return the
+    /// messages of a peek; the broker's error is logged and never answered.
+    /// </summary>
+    public static ObjectResult ReadFailed(MessageReadFailedException ex, ILogger logger, string entityPath, MessageSubQueue subQueue)
+    {
+        logger.LogWarning(ex, "The broker did not return the {SubQueue} messages of {EntityPath}", subQueue, entityPath);
+        return new ObjectResult(new { message = ex.Message }) { StatusCode = StatusCodes.Status502BadGateway };
+    }
+
     public static BadRequestObjectResult DeleteAllOfTransferDeadLetter() => new(new { message = "all must be false for the transfer dead-letter queue." });
 
     public static BadRequestObjectResult ScheduledMessagesNotSupported() => new(new { message = "This provider does not support scheduled messages." });
@@ -57,6 +67,10 @@ internal static class EntityAdministrationResults
         subQueue == MessageSubQueue.TransferDeadLetter && !provider.Capabilities.SupportsTransferDeadLetter
             ? new(new { message = "This provider does not support the transfer dead-letter queue." })
             : null;
+
+    /// <summary>400 when the provider declares it cannot search messages; null when it may be called.</summary>
+    public static BadRequestObjectResult? SearchNotSupported(IMessagingProvider provider) =>
+        provider.Capabilities.SupportsMessageSearch ? null : new(new { message = "This provider does not support searching messages." });
 
     public static NotFoundObjectResult NotFound(string kind) => new(new { message = $"The {kind} was not found." });
 

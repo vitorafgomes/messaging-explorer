@@ -19,6 +19,7 @@ import { SendMessageDialogComponent } from './send-message-dialog.component';
 import { BulkOperationProgressDialogComponent } from '../../shared/components/bulk-operation-progress-dialog/bulk-operation-progress-dialog.component';
 import { BulkOperationResultsDialogComponent } from '../../shared/components/bulk-operation-results-dialog/bulk-operation-results-dialog.component';
 import { DEFAULT_AZURE_CAPABILITIES, DEFAULT_RABBITMQ_CAPABILITIES, ProviderService } from '../../core/services/provider.service';
+import { EntityCountsService } from '../../core/services';
 import { ProviderCapabilities } from '../../core/models/provider.model';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { FilterLogic, FilterOperator } from '../../core/models/filter.model';
@@ -513,17 +514,38 @@ describe('ViewMessagesDialogComponent: transfer dead-letter queue, message state
 
   afterEach(() => vi.useRealTimers());
 
+  describe('a count of 0 empties the list on screen', () => {
+    afterEach(() => vi.useRealTimers());
+
+    it('half a second after the count is set to 0 the rows, the select-all count and the open message are gone, with no other event to redraw the screen', async () => {
+      vi.useFakeTimers();
+      const { fixture, component, el } = render({ activeMessageCount: 2 }, { active: [message(1), message(2)] });
+      component.selectedMessage = component.activeMessages[0];
+      fixture.changeDetectorRef.markForCheck();
+      fixture.detectChanges();
+      expect(el.querySelectorAll('.message-card').length, 'two rows before').toBe(2);
+      expect(el.querySelector('.message-detail'), 'a message is open').not.toBeNull();
+
+      component.onCountChange(0);
+      await vi.advanceTimersByTimeAsync(500);
+      await vi.advanceTimersByTimeAsync(50);
+
+      expect(el.querySelectorAll('.message-card').length, 'no row is left').toBe(0);
+      expect(el.querySelector('.message-detail'), 'the open message is closed').toBeNull();
+      expect(component.filteredActiveMessages, 'the filtered list is emptied with the list').toStrictEqual([]);
+    });
+  });
+
   describe('the transfer dead-letter queue is reachable', () => {
-    it('RabbitMQ offers Resubmit of the ticked messages, Resubmit of the open one and Auto resubmit, and no Delete, Move or Edit & Resubmit; Azure offers them all', () => {
+    it('RabbitMQ offers what Azure Service Bus offers: Delete, Move and Resubmit of the ticked messages, Edit & Resubmit and Resubmit of the open one, and Auto resubmit', () => {
       const rabbit = render({ initialTab: 1 }, { deadLetter: messages(2) }, DEFAULT_RABBITMQ_CAPABILITIES);
-      expect(text(rabbit.el.querySelector('app-bulk-actions-toolbar'))).toBe('No message selected. Tick rows to resubmit, compare or export them.');
       expect(Array.from(rabbit.el.querySelectorAll('button')).some(b => text(b).endsWith('Auto resubmit')), 'Auto resubmit beside the dead-letter search').toBe(true);
       rabbit.component.toggleAllDeadLetter(true);
       rabbit.component.selectMessage(rabbit.component.filteredDeadLetterMessages[0]);
       rabbit.refresh();
       const strip = (t: string) => t.replace(/^[a-z_]+ /, '');
-      expect(toolbarButtons(rabbit.el).map(strip).filter(t => /Delete|Move|Resubmit/.test(t)), 'the selection bar').toStrictEqual(['Resubmit']);
-      expect(Array.from(rabbit.el.querySelectorAll('.message-actions button')).map(b => strip(text(b))), 'the detail pane').toStrictEqual(['Resubmit']);
+      expect(toolbarButtons(rabbit.el).map(strip).filter(t => /Delete|Move|Resubmit/.test(t)).map(t => t.split(' ')[0]).sort(), 'the selection bar').toStrictEqual(['Delete', 'Move', 'Resubmit']);
+      expect(Array.from(rabbit.el.querySelectorAll('.message-actions button')).map(b => strip(text(b))), 'the detail pane').toStrictEqual(['Edit & Resubmit', 'Resubmit']);
 
       TestBed.resetTestingModule();
       const azure = render({ initialTab: 1 }, { deadLetter: messages(2) }, withTransfer);
@@ -1221,7 +1243,181 @@ describe('ViewMessagesDialogComponent: transfer dead-letter queue, message state
     });
   });
 
+  describe('the counts of the entity are the ones every other display of it shows', () => {
+    it('a count read elsewhere for the entity reaches the tabs of the open dialog, and one for another entity does not', async () => {
+      const { fixture, component } = render({ activeMessageCount: 5, deadLetterMessageCount: 2 }, { active: messages(2) });
+      const counts = TestBed.inject(EntityCountsService);
+      await fixture.whenStable();
+
+      counts.put(EntityCountsService.key('other'), { activeMessageCount: 99, deadLetterMessageCount: 99 });
+      counts.put(EntityCountsService.key(component.data.entityName, component.data.topicName), { activeMessageCount: 4, deadLetterMessageCount: 3 });
+      await fixture.whenStable();
+
+      expect([component.activeMessageCount(), component.deadLetterMessageCount()]).toStrictEqual([4, 3]);
+    });
+
+    it('the counts the dialog is opened with replace an older read of the entity, so the tabs never start on a stale number', async () => {
+      lists({ active: messages(2) });
+      providers({ activeMessageCount: 9, deadLetterMessageCount: 1 }, withTransfer);
+      const counts = TestBed.inject(EntityCountsService);
+      const data = TestBed.inject(MAT_DIALOG_DATA) as ViewMessagesDialogData;
+      counts.put(EntityCountsService.key(data.entityName, data.topicName), { activeMessageCount: 5, deadLetterMessageCount: 0 });
+
+      const fixture = TestBed.createComponent(ViewMessagesDialogComponent);
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect([fixture.componentInstance.activeMessageCount(), fixture.componentInstance.deadLetterMessageCount()]).toStrictEqual([9, 1]);
+    });
+
+    it('a count the dialog changes after an operation reaches the tree and the panel through the shared counts', async () => {
+      const { fixture, component } = render({ activeMessageCount: 5, deadLetterMessageCount: 2 }, { active: messages(2) });
+      const key = EntityCountsService.key(component.data.entityName, component.data.topicName);
+      await fixture.whenStable();
+      expect(TestBed.inject(EntityCountsService).of(key), 'as the dialog opened').toStrictEqual({ activeMessageCount: 5, deadLetterMessageCount: 2 });
+
+      component.activeMessageCount.set(3);
+      await fixture.whenStable();
+
+      expect(TestBed.inject(EntityCountsService).of(key)).toStrictEqual({ activeMessageCount: 3, deadLetterMessageCount: 2 });
+    });
+  });
+
   describe('a possible duplicate from a transfer dead-letter resubmit is never retried', () => {
+    it('on RabbitMQ a resubmit with failures offers no Retry: the positions of the messages left have moved', () => {
+      vi.useFakeTimers();
+      const component = create({ initialTab: 1 }, { deadLetter: messages(3) }, DEFAULT_RABBITMQ_CAPABILITIES);
+      queue['resubmitDeadLetterMessages'].mockReturnValueOnce(of({
+        success: false, successCount: 1, failureCount: 2,
+        failures: [
+          { sequenceNumber: 2, error: 'Not resubmitted: the broker did not accept the message. It is still in the dead-letter queue.' },
+          { sequenceNumber: 3, error: 'Not resubmitted: the batch stopped after an earlier message failed. The message is still in the dead-letter queue.' }
+        ]
+      }));
+      component.toggleAllDeadLetter(true);
+
+      component.onBulkAction({ action: 'resubmit' });
+      vi.advanceTimersByTime(1000);
+
+      expect(lastOpened(BulkOperationResultsDialogComponent)!.data.allowRetry).toBe(false);
+    });
+
+    it('on RabbitMQ a cancelled resubmit unticks the messages at once and reads the list again when the cancelled dialog is closed', () => {
+      const component = create({ initialTab: 1 }, { deadLetter: messages(3) }, DEFAULT_RABBITMQ_CAPABILITIES);
+      component.toggleAllDeadLetter(true);
+      component.onBulkAction({ action: 'resubmit' });
+      const progress = lastOpened(BulkOperationProgressDialogComponent)!;
+      const reads = queue['peekDeadLetterMessages'].mock.calls.length;
+
+      progress.cancelRequested$.next();
+
+      expect(component.getSelectedCount(), 'no stale position stays ticked').toBe(0);
+      expect(queue['peekDeadLetterMessages'].mock.calls.length, 'not read before the cancelled dialog is closed').toBe(reads);
+      progress.closed.next(undefined);
+      expect(queue['peekDeadLetterMessages'].mock.calls.length, 'read again once the cancelled dialog is closed').toBe(reads + 1);
+    });
+
+    it('on RabbitMQ a resubmit whose call fails unticks the messages and reads the list again', () => {
+      const component = create({ initialTab: 1 }, { deadLetter: messages(3) }, DEFAULT_RABBITMQ_CAPABILITIES);
+      queue['resubmitDeadLetterMessages'].mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 500, error: { message: 'The broker timed out' } })));
+      component.toggleAllDeadLetter(true);
+      const reads = queue['peekDeadLetterMessages'].mock.calls.length;
+
+      component.onBulkAction({ action: 'resubmit' });
+
+      expect(component.getSelectedCount(), 'no stale position stays ticked').toBe(0);
+      expect(queue['peekDeadLetterMessages'].mock.calls.length, 'the list is read again').toBe(reads + 1);
+    });
+
+    const start = (component: ViewMessagesDialogComponent, action: 'delete' | 'move') => {
+      component.onBulkAction({ action });
+      if (action === 'delete') confirm();
+      if (action === 'move') lastOpened(MoveMessagesDialogComponent)!.closed.next({ targetQueueName: 'orders-retry', newMessageIdOnDuplicateDetection: false });
+    };
+
+    it.each(['delete', 'move'] as const)('on RabbitMQ a %s that is cancelled unticks the messages at once and reads the list again when the cancelled dialog is closed', action => {
+      const component = create({ initialTab: 1 }, { deadLetter: messages(3) }, DEFAULT_RABBITMQ_CAPABILITIES);
+      component.toggleDeadLetterSelection(component.filteredDeadLetterMessages[1], true);
+      start(component, action);
+      const progress = lastOpened(BulkOperationProgressDialogComponent)!;
+      const reads = queue['peekDeadLetterMessages'].mock.calls.length;
+
+      progress.cancelRequested$.next();
+
+      expect(component.getSelectedCount(), 'no stale position stays ticked').toBe(0);
+      expect(queue['peekDeadLetterMessages'].mock.calls.length, 'not read before the cancelled dialog is closed').toBe(reads);
+      progress.closed.next(undefined);
+      expect(queue['peekDeadLetterMessages'].mock.calls.length, 'read again once the cancelled dialog is closed').toBe(reads + 1);
+    });
+
+    it.each([['delete', 'deleteMessages'], ['move', 'moveMessages']] as const)('on RabbitMQ a %s whose call fails unticks the messages and reads the list again', (action, method) => {
+      const component = create({ initialTab: 1 }, { deadLetter: messages(3) }, DEFAULT_RABBITMQ_CAPABILITIES);
+      queue[method].mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 500, error: { message: 'The broker timed out' } })));
+      component.toggleDeadLetterSelection(component.filteredDeadLetterMessages[1], true);
+      const reads = queue['peekDeadLetterMessages'].mock.calls.length;
+
+      start(component, action);
+
+      expect(component.getSelectedCount(), 'no stale position stays ticked').toBe(0);
+      expect(queue['peekDeadLetterMessages'].mock.calls.length, 'the list is read again').toBe(reads + 1);
+    });
+
+    it('on RabbitMQ a move with failures offers no Retry: the positions of the messages left have moved', () => {
+      vi.useFakeTimers();
+      const component = create({ initialTab: 1 }, { deadLetter: messages(3) }, DEFAULT_RABBITMQ_CAPABILITIES);
+      queue['moveMessages'].mockReturnValueOnce(of({
+        success: false, successCount: 0, failureCount: 1,
+        failures: [{ sequenceNumber: 2, error: 'Not moved: the broker did not accept the message. It is still in the dead-letter queue.' }]
+      }));
+      component.toggleDeadLetterSelection(component.filteredDeadLetterMessages[1], true);
+
+      start(component, 'move');
+      vi.advanceTimersByTime(1000);
+
+      expect(lastOpened(BulkOperationResultsDialogComponent)!.data.allowRetry).toBe(false);
+    });
+
+    it.each([['delete', 'deleteMessages'], ['move', 'moveMessages']] as const)('on Azure Service Bus a %s whose call fails keeps the messages ticked and reads nothing again', (action, method) => {
+      const component = create({ initialTab: 1 }, { deadLetter: messages(3) });
+      queue[method].mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 500, error: { message: 'The broker timed out' } })));
+      component.toggleDeadLetterSelection(component.filteredDeadLetterMessages[1], true);
+      const reads = queue['peekDeadLetterMessages'].mock.calls.length;
+
+      start(component, action);
+
+      expect(component.getSelectedCount()).toBe(1);
+      expect(queue['peekDeadLetterMessages'].mock.calls.length).toBe(reads);
+    });
+
+    it('on RabbitMQ a resubmit of the open message whose call fails unticks the messages and reads the list again', () => {
+      const component = create({ initialTab: 1 }, { deadLetter: messages(3) }, DEFAULT_RABBITMQ_CAPABILITIES);
+      queue['resubmitDeadLetterMessages'].mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 500, error: { message: 'The broker timed out' } })));
+      component.toggleDeadLetterSelection(component.filteredDeadLetterMessages[2], true);
+      const reads = queue['peekDeadLetterMessages'].mock.calls.length;
+
+      component.resubmit(component.filteredDeadLetterMessages[0]);
+
+      expect(component.getSelectedCount(), 'no stale position stays ticked').toBe(0);
+      expect(queue['peekDeadLetterMessages'].mock.calls.length, 'the list is read again').toBe(reads + 1);
+    });
+
+    it('on Azure Service Bus a resubmit that is cancelled or whose call fails keeps the messages ticked: a sequence number does not move', () => {
+      const component = create({ initialTab: 1 }, { deadLetter: messages(3) });
+      queue['resubmitDeadLetterMessages'].mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 500, error: { message: 'The broker timed out' } })));
+      component.toggleAllDeadLetter(true);
+      const reads = queue['peekDeadLetterMessages'].mock.calls.length;
+
+      component.onBulkAction({ action: 'resubmit' });
+      expect(component.getSelectedCount(), 'after a failed call').toBe(3);
+
+      component.onBulkAction({ action: 'resubmit' });
+      const progress = lastOpened(BulkOperationProgressDialogComponent)!;
+      progress.cancelRequested$.next();
+      progress.closed.next(undefined);
+      expect(component.getSelectedCount(), 'after a cancel').toBe(3);
+      expect(queue['peekDeadLetterMessages'].mock.calls.length, 'the list is not read again').toBe(reads);
+    });
+
     it('Retry after a transfer resubmit resends only the failure that was not sent, never the possible duplicate', () => {
       vi.useFakeTimers();
       const component = create({ initialTab: 2 }, { transfer: messages(2) });
@@ -1312,6 +1508,20 @@ describe('ViewMessagesDialogComponent: transfer dead-letter queue, message state
       expect(queue['peekMessages']).toHaveBeenCalledTimes(2);
       expect(el.querySelector('[data-testid="load-error"]')).toBeNull();
       expect(el.querySelectorAll('.message-card')).toHaveLength(2);
+    });
+
+    it('a first load the broker did not answer says so in the API\'s words, not as an error of the local API', () => {
+      lists({});
+      queue['peekMessages'].mockReturnValueOnce(throwError(() => new HttpErrorResponse({
+        status: 502, error: { message: 'The broker did not return the messages of this entity (GeneralError).' },
+      })));
+      providers({}, withTransfer);
+      const fixture = TestBed.createComponent(ViewMessagesDialogComponent);
+      fixture.detectChanges();
+      const panel = (fixture.nativeElement as HTMLElement).querySelector('[data-testid="load-error"]') as HTMLElement;
+
+      expect(panel.querySelector('p')?.textContent?.trim(), 'the reason the broker gave, once, then what was not done').toBe(
+        'The broker did not return the messages of this entity (GeneralError). No message is shown because none was read, and nothing on the broker was changed.');
     });
 
     it('as Messages.dc.html draws it: while a tab loads it says "Loading the {noun} messages of {entity} from {connection}"', () => {
@@ -1522,7 +1732,7 @@ describe('ViewMessagesDialogComponent: transfer dead-letter queue, message state
       expect([text(pane.querySelector('h2.pane-title')), Array.from(pane.querySelectorAll('h3.section-title')).map(text)],
         'Message Details is a second-level heading and Body a third-level one, as drawn').toEqual(['Message Details', ['Body']]);
       expect(Array.from(pane.children).map(c => c.classList.contains('detail-grid') ? 'fields' : c.classList.contains('why-dead') ? 'why' : c.classList.contains('body-head') ? 'body' : null).filter(Boolean),
-        'as Messages.dc.html draws it: the reason sits after the message fields and before the body').toEqual(['fields', 'why', 'body']);
+        'as Messages.dc.html draws it: the body comes first, so it is read without scrolling, then the message fields and the reason').toEqual(['body', 'fields', 'why']);
       expect(el.querySelector('[aria-label="Close message details"]')?.getAttribute('title'), 'the close button is titled as drawn').toBe('Close message details');
 
       (Array.from(el.querySelectorAll('.body-head button')).find(b => text(b).endsWith('Copy body')) as HTMLElement).click();

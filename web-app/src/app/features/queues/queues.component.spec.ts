@@ -1,13 +1,17 @@
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { NEVER, of, throwError } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
-import { ConnectionService, QueueService } from '../../core/services';
+import { ConnectionService, QueueService, EntityCountsService } from '../../core/services';
+import { ProviderService } from '../../core/services/provider.service';
 import { QueueInfo } from '../../core/models';
 import { QueuesComponent } from './queues.component';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
 
 const queue = (name: string) =>
   ({ name, activeMessageCount: 3, deadLetterMessageCount: 1, scheduledMessageCount: 0, sizeInBytes: 2048 }) as QueueInfo;
+
+const capabilities = signal<{ supportsMessageCounts?: boolean } | null>(null);
 
 describe('QueuesComponent', () => {
   let queueService: { getQueues: ReturnType<typeof vi.fn> };
@@ -19,6 +23,7 @@ describe('QueuesComponent', () => {
       providers: [
         { provide: QueueService, useValue: queueService },
         { provide: ConnectionService, useValue: { isConnected: true, connectionStatus$: NEVER } },
+        { provide: ProviderService, useValue: { capabilities } },
         { provide: MatDialog, useValue: { open: vi.fn() } }
       ]
     });
@@ -47,6 +52,38 @@ describe('QueuesComponent', () => {
     expect(text(el.querySelector('td'))).toBe('orders');
   });
 
+  it('a row shows the latest counts read for its queue anywhere in the app, and what the page reads is given to the other displays', () => {
+    capabilities.set(null);
+    queueService = { getQueues: vi.fn().mockReturnValue(of([queue('orders')])) };
+    const { fixture, el } = render();
+    const counts = TestBed.inject(EntityCountsService);
+    const shown = () => Array.from(el.querySelectorAll('button.count')).map(text);
+
+    expect(counts.of('queue:orders'), 'the page gives what it read').toStrictEqual({ activeMessageCount: 3, deadLetterMessageCount: 1 });
+    expect(shown()).toStrictEqual(['3', '1']);
+
+    counts.put('queue:orders', { activeMessageCount: 7, deadLetterMessageCount: 0 });
+    fixture.detectChanges();
+
+    expect(shown(), 'the row follows a count read by another display').toStrictEqual(['7', '0']);
+
+    const opened = vi.spyOn(fixture.debugElement.injector.get(MatDialog), 'open').mockImplementation(() => ({ afterClosed: () => of(undefined) }) as never);
+    (el.querySelector('button.count') as HTMLElement).click();
+    const data = (opened.mock.calls[0][1] as { data: { activeMessageCount: number; deadLetterMessageCount: number } }).data;
+    expect([data.activeMessageCount, data.deadLetterMessageCount], 'the dialog opens with the counts shown, not the older ones of the list').toStrictEqual([7, 0]);
+  });
+
+  it('on a broker that reports no message counts a row shows no number', () => {
+    capabilities.set({ supportsMessageCounts: false });
+    queueService = { getQueues: vi.fn().mockReturnValue(of([queue('orders')])) };
+    const { el } = render();
+
+    expect(Array.from(el.querySelectorAll('button.count')).map(b => [text(b), b.getAttribute('aria-label')])).toStrictEqual([
+      ['—', 'View the active messages of orders'], ['—', 'View the dead-letter messages of orders']
+    ]);
+    capabilities.set(null);
+  });
+
   it('an answer with no queue says so', () => {
     queueService = { getQueues: vi.fn().mockReturnValue(of([])) };
     const { el } = render();
@@ -73,7 +110,8 @@ describe('QueuesComponent purges from the More actions menu', () => {
       imports: [QueuesComponent],
       providers: [
         { provide: QueueService, useValue: queueService },
-        { provide: ConnectionService, useValue: { isConnected: true, connectionStatus$: NEVER } }
+        { provide: ConnectionService, useValue: { isConnected: true, connectionStatus$: NEVER } },
+        { provide: ProviderService, useValue: { capabilities } },
       ]
     });
     const fixture = TestBed.createComponent(QueuesComponent);

@@ -1,8 +1,8 @@
 ---
 title: "ADR 0006 - Choose the version to install, per channel"
-version: "1.0"
+version: "1.1"
 date: 2026-11-15
-changes: "Initial ADR draft"
+changes: "v1.1 (2026-11-16): an amendment proposed, the notes of the picked version and the agreement before an install. Initial ADR draft"
 page_type: adr
 status: proposed
 description: "Settings lists the releases of the chosen channel, Stable or Beta, and installs the one the user picks, older ones included, only on the user's click; the automatic check stays as it is."
@@ -62,6 +62,15 @@ Settings, under Updates, lists the releases of the chosen channel, read by the E
 - **IPC input:** `install-update-version` accepts only a tag that matches `^v\d+\.\d+\.\d+(-beta\.\d+)?$` and was in the last list the main process read; the URL is built from fixed owner and repo, never from text the renderer sends. A test in `web-app/electron/shell-helpers.test.js` refuses any other tag, and a test where the GitHub request fails asserts what Settings shows.
 - **Restore after install:** a test asserts that the feed and `allowDowngrade = false` return after an install that succeeds and after one that fails.
 - **Review:** the change is Sensitive under the pipeline (`api-surface` for the IPC channels and the external call); [[pages/decisions/0005-cite-code-by-name-and-prove-in-proportion-to-risk]] sets its proof.
+
+## Amendment proposed on 2026-11-16
+
+The owner asked, on 2026-11-16, for two things this page does not say. They add to the decision; no sentence above is replaced.
+
+- **The notes of the picked version are shown.** Picking a version installs nothing: the screen shows what that version has, the text of its release notes, shown as text and never as markup. For the installed version it shows the notes and nothing to install.
+- **Install needs the user's agreement.** Install is offered only after the user ticks that they read what the version has and want it, for a newer version and for an older one alike.
+
+Still open, and the owner's to decide: whether the newest version found by the automatic check may keep downloading by itself and installing on quit, as it has since 2026-11-13, or needs the same agreement. The work is ordered on [[pages/roadmap/settings-data-and-updates]].
 
 ## Related
 

@@ -25,6 +25,15 @@ public sealed class EntityDisabledException(Exception? innerException = null)
     : Exception("The entity is disabled for this operation.", innerException);
 
 /// <summary>
+/// The broker did not return the messages of a read that changes nothing: a peek of a queue, of a subscription or of
+/// one of their sub-queues. <see cref="Exception.Message"/> is text this application authored and is safe to show: a
+/// fixed sentence and, in brackets, the name the provider gives the cause. The broker's own error is the inner
+/// exception and is for the log only.
+/// </summary>
+public sealed class MessageReadFailedException(string cause, Exception? innerException = null)
+    : Exception($"The broker did not return the messages of this entity ({cause}).", innerException);
+
+/// <summary>
 /// An entity configuration, or the sequence numbers of a message operation, was refused, by the provider's own
 /// rules before anything reached the broker or by the broker itself. <see cref="Exception.Message"/> is always text this application authored and is safe to show:
 /// the violations, each naming the field and its allowed range, or the fixed "The broker refused this

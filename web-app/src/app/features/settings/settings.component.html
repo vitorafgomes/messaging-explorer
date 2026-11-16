@@ -53,6 +53,82 @@
         @if (updates.channelError()) {
           <p class="inline-error" role="alert">The channel was not changed: {{ updates.channelError() }}</p>
         }
+        @if (updates.versionsError()) {
+          <div class="setting-row">
+            <span class="row-label">Version</span>
+            <div class="inline-error" role="alert" data-testid="versions-error">
+              The versions could not be read: {{ updates.versionsError() }}
+              <button mat-stroked-button type="button" (click)="updates.loadVersions()" [disabled]="updates.versionsLoading()">
+                <mat-icon>refresh</mat-icon>Retry
+              </button>
+            </div>
+          </div>
+        } @else if (updates.versions(); as versions) {
+          <div class="setting-row versions-row">
+            <span class="row-label" id="version-label">Version</span>
+            @if (versions.length === 0) {
+              <span data-testid="versions-empty">No version was released on the {{ channelName() }} channel yet.</span>
+            } @else {
+              <div class="version-list">
+                <mat-form-field appearance="outline" subscriptSizing="dynamic" class="version-field">
+                  <mat-select aria-labelledby="version-label" data-testid="version-list" [value]="pickedVersion()?.version"
+                              (selectionChange)="pickVersion($event.value)">
+                    @for (version of versions; track version.version) {
+                      <mat-option [value]="version.version">{{ version.version }} · {{ version.date | date: 'mediumDate' }}@if (version.installed) { · Installed}</mat-option>
+                    }
+                  </mat-select>
+                </mat-form-field>
+                <span class="note">Pick a version to read what it has. Picking one installs nothing.</span>
+              </div>
+            }
+          </div>
+          @if (pickedVersion(); as picked) {
+            <section class="panel version-notes" aria-live="polite" data-testid="version-notes">
+              <h3>What version {{ picked.version }} has</h3>
+              @if (picked.notes.trim()) {
+                <pre class="notes-text">{{ picked.notes }}</pre>
+              } @else {
+                <p class="muted">No notes were written for this version.</p>
+              }
+              @if (picked.installed) {
+                <p class="strong">This is the version you have.</p>
+              } @else {
+                <div class="version-install" data-testid="version-install">
+                  <p class="strong">Install {{ picked.version }}. You have {{ updates.version() }}.</p>
+                  @if (picked.older) {
+                    <p class="muted" data-testid="downgrade-note">This goes back to an older version. Connections saved by the version you have may not be read by it; a copy of the connections file is kept beside the original before it installs.</p>
+                  }
+                  @if (blockerReason(); as blocked) {
+                    <p><strong>{{ blocked.platform }}:</strong> this package cannot install it by itself; {{ blocked.reason }}</p>
+                    <a mat-stroked-button [href]="releaseOf(picked.version)" target="_blank" rel="noopener noreferrer">
+                      Open the page of this version<mat-icon iconPositionEnd aria-hidden="true">open_in_new</mat-icon>
+                    </a>
+                  } @else if (!picked.installable) {
+                    <p>The release of this version holds no package this app can install here.</p>
+                    <a mat-stroked-button [href]="releaseOf(picked.version)" target="_blank" rel="noopener noreferrer">
+                      Open the page of this version<mat-icon iconPositionEnd aria-hidden="true">open_in_new</mat-icon>
+                    </a>
+                  } @else {
+                    <mat-checkbox [checked]="agreedToInstall()" (change)="agree(picked.version, $event.checked)" [disabled]="updates.installingVersion() !== ''">
+                      I have read what this version has and want to install it
+                    </mat-checkbox>
+                    <div class="install-actions">
+                      <button mat-flat-button type="button" [disabled]="!agreedToInstall() || updates.installingVersion() !== ''" (click)="installPicked(picked.version)">
+                        <mat-icon aria-hidden="true">download</mat-icon>Install {{ picked.version }}
+                      </button>
+                      @if (updates.installingVersion()) {
+                        <span class="muted" role="status">Downloading {{ updates.installingVersion() }}. It installs when the app restarts.</span>
+                      }
+                    </div>
+                    @if (updates.installError()) {
+                      <p class="inline-error" role="alert" data-testid="install-error">{{ updates.installError() }}</p>
+                    }
+                  }
+                </div>
+              }
+            </section>
+          }
+        }
         <div class="setting-row">
           <span class="row-label">Last check</span>
           <span class="tabular" data-testid="last-check">{{ updates.lastChecked() ? (updates.lastChecked() | date: 'medium') : 'Not in this session' }}</span>
@@ -130,7 +206,11 @@
                   @case ('available') {
                     <div class="panel available-panel">
                       <h3><mat-icon aria-hidden="true">download</mat-icon>Version {{ updates.availableVersion() }} is available</h3>
-                      <p>You have {{ updates.version() }}. It is downloading in the background and installs the next time you quit the app.</p>
+                      @if (updates.downloadsByItself()) {
+                        <p>You have {{ updates.version() }}. It is downloading in the background and installs the next time you quit the app.</p>
+                      } @else {
+                        <p data-testid="kept-version-note">You have {{ updates.version() }}, a version you picked, so it is kept: nothing downloads or installs until you ask for it.</p>
+                      }
                       @if (updates.releaseNotes().length) {
                         <div class="release-notes" data-testid="release-notes">
                           <span class="notes-title">Release notes of {{ updates.availableVersion() }}</span>

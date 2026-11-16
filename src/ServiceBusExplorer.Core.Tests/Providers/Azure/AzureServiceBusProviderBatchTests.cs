@@ -219,6 +219,7 @@ public class AzureServiceBusProviderBatchTests
         var failure = Assert.Single(result.Failures);
         Assert.Equal(1, failure.SequenceNumber);
         Assert.Contains("duplicated", failure.Error, StringComparison.OrdinalIgnoreCase);
+        Assert.True(failure.PossibleDuplicate, "A message sent and not removed carries the possible-duplicate flag.");
 
         // Sent exactly once, never re-sent as a single message either.
         sender.Verify(s => s.SendMessagesAsync(It.IsAny<ServiceBusMessageBatch>(), It.IsAny<CancellationToken>()), Times.Once);
@@ -370,6 +371,7 @@ public class AzureServiceBusProviderBatchTests
         var failure = Assert.Single(result.Failures);
         Assert.Equal(1, failure.SequenceNumber);
         Assert.Contains("duplicated", failure.Error, StringComparison.OrdinalIgnoreCase);
+        Assert.True(failure.PossibleDuplicate, "A message sent and not removed carries the possible-duplicate flag.");
 
         // Sent exactly once, never re-sent as a single message either.
         sender.Verify(s => s.SendMessagesAsync(It.IsAny<ServiceBusMessageBatch>(), It.IsAny<CancellationToken>()), Times.Once);

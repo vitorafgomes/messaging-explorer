@@ -129,7 +129,8 @@ public sealed class RabbitMQConnectionFailureLogTests(RabbitMqFixture fixture)
             result = await capture.CreateProviderFactory().TestConnectionAsync(WrongPasswordConnection()));
 
         Assert.False(result);
-        Assert.Contains("[RabbitMQ] Management API returned Unauthorized", console, StringComparison.Ordinal);
+        Assert.Contains(capture.Entries, e => e.Level == LogLevel.Warning && e.Text.Contains("did not answer the connection test: it answered 401", StringComparison.Ordinal));
+        Assert.DoesNotContain("[RabbitMQ]", console, StringComparison.Ordinal);
         capture.AssertNoSecret(Needles, console);
     }
 

@@ -1,9 +1,9 @@
 ---
 title: "Electron Shell history"
-version: "1.1"
+version: "1.2"
 date: 2026-11-13
-updated: 2026-11-14
-changes: "v1.1: dated entries above the version notes"
+updated: 2026-11-16
+changes: "2026-11-16: the versions of a channel. v1.1: dated entries above the version notes"
 page_type: reference
 status: active
 description: "What changed in the Electron Shell project and when, newest first, as the service page header recorded it until 2026-11-13."
@@ -15,6 +15,14 @@ reliability: high
 # Electron Shell history
 
 What changed when in the project [[pages/services/electron-shell|Electron Shell]] describes, newest first.
+
+## 2026-11-16
+
+- A version the user picked is kept: nothing newer downloads or installs by itself while it runs. [[pages/services/electron-shell/updates-packaging-and-release]]
+
+- The `install-update-version` channel downloads a picked version after the user's agreement, with the updater put back afterwards. [[pages/services/electron-shell/updates-packaging-and-release]]
+
+- `list-update-versions`, an IPC channel with no argument: the versions of the stored channel, read by the main process from the release page of this repository ([[pages/services/electron-shell/updates-packaging-and-release]]). The first request the shell makes to the internet outside the updater.
 
 ## 2026-11-14
 

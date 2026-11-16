@@ -1,9 +1,9 @@
 ---
 title: "Electron Shell: IPC surface and tray"
-version: "1.1"
+version: "1.2"
 date: 2026-11-13
-updated: 2026-11-14
-changes: "v1.1: get-data-file, show-data-file and open-dev-tools; Ctrl+N sends navigate"
+updated: 2026-11-16
+changes: "2026-11-16: the list-update-versions channel. v1.1: get-data-file, show-data-file and open-dev-tools; Ctrl+N sends navigate"
 page_type: service
 status: active
 description: "Read when a change touches an IPC channel, the preload bridge, or the tray and its connection menu."
@@ -40,6 +40,8 @@ One topic of [[pages/services/electron-shell|Electron Shell]]; the map lists the
 | `set-update-channel` | invoke | for `latest` or `beta` only: stores and applies it, returns `{status:'ok',channel}`; anything else changes nothing and returns `{status:'error',message:'Unknown update channel'}` (`web-app/electron/main.js#ipcMain.handle('set-update-channel', (event, requested) => {`) | `setUpdateChannel` | `AppUpdateService.setChannel` (`web-app/src/app/features/settings/app-update.service.ts#result`) |
 | `get-update-channel` | invoke | stored channel, `latest` when the stored value is not a known channel (`web-app/electron/main.js#ipcMain.handle('get-update-channel', () => {`) | `getUpdateChannel` | `AppUpdateService.initialize` (`web-app/src/app/features/settings/app-update.service.ts#shell`) |
 | `get-self-update-blocker` | invoke | `'macos-unsigned'`, `'windows-portable'`, `'linux-package'` or null, from `selfUpdateBlocker(process.platform, process.env)`; read-only, takes no argument (`web-app/electron/main.js#ipcMain.handle('get-self-update-blocker', () => selfUpdateBlocker(process.platfo`, `web-app/electron/shell-helpers.js#function selfUpdateBlocker(platform, env) {`); added 2026-11-13 | `getSelfUpdateBlocker` | `AppUpdateService.initialize` (`web-app/src/app/features/settings/app-update.service.ts#shell`) |
+| `list-update-versions` | invoke | the versions of the stored channel, read from the release page of this repository at a fixed address: `{status:'ok',channel,versions}` or `{status:'error',message}` with a fixed sentence; takes no argument, so the page names no address, repository or channel (`web-app/electron/main.js#ipcMain.handle('list-update-versions'`, `web-app/electron/shell-helpers.js#readUpdateVersions`, `web-app/electron/preload.test.js#listUpdateVersions reads the list-update-versions channel and sends no argument, so the renderer cannot name an address or a repository`); added 2026-11-16 | `listUpdateVersions` | `AppUpdateService.loadVersions` (`web-app/src/app/features/settings/app-update.service.ts#loadVersions`) |
+| `install-update-version` | invoke, `{ version, agreed }` | `{ status: 'ok', version }` once the picked version is downloaded, or `{ status: 'error', message }`; only a version of the last list read, with the user's agreement (`web-app/electron/shell-helpers.js#installUpdateVersion`); added 2026-11-16 | `installUpdateVersion` | `AppUpdateService.installVersion` (`web-app/src/app/features/settings/app-update.service.ts#installVersion`) |
 | `get-data-file` | invoke | the path of `data/workspace.json` under the user data folder; takes no argument (`web-app/electron/shell-helpers.js#dataFilePath`) | `getDataFile` | `SettingsComponent` |
 | `show-data-file` | invoke | shows that file in the file manager of the system; takes no argument, so the renderer cannot name another path; `{status:'ok'}`, or `{status:'error',message}` when nothing is saved yet or the file manager refuses, never a throw (`web-app/electron/shell-helpers.js#showDataFile`) | `showDataFile` | `SettingsComponent` |
 | `open-dev-tools` | invoke | none; opens the developer tools of the main window only when the sender is the main window's own webContents, and does nothing when the window is gone or destroyed or another sender asks; takes no argument, so the renderer cannot choose a target (`web-app/electron/shell-helpers.js#openDevTools`) | `openDevTools` | `SettingsComponent` (`web-app/src/app/features/settings/settings.component.ts#openDevTools`) |

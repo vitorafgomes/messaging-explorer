@@ -67,6 +67,7 @@ Read the one row your change matches. Pages are under `context/pages/services/we
 | `ApiService`, `apiPath`, `HighlightPipe` | `how-the-rules-are-kept.md` |
 | A package, the build, bootstrap, routes, the toolbar, `core/` | `stack-and-bootstrap.md` |
 | Delete, resubmit, move or send in the messages dialog | `bulk-operations.md` |
+| A resubmit, delete or move on a broker that names a message by position | `bulk-by-position.md` |
 | The automatic resubmit of a dead-letter queue | `bulk-automatic-resubmit.md` |
 | The entity form, sub-queue tabs, scheduled messages, sessions | `features-messages-and-sessions.md` |
 | The entity panel, the tree, definitions, the purge confirmation | `features-entities-panel-and-definitions.md` |

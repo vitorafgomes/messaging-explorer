@@ -97,6 +97,13 @@ public sealed class RabbitMqFixture : IAsyncLifetime
     /// </summary>
     public void PublishToQueue(string queue, string body) => Publish("", queue, body, p => p.ContentType = "text/plain");
 
+    /// <summary>Declares a queue as the observer client: exclusive to its connection, or with the given arguments.</summary>
+    public void DeclareQueue(string queue, bool exclusive = false, IDictionary<string, object>? arguments = null)
+    {
+        using var channel = _observer!.CreateModel();
+        channel.QueueDeclare(queue, durable: !exclusive, exclusive: exclusive, autoDelete: false, arguments: arguments);
+    }
+
     /// <summary>The number of ready messages in a queue, read over AMQP.</summary>
     public uint MessageCount(string queue)
     {

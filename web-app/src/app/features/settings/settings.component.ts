@@ -9,9 +9,11 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatSelectModule } from '@angular/material/select';
 import { ConnectionService, DevSettingsService, ThemeService } from '../../core/services';
 import { BugReportService } from '../../shared/bug-report.service';
-import { AppUpdateService, RELEASES_URL, REPOSITORY_URL, UpdateChannel } from './app-update.service';
+import { AppUpdateService, RELEASES_URL, REPOSITORY_URL, UpdateChannel, UpdateVersion } from './app-update.service';
 import { ClearAllDataDialogComponent, ClearAllDataResult } from './clear-all-data-dialog.component';
 
 const BLOCKER_REASONS = {
@@ -33,6 +35,8 @@ const BLOCKER_REASONS = {
     MatIconModule,
     MatProgressBarModule,
     MatProgressSpinnerModule,
+    MatFormFieldModule,
+    MatSelectModule,
   ],
   templateUrl: './settings.component.html',
   styleUrl: './settings.component.scss',
@@ -68,8 +72,39 @@ export class SettingsComponent {
     return version ? `${RELEASES_URL}/tag/v${version}` : RELEASES_URL;
   });
 
+  /** The version whose notes are shown: the one the user picked while it is still listed, else the newest. */
+  private readonly pickedVersionName = signal<string | null>(null);
+  readonly pickedVersion = computed<UpdateVersion | null>(() => {
+    const versions = this.updates.versions() ?? [];
+    return versions.find(v => v.version === this.pickedVersionName()) ?? versions[0] ?? null;
+  });
+
   constructor() {
     void Promise.resolve(this.shell?.getDataFile?.()).then(file => this.dataFile.set(typeof file === 'string' ? file : ''), () => {});
+    void this.updates.loadVersions();
+  }
+
+  pickVersion(version: string): void {
+    this.pickedVersionName.set(version);
+    this.agreedVersion.set(null);
+    this.updates.installError.set('');
+  }
+
+  /** The version the user agreed to install; the agreement holds only while that version is the one shown. */
+  private readonly agreedVersion = signal<string | null>(null);
+  readonly agreedToInstall = computed(() => this.agreedVersion() !== null && this.agreedVersion() === this.pickedVersion()?.version);
+
+  agree(version: string, agreed: boolean): void {
+    this.agreedVersion.set(agreed ? version : null);
+  }
+
+  releaseOf(version: string): string {
+    return `${RELEASES_URL}/tag/v${version}`;
+  }
+
+  installPicked(version: string): void {
+    if (!this.agreedToInstall()) return;
+    void this.updates.installVersion(version);
   }
 
   async showDataFile(): Promise<void> {

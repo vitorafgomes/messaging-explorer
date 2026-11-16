@@ -16,13 +16,13 @@ The prototype is being redrawn as a design canvas: one `.dc.html` artboard per s
 |---|---|---|
 | `Main.dc.html` | The app today | the entity tree and the queue, topic and subscription panel |
 | `Connections.dc.html` | The app today | the connection list, add and edit for both brokers, groups, export, import, a failed connect |
-| `Settings.dc.html` | The app today | settings, every state of the update, the bug report, clearing the data |
+| `Settings.dc.html` | The app today | settings, every state of the update, the version picker with the notes and the agreement, the Monitoring history inside Data, the bug report, clearing the data |
 | `Messages.dc.html` | The app today | active, dead-letter, transfer dead-letter and scheduled messages, selection, cancel scheduled, progress and results |
 | `Send.dc.html` | The app today | send, schedule, edit and resubmit, move, import, export, compare |
 | `AutoResubmit.dc.html` | The app today | the automatic dead-letter resubmit as it is today on a queue of 700,000, and the proposal for a run of that size |
 | `EntityAdmin.dc.html` | Azure Service Bus | create, edit and status of a queue, a topic and a subscription |
 | `Rules.dc.html` | Azure Service Bus | the subscription rules table and editor |
-| `Monitoring.dc.html` | Azure Service Bus | monitoring today, and the proposed counts, sessions and definitions screens |
+| `Monitoring.dc.html` | Azure Service Bus | monitoring today, the proposed processed totals and the table of what the app did, and the proposed counts, sessions and definitions screens |
 | `Components.dc.html` | Window and components | the colours, type and components every artboard uses |
 | `Window.dc.html` | Window and components | the window on each system, without a menu bar, and macOS as it is today |
 

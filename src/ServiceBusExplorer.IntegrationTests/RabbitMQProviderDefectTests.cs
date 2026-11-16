@@ -153,9 +153,9 @@ public sealed class RabbitMQProviderDefectTests(RabbitMqFixture fixture) : IAsyn
         Assert.Equal("contoso", message.ApplicationProperties["tenant"]);
     }
 
-    /// <summary>Correct: a move to a queue that does not exist reports a failure and leaves the message in the source.</summary>
+    /// <summary>Fixed 2026-11-16: a move to a queue that does not exist reports a failure and leaves the message in the source.</summary>
     [Fact]
-    public async Task Defect_move_to_a_missing_queue_reports_success_and_the_message_is_gone()
+    public async Task A_move_to_a_missing_queue_reports_the_failure_and_the_message_stays_in_the_source()
     {
         var source = await CreateQueueAsync("move-src");
         var missing = RabbitMqFixture.UniqueName("move-missing");
@@ -163,11 +163,42 @@ public sealed class RabbitMQProviderDefectTests(RabbitMqFixture fixture) : IAsyn
 
         var result = await _provider.MoveMessagesAsync(source, missing, [1]);
 
-        Assert.Equal(1, result.SuccessCount);
-        Assert.Equal(0, result.FailureCount);
-        Assert.Empty(result.Failures);
-        Assert.Equal(0u, fixture.MessageCount(source));
+        Assert.Equal(0, result.SuccessCount);
+        Assert.Equal("Not moved: the broker did not accept the message. It is still in the queue.", Assert.Single(result.Failures).Error);
         Assert.False(await fixture.QueueExistsAsync(missing));
+        Assert.Equal(["moved"], fixture.Drain(source));
+    }
+
+    /// <summary>Fixed 2026-11-16: a move sends the chosen message to the target and leaves the others in the source, in their order.</summary>
+    [Fact]
+    public async Task A_move_sends_the_chosen_message_to_the_target_and_keeps_the_others_in_the_source_in_their_order()
+    {
+        var source = await CreateQueueAsync("move-from");
+        var target = await CreateQueueAsync("move-to");
+        foreach (var body in new[] { "m1", "m2", "m3" }) fixture.PublishToQueue(source, body);
+        await fixture.WaitForMessageCountAsync(source, 3);
+
+        var result = await _provider.MoveMessagesAsync(source, target, [2]);
+
+        Assert.Equal(1, result.SuccessCount);
+        Assert.Empty(result.Failures);
+        Assert.Equal(["m2"], fixture.Drain(target));
+        Assert.Equal(["m1", "m3"], fixture.Drain(source));
+    }
+
+    /// <summary>Fixed 2026-11-16: a delete removes the chosen position and leaves the others in the queue, in their order.</summary>
+    [Fact]
+    public async Task A_delete_removes_the_chosen_position_and_keeps_the_others_in_their_order()
+    {
+        var queue = await CreateQueueAsync("delete-order");
+        foreach (var body in new[] { "m1", "m2", "m3" }) fixture.PublishToQueue(queue, body);
+        await fixture.WaitForMessageCountAsync(queue, 3);
+
+        var result = await _provider.DeleteMessagesAsync(queue, [2]);
+
+        Assert.Equal(1, result.SuccessCount);
+        Assert.Empty(result.Failures);
+        Assert.Equal(["m1", "m3"], fixture.Drain(queue));
     }
 
     /// <summary>Correct: a delete addresses the message the user saw, and reports it not found when it is gone.</summary>
@@ -202,20 +233,86 @@ public sealed class RabbitMQProviderDefectTests(RabbitMqFixture fixture) : IAsyn
         Assert.Equal(["m1", "m2"], fixture.Drain(queue).OrderBy(b => b));
     }
 
-    /// <summary>Correct: a send to a fanout exchange reaches its bound queues, or fails when nothing can route it.</summary>
+    /// <summary>Fixed 2026-11-16: a send to a fanout exchange reaches its bound queue without a subject.</summary>
     [Fact]
-    public async Task Defect_send_to_a_fanout_exchange_without_subject_is_dropped_and_reports_success()
+    public async Task A_send_to_a_fanout_exchange_without_a_subject_reaches_its_bound_queue()
     {
         var exchange = await CreateExchangeAsync("fanout", "fanout");
         var queue = RabbitMqFixture.UniqueName("fanout-q");
         _queues.Add(queue);
         await _provider.CreateSubscriptionAsync(exchange, queue);
 
-        await _provider.SendMessageAsync(exchange, new SendMessageRequest { Body = "dropped" });
-        await _provider.SendMessageAsync(exchange, new SendMessageRequest { Body = "sentinel", Subject = "any" });
+        await _provider.SendMessageAsync(exchange, new SendMessageRequest { Body = "no subject" });
+        await _provider.SendMessageAsync(exchange, new SendMessageRequest { Body = "with subject", Subject = "any" });
 
-        await fixture.WaitForMessageCountAsync(queue, 1);
-        Assert.Equal(["sentinel"], fixture.Drain(queue));
+        await fixture.WaitForMessageCountAsync(queue, 2);
+        Assert.Equal(["no subject", "with subject"], fixture.Drain(queue));
+    }
+
+    /// <summary>Fixed 2026-11-16: a send no queue receives is a failure that says so, never a success.</summary>
+    [Fact]
+    public async Task A_send_no_queue_receives_fails_and_says_why_for_an_exchange_without_a_binding_and_for_a_name_that_does_not_exist()
+    {
+        var unbound = await CreateExchangeAsync("unbound", "fanout");
+
+        var notRouted = await Assert.ThrowsAsync<InvalidEntityConfigurationException>(
+            () => _provider.SendMessageAsync(unbound, new SendMessageRequest { Body = "nowhere" }));
+        var noName = await Assert.ThrowsAsync<InvalidEntityConfigurationException>(
+            () => _provider.SendMessageAsync(RabbitMqFixture.UniqueName("missing"), new SendMessageRequest { Body = "nowhere" }));
+
+        Assert.Equal("The broker could not route the message: no queue receives it.", notRouted.Message);
+        Assert.Equal("No queue or exchange has this name.", noName.Message);
+    }
+
+    /// <summary>Fixed 2026-11-16: a send to a queue with a subject goes to the queue; it was published to an exchange of the queue's name and lost.</summary>
+    [Fact]
+    public async Task A_send_to_a_queue_with_a_subject_reaches_the_queue_and_the_connection_keeps_working()
+    {
+        var queue = await CreateQueueAsync("send-subject");
+
+        await _provider.SendMessageAsync(queue, new SendMessageRequest { Body = "labelled", Subject = "invoice" });
+        await _provider.SendMessageAsync(queue, new SendMessageRequest { Body = "plain" });
+
+        await fixture.WaitForMessageCountAsync(queue, 2);
+        Assert.Equal(["labelled", "plain"], (await _provider.PeekMessagesAsync(queue, 10)).Select(m => m.Body));
+    }
+
+    /// <summary>Fixed 2026-11-16: a queue the broker does not let this client read says why, and the connection keeps working.</summary>
+    [Fact]
+    public async Task A_peek_of_a_stream_or_of_a_queue_exclusive_to_another_connection_says_why_and_a_later_peek_still_works()
+    {
+        var stream = RabbitMqFixture.UniqueName("stream");
+        var exclusive = RabbitMqFixture.UniqueName("exclusive");
+        _queues.Add(stream);
+        fixture.DeclareQueue(stream, arguments: new Dictionary<string, object> { ["x-queue-type"] = "stream" });
+        fixture.DeclareQueue(exclusive, exclusive: true);
+        var plain = await CreateQueueAsync("after-refusal");
+        fixture.PublishToQueue(plain, "still read");
+
+        var ofStream = await Assert.ThrowsAsync<MessageReadFailedException>(() => _provider.PeekMessagesAsync(stream, 5));
+        var ofExclusive = await Assert.ThrowsAsync<MessageReadFailedException>(() => _provider.PeekMessagesAsync(exclusive, 5));
+
+        Assert.Equal("The broker did not return the messages of this entity (a stream is not read this way).", ofStream.Message);
+        Assert.Equal("The broker did not return the messages of this entity (the queue is exclusive to another connection).", ofExclusive.Message);
+        Assert.Equal("Not deleted: a stream is not read this way. Nothing was sent or removed.", Assert.Single((await _provider.DeleteMessagesAsync(stream, [1])).Failures).Error);
+        Assert.True(_provider.IsConnected, "A stream closes the whole connection on a get; it must never be asked.");
+        Assert.Equal("still read", Assert.Single(await _provider.PeekMessagesAsync(plain, 5)).Body);
+    }
+
+    /// <summary>Fixed 2026-11-16: a receive and a purge on a stream are refused before the broker is asked; either one closed the whole connection.</summary>
+    [Fact]
+    public async Task A_receive_and_a_purge_on_a_stream_are_refused_with_a_reason_and_the_connection_stays_open()
+    {
+        var stream = RabbitMqFixture.UniqueName("stream-refused");
+        _queues.Add(stream);
+        fixture.DeclareQueue(stream, arguments: new Dictionary<string, object> { ["x-queue-type"] = "stream" });
+
+        var purge = await Assert.ThrowsAsync<InvalidEntityConfigurationException>(() => _provider.PurgeMessagesAsync(stream));
+        var receive = await Assert.ThrowsAsync<MessageReadFailedException>(() => _provider.ReceiveMessagesAsync(stream, 1));
+
+        Assert.Equal("A stream cannot be purged: it keeps its messages until its retention removes them.", purge.Message);
+        Assert.Equal("The broker did not return the messages of this entity (a stream is not read this way).", receive.Message);
+        Assert.True(_provider.IsConnected, "A stream closes the whole connection on a get or a purge; it must never be asked.");
     }
 
     /// <summary>

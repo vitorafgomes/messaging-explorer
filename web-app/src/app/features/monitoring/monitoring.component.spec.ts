@@ -24,7 +24,7 @@ describe('MonitoringComponent: loading, empty and error are three different stat
   let el: HTMLElement;
   let monitoring: { getHistory: ReturnType<typeof vi.fn>; getSnapshot: ReturnType<typeof vi.fn> };
 
-  function render(answer: () => Observable<MonitoringStatus>, history: MonitoringSnapshot[] = []) {
+  function render(answer: () => Observable<MonitoringStatus>, history: MonitoringSnapshot[] = [], capabilities: Record<string, boolean> = { supportsDeadLetterQueue: true }) {
     monitoring = { getHistory: vi.fn(() => of(history)), getSnapshot: vi.fn(answer) };
     TestBed.configureTestingModule({
       imports: [MonitoringComponent],
@@ -32,7 +32,7 @@ describe('MonitoringComponent: loading, empty and error are three different stat
         provideRouter([]),
         { provide: MonitoringService, useValue: monitoring },
         { provide: ConnectionService, useValue: { isConnected: true, currentTarget: HOST, connectionStatus$: new Subject() } },
-        { provide: ProviderService, useValue: { capabilities: signal({ supportsDeadLetterQueue: true }) } }
+        { provide: ProviderService, useValue: { capabilities: signal(capabilities) } }
       ]
     });
     fixture = TestBed.createComponent(MonitoringComponent);
@@ -62,6 +62,15 @@ describe('MonitoringComponent: loading, empty and error are three different stat
     expect(headerButtons(), 'Refresh shows only with data').toStrictEqual([]);
     expect(el.querySelector('.last-update'), 'the last-update note shows only with data').toBeNull();
     expect(el.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it('on a broker that reports no message counts it says the numbers are not counts of messages, and on one that reports them it says nothing', () => {
+    render(() => of(status(SNAPSHOT)), [], { supportsDeadLetterQueue: true, supportsMessageCounts: false });
+    expect(text(el.querySelector('[data-testid="no-counts-note"]'))).toBe('This broker does not report message counts: the numbers below are what it answers, not how many messages it holds.');
+
+    TestBed.resetTestingModule();
+    render(() => of(status(SNAPSHOT)));
+    expect(el.querySelector('[data-testid="no-counts-note"]')).toBeNull();
   });
 
   it('says it waits for the first poll when the API has no snapshot yet and no poll failed, never that the namespace is empty', () => {

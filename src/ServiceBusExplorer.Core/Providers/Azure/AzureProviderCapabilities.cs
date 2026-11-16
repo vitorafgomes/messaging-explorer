@@ -14,6 +14,27 @@ public class AzureProviderCapabilities : IProviderCapabilities
     /// </summary>
     public static readonly AzureProviderCapabilities Instance = new();
 
+    private static readonly AzureProviderCapabilities Emulator = new(emulator: true);
+
+    private readonly bool _emulator;
+
+    /// <summary>The capabilities of a namespace.</summary>
+    public AzureProviderCapabilities() { }
+
+    private AzureProviderCapabilities(bool emulator) => _emulator = emulator;
+
+    /// <summary>
+    /// The capabilities of one connection: those of the development emulator when its connection string
+    /// asks for it with <c>UseDevelopmentEmulator=true</c>, those of a namespace otherwise.
+    /// </summary>
+    public static AzureProviderCapabilities For(AzureConnectionConfig? connection) =>
+        !string.IsNullOrEmpty(connection?.ConnectionString) && connection.ConnectionString.Split(';').Any(part =>
+            part.Split('=', 2) is [var key, var value]
+            && key.Trim().Equals("UseDevelopmentEmulator", StringComparison.OrdinalIgnoreCase)
+            && value.Trim().Equals("true", StringComparison.OrdinalIgnoreCase))
+            ? Emulator
+            : Instance;
+
     /// <inheritdoc />
     /// <remarks>
     /// Azure Service Bus has native support for Topics as a pub/sub mechanism.
@@ -97,7 +118,11 @@ public class AzureProviderCapabilities : IProviderCapabilities
     public bool SupportsSubscriptionRules => true;
 
     /// <inheritdoc />
-    public bool SupportsTransferDeadLetter => true;
+    /// <remarks>False on the development emulator, which refuses the transfer dead-letter queue of a subscription.</remarks>
+    public bool SupportsTransferDeadLetter => !_emulator;
+
+    /// <inheritdoc />
+    public bool SupportsMessageCounts => !_emulator;
 
     /// <inheritdoc />
     public bool SupportsDefinitions => true;
@@ -143,6 +168,9 @@ public class AzureProviderCapabilities : IProviderCapabilities
 
     /// <inheritdoc />
     public bool SupportsBulkMessageOperations => true;
+
+    /// <inheritdoc />
+    public bool SupportsMessageSearch => true;
 
     /// <inheritdoc />
     public bool SupportsBinaryBody => true;
