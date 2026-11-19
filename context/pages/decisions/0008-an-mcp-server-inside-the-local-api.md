@@ -2,7 +2,7 @@
 title: "ADR 0008 - An MCP server inside the local API"
 version: "1.0"
 date: 2026-11-19
-changes: "Initial ADR draft"
+changes: "2026-11-19: the SDK calls proven by a throwaway project; the SDK leaves the Origin check to the application. Initial ADR draft"
 page_type: adr
 status: proposed
 description: "The local API serves an MCP endpoint, off until the user turns it on, that offers an assistant only the connections the user chose, behind a token of its own, and asks the user in the app before anything is sent, moved or removed."
@@ -38,7 +38,7 @@ What was read on 2026-11-19, and what was not:
 
 - The specification, revision 2026-07-28, has two standard transports, stdio and Streamable HTTP. For Streamable HTTP a server must validate the `Origin` header and answer 403 to an invalid one, should bind to localhost when local, and should authenticate every connection. Authorization is optional; the OAuth flow is the one the specification describes, and it says nothing for or against a static bearer token.
 - The specification says there should always be a human in the loop able to deny a tool call, and puts that on the host application. Elicitation lets a server ask the user through the client, but a client need not support it.
-- The C# SDK is `ModelContextProtocol` 2.4.0 with `ModelContextProtocol.AspNetCore` for HTTP inside an ASP.NET Core application (`AddMcpServer`, `WithHttpTransport`, `MapMcp`). **Not verified:** the code samples read are from the version 1 documentation; the version 2 pages carried none, so the exact calls of 2.4.0, tool annotations and the binding of a `CancellationToken` are to be confirmed by a spike before any plan depends on them.
+- The C# SDK is `ModelContextProtocol.AspNetCore` 2.4.0. A throwaway project proved on 2026-11-19 what the plan needs: `AddMcpServer().WithHttpTransport(o => o.Stateless = true).WithTools<T>()` and `MapMcp("/mcp")` build and answer `initialize`, `tools/list` and `tools/call`; a tool method takes a service from dependency injection and a `CancellationToken`, and neither shows in its schema; `[McpServerTool(ReadOnly = true)]` and `Destructive = true` reach the client as `readOnlyHint` and `destructiveHint`; an `McpException` reaches the client as an error result with its message. **The SDK does not validate `Origin`:** a call with a foreign `Origin` was answered 200, so that check is this application's to write. **Not verified:** a connection from Claude Code itself; the calls were made with an HTTP client.
 - Claude Code takes an HTTP server as `{ "type": "http", "url": ..., "headers": { "Authorization": "Bearer ..." } }`.
 - The MCP logo is in the specification's repository, which is MIT licensed. No usage terms for the logo or the name were found.
 
@@ -60,7 +60,7 @@ What was read on 2026-11-19, and what was not:
 
 **A record.** What assistants asked for and what happened is kept in memory while the app is open, with no message body and no secret, and shown in Settings.
 
-**Order of building.** A spike that proves the SDK calls of 2.4.0 and a real connection from Claude Code; then reading; then sending; then moving and removing; then entity administration; the Settings group and the confirmation window come with the first phase that needs them.
+**Order of building.** A real connection from Claude Code to the first endpoint; then reading; then sending; then moving and removing; then entity administration; the Settings group and the confirmation window come with the first phase that needs them.
 
 ## Consequences
 
