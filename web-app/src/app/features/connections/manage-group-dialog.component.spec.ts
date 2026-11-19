@@ -102,11 +102,28 @@ describe('ManageGroupDialogComponent', () => {
     expect(groupService.deleteGroup).not.toHaveBeenCalled();
   });
 
-  it('a client that still has environments is refused before any question, as the API removes no environment with it', async () => {
+  it('deleting a client that has environments asks first, names its environments and its connections, and deletes the client once confirmed', async () => {
     const { component } = await render([contoso, prod], connections);
+    dialog.open.mockReturnValue({ afterClosed: () => of(true) });
+
     component.deleteClient(contoso);
-    expect(dialog.open).not.toHaveBeenCalled();
+
+    const data = dialog.open.mock.calls[0][1].data as ConfirmDialogData;
+    expect(data.title).toBe('Delete client?');
+    expect(data.message).toBe('This removes the client Contoso from this computer, with its environments: Production. '
+      + 'These connections stay saved and go to No client, with no environment: contoso-prod, contoso-dev. Nothing on a broker is changed.');
+    expect(groupService.deleteGroup).toHaveBeenCalledWith(contoso.id);
+    expect(component.environments().some(e => e.parentId === contoso.id), 'its environments leave the list too').toBe(false);
+  });
+
+  it('a client with an environment marked production is deleted only after its name is typed', async () => {
+    const { component } = await render([contoso, { ...prod, isProduction: true }], connections);
+    dialog.open.mockReturnValue({ afterClosed: () => of(undefined) });
+
+    component.deleteClient(contoso);
+
+    const data = dialog.open.mock.calls[0][1].data as ConfirmDialogData;
+    expect([data.typedName, data.typedLabel]).toEqual(['Contoso', 'Type the name of the client to confirm']);
     expect(groupService.deleteGroup).not.toHaveBeenCalled();
-    expect(snackBar.open.mock.calls[0][0]).toBe('Cannot delete client with 1 environment(s). Delete environments first.');
   });
 });

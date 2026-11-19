@@ -84,7 +84,16 @@ export class SettingsComponent {
     void this.updates.loadVersions();
   }
 
+  /** How many lines of long notes are shown before "Show all". */
+  readonly notesShort = 4;
+  readonly notesOpen = signal(true);
+  readonly notesAll = signal(false);
+  readonly noteLines = computed(() => (this.pickedVersion()?.notes ?? '').trim().split('\n'));
+  readonly notesShown = computed(() => (this.notesAll() ? this.noteLines() : this.noteLines().slice(0, this.notesShort)).join('\n'));
+
   pickVersion(version: string): void {
+    this.notesOpen.set(true);
+    this.notesAll.set(false);
     this.pickedVersionName.set(version);
     this.agreedVersion.set(null);
     this.updates.installError.set('');
@@ -96,6 +105,18 @@ export class SettingsComponent {
 
   agree(version: string, agreed: boolean): void {
     this.agreedVersion.set(agreed ? version : null);
+  }
+
+  /** The version found by the check that the user agreed to download and install; it holds only for that version. */
+  private readonly agreedUpdate = signal<string | null>(null);
+  readonly agreedToUpdate = computed(() => this.agreedUpdate() !== null && this.agreedUpdate() === this.updates.availableVersion());
+
+  agreeToUpdate(agreed: boolean): void {
+    this.agreedUpdate.set(agreed ? this.updates.availableVersion() : null);
+  }
+
+  downloadUpdate(): void {
+    void this.updates.download(this.agreedUpdate());
   }
 
   releaseOf(version: string): string {
@@ -124,8 +145,8 @@ export class SettingsComponent {
   }
 
   retry(): void {
-    if (this.updates.failedDuring() === 'download') {
-      void this.updates.download();
+    if (this.updates.failedDuring() === 'download' && this.agreedToUpdate()) {
+      this.downloadUpdate();
     } else {
       void this.updates.check();
     }

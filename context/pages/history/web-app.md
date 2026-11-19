@@ -16,6 +16,20 @@ reliability: high
 
 What changed when in the project [[pages/services/web-app|Web App]] describes, newest first.
 
+## 2026-11-19
+
+- Logs: the screen keeps only its calls that got no answer; a failure the backend answered was shown and counted twice.
+
+- Settings: an available version shows the agreement box and Download waits for it; the agreement is for that version only (`web-app/src/app/features/settings/settings.component.ts#agreedToUpdate`).
+
+- The Logs screen gained its third source, Desktop app. [[pages/services/web-app/features-logs]]
+
+- **A Logs screen in Developer mode,** asked by the owner after an error the app did not explain. [[pages/services/web-app/features-logs]]
+
+- **Connections is a tree of client, environment and connection,** with environments that hide and show and are remembered. [[pages/services/web-app/features-connections]]
+
+- **Add Connection signs in first, then picks.** Three steps as the artboard draws them; Service Principal and Default credential leave the Add screen and still edit. [[pages/services/web-app/features-connections]]
+
 ## 2026-11-16
 
 - **The panel lists only the rows a broker has.** Sessions, forwarding and duplicate detection follow the capabilities; a delivery limit, a lock or a size limit of zero is left out. [[pages/services/web-app/features-entities-panel-and-definitions]]

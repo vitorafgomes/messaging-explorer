@@ -73,5 +73,6 @@ Read the one row your change matches. Pages are under `context/pages/services/we
 | The entity panel, the tree, definitions, the purge confirmation | `features-entities-panel-and-definitions.md` |
 | Settings, or a list page under `features/` | `features-settings-and-folders.md` |
 | The Monitoring screen | `features-monitoring.md` |
+| The Logs screen of Developer mode | `features-logs.md` |
 | The provider registry, capabilities, `shared/` | `providers-and-shared.md` |
 | A spec or an end-to-end test | `tests.md` |

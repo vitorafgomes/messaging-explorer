@@ -43,4 +43,4 @@ Unit, `src/ServiceBusExplorer.Core.Tests/Providers/Azure/AzureServiceBusProvider
 
 ## Known gaps
 
-A message whose AMQP body is a value or a sequence, not data, throws on `ServiceBusReceivedMessage.Body`, so the map of a peek that holds one fails ([[pages/services/core/known-gaps]]).
+A message whose AMQP body is a value or a sequence, not data, throws on `ServiceBusReceivedMessage.Body`. Since 2026-11-19 the map reads the body from the raw message instead: a value that is text or bytes as it is, any other value and a sequence as their JSON (`src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs#BodyBytes`), so one such message no longer fails a peek. A resubmit or a move still copies the message as the SDK does.

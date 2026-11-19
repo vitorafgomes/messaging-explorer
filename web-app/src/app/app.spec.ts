@@ -176,9 +176,28 @@ describe('App', () => {
         fixture.nativeElement.querySelectorAll('mat-toolbar nav[aria-label="Main"] a'));
       const settings = fixture.nativeElement.querySelector('mat-toolbar a[aria-label="Settings"]') as HTMLAnchorElement;
 
-      expect(routePaths).toEqual(['connections', 'entities', 'queues', 'topics', 'monitoring', 'settings']);
+      expect(routePaths).toEqual(['connections', 'entities', 'queues', 'topics', 'monitoring', 'logs', 'settings']);
       expect(links.map(a => a.textContent?.trim()), 'the nav draws three links').toEqual(['Connections', 'Entities', 'Monitoring']);
       expect([...links, settings].map(a => a.getAttribute('href'))).toEqual(['/connections', '/entities', '/monitoring', '/settings']);
+    });
+
+    it('Logs is on the toolbar beside Monitoring only while Developer mode is on, as Logs.dc.html draws', () => {
+      const devSettings = TestBed.inject(DevSettingsService);
+      const fixture = TestBed.createComponent(App);
+      fixture.detectChanges();
+      const logs = () => fixture.nativeElement.querySelector('[data-testid="nav-logs"]') as HTMLAnchorElement | null;
+      const wasOn = devSettings.devMode();
+      if (wasOn) devSettings.toggle();
+      fixture.detectChanges();
+      expect(logs(), 'off: no Logs').toBeNull();
+
+      devSettings.toggle();
+      fixture.detectChanges();
+      expect(logs()?.getAttribute('href')).toBe('/logs');
+      expect(logs()?.previousElementSibling?.textContent?.trim()).toBe('Monitoring');
+
+      devSettings.toggle();
+      if (wasOn) devSettings.toggle();
     });
 
     it('the toolbar no longer shows the version or the badge that opened the channel menu: they live in Settings', async () => {

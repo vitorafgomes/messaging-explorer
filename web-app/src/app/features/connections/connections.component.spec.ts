@@ -100,7 +100,7 @@ describe('ConnectionsComponent', () => {
     fixture.detectChanges();
 
     expect(element.textContent).not.toContain('Could not load the connections');
-    const row = element.querySelector('tr.connection-card');
+    const row = element.querySelector('li.connection-card');
     expect(row?.querySelector('h3')?.textContent?.trim()).toBe('orders-rabbitmq');
   });
 
@@ -143,22 +143,125 @@ describe('ConnectionsComponent', () => {
     vi.mocked(groupService.getGroups).mockReturnValue(later([client, production]));
     const { element } = await render();
 
-    const groups = Array.from(element.querySelectorAll('tbody')).map(body => ({
-      label: body.querySelector('th[scope="rowgroup"]')?.textContent?.trim(),
-      names: Array.from(body.querySelectorAll('tr.connection-card h3')).map(h => h.textContent?.trim())
+    const words = (e: Element | null) => (e?.textContent ?? '').replace(/\s+/g, ' ').trim();
+    const blocks = Array.from(element.querySelectorAll('section.client-block')).map(block => ({
+      client: words(block.querySelector('h2.client-name')),
+      environments: Array.from(block.querySelectorAll('.environment')).map(env => ({
+        row: words(env.querySelector('button.environment-row')).replace(/^(expand_more|chevron_right) /, ''),
+        open: env.querySelector('button.environment-row')?.getAttribute('aria-expanded'),
+        names: Array.from(env.querySelectorAll('li.connection-card h3')).map(words)
+      }))
     }));
-    expect(groups).toEqual([
-      { label: 'Contoso, Production', names: ['prod-bus'] },
-      { label: 'Ungrouped Connections', names: ['loose-bus'] }
+    expect(blocks, 'a block for each client, its environments inside, the ones with no client last').toEqual([
+      { client: 'Contoso 1 connection', environments: [{ row: 'PRODUCTION 1 connection', open: 'true', names: ['prod-bus'] }] },
+      { client: 'No client 1 connection', environments: [{ row: 'NO ENVIRONMENT 1 connection', open: 'true', names: ['loose-bus'] }] }
     ]);
+    expect(element.querySelector('table'), 'no table any more').toBeNull();
     expect(element.textContent).toContain('2 connections, 1 client, 1 environment.');
+  });
+
+  it('an environment is hidden and shown by its row, a hidden one that holds the active connection says Connected, and what was left hidden is kept for the next visit', async () => {
+    localStorage.removeItem('connections-collapsed');
+    connectionServiceMock.getConnections.mockReturnValue(later([connection({ id: 'c1', name: 'prod-bus', clientId: 'g1', environmentId: 'g2', isConnected: true })]));
+    vi.mocked(groupService.getGroups).mockReturnValue(later([client, production]));
+    const { fixture, element } = await render();
+    const row = element.querySelector('button.environment-row') as HTMLButtonElement;
+
+    row.click();
+    fixture.detectChanges();
+
+    expect(row.getAttribute('aria-expanded')).toBe('false');
+    expect(element.querySelectorAll('li.connection-card').length, 'its connections are hidden').toBe(0);
+    expect(row.textContent, 'the active connection is not lost from view').toContain('Connected');
+    expect(JSON.parse(localStorage.getItem('connections-collapsed')!)).toEqual(['g2']);
+
+    fixture.destroy();
+    const again = await render();
+    expect(again.element.querySelector('button.environment-row')?.getAttribute('aria-expanded'), 'left hidden, it opens hidden').toBe('false');
+    localStorage.removeItem('connections-collapsed');
+  });
+
+  it.each(['{"a":1}', 'not json', '[1,{"x":2}]'])('what was kept on this computer and is not a list of names (%s) is ignored: the list opens with every environment shown', async kept => {
+    localStorage.setItem('connections-collapsed', kept);
+    connectionServiceMock.getConnections.mockReturnValue(later([connection({ id: 'c1', name: 'prod-bus', clientId: 'g1', environmentId: 'g2' })]));
+    vi.mocked(groupService.getGroups).mockReturnValue(later([client, production]));
+    const { element } = await render();
+
+    expect(element.querySelector('button.environment-row')?.getAttribute('aria-expanded')).toBe('true');
+    expect(element.querySelectorAll('li.connection-card').length).toBe(1);
+    localStorage.removeItem('connections-collapsed');
+  });
+
+  it('an environment still hides and shows when this computer refuses to keep what was hidden', async () => {
+    localStorage.removeItem('connections-collapsed');
+    const refuse = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('quota', 'QuotaExceededError'); });
+    connectionServiceMock.getConnections.mockReturnValue(later([connection({ id: 'c1', name: 'prod-bus', clientId: 'g1', environmentId: 'g2' })]));
+    vi.mocked(groupService.getGroups).mockReturnValue(later([client, production]));
+    const { fixture, element } = await render();
+
+    (element.querySelector('button.environment-row') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(element.querySelector('button.environment-row')?.getAttribute('aria-expanded')).toBe('false');
+    refuse.mockRestore();
+  });
+
+  it('Collapse all hides every environment and Expand all shows them again', async () => {
+    localStorage.removeItem('connections-collapsed');
+    connectionServiceMock.getConnections.mockReturnValue(later([
+      connection({ id: 'c1', name: 'prod-bus', clientId: 'g1', environmentId: 'g2' }), connection({ id: 'c2', name: 'loose-bus' })
+    ]));
+    vi.mocked(groupService.getGroups).mockReturnValue(later([client, production]));
+    const { fixture, element, buttons } = await render();
+    const states = () => Array.from(element.querySelectorAll('button.environment-row')).map(b => b.getAttribute('aria-expanded'));
+
+    buttons('Collapse all')[0].click();
+    fixture.detectChanges();
+    expect(states()).toEqual(['false', 'false']);
+    expect(element.querySelectorAll('li.connection-card').length).toBe(0);
+
+    buttons('Expand all')[0].click();
+    fixture.detectChanges();
+    expect(states()).toEqual(['true', 'true']);
+    expect(element.querySelectorAll('li.connection-card').length).toBe(2);
+    localStorage.removeItem('connections-collapsed');
+  });
+
+  describe('export in the desktop app', () => {
+    afterEach(() => { delete (window as any).electronAPI; });
+
+    const exportWith = async (answer: unknown) => {
+      const saveExportFile = vi.fn(async () => answer);
+      (window as any).electronAPI = { saveExportFile };
+      (connectionServiceMock as any).exportFullConfiguration = vi.fn(() => of({ connections: [], groups: [] }));
+      const { fixture } = await render();
+      (fixture.componentInstance as any).runFullExport(true);
+      await settle();
+      return { saveExportFile, said: snackBarMock.open.mock.calls.map(c => c[0]) };
+    };
+
+    it('is saved where the user chooses: the desktop app is given a file name and the text, and the screen says the file it wrote', async () => {
+      const { saveExportFile, said } = await exportWith({ status: 'saved', file: 'my-export.json' });
+
+      expect(saveExportFile.mock.calls[0]).toEqual([expect.stringMatching(/^servicebus-full-config-\d{4}-\d{2}-\d{2}\.json$/), JSON.stringify({ connections: [], groups: [] }, null, 2)]);
+      expect(said).toEqual(['Export saved as my-export.json. File contains plaintext credentials — store securely.']);
+    });
+
+    it('a save dialog that was cancelled says nothing', async () => {
+      expect((await exportWith({ status: 'cancelled' })).said).toEqual([]);
+    });
+
+    it('a file that could not be written says why, as the desktop app worded it', async () => {
+      expect((await exportWith({ status: 'error', message: 'The file could not be written (EACCES).' })).said)
+        .toEqual(['The export was not saved. The file could not be written (EACCES).']);
+    });
   });
 
   it('offers Open entities instead of Connect on the active connection', async () => {
     connectionServiceMock.getConnections.mockReturnValue(later([connection({ isConnected: true })]));
     const { element, buttons } = await render();
 
-    const row = element.querySelector('tr.connection-card');
+    const row = element.querySelector('li.connection-card');
     expect(row).not.toBeNull();
     const open = row?.querySelector('a');
     expect(open?.textContent?.trim()).toBe('Open entities');
@@ -167,13 +270,14 @@ describe('ConnectionsComponent', () => {
     expect(buttons('Connect').filter(b => row?.contains(b))).toHaveLength(0);
   });
 
-  it('shows the columns Connection, Broker, Target, Environment, Last used and Actions', async () => {
+  it('a connection row shows its name with the broker and how it signs in, its target, when it was last used and its actions; the environment is its group, not a column', async () => {
     connectionServiceMock.getConnections.mockReturnValue(later([connection({})]));
     const { element } = await render();
 
-    const headers = Array.from(element.querySelectorAll('thead th')).map(th => th.textContent?.trim());
-    expect(headers).toEqual(['Connection', 'Broker', 'Target', 'Environment', 'Last used', 'Actions']);
-    expect(element.querySelector('th[scope="rowgroup"]')?.getAttribute('colspan')).toBe('6');
+    const row = element.querySelector('li.connection-card')!;
+    expect(Array.from(row.children).map(c => c.className.split(' ')[0])).toEqual(['identity', 'target', 'last-used', 'row-actions']);
+    expect(row.querySelector('.environment-chip'), 'no environment chip on the row').toBeNull();
+    expect(element.querySelector('thead')).toBeNull();
   });
 
   it('shows the environment chip of each connection, PRODUCTION for an environment marked production and NO ENVIRONMENT for none', async () => {
@@ -186,9 +290,9 @@ describe('ConnectionsComponent', () => {
     vi.mocked(groupService.getGroups).mockReturnValue(later([client, { ...production, isProduction: true }, development]));
     const { element } = await render();
 
-    const chips = Object.fromEntries(Array.from(element.querySelectorAll('tr.connection-card')).map(row => [
-      row.querySelector('h3')?.textContent?.trim(),
-      row.querySelector('.environment-chip')
+    const chips = Object.fromEntries(Array.from(element.querySelectorAll('.environment')).map(env => [
+      env.querySelector('li.connection-card h3')?.textContent?.trim(),
+      env.querySelector('button.environment-row .environment-chip')
     ]));
     expect(chips['prod-bus']?.textContent?.replace('warning', '').trim()).toBe('PRODUCTION');
     expect(chips['prod-bus']?.classList.contains('production')).toBe(true);
@@ -204,7 +308,7 @@ describe('ConnectionsComponent', () => {
     ]));
     const { element } = await render();
 
-    const lastUsed = Object.fromEntries(Array.from(element.querySelectorAll('tr.connection-card')).map(row => [
+    const lastUsed = Object.fromEntries(Array.from(element.querySelectorAll('li.connection-card')).map(row => [
       row.querySelector('h3')?.textContent?.trim(),
       // DatePipe puts a narrow no-break space before PM.
       row.querySelector('.last-used')?.textContent?.replace(/\s+/g, ' ').trim()
@@ -216,7 +320,7 @@ describe('ConnectionsComponent', () => {
     connectionServiceMock.getConnections.mockReturnValue(later([connection({})]));
     const { element } = await render();
 
-    const labels = Array.from(element.querySelectorAll('tr.connection-card button')).map(b => b.getAttribute('aria-label'));
+    const labels = Array.from(element.querySelectorAll('li.connection-card button')).map(b => b.getAttribute('aria-label'));
     expect(labels).toEqual(['Connect to orders-rabbitmq', 'Edit orders-rabbitmq', 'Delete orders-rabbitmq']);
   });
   describe('as the artboard draws it', () => {
@@ -246,14 +350,29 @@ describe('ConnectionsComponent', () => {
       expect(Array.from(element.querySelectorAll('h1')).map(h => h.textContent?.trim())).toEqual(['Connections']);
     });
 
-    it('says under each name how the connection signs in', async () => {
+    it('says under each name the broker and how the connection signs in', async () => {
       connectionServiceMock.getConnections.mockReturnValue(later([
         connection({ id: 'r', name: 'rabbit', virtualHost: '/' }),
         connection({ id: 'a', name: 'bus', providerType: ProviderType.AzureServiceBus, namespace: 'ns.servicebus.windows.net', authType: 'InteractiveBrowser' }),
       ]));
       const { element } = await render();
-      expect(Array.from(element.querySelectorAll('tr.connection-card .auth-line')).map(l => l.textContent?.trim()))
-        .toEqual(['Username and password, virtual host /', 'Sign in with Microsoft']);
+      expect(Array.from(element.querySelectorAll('li.connection-card .auth-line')).map(l => l.textContent?.trim()))
+        .toEqual(['RabbitMQ · Username and password, virtual host /', 'Azure Service Bus · Sign in with Microsoft']);
+    });
+
+    it('deleting a connection of an environment marked production asks for its name typed, and one of another environment does not', async () => {
+      dialogMock.open.mockReturnValue({ afterClosed: () => of(false) });
+      connectionServiceMock.getConnections.mockReturnValue(later([
+        connection({ id: 'p', name: 'prod-bus', clientId: 'g1', environmentId: 'g2' }), connection({ id: 'l', name: 'loose-bus' })
+      ]));
+      vi.mocked(groupService.getGroups).mockReturnValue(later([client, { ...production, isProduction: true }]));
+      const { element } = await render();
+
+      Array.from(element.querySelectorAll<HTMLButtonElement>('button.delete')).forEach(b => b.click());
+
+      expect(dialogMock.open.mock.calls.map(c => [c[1].data.typedName, c[1].data.typedLabel])).toEqual([
+        ['prod-bus', 'Type the name of the connection to confirm'], [undefined, 'Type the name of the connection to confirm']
+      ]);
     });
 
     it('a failed connect is an error on the screen that names the connection and what stays active, with Retry and Edit', async () => {
@@ -277,11 +396,16 @@ describe('ConnectionsComponent', () => {
       dialog.open.mockReturnValue({ afterClosed: () => of(undefined) });
       const named = (label: string) => Array.from(panel.querySelectorAll('button')).find(b => b.textContent?.trim().endsWith(label)) as HTMLElement;
       expect(['Retry', 'Edit the connection'].map(label => named(label).querySelector('mat-icon')?.textContent?.trim()), 'as Connections.dc.html draws them: Retry with the refresh icon, Edit the connection with the pencil').toEqual(['refresh', 'edit']);
-      named('Edit the connection').click();
-      expect(dialog.open).toHaveBeenCalledTimes(1);
-
       named('Retry').click();
       expect(service.connect).toHaveBeenCalledTimes(2);
+      await settle();
+      fixture.detectChanges();
+
+      const edit = Array.from(element.querySelectorAll('[data-testid="connect-error"] button')).find(b => b.textContent?.trim().endsWith('Edit the connection')) as HTMLElement;
+      edit.click();
+      fixture.detectChanges();
+      expect(dialog.open).toHaveBeenCalledTimes(1);
+      expect(element.querySelector('[data-testid="connect-error"]'), 'the error leaves the screen when the connection is opened for edit, as the artboard draws').toBeNull();
     });
 
     describe('a failed connect says the reason the API classified, as Connections.dc.html draws it', () => {
@@ -301,6 +425,7 @@ describe('ConnectionsComponent', () => {
         ['host-not-found', 'The host of localhost:5672 was not found. Check the host name.'],
         ['timeout', 'The broker at localhost:5672 did not answer in time. Check the host name, the port and the network.'],
         ['tls', 'The TLS handshake with localhost:5672 failed. Check the TLS setting and the port.'],
+        ['credentials-refused', 'The broker at localhost:5672 refused the user name or the password. Check the user name and the password.'],
       ])('%s: the broker\'s reason with what to check', async (code, sentence) => {
         expect(await reasonAfterConnect(code), `the reason the API classified as ${code}, with the target of the connection`).toBe(sentence);
       });

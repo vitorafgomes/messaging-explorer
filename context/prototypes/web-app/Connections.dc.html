@@ -125,139 +125,65 @@ input::placeholder{color:currentColor;opacity:.72}
           </div>
         </sc-if>
 
-        <table style="width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums">
-          <caption style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">Saved connections, grouped by client and environment</caption>
-          <thead>
-            <tr>
-              <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left; padding-left: 8px">Connection</th>
-              <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Broker</th>
-              <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Target</th>
-              <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Environment</th>
-              <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left">Last used</th>
-              <th scope="col" style="padding: 8px 12px; border-bottom: 1px solid {{t.outline}}; font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}; text-align: left; padding-right: 0; text-align: right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <th colspan="6" scope="rowgroup" style="padding: 16px 12px 6px 8px; border-bottom: 1px solid {{t.outlineVariant}}; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: {{t.onSurfaceVariant}}; text-align: left">Contoso, Production</th>
-            </tr>
-            <tr style="background: {{c0.rowBg}}">
-              <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; padding-left: 8px">
-                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
-                  <span style="font-weight: 500; overflow-wrap: anywhere">{{c0.name}}</span>
-                  <sc-if value="{{c0.on}}" hint-placeholder-val="{{true}}">
-                    <span style="display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px 0 6px; border-radius: 999px; background: {{t.successContainer}}; color: {{t.onSuccessContainer}}; font-size: 12px; line-height: 16px; font-weight: 700; white-space: nowrap"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="12" cy="12" r="9"></circle><path d="M8 12l3 3 5-6"></path></svg>Connected</span>
-                  </sc-if>
-                </div>
-                <div style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">{{c0.auth}}</div>
-              </td>
-              <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">{{c0.broker}}</td>
-              <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; overflow-wrap: anywhere">{{c0.target}}</td>
-              <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">
-                <span style="display: inline-flex; align-items: center; gap: 6px; flex: none; height: 24px; padding: 0 10px; border-radius: 999px; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap; background: {{c0.env.bg}}; color: {{c0.env.fg}}">
-                  <sc-if value="{{c0.env.isProd}}" hint-placeholder-val="{{true}}">
-                    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
-                  </sc-if>
-                  {{c0.env.label}}
-                </span>
-              </td>
-              <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; color: {{t.onSurfaceVariant}}">{{c0.lastUsed}}</td>
-              <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; padding-right: 0">
-                <div style="display: flex; align-items: center; justify-content: flex-end; gap: 4px">
-                  <sc-if value="{{c0.on}}" hint-placeholder-val="{{true}}">
+        <div aria-label="Saved connections, by client and environment" style="display: flex; flex-direction: column; gap: 20px; font-variant-numeric: tabular-nums">
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+            <button type="button" onClick="{{tree.openAll}}" class="hov" style="display: inline-flex; align-items: center; height: 32px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; cursor: pointer">Expand all</button>
+            <button type="button" onClick="{{tree.closeAll}}" class="hov" style="display: inline-flex; align-items: center; height: 32px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; cursor: pointer">Collapse all</button>
+            <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap">Built 2026-11-19: it was one table with a group line per client and environment</span>
+          </div>
+          <sc-for list="{{tree.clients}}" as="cl" hint-placeholder-count="2">
+            <section aria-label="{{cl.label}}" style="display: flex; flex-direction: column; gap: 6px">
+              <h3 style="display: flex; align-items: baseline; gap: 8px; margin: 0; padding: 0 8px 6px; border-bottom: 1px solid {{t.outline}}; font-size: 16px; line-height: 24px; font-weight: 500">{{cl.name}} <span style="font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}">{{cl.count}}</span></h3>
+              <sc-for list="{{cl.envs}}" as="ev" hint-placeholder-count="2">
+                <div style="display: flex; flex-direction: column; margin-left: 16px">
+                  <button type="button" onClick="{{ev.toggle}}" aria-expanded="{{ev.expanded}}" class="hov" style="display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; box-sizing: border-box; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; color: {{t.onSurface}}; font: inherit; text-align: left; cursor: pointer">
+                    <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; transform: {{ev.turn}}"><path d="M9 6l6 6-6 6"></path></svg>
+                    <span style="display: inline-flex; align-items: center; gap: 6px; flex: none; height: 24px; padding: 0 10px; border-radius: 999px; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap; background: {{ev.chip.bg}}; color: {{ev.chip.fg}}">
+                      <sc-if value="{{ev.chip.isProd}}" hint-placeholder-val="{{false}}">
+                        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
+                      </sc-if>
+                      {{ev.chip.label}}
+                    </span>
+                    <span style="flex: 1; min-width: 0; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">{{ev.count}}</span>
+                    <sc-if value="{{ev.hasActive}}" hint-placeholder-val="{{false}}">
+                      <span style="display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px 0 6px; border-radius: 999px; background: {{t.successContainer}}; color: {{t.onSuccessContainer}}; font-size: 12px; line-height: 16px; font-weight: 700; white-space: nowrap"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="12" cy="12" r="9"></circle><path d="M8 12l3 3 5-6"></path></svg>Connected</span>
+                    </sc-if>
+                  </button>
+                  <sc-if value="{{ev.open}}" hint-placeholder-val="{{true}}">
+                    <ul style="display: flex; flex-direction: column; margin: 0 0 8px 28px; padding: 0; list-style: none">
+                      <sc-for list="{{ev.rows}}" as="r" hint-placeholder-count="3">
+                        <li style="display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; padding: 8px 0 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; background: {{r.rowBg}}">
+                          <div style="flex: 1 1 220px; min-width: 0">
+                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+                              <span style="font-weight: 500; overflow-wrap: anywhere">{{r.name}}</span>
+                              <sc-if value="{{r.on}}" hint-placeholder-val="{{false}}">
+                                <span style="display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px 0 6px; border-radius: 999px; background: {{t.successContainer}}; color: {{t.onSuccessContainer}}; font-size: 12px; line-height: 16px; font-weight: 700; white-space: nowrap"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="12" cy="12" r="9"></circle><path d="M8 12l3 3 5-6"></path></svg>Connected</span>
+                              </sc-if>
+                            </div>
+                            <div style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">{{r.broker}} · {{r.auth}}</div>
+                          </div>
+                          <span style="flex: 1 1 240px; min-width: 0; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; overflow-wrap: anywhere">{{r.target}}</span>
+                          <span style="flex: 0 1 180px; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">{{r.lastUsed}}</span>
+                          <div style="display: flex; align-items: center; justify-content: flex-end; gap: 4px">
+                  <sc-if value="{{r.on}}" hint-placeholder-val="{{true}}">
                     <a href="Main.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer">Open entities</a>
                   </sc-if>
-                  <sc-if value="{{c0.off}}" hint-placeholder-val="{{true}}">
-                    <a href="Main.dc.html" aria-label="{{c0.connectLabel}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px 0 12px; border: 0; border-radius: 999px; background: {{t.primary}}; color: {{t.onPrimary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M9 3v5M15 3v5M6 8h12v4a6 6 0 0 1-12 0zM12 18v3"></path></svg>Connect</a>
+                  <sc-if value="{{r.off}}" hint-placeholder-val="{{true}}">
+                    <a href="Main.dc.html" aria-label="{{r.connectLabel}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px 0 12px; border: 0; border-radius: 999px; background: {{t.primary}}; color: {{t.onPrimary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M9 3v5M15 3v5M6 8h12v4a6 6 0 0 1-12 0zM12 18v3"></path></svg>Connect</a>
                   </sc-if>
-                  <button type="button" onClick="{{c0.edit}}" aria-label="{{c0.editLabel}}" title="{{c0.editLabel}}" class="hov" style="display: flex; align-items: center; justify-content: center; flex: none; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: {{t.onSurfaceVariant}}; font: inherit; cursor: pointer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M4 20h4L19 9l-4-4L4 16zM13 7l4 4"></path></svg></button>
+                  <button type="button" onClick="{{r.edit}}" aria-label="{{r.editLabel}}" title="{{r.editLabel}}" class="hov" style="display: flex; align-items: center; justify-content: center; flex: none; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: {{t.onSurfaceVariant}}; font: inherit; cursor: pointer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M4 20h4L19 9l-4-4L4 16zM13 7l4 4"></path></svg></button>
                   <span aria-hidden="true" style="flex: none; width: 1px; height: 20px; margin: 0 4px; background: {{t.outlineVariant}}"></span>
-                  <button type="button" onClick="{{c0.del}}" aria-label="{{c0.delLabel}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: {{t.error}}; font: inherit; font-weight: 500; white-space: nowrap; cursor: pointer; height: 32px; padding: 0 10px 0 8px; gap: 6px"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"></path></svg>Delete</button>
+                  <button type="button" onClick="{{r.del}}" aria-label="{{r.delLabel}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: {{t.error}}; font: inherit; font-weight: 500; white-space: nowrap; cursor: pointer; height: 32px; padding: 0 10px 0 8px; gap: 6px"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"></path></svg>Delete</button>
                 </div>
-              </td>
-            </tr>
-          </tbody>
-          <tbody>
-            <tr>
-              <th colspan="6" scope="rowgroup" style="padding: 16px 12px 6px 8px; border-bottom: 1px solid {{t.outlineVariant}}; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: {{t.onSurfaceVariant}}; text-align: left">Contoso, Development</th>
-            </tr>
-            <tr style="background: {{c1.rowBg}}">
-              <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; padding-left: 8px">
-                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
-                  <span style="font-weight: 500; overflow-wrap: anywhere">{{c1.name}}</span>
-                  <sc-if value="{{c1.on}}" hint-placeholder-val="{{true}}">
-                    <span style="display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px 0 6px; border-radius: 999px; background: {{t.successContainer}}; color: {{t.onSuccessContainer}}; font-size: 12px; line-height: 16px; font-weight: 700; white-space: nowrap"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="12" cy="12" r="9"></circle><path d="M8 12l3 3 5-6"></path></svg>Connected</span>
+                        </li>
+                      </sc-for>
+                    </ul>
                   </sc-if>
                 </div>
-                <div style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">{{c1.auth}}</div>
-              </td>
-              <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">{{c1.broker}}</td>
-              <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; overflow-wrap: anywhere">{{c1.target}}</td>
-              <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">
-                <span style="display: inline-flex; align-items: center; gap: 6px; flex: none; height: 24px; padding: 0 10px; border-radius: 999px; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap; background: {{c1.env.bg}}; color: {{c1.env.fg}}">
-                  <sc-if value="{{c1.env.isProd}}" hint-placeholder-val="{{true}}">
-                    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
-                  </sc-if>
-                  {{c1.env.label}}
-                </span>
-              </td>
-              <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; color: {{t.onSurfaceVariant}}">{{c1.lastUsed}}</td>
-              <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; padding-right: 0">
-                <div style="display: flex; align-items: center; justify-content: flex-end; gap: 4px">
-                  <sc-if value="{{c1.on}}" hint-placeholder-val="{{true}}">
-                    <a href="Main.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer">Open entities</a>
-                  </sc-if>
-                  <sc-if value="{{c1.off}}" hint-placeholder-val="{{true}}">
-                    <a href="Main.dc.html" aria-label="{{c1.connectLabel}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px 0 12px; border: 0; border-radius: 999px; background: {{t.primary}}; color: {{t.onPrimary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M9 3v5M15 3v5M6 8h12v4a6 6 0 0 1-12 0zM12 18v3"></path></svg>Connect</a>
-                  </sc-if>
-                  <button type="button" onClick="{{c1.edit}}" aria-label="{{c1.editLabel}}" title="{{c1.editLabel}}" class="hov" style="display: flex; align-items: center; justify-content: center; flex: none; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: {{t.onSurfaceVariant}}; font: inherit; cursor: pointer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M4 20h4L19 9l-4-4L4 16zM13 7l4 4"></path></svg></button>
-                  <span aria-hidden="true" style="flex: none; width: 1px; height: 20px; margin: 0 4px; background: {{t.outlineVariant}}"></span>
-                  <button type="button" onClick="{{c1.del}}" aria-label="{{c1.delLabel}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: {{t.error}}; font: inherit; font-weight: 500; white-space: nowrap; cursor: pointer; height: 32px; padding: 0 10px 0 8px; gap: 6px"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"></path></svg>Delete</button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-          <tbody>
-            <tr>
-              <th colspan="6" scope="rowgroup" style="padding: 16px 12px 6px 8px; border-bottom: 1px solid {{t.outlineVariant}}; font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: {{t.onSurfaceVariant}}; text-align: left">Ungrouped Connections</th>
-            </tr>
-            <tr style="background: {{c2.rowBg}}">
-              <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; padding-left: 8px">
-                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
-                  <span style="font-weight: 500; overflow-wrap: anywhere">{{c2.name}}</span>
-                  <sc-if value="{{c2.on}}" hint-placeholder-val="{{true}}">
-                    <span style="display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px 0 6px; border-radius: 999px; background: {{t.successContainer}}; color: {{t.onSuccessContainer}}; font-size: 12px; line-height: 16px; font-weight: 700; white-space: nowrap"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><circle cx="12" cy="12" r="9"></circle><path d="M8 12l3 3 5-6"></path></svg>Connected</span>
-                  </sc-if>
-                </div>
-                <div style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">{{c2.auth}}</div>
-              </td>
-              <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">{{c2.broker}}</td>
-              <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; overflow-wrap: anywhere">{{c2.target}}</td>
-              <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}">
-                <span style="display: inline-flex; align-items: center; gap: 6px; flex: none; height: 24px; padding: 0 10px; border-radius: 999px; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: .06em; white-space: nowrap; background: {{c2.env.bg}}; color: {{c2.env.fg}}">
-                  <sc-if value="{{c2.env.isProd}}" hint-placeholder-val="{{true}}">
-                    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
-                  </sc-if>
-                  {{c2.env.label}}
-                </span>
-              </td>
-              <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; color: {{t.onSurfaceVariant}}">{{c2.lastUsed}}</td>
-              <td style="padding: 8px 12px; border-bottom: 1px solid {{t.outlineVariant}}; padding-right: 0">
-                <div style="display: flex; align-items: center; justify-content: flex-end; gap: 4px">
-                  <sc-if value="{{c2.on}}" hint-placeholder-val="{{true}}">
-                    <a href="Main.dc.html" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer">Open entities</a>
-                  </sc-if>
-                  <sc-if value="{{c2.off}}" hint-placeholder-val="{{true}}">
-                    <a href="Main.dc.html" aria-label="{{c2.connectLabel}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px 0 12px; border: 0; border-radius: 999px; background: {{t.primary}}; color: {{t.onPrimary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M9 3v5M15 3v5M6 8h12v4a6 6 0 0 1-12 0zM12 18v3"></path></svg>Connect</a>
-                  </sc-if>
-                  <button type="button" onClick="{{c2.edit}}" aria-label="{{c2.editLabel}}" title="{{c2.editLabel}}" class="hov" style="display: flex; align-items: center; justify-content: center; flex: none; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: {{t.onSurfaceVariant}}; font: inherit; cursor: pointer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M4 20h4L19 9l-4-4L4 16zM13 7l4 4"></path></svg></button>
-                  <span aria-hidden="true" style="flex: none; width: 1px; height: 20px; margin: 0 4px; background: {{t.outlineVariant}}"></span>
-                  <button type="button" onClick="{{c2.del}}" aria-label="{{c2.delLabel}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: {{t.error}}; font: inherit; font-weight: 500; white-space: nowrap; cursor: pointer; height: 32px; padding: 0 10px 0 8px; gap: 6px"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"></path></svg>Delete</button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+              </sc-for>
+            </section>
+          </sc-for>
+        </div>
 
         <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">
           <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built</span>
@@ -318,22 +244,121 @@ input::placeholder{color:currentColor;opacity:.72}
               </fieldset>
 
               <div style="display: flex; flex-direction: column; gap: 12px; flex: 1 1 320px; min-width: 0">
-                <sc-if value="{{authSignIn}}" hint-placeholder-val="{{true}}">
+                <sc-if value="{{authPick}}" hint-placeholder-val="{{true}}">
                   <div style="display: flex; flex-direction: column; gap: 12px">
-                    <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
-                      <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Fully Qualified Namespace</span>
-                      <input type="text" placeholder="mynamespace.servicebus.windows.net" autocomplete="off" spellcheck="false" style="height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit">
-                      <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Your Service Bus namespace host, without the scheme</span>
-                    </label>
-                    <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
-                      <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Tenant ID (optional)</span>
-                      <input type="text" placeholder="00000000-0000-0000-0000-000000000000" autocomplete="off" spellcheck="false" style="height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit">
-                      <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Leave empty to use the user's home tenant</span>
-                    </label>
-                    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
-                      <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px 0 16px; border: 0; border-radius: 999px; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer">Sign in with Microsoft</button>
-                      <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Opens your browser. Enter the namespace first.</span>
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+                      <ol aria-label="Steps" style="display: flex; gap: 4px; flex: 1 1 200px; flex-wrap: wrap; margin: 0; padding: 0; list-style: none">
+                        <sc-for list="{{si.steps}}" as="st" hint-placeholder-count="3">
+                          <li><button type="button" onClick="{{st.pick}}" aria-current="{{st.current}}" class="hov" style="display: inline-flex; align-items: center; height: 32px; padding: 0 12px; border: 0; border-radius: 999px; background: {{st.bg}}; color: {{st.fg}}; font: inherit; font-size: 12px; font-weight: {{st.weight}}; cursor: pointer">{{st.label}}</button></li>
+                        </sc-for>
+                      </ol>
+                      <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built</span>
                     </div>
+
+                    <sc-if value="{{si.s1SignIn}}" hint-placeholder-val="{{true}}">
+                      <div style="display: flex; flex-direction: column; gap: 12px">
+                        <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+                          <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Tenant ID (optional)</span>
+                          <input type="text" placeholder="00000000-0000-0000-0000-000000000000" autocomplete="off" spellcheck="false" style="height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit">
+                          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Leave empty to use the user's home tenant</span>
+                        </label>
+                        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+                          <button type="button" onClick="{{si.signIn}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px 0 16px; border: 0; border-radius: 999px; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer">Sign in with Microsoft</button>
+                          <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Opens your browser. The namespace is picked after the sign-in, no longer typed first.</span>
+                        </div>
+                      </div>
+                    </sc-if>
+
+                    <sc-if value="{{si.s1Cli}}" hint-placeholder-val="{{false}}">
+                      <div style="display: flex; flex-direction: column; gap: 12px">
+                        <p style="margin: 0">Uses your current "az login" session. Nothing is typed here.</p>
+                        <p role="status" style="margin: 0; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Session found: <strong style="font-weight: 600; color: {{t.onSurface}}">ana@contoso.example</strong>, tenant contoso.onmicrosoft.com</p>
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+                          <button type="button" onClick="{{si.signIn}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px; border: 0; border-radius: 999px; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer">Continue with this session</button>
+                          <button type="button" class="hov" style="display: inline-flex; align-items: center; height: 40px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; cursor: pointer">Check again</button>
+                        </div>
+                        <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">No session, or another account? Run az login in a terminal, then Check again. The app asks the Azure CLI for a token and never sees a password.</span>
+                      </div>
+                    </sc-if>
+
+                    <sc-if value="{{si.signed}}" hint-placeholder-val="{{false}}">
+                      <p style="margin: 0; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">{{si.signedLabel}} <strong style="font-weight: 600; color: {{t.onSurface}}">ana@contoso.example</strong></p>
+                    </sc-if>
+
+                    <sc-if value="{{si.s2}}" hint-placeholder-val="{{false}}">
+                      <div style="display: flex; flex-direction: column; gap: 12px">
+                        <p style="margin: 0; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">The client and the environment the namespaces are added to</p>
+                        <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+                          <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Client</span>
+                          <select value="{{org.client}}" onChange="{{org.setClient}}" style="height: 40px; box-sizing: border-box; padding: 0 8px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit">
+                            <option value="">No client</option>
+                            <option value="Contoso">Contoso</option>
+                          </select>
+                        </label>
+                        <sc-if value="{{org.hasClient}}" hint-placeholder-val="{{true}}">
+                          <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+                            <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Environment</span>
+                            <select value="{{org.env}}" onChange="{{org.setEnv}}" style="height: 40px; box-sizing: border-box; padding: 0 8px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit">
+                              <option value="">No environment</option>
+                              <option value="Production">Production</option>
+                              <option value="Development">Development</option>
+                            </select>
+                          </label>
+                        </sc-if>
+                        <div><button type="button" onClick="{{si.toNs}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px 0 16px; border: 0; border-radius: 999px; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer; padding: 0 20px">Next: pick the namespaces</button></div>
+                      </div>
+                    </sc-if>
+
+                    <sc-if value="{{si.s3}}" hint-placeholder-val="{{false}}">
+                      <div style="display: flex; flex-direction: column; gap: 12px">
+                        <p style="margin: 0; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">{{si.target}}</p>
+                        <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+                          <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Azure subscription <span style="font-weight: 400">{{si.subCount}} in this account</span></span>
+                          <select value="{{si.sub}}" onChange="{{si.setSub}}" style="height: 40px; box-sizing: border-box; padding: 0 8px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit">
+                            <sc-for list="{{si.subs}}" as="sb" hint-placeholder-count="5"><option value="{{sb.id}}">{{sb.label}}</option></sc-for>
+                          </select>
+                        </label>
+                        <sc-if value="{{si.nsLoading}}" hint-placeholder-val="{{false}}">
+                          <p role="status" style="display: flex; align-items: center; gap: 8px; margin: 0; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">
+                            <svg aria-hidden="true" class="spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 9 9"></path></svg>
+                            Loading the namespaces of this subscription from Azure
+                          </p>
+                        </sc-if>
+                        <sc-if value="{{si.nsFailed}}" hint-placeholder-val="{{false}}">
+                          <div role="alert" style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 10px 14px; border-radius: 8px; background: {{t.errorContainer}}; color: {{t.onErrorContainer}}">
+                            <span><strong style="font-weight: 600">Azure did not list the namespaces.</strong> Your account may not read this subscription (403). Nothing was changed. You can still add a namespace by typing it.</span>
+                            <button type="button" class="hov" style="display: inline-flex; align-items: center; height: 40px; padding: 0 16px; border: 1px solid currentColor; border-radius: 999px; background: transparent; color: inherit; font: inherit; font-weight: 500; cursor: pointer">Retry</button>
+                          </div>
+                        </sc-if>
+                        <sc-if value="{{si.nsLoaded}}" hint-placeholder-val="{{true}}">
+                          <ul aria-label="Namespaces of the subscription" style="display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none">
+                          <sc-for list="{{si.namespaces}}" as="n" hint-placeholder-count="3">
+                            <li>
+                              <label style="display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 2px 8px; border-radius: 8px; background: {{n.bg}}; cursor: pointer">
+                                <input type="checkbox" checked="{{n.checked}}" disabled="{{n.already}}" onChange="{{n.toggle}}" style="flex: none; width: 18px; height: 18px; margin: 0; accent-color: {{t.primary}}">
+                                <span style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+                                  <span style="font-weight: {{n.weight}}; overflow-wrap: anywhere">{{n.host}}</span>
+                                  <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">{{n.where}}</span>
+                                </span>
+                              </label>
+                            </li>
+                          </sc-for>
+                        </ul>
+                        </sc-if>
+                        <sc-if value="{{si.noNsShown}}" hint-placeholder-val="{{false}}">
+                          <p style="margin: 0; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">This subscription holds no Service Bus namespace your account can read.</p>
+                        </sc-if>
+                        <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">{{si.summary}} Ticks are kept when the subscription is changed. Each namespace becomes one connection, named after it.</span>
+                        <div><button type="button" onClick="{{si.toggleHand}}" aria-expanded="{{si.handOpen}}" class="hov" style="display: inline-flex; align-items: center; height: 40px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; cursor: pointer; padding: 0 8px">A namespace that is not listed: type it</button></div>
+                        <sc-if value="{{si.hand}}" hint-placeholder-val="{{false}}">
+                          <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+                            <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Fully Qualified Namespace</span>
+                            <input type="text" placeholder="mynamespace.servicebus.windows.net" autocomplete="off" spellcheck="false" style="height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit">
+                            <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Your Service Bus namespace host, without the scheme. Added to the same client and environment as the ticked ones.</span>
+                          </label>
+                        </sc-if>
+                      </div>
+                    </sc-if>
                   </div>
                 </sc-if>
                 <sc-if value="{{authConnStr}}" hint-placeholder-val="{{false}}">
@@ -435,6 +460,7 @@ input::placeholder{color:currentColor;opacity:.72}
             </div>
           </sc-if>
 
+            <sc-if value="{{orgAtEnd}}" hint-placeholder-val="{{false}}">
             <div style="display: flex; flex-direction: column; gap: 8px">
               <div>
                 <h3 style="margin: 0; font-size: 14px; line-height: 20px; font-weight: 500">Organization (Optional)</h3>
@@ -460,6 +486,7 @@ input::placeholder{color:currentColor;opacity:.72}
                 </sc-if>
               </div>
             </div>
+          </sc-if>
 
           <sc-if value="{{store.plain}}" hint-placeholder-val="{{false}}">
             <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 6px">
@@ -480,7 +507,7 @@ input::placeholder{color:currentColor;opacity:.72}
           <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 8px">
             <button type="button" onClick="{{close}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer">Cancel</button>
             <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; box-sizing: border-box; padding: 0 20px 0 16px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M9 3v5M15 3v5M6 8h12v4a6 6 0 0 1-12 0zM12 18v3"></path></svg>Test</button>
-            <button type="button" onClick="{{close}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px 0 16px; border: 0; border-radius: 999px; background: {{t.primary}}; color: {{t.onPrimary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer; padding: 0 20px">Save</button>
+            <button type="button" onClick="{{close}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px 0 16px; border: 0; border-radius: 999px; background: {{t.primary}}; color: {{t.onPrimary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer; padding: 0 20px">{{saveLabel}}</button>
           </div>
         </section>
       </sc-if>
@@ -810,7 +837,15 @@ input::placeholder{color:currentColor;opacity:.72}
   </sc-if>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Preview"},"state":{"editor":"enum","options":["list","empty","addAzure","addRabbit","edit","groups","export","import","deleteConfirm","connectError"],"default":"list","section":"Preview"},"environment":{"editor":"enum","options":["production","development"],"default":"production","section":"Preview"},"$preview":{"width":1280,"height":900}}'>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Preview"},"state":{"editor":"enum","options":["list","empty","addAzure","addRabbit","edit","groups","export","import","deleteConfirm","connectError"],"default":"list","section":"Preview"},"environment":{"editor":"enum","options":["production","development"],"default":"production","section":"Preview"},"namespaces":{"editor":"enum","options":["loaded","loading","failed"],"default":"loaded","section":"Preview"},"$preview":{"width":1280,"height":900}}'>
+const SI_SUBS = [
+  { id: 'prod', name: 'Contoso Production', ns: [['contoso-prod', 'rg-messaging', 'Premium'], ['contoso-prod-eu', 'rg-messaging-eu', 'Premium'], ['contoso-billing', 'rg-billing', 'Standard']] },
+  { id: 'nonprod', name: 'Contoso Non-production', ns: [['contoso-staging', 'rg-messaging-stg', 'Standard'], ['contoso-dev', 'rg-messaging-dev', 'Standard']] },
+  { id: 'data', name: 'Contoso Data Platform', ns: [['contoso-ingest', 'rg-ingest', 'Standard']] },
+  { id: 'sandbox', name: 'Contoso Sandbox', ns: [] },
+  { id: 'partner', name: 'Partner Integrations', ns: [['partner-hub', 'rg-partners', 'Standard']] }
+];
+const SI_ALREADY = { Production: ['contoso-prod'], Development: ['contoso-dev'] };
 const LIGHT = { surface:'#f9f9ff', surfaceLow:'#f2f3fa', surfaceContainer:'#ecedf4', surfaceHigh:'#e6e8ee',
   onSurface:'#191c20', onSurfaceVariant:'#43474e', outline:'#73777f', outlineVariant:'#c3c6cf',
   primary:'#005cbb', onPrimary:'#ffffff', primaryContainer:'#d7e3ff', onPrimaryContainer:'#001b3f',
@@ -835,15 +870,21 @@ const CONNS = [
     fields: [] },
   { id: 'rabbit', name: 'Contoso RabbitMQ', broker: 'RabbitMQ', target: 'rabbit.contoso.internal:5672', auth: 'Username and password, virtual host /',
     client: '', envName: '', lastUsed: 'Nov 3, 2026, 4:40:12 PM', secretLabel: 'Password',
-    fields: [['Host Name', 'rabbit.contoso.internal'], ['Port', '5672'], ['Username', 'explorer'], ['Virtual Host', '/'], ['Management Port', '15672']] }
+    fields: [['Host Name', 'rabbit.contoso.internal'], ['Port', '5672'], ['Username', 'explorer'], ['Virtual Host', '/'], ['Management Port', '15672']] },
+  { id: 'prod-eu', name: 'contoso-prod-eu', broker: 'Azure Service Bus', target: 'contoso-prod-eu.servicebus.windows.net', auth: 'Sign in with Microsoft',
+    client: 'Contoso', envName: 'Production', lastUsed: 'Nov 10, 2026, 9:02:10 AM', secretLabel: '', fields: [] },
+  { id: 'billing', name: 'contoso-billing', broker: 'Azure Service Bus', target: 'contoso-billing.servicebus.windows.net', auth: 'Azure CLI session',
+    client: 'Contoso', envName: 'Production', lastUsed: 'Never', secretLabel: '', fields: [] },
+  { id: 'dev-rabbit', name: 'Contoso dev RabbitMQ', broker: 'RabbitMQ', target: 'localhost:5672', auth: 'Username and password, virtual host /',
+    client: 'Contoso', envName: 'Development', lastUsed: 'Nov 9, 2026, 5:44:00 PM', secretLabel: 'Password', fields: [] },
+  { id: 'fab-prod', name: 'fabrikam-orders', broker: 'Azure Service Bus', target: 'fabrikam-orders.servicebus.windows.net', auth: 'Sign in with Microsoft',
+    client: 'Fabrikam', envName: 'Production', lastUsed: 'Oct 28, 2026, 11:15:39 AM', secretLabel: '', fields: [] }
 ];
 
 const AUTHS = [
   { id: 'InteractiveBrowser', label: 'Sign in with Microsoft', note: 'Recommended', design: false },
   { id: 'ConnectionString', label: 'Connection string', note: '', design: false },
-  { id: 'ServicePrincipal', label: 'Service Principal', note: 'advanced', design: false },
-  { id: 'AzureCli', label: 'Azure CLI session', note: 'advanced', design: false },
-  { id: 'DefaultCredential', label: 'Default credential', note: '', design: true }
+  { id: 'AzureCli', label: 'Azure CLI session', note: 'advanced', design: false }
 ];
 
 const NO_SECRET = {
@@ -911,6 +952,33 @@ class Component extends DCLogic {
       };
     };
     const rows = CONNS.map(rowOf);
+    const closed = s.closed ?? { 'Contoso/Development': true };
+    const clientNames = CONNS.map(c => c.client).filter((c, i, all) => all.indexOf(c) === i).sort((a, b) => (a === '') - (b === '') || a.localeCompare(b));
+    const plural = (n, word) => n + ' ' + word + (n === 1 ? '' : 's');
+    const allKeys = [];
+    const tree = {
+      clients: clientNames.map(client => {
+        const mine = CONNS.filter(c => c.client === client);
+        const envNames = mine.map(c => c.envName).filter((e, i, all) => all.indexOf(e) === i);
+        return {
+          name: client || 'No client', label: 'Connections of ' + (client || 'no client'), count: plural(mine.length, 'connection'),
+          envs: envNames.map(envName => {
+            const key = client + '/' + envName;
+            allKeys.push(key);
+            const list = mine.filter(c => c.envName === envName);
+            const isOpen = !closed[key];
+            return {
+              chip: chip(envName), count: plural(list.length, 'connection'), open: isOpen, expanded: isOpen ? 'true' : 'false',
+              turn: isOpen ? 'rotate(90deg)' : 'none', hasActive: !isOpen && list.some(c => c.id === activeId),
+              toggle: () => this.setState({ closed: Object.assign({}, closed, { [key]: isOpen }) }),
+              rows: list.map(rowOf)
+            };
+          })
+        };
+      }),
+      openAll: () => this.setState({ closed: {} }),
+      closeAll: () => this.setState({ closed: Object.fromEntries(allKeys.map(k => [k, true])) })
+    };
     const curId = s.row ?? (view === 'deleteConfirm' ? 'prod' : 'dev');
     const curConn = CONNS.find(c => c.id === curId) || CONNS[1];
     const cur = rowOf(curConn);
@@ -929,7 +997,7 @@ class Component extends DCLogic {
     const auths = AUTHS.map(a => ({
       label: a.label, note: a.note, hasNote: !!a.note, design: a.design, on: a.id === auth,
       bg: a.id === auth ? t.secondaryContainer : 'transparent', weight: a.id === auth ? 600 : 400,
-      pick: () => this.setState({ auth: a.id })
+      pick: () => this.setState({ auth: a.id, siStep: 1 })
     }));
     const storeKey = isRabbit ? 'rabbit' : auth;
     const store = PLAIN[storeKey]
@@ -948,6 +1016,39 @@ class Component extends DCLogic {
       setClient: ev => this.setState({ orgClient: ev.target.value, orgEnv: '' }),
       setEnv: ev => this.setState({ orgEnv: ev.target.value })
     };
+
+    const authPick = auth === 'InteractiveBrowser' || auth === 'AzureCli';
+    const isCli = auth === 'AzureCli';
+    const siStep = authPick ? (s.siStep ?? 1) : 1;
+    const nsView = this.props.namespaces ?? 'loaded';
+    const siSub = s.siSub ?? SI_SUBS[0].id;
+    const siTicked = s.siTicked ?? {};
+    const siAlready = SI_ALREADY[orgEnv] ?? [];
+    const siPicked = Object.keys(siTicked).filter(k => siTicked[k] && siAlready.indexOf(k) < 0);
+    const si = {
+      s1SignIn: siStep === 1 && !isCli, s1Cli: siStep === 1 && isCli, s2: siStep === 2, s3: siStep === 3, signed: siStep > 1,
+      signedLabel: isCli ? 'Azure CLI session of' : 'Signed in as',
+      nsLoading: nsView === 'loading', nsFailed: nsView === 'failed', nsLoaded: nsView === 'loaded',
+      hand: !!s.siHand, handOpen: s.siHand ? 'true' : 'false', toggleHand: () => this.setState({ siHand: !s.siHand }),
+      steps: [[1, isCli ? '1 Azure CLI session' : '1 Sign in'], [2, '2 Client and environment'], [3, '3 Namespaces']].map(x => ({
+        label: x[1], current: x[0] === siStep ? 'step' : 'false', weight: x[0] === siStep ? 700 : 500,
+        bg: x[0] === siStep ? t.secondaryContainer : 'transparent', fg: x[0] === siStep ? t.onSecondaryContainer : t.onSurfaceVariant,
+        pick: () => this.setState({ siStep: x[0] })
+      })),
+      signIn: () => this.setState({ siStep: 2 }), toNs: () => this.setState({ siStep: 3 }),
+      target: orgClient ? 'Added to ' + orgClient + (orgEnv ? ', ' + orgEnv : ', with no environment') : 'Added with no client and no environment',
+      sub: siSub, subCount: SI_SUBS.length, setSub: ev => this.setState({ siSub: ev.target.value }),
+      subs: SI_SUBS.map(x => ({ id: x.id, label: x.name + ' (' + x.ns.length + ')' })),
+      namespaces: SI_SUBS.find(x => x.id === siSub).ns.map(n => {
+        const was = siAlready.indexOf(n[0]) >= 0, on = was || !!siTicked[n[0]];
+        return { host: n[0] + '.servicebus.windows.net', where: was ? 'Already in ' + orgEnv : 'Resource group ' + n[1] + ' · ' + n[2],
+          checked: on, already: was, bg: on && !was ? t.secondaryContainer : 'transparent', weight: on ? 600 : 400,
+          toggle: () => this.setState({ siTicked: Object.assign({}, siTicked, { [n[0]]: !siTicked[n[0]] }) }) };
+      }),
+      noNsShown: nsView === 'loaded' && SI_SUBS.find(x => x.id === siSub).ns.length === 0,
+      summary: siPicked.length ? siPicked.length + ' ticked: ' + siPicked.join(', ') + '.' : 'No namespace ticked yet.'
+    };
+    const signInFlow = isAzure && authPick;
 
     const gtab = s.gtab ?? 'envs';
     const gtabs = [['clients', 'Clients'], ['envs', 'Environments']].map(g => ({
@@ -970,15 +1071,17 @@ class Component extends DCLogic {
       isDefault: view === 'list', isLoading: false, isEmpty, isError,
       showList: !isEmpty, showDialog: DIALOGS.includes(view),
       c0: rows[0], c1: rows[1], c2: rows[2], cur,
+      tree,
       errorKeeps: 'The connection that was active stays active: ' + conn + '. Nothing was changed on either broker.',
       retry: open('list'), close: open('list'),
       openAdd: open('addAzure', { auth: undefined }), openImport: open('import'), openExport: open('export'), openGroups: open('groups'),
       dlgAdd, isAzure, isRabbit, provider: isRabbit ? 'rabbit' : 'azure',
       onProvider: ev => this.setState({ view: ev.target.value === 'rabbit' ? 'addRabbit' : 'addAzure' }),
       addChip: chip(orgEnv), auths,
-      authSignIn: auth === 'InteractiveBrowser', authConnStr: auth === 'ConnectionString', authSp: auth === 'ServicePrincipal',
-      authCli: auth === 'AzureCli', authDefault: auth === 'DefaultCredential',
+      authPick, authSignIn: false, authConnStr: auth === 'ConnectionString', authSp: auth === 'ServicePrincipal',
+      authCli: false, authDefault: false,
       store, rb, org,
+      si, orgAtEnd: !signInFlow, saveLabel: signInFlow && siPicked.length > 1 ? 'Add ' + siPicked.length + ' connections' : 'Save',
       dlgEdit: editing, editFields,
       secretStored: !!curConn.secretLabel && !replacing, secretReplace: !!curConn.secretLabel && replacing, secretNone: !curConn.secretLabel,
       startReplace: () => this.setState({ replace: true }), stopReplace: () => this.setState({ replace: false }),

@@ -139,6 +139,16 @@
       "page": "servicebus",
       "expand": "fill",
       "is_interactive": true
+    },
+    "Logs.dc.html": {
+      "x": 4080,
+      "y": 0,
+      "w": 1280,
+      "h": 900,
+      "title": "Logs, in Developer mode",
+      "page": "app",
+      "expand": "fill",
+      "is_interactive": true
     }
   },
   "order": [
@@ -152,7 +162,8 @@
     "Rules.dc.html",
     "Monitoring.dc.html",
     "Components.dc.html",
-    "Window.dc.html"
+    "Window.dc.html",
+    "Logs.dc.html"
   ],
   "notes": {
     "app-title": {

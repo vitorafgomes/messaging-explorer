@@ -71,6 +71,7 @@ Read the page your change touches, not all of them.
 | [[pages/services/web-app/bulk-new-message-id\|New message IDs and unselected messages]] | the option "Send with a new message ID" in any dialog, a duplicate refusal, or the new ids and unselected-message lines of the results dialog |
 | [[pages/services/web-app/bulk-deferred-messages\|Deferred messages and Load more]] | the deferred actions of the selection bar, the dead-letter dialog of deferred messages, or Load more on the Active and Dead Letter tabs |
 | [[pages/services/web-app/bulk-by-position\|Operations by position]] | a resubmit, a delete or a move on a broker that names a message by its place in the queue: no Retry, untick and read again |
+| [[pages/services/web-app/features-logs\|The Logs screen]] | the Logs screen of Developer mode, the service that gathers its lines, or what a line may carry |
 | [[pages/services/web-app/bulk-automatic-resubmit\|Automatic resubmit]] | the automatic resubmit of a dead-letter queue: ResubmitRunService, its batches, filter, pause and stop, a change of connection, its report and indicator |
 | [[pages/services/web-app/bulk-automatic-resubmit-dialog\|Automatic resubmit dialog]] | what the automatic resubmit dialog shows: configure, the run, the report, the head-of-queue loop |
 | [[pages/services/web-app/bulk-automatic-resubmit-progress\|Automatic resubmit progress]] | the count before a run, batch numbers, progress and report, the toolbar card, the queue panel line and the tree spinner |

@@ -186,17 +186,49 @@ describe('SettingsComponent', () => {
       expect(shown(el), 'the late answer for Stable is dropped').toBe('2.4.5-beta.7 · Nov 15, 2026');
     });
 
-    it('a version the user picked is kept: a newer one is announced, downloads nothing by itself and waits for Download', async () => {
-      const { el, push, state, shell } = await render();
-      const button = (label: string) => Array.from(el.querySelectorAll('button')).find(b => words(b).endsWith(label));
+    describe('the notes expand and hide', () => {
+      const long = { version: '2.4.4', date: '2026-11-14T10:00:00Z', notes: ['- one', '- two', '- three', '- four', '- five', '- six'].join('\n'), installed: false, older: false, installable: true };
+      const open = async () => {
+        const rendered = await render({ listUpdateVersions: vi.fn(async () => ({ status: 'ok', channel: 'latest', versions: [long] })) });
+        await rendered.refresh();
+        await rendered.refresh();
+        const notes = () => rendered.el.querySelector('[data-testid="version-notes"]') as HTMLElement;
+        const toggle = () => notes().querySelector('button.notes-toggle') as HTMLButtonElement;
+        const button = (label: string) => Array.from(notes().querySelectorAll('button')).find(b => words(b) === label) as HTMLButtonElement | undefined;
+        return { ...rendered, notes, toggle, button };
+      };
 
-      await push({ status: 'available', version: '2.4.4', downloads: false });
+      it('the notes open with the version, name how many lines they hold, show the first four of a long text and the rest on "Show all 6 lines"', async () => {
+        const { notes, toggle, button, refresh } = await open();
 
-      expect(words(el.querySelector('[data-testid="kept-version-note"]'))).toBe('You have 2.4.2, a version you picked, so it is kept: nothing downloads or installs until you ask for it.');
-      expect(state()).not.toContain('downloading in the background');
-      expect(shell.downloadUpdate).not.toHaveBeenCalled();
-      button('Download')!.click();
-      expect(shell.downloadUpdate).toHaveBeenCalledTimes(1);
+        expect(words(toggle())).toContain('Release notes of 2.4.4');
+        expect(words(toggle())).toContain('6 lines');
+        expect(toggle().getAttribute('aria-expanded')).toBe('true');
+        expect(notes().querySelector('pre')?.textContent, 'the first four lines').toBe('- one\n- two\n- three\n- four');
+
+        button('Show all 6 lines')!.click();
+        await refresh();
+        expect(notes().querySelector('pre')?.textContent).toBe(long.notes);
+        expect(button('Show fewer'), 'the way back').toBeDefined();
+      });
+
+      it('hidden notes leave their header and say they are hidden, and the agreement and Install stay as they were, as Settings.dc.html draws', async () => {
+        const { el, notes, toggle, refresh } = await open();
+        const agreement = () => el.querySelector('[data-testid="version-install"] mat-checkbox input') as HTMLInputElement;
+        const install = () => Array.from(el.querySelectorAll<HTMLButtonElement>('[data-testid="version-install"] button')).find(b => words(b).includes('Install '))!;
+
+        toggle().click();
+        await refresh();
+
+        expect(toggle().getAttribute('aria-expanded')).toBe('false');
+        expect(notes().querySelector('pre'), 'no notes on screen').toBeNull();
+        expect(words(notes())).toContain('Hidden. Open them to read what this version has.');
+        expect(agreement().disabled, 'the agreement can be given with the notes hidden').toBe(false);
+
+        agreement().click();
+        await refresh();
+        expect(install().disabled).toBe(false);
+      });
     });
 
     describe('installing the version picked', () => {
@@ -352,14 +384,28 @@ describe('SettingsComponent', () => {
     expect(state()).toBe('check_circle You are up to date 2.4.2 is the newest version on the Stable channel.');
   });
 
-  it('available: names the version, says it is downloading in the background, and Download joins the download through the shell', async () => {
-    const { state, push, button, shell } = await render();
+  it('available: names the version, downloads nothing by itself, and Download waits for the agreement to that version', async () => {
+    const { state, push, button, shell, el, fixture } = await render();
     await push({ status: 'available', version: '2.5.0' });
+    const agreement = () => el.querySelector('[data-testid="update-agreement"] input') as HTMLInputElement;
 
     expect(state()).toContain('Version 2.5.0 is available');
-    expect(state()).toContain('It is downloading in the background and installs the next time you quit the app.');
+    expect(state()).toContain('You have 2.4.2. Nothing downloads or installs until you agree.');
+    expect(words(el.querySelector('[data-testid="update-agreement"]'))).toBe('I have read what this version has and want to install it');
+    expect((button('download Download') as HTMLButtonElement).disabled).toBe(true);
+    fixture.componentInstance.downloadUpdate();
+    expect(shell.downloadUpdate, 'no agreement, no download').not.toHaveBeenCalled();
+
+    agreement().click();
+    await push({ status: 'available', version: '2.5.1' });
+    expect(agreement().checked, 'an agreement to 2.5.0 is not one to 2.5.1').toBe(false);
+    expect((button('download Download') as HTMLButtonElement).disabled).toBe(true);
+
+    agreement().click();
+    await push({ status: 'available', version: '2.5.1' });
     button('download Download')!.click();
     expect(shell.downloadUpdate).toHaveBeenCalledTimes(1);
+    expect(shell.downloadUpdate).toHaveBeenCalledWith(true, '2.5.1');
   });
 
   it('downloading: shows the percent and that the app does not restart on its own', async () => {
@@ -382,6 +428,8 @@ describe('SettingsComponent', () => {
   it('a failed download says why, that nothing was installed, retries the download and links the release', async () => {
     const { state, push, button, shell, el } = await render();
     await push({ status: 'available', version: '2.5.0' });
+    (el.querySelector('[data-testid="update-agreement"] input') as HTMLInputElement).click();
+    await push({ status: 'available', version: '2.5.0' });
     button('download Download')!.click();
     await push({ status: 'error', message: 'The connection was reset.' });
 
@@ -393,6 +441,19 @@ describe('SettingsComponent', () => {
 
     button('refresh Retry')!.click();
     expect(shell.downloadUpdate).toHaveBeenCalledTimes(2);
+  });
+
+  it('Retry after a failed download that has no agreement checks again, so the agreement can be given, and downloads nothing', async () => {
+    const { push, button, shell } = await render();
+    await push({ status: 'available', version: '2.5.0' });
+    await push({ status: 'downloading', version: '2.5.0', percent: 10 });
+    await push({ status: 'error', message: 'The connection was reset.' });
+    const checks = shell.checkForUpdates.mock.calls.length;
+
+    button('refresh Retry')!.click();
+
+    expect(shell.downloadUpdate).not.toHaveBeenCalled();
+    expect(shell.checkForUpdates.mock.calls.length).toBe(checks + 1);
   });
 
   it('a failed check says the check failed and Retry checks again', async () => {

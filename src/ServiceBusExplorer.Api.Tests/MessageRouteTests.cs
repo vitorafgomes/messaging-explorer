@@ -1,3 +1,4 @@
+using ServiceBusExplorer.Api.Controllers;
 using System.Net;
 using System.Reflection;
 using System.Text;
@@ -218,6 +219,56 @@ public class MessageRouteTests
         Assert.Equal(HttpStatusCode.BadRequest, answered.Status);
         Assert.Equal("""{"message":"This provider does not support scheduled messages."}""", answered.Body);
         Assert.Empty(answered.Calls);
+    }
+
+    [Fact]
+    public async Task A_refusal_that_names_the_missing_right_answers_502_naming_it_and_nothing_else_of_the_broker()
+    {
+        var answered = await SendAsync("POST", "/api/queues/orders/messages/cancel-scheduled", """{"sequenceNumbers":[12]}""",
+            Fails(nameof(IMessagingProvider.CancelScheduledMessagesAsync), new UnauthorizedAccessException($"Unauthorized access. 'Send' claim(s) are required. Resource: {Sentinel}")));
+
+        Assert.Equal(HttpStatusCode.BadGateway, answered.Status);
+        Assert.Equal("""{"message":"The broker refused this operation as not authorised: the broker says the Send right is missing; the role Azure Service Bus Data Sender, or a key with that right, gives it."}""", answered.Body);
+    }
+
+    [Fact]
+    public async Task A_route_with_no_catch_of_its_own_answers_502_through_the_handler_when_the_broker_refuses_as_not_authorised()
+    {
+        var answered = await SendAsync("GET", "/api/queues", null,
+            Fails(nameof(IMessagingProvider.GetQueuesAsync), new InvalidOperationException(Sentinel, new UnauthorizedAccessException(Sentinel))));
+
+        Assert.Equal(HttpStatusCode.BadGateway, answered.Status);
+        Assert.Equal($$"""{"message":"{{EntityAdministrationResults.NotAuthorised}}"}""", answered.Body);
+    }
+
+    [Fact]
+    public void A_file_this_user_may_not_open_and_a_refusal_buried_deeper_than_five_errors_stay_the_constant_500()
+    {
+        var folder = Directory.CreateTempSubdirectory().FullName;
+        var fromTheFileSystem = Assert.Throws<UnauthorizedAccessException>(() => File.ReadAllText(folder));
+        Directory.Delete(folder);
+        Exception buried = new UnauthorizedAccessException(Sentinel);
+        for (var depth = 0; depth < 5; depth++) buried = new InvalidOperationException(Sentinel, buried);
+
+        Assert.Equal(500, EntityAdministrationResults.Unhandled(fromTheFileSystem).StatusCode);
+        Assert.Equal(500, EntityAdministrationResults.Unhandled(new InvalidOperationException("workspace", fromTheFileSystem)).StatusCode);
+        Assert.Equal(500, EntityAdministrationResults.Unhandled(buried).StatusCode);
+        Assert.Equal(502, EntityAdministrationResults.Unhandled(buried.InnerException).StatusCode);
+        Assert.Equal(500, EntityAdministrationResults.Unhandled(null).StatusCode);
+    }
+
+    [Theory]
+    [InlineData("/api/queues/orders/messages/cancel-scheduled", false)]
+    [InlineData("/api/topics/events/messages/cancel-scheduled", false)]
+    [InlineData("/api/queues/orders/messages/cancel-scheduled", true)]
+    public async Task An_operation_the_broker_refuses_as_not_authorised_answers_502_saying_what_it_needs_and_nothing_of_the_broker(string path, bool wrapped)
+    {
+        Exception refused = new UnauthorizedAccessException(Sentinel);
+        var answered = await SendAsync("POST", path, """{"sequenceNumbers":[12]}""",
+            Fails(nameof(IMessagingProvider.CancelScheduledMessagesAsync), wrapped ? new InvalidOperationException(Sentinel, refused) : refused));
+
+        Assert.Equal(HttpStatusCode.BadGateway, answered.Status);
+        Assert.Equal("""{"message":"The broker refused this operation as not authorised. On Azure Service Bus the identity or the key of the connection needs the right the operation uses: Listen to read or remove messages, Send to send, Manage to create, change or count; and the network rules of the namespace must accept this computer."}""", answered.Body);
     }
 
     [Theory]

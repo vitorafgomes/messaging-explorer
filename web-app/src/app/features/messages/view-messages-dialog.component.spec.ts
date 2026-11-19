@@ -537,6 +537,17 @@ describe('ViewMessagesDialogComponent: transfer dead-letter queue, message state
   });
 
   describe('the transfer dead-letter queue is reachable', () => {
+    it('a dead-lettered message whose body was not sent as bytes is resubmitted as it is but not offered for edit, and the screen says why', () => {
+      const shown = render({ initialTab: 1 }, { deadLetter: [{ ...message(1, '{"orderId":7}'), bodyType: 'AmqpValue' }] }, withTransfer);
+      shown.component.selectMessage(shown.component.filteredDeadLetterMessages[0]);
+      shown.refresh();
+
+      const offered = Array.from(shown.el.querySelectorAll('.message-actions button')).map(b => text(b).replace(/^[a-z_]+ /, ''));
+      expect(offered, 'Resubmit sends the original').toContain('Resubmit');
+      expect(offered, 'no edit of a rendering').not.toContain('Edit & Resubmit');
+      expect(text(shown.el.querySelector('[data-testid="not-editable-note"]'))).toContain('This body was not sent as bytes, so what is shown is a rendering of it.');
+    });
+
     it('RabbitMQ offers what Azure Service Bus offers: Delete, Move and Resubmit of the ticked messages, Edit & Resubmit and Resubmit of the open one, and Auto resubmit', () => {
       const rabbit = render({ initialTab: 1 }, { deadLetter: messages(2) }, DEFAULT_RABBITMQ_CAPABILITIES);
       expect(Array.from(rabbit.el.querySelectorAll('button')).some(b => text(b).endsWith('Auto resubmit')), 'Auto resubmit beside the dead-letter search').toBe(true);

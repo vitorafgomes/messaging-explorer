@@ -32,7 +32,7 @@ public class ConnectionGroupsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to fetch connection groups");
-            return StatusCode(500, new { message = "An internal error occurred." });
+            return EntityAdministrationResults.Unhandled(ex);
         }
     }
 
@@ -75,7 +75,7 @@ public class ConnectionGroupsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to create connection group");
-            return StatusCode(500, new { message = "An internal error occurred." });
+            return EntityAdministrationResults.Unhandled(ex);
         }
     }
 

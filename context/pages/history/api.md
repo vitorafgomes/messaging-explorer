@@ -16,6 +16,18 @@ reliability: high
 
 What changed when in the project [[pages/services/api|Api]] describes, newest first.
 
+## 2026-11-19
+
+- A second review by Codex found one log call that formatted a broker's error text into its words, readable on the new Logs route; it now logs the reason code, and a test reads every log call of the two projects for an exception's message (`src/ServiceBusExplorer.Api.Tests/RecentLogTests.cs#No_log_call_of_the_application_formats_the_message_of_an_exception_into_its_words`).
+
+- An operation the broker refuses as not authorised answers 502 with a fixed sentence saying what it needs, on every route, where it was the constant 500; the owner's log lines showed the refusal on reads and it can happen on any operation (`src/ServiceBusExplorer.Api/Controllers/EntityAdministrationResults.cs#Unhandled`, `src/ServiceBusExplorer.Api.Tests/MessageRouteTests.cs#An_operation_the_broker_refuses_as_not_authorised_answers_502_saying_what_it_needs_and_nothing_of_the_broker`).
+
+- The Logs route and the in-memory store of the last 2000 lines, without the text of any exception. [[pages/services/api/controllers]]
+
+- The connect route answers `credentials-refused` with a fixed sentence when the broker refused the user name or the password.
+
+- `api/azure-directory`: sign in, the subscriptions, the namespaces of one, sign out; the token reaches no response and no log. [[pages/services/api/controllers]]
+
 ## 2026-11-16
 
 - The capabilities route answers for the connected provider and carries `supportsMessageCounts`. [[pages/services/api/controllers]]

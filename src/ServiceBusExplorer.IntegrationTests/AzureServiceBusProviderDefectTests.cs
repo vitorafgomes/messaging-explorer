@@ -293,9 +293,9 @@ public sealed class AzureServiceBusProviderDefectTests(AzureServiceBusFixture fi
         Assert.Contains(deepest, stillDeadLettered);
     }
 
-    /// <summary>Correct: a message whose AMQP body is a value is shown with a readable body, and the other messages of the peek are still returned.</summary>
+    /// <summary>A message whose AMQP body is a value is shown with a readable body, and the other messages of the peek are still returned.</summary>
     [Fact]
-    public async Task Defect_one_message_with_an_amqp_value_body_breaks_the_whole_peek()
+    public async Task One_message_with_an_amqp_value_body_is_read_as_its_value_and_the_peek_returns_every_message()
     {
         var queue = await CreateQueueAsync("value-body");
         await fixture.SendAsync(queue, "readable");
@@ -304,8 +304,7 @@ public sealed class AzureServiceBusProviderDefectTests(AzureServiceBusFixture fi
             await sender.SendMessageAsync(new ServiceBusMessage(new AmqpAnnotatedMessage(AmqpMessageBody.FromValue(42))));
         }
 
-        await Assert.ThrowsAsync<NotSupportedException>(async () => (await _messaging.PeekMessagesAsync(queue, 10)).ToList());
-        Assert.Equal(["readable"], (await _messaging.PeekMessagesAsync(queue, 1)).Select(m => m.Body));
+        Assert.Equal(["readable", "42"], (await _messaging.PeekMessagesAsync(queue, 10)).Select(m => m.Body));
     }
 
     /// <summary>Correct: an invalid regular expression is answered as a validation error before any message is read.</summary>

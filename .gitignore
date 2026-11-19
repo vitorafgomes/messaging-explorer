@@ -52,6 +52,8 @@ coverage/
 # Logs
 logs/
 *.log
+!web-app/src/app/features/logs/
+!src/ServiceBusExplorer.Api/Logs/
 
 # Temp files
 *.tmp

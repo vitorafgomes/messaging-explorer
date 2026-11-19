@@ -101,4 +101,34 @@ public class RabbitMQSubQueueTests
         Assert.Equal(("Active", bytes), (withBody.State, withBody.SizeInBytes));
         Assert.Equal(("Active", bytes), (withoutBody.State, withoutBody.SizeInBytes));
     }
+
+    [Fact]
+    public void The_headers_of_a_dead_lettered_RabbitMQ_message_are_read_as_text_at_every_depth_and_the_message_is_written_as_JSON()
+    {
+        var properties = new Moq.Mock<RabbitMQ.Client.IBasicProperties>();
+        properties.SetupGet(p => p.Headers).Returns(new Dictionary<string, object>
+        {
+            ["x-first-death-exchange"] = System.Text.Encoding.UTF8.GetBytes("orders"),
+            ["x-death"] = new List<object>
+            {
+                new Dictionary<string, object>
+                {
+                    ["queue"] = System.Text.Encoding.UTF8.GetBytes("orders.created"),
+                    ["reason"] = System.Text.Encoding.UTF8.GetBytes("rejected"),
+                    ["count"] = 2L,
+                    ["time"] = new RabbitMQ.Client.AmqpTimestamp(1794873600),
+                    ["routing-keys"] = new List<object> { System.Text.Encoding.UTF8.GetBytes("order.created") }
+                }
+            }
+        });
+        var result = new RabbitMQ.Client.BasicGetResult(1, false, "orders.dlx", "order.created", 0, properties.Object, System.Text.Encoding.UTF8.GetBytes("{}"));
+
+        var message = RabbitMQProvider.MapBasicGetToMessageInfo(result, isDeadLettered: true);
+        var json = System.Text.Json.JsonSerializer.Serialize(message.ApplicationProperties);
+
+        Assert.Equal("orders", message.DeadLetterSource);
+        Assert.Equal(
+            """{"x-first-death-exchange":"orders","x-death":[{"queue":"orders.created","reason":"rejected","count":2,"time":"2026-11-17T00:00:00Z","routing-keys":["order.created"]}]}""",
+            json);
+    }
 }

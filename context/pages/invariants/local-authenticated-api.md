@@ -1,12 +1,12 @@
 ---
 title: "The API is local and authenticated"
-version: "1.1"
+version: "1.2"
 date: 2026-11-12
-changes: "v1.1 (2026-11-12): the Host filter and the API_SECRET fail-fast are pinned by tests; an exception handler answers one constant body, which closed a leak of the API key through the developer exception page. v1.0 founded from the code"
+changes: "v1.2 (2026-11-19): the exception handler answers 502 with a fixed sentence when a broker refused the operation as not authorised, 500 otherwise. v1.1 (2026-11-12): the Host filter and the API_SECRET fail-fast are pinned by tests; an exception handler answers one constant body, which closed a leak of the API key through the developer exception page. v1.0 founded from the code"
 page_type: invariant
 status: active
 description: "The API listens on loopback, filters the Host header, restricts CORS to the configured front end and refuses every request without the per-launch API key, compared in fixed time; /health is the one exemption."
-updated: 2026-11-12
+updated: 2026-11-19
 enforced_by:
   - "src/ServiceBusExplorer.Api/Program.cs"
   - "src/ServiceBusExplorer.Api/Program.cs#o.AllowedHosts = new[] { "localhost", "127.0.0.1" };"
@@ -20,6 +20,7 @@ verified_by:
   - "src/ServiceBusExplorer.Api.Tests/BoundaryGuardTests.cs#A_foreign_Host_is_refused"
   - "src/ServiceBusExplorer.Api.Tests/BoundaryGuardTests.cs#The_API_does_not_start_without_a_32_character_API_SECRET"
   - "src/ServiceBusExplorer.Api.Tests/ErrorBodyTests.cs#An_unhandled_exception_answers_a_constant_500_body_and_never_the_exception_text"
+  - "src/ServiceBusExplorer.Api.Tests/MessageRouteTests.cs#A_route_with_no_catch_of_its_own_answers_502_through_the_handler_when_the_broker_refuses_as_not_authorised"
 source:
   - "src/ServiceBusExplorer.Api/Program.cs"
   - "src/ServiceBusExplorer.Api.Tests/"
@@ -67,7 +68,7 @@ Recorded on the service pages with their citations and tracked in [[pages/roadma
 - **The loopback binding is not what runs under Electron.** The shell always sets `ASPNETCORE_URLS`, so the branch at `Program.cs:86` is skipped; what binds the API to loopback is the URL the shell passes. No test covers either.
 - **Host filtering has two sources in the text, one in effect.** `appsettings.json` carries `"AllowedHosts": "*"`; the explicit list in `Program.cs` is what the filter uses, and a test sends a foreign `Host` and gets 400 (`src/ServiceBusExplorer.Api.Tests/BoundaryGuardTests.cs#A_foreign_Host_is_refused`).
 - **CORS allows origin `null`**, which any sandboxed frame or local file also sends. The key is what protects that path.
-- **An unhandled exception used to leak the API key in Development.** The developer exception page echoed the request headers, `X-Api-Key` included. Since 2026-11-12 an exception handler outermost in the pipeline answers one constant body in every environment (`src/ServiceBusExplorer.Api.Tests/ErrorBodyTests.cs#An_unhandled_exception_answers_a_constant_500_body_and_never_the_exception_text`).
+- **An unhandled exception used to leak the API key in Development.** The developer exception page echoed the request headers, `X-Api-Key` included. Since 2026-11-12 an exception handler outermost in the pipeline answers one constant body in every environment (`src/ServiceBusExplorer.Api.Tests/ErrorBodyTests.cs#An_unhandled_exception_answers_a_constant_500_body_and_never_the_exception_text`). Since 2026-11-19 the same handler answers 502 with a sentence the application wrote, never the exception text, when a broker refused the operation as not authorised (`src/ServiceBusExplorer.Api/Controllers/EntityAdministrationResults.cs#Unhandled`, `src/ServiceBusExplorer.Api.Tests/MessageRouteTests.cs#A_route_with_no_catch_of_its_own_answers_502_through_the_handler_when_the_broker_refuses_as_not_authorised`).
 
 ## Change protocol
 

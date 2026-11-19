@@ -16,6 +16,20 @@ reliability: high
 
 What changed when in the project [[pages/services/electron-shell|Electron Shell]] describes, newest first.
 
+## 2026-11-19
+
+- From the review of the pull request: the version an agreement is checked against no longer outlives the offer. The installed updater replaces the update it holds only when it announces one, so the last announced version was already the one it would download; now a check in flight, a check that found nothing newer and an error each void it too, so a stale agreement is refused whatever the library does (`web-app/electron/shell-helpers.js#followFoundVersion`, `web-app/electron/shell-helpers.test.js#the version an agreement can be given for is the one the updater would download now`).
+
+- From the same review: the shell logs an error as the error, never its text or stack, and `download-update` carries the version the agreement was given for.
+
+- **An update downloads only with the user's agreement,** decided by the owner: the check announces, `download-update` refuses without `agreed`, and the special case of a picked version is gone. [[pages/services/electron-shell/updates-packaging-and-release]]
+
+- The tray asks the API for its menu only once the API is healthy and refreshes then; the two requests it made before logged two errors at every start (`web-app/electron/main.js#async function fetchFromAPI(endpoint) {`).
+
+- The shell keeps its own console lines in memory and answers them on `get-shell-logs`, for the Logs screen. [[pages/services/electron-shell/ipc-and-tray]]
+
+- The `save-export-file` channel writes an export where the user chooses in the save dialog. [[pages/services/electron-shell/ipc-and-tray]]
+
 ## 2026-11-16
 
 - A version the user picked is kept: nothing newer downloads or installs by itself while it runs. [[pages/services/electron-shell/updates-packaging-and-release]]

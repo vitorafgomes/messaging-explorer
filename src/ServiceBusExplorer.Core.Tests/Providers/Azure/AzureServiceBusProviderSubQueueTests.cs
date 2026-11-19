@@ -294,6 +294,50 @@ public class AzureServiceBusProviderSubQueueTests
         Assert.Equal(ServiceBusFailureReason.ServiceTimeout, Assert.IsType<ServiceBusException>(error.InnerException).Reason);
     }
 
+    public static TheoryData<Exception, string> OtherPeekFailures => new()
+    {
+        { new UnauthorizedAccessException("Endpoint=sb://secret;SharedAccessKey=SENTINEL"), "not authorised: reading needs the Listen right, which the role Azure Service Bus Data Receiver or a key with that right gives, and the network rules of the namespace must accept this computer" },
+        { new UnauthorizedAccessException("Unauthorized access. 'Listen' claim(s) are required to perform this operation. Resource: 'sb://SENTINEL'"), "not authorised: the broker says the Listen right is missing; the role Azure Service Bus Data Receiver, or a key with that right, gives it" },
+        { new UnauthorizedAccessException("Ip has been prevented to connect to the endpoint SENTINEL"), "not authorised: the network rules of the namespace refuse this computer" },
+        { new InvalidOperationException("the entity requires sessions SENTINEL"), "InvalidOperationException" },
+        { new TimeoutException("SENTINEL"), "TimeoutException" },
+        { new NotSupportedException("SENTINEL"), "NotSupportedException" },
+    };
+
+    [Theory]
+    [InlineData("Unauthorized access. 'Send' claim(s) are required to perform this operation. SENTINEL", "the broker says the Send right is missing; the role Azure Service Bus Data Sender, or a key with that right, gives it")]
+    [InlineData("Unauthorized access. 'Manage,EntityRead' claim(s) are required SENTINEL", "the broker says the Manage right is missing; the role Azure Service Bus Data Owner, or a key with that right, gives it")]
+    [InlineData("a claim is required SENTINEL", "the broker says a right this operation needs is missing")]
+    [InlineData("Public network access is disabled for the namespace SENTINEL", "the network rules of the namespace refuse this computer")]
+    [InlineData("Put token failed. status-code: 401. Resource: 'sb://network-prod.example/firewall-events' SENTINEL", null)]
+    [InlineData("SENTINEL", null)]
+    public void A_refusal_is_told_apart_by_what_the_broker_names_and_never_carries_its_text(string brokerText, string? detail)
+    {
+        Assert.Equal(detail, BrokerRefusal.Detail(new UnauthorizedAccessException(brokerText)));
+    }
+
+    [Theory]
+    [MemberData(nameof(OtherPeekFailures))]
+    public async Task A_peek_that_fails_with_an_error_that_is_not_the_brokers_own_still_names_its_kind_and_never_its_text(Exception failure, string kind)
+    {
+        var broker = new FakeBroker();
+        broker.Receiver.Setup(r => r.PeekMessagesAsync(It.IsAny<int>(), It.IsAny<long?>(), It.IsAny<CancellationToken>())).ThrowsAsync(failure);
+
+        var error = await Assert.ThrowsAsync<MessageReadFailedException>(() => broker.Provider().PeekMessagesAsync("orders", 10));
+
+        Assert.Equal($"The broker did not return the messages of this entity ({kind}).", error.Message);
+        Assert.Same(failure, error.InnerException);
+    }
+
+    [Fact]
+    public async Task A_peek_the_caller_cancels_is_a_cancellation_not_a_read_failure()
+    {
+        var broker = new FakeBroker();
+        broker.Receiver.Setup(r => r.PeekMessagesAsync(It.IsAny<int>(), It.IsAny<long?>(), It.IsAny<CancellationToken>())).ThrowsAsync(new OperationCanceledException());
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => broker.Provider().PeekMessagesAsync("orders", 10));
+    }
+
     [Fact]
     public async Task A_transfer_dead_letter_peek_whose_receiver_fails_gives_the_caller_the_broker_error_instead_of_an_empty_list()
     {
@@ -431,6 +475,8 @@ public class AzureServiceBusProviderSubQueueTests
     [Theory]
     [InlineData("not found", "it was not found among the messages read to remove it.")]
     [InlineData("complete fails", "the broker did not remove it (MessageLockLost).")]
+    [InlineData("complete refused", "the broker did not remove it (UnauthorizedAccessException).")]
+    [InlineData("complete times out", "the broker did not remove it (TimeoutException).")]
     public async Task A_single_resubmit_that_sent_its_copy_and_could_not_remove_the_original_says_so_as_a_possible_duplicate_never_returns_in_silence(string how, string why)
     {
         var broker = DetectingBroker();
@@ -445,7 +491,12 @@ public class AzureServiceBusProviderSubQueueTests
         else
         {
             broker.Receiver.Setup(r => r.ReceiveMessagesAsync(It.IsAny<int>(), It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>())).ReturnsAsync(Batch(original));
-            broker.Receiver.Setup(r => r.CompleteMessageAsync(original, It.IsAny<CancellationToken>())).ThrowsAsync(Broker(ServiceBusFailureReason.MessageLockLost));
+            broker.Receiver.Setup(r => r.CompleteMessageAsync(original, It.IsAny<CancellationToken>())).ThrowsAsync(how switch
+            {
+                "complete refused" => new UnauthorizedAccessException("Listen claim(s) are required"),
+                "complete times out" => new TimeoutException("no answer"),
+                _ => Broker(ServiceBusFailureReason.MessageLockLost)
+            });
         }
 
         var said = await Assert.ThrowsAsync<InvalidEntityConfigurationException>(() =>

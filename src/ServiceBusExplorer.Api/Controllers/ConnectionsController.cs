@@ -95,7 +95,7 @@ public class ConnectionsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to fetch connections");
-            return StatusCode(500, new { message = "An internal error occurred." });
+            return EntityAdministrationResults.Unhandled(ex);
         }
     }
 
@@ -188,7 +188,7 @@ public class ConnectionsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to save connection");
-            return StatusCode(500, new { message = "An internal error occurred." });
+            return EntityAdministrationResults.Unhandled(ex);
         }
     }
 
@@ -301,7 +301,7 @@ public class ConnectionsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to connect to {ConnectionId}", id);
-            return StatusCode(500, new { message = "An internal error occurred." });
+            return EntityAdministrationResults.Unhandled(ex);
         }
     }
 
@@ -317,6 +317,8 @@ public class ConnectionsController : ControllerBase
         {
             switch (e)
             {
+                case BrokerCredentialsRefusedException:
+                    return ("credentials-refused", "The broker refused the user name or the password.");
                 case AuthenticationException:
                     return ("tls", "The TLS handshake with the broker failed.");
                 case TimeoutException:
@@ -379,7 +381,7 @@ public class ConnectionsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to disconnect messaging provider");
-            return StatusCode(500, new { message = "An internal error occurred." });
+            return EntityAdministrationResults.Unhandled(ex);
         }
     }
 
@@ -552,7 +554,7 @@ public class ConnectionsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Import configuration failed");
-            return StatusCode(500, new { message = "An internal error occurred." });
+            return EntityAdministrationResults.Unhandled(ex);
         }
     }
 
@@ -593,7 +595,7 @@ public class ConnectionsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error exporting full configuration");
-            return StatusCode(500, new { message = "An internal error occurred." });
+            return EntityAdministrationResults.Unhandled(ex);
         }
     }
 
@@ -658,7 +660,7 @@ public class ConnectionsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Import-full configuration failed");
-            return StatusCode(500, new { message = "An internal error occurred." });
+            return EntityAdministrationResults.Unhandled(ex);
         }
     }
 
@@ -734,7 +736,7 @@ public class ConnectionsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Import preview failed");
-            return StatusCode(500, new { message = "An internal error occurred." });
+            return EntityAdministrationResults.Unhandled(ex);
         }
     }
 
@@ -774,7 +776,7 @@ public class ConnectionsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Clear-all failed");
-            return StatusCode(500, new { message = "An internal error occurred." });
+            return EntityAdministrationResults.Unhandled(ex);
         }
     }
 }

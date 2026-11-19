@@ -1,4 +1,4 @@
-import { Component, inject, Inject, signal, WritableSignal } from '@angular/core';
+import { Component, DestroyRef, inject, Inject, signal, WritableSignal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
@@ -11,7 +11,9 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatIconModule } from '@angular/material/icon';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatRadioModule } from '@angular/material/radio';
-import { ConnectionService } from '../../core/services';
+import { Subscription, from, of } from 'rxjs';
+import { catchError, concatMap, map, mergeMap, toArray } from 'rxjs/operators';
+import { AzureDirectoryAccount, AzureDirectoryAuth, AzureDirectoryService, AzureNamespace, AzureSubscription, ConnectionService } from '../../core/services';
 import { ConnectionGroup, ServiceBusConnection, ProviderType, getProviderDisplayName, getConnectionDisplayTarget, AzureAuthType } from '../../core/models';
 import { EnvironmentLineComponent, EnvironmentMark } from '../../shared/environment-line.component';
 
@@ -24,6 +26,33 @@ interface AzureAuthOption {
   label: string;
   note?: string;
 }
+
+/** The name of each Azure auth type, for a stored connection of any type. */
+const AUTH_LABELS: Record<AzureAuthType, string> = {
+  InteractiveBrowser: 'Sign in with Microsoft',
+  ConnectionString: 'Connection string',
+  ServicePrincipal: 'Service Principal',
+  AzureCli: 'Azure CLI session',
+  DefaultCredential: 'Default credential'
+};
+
+/** What a namespace list of one subscription is: loading, failed with the API's sentence, or the list. */
+interface NamespaceList {
+  loading?: boolean;
+  error?: string;
+  list?: AzureNamespace[];
+}
+
+/** One connection the sign-in path creates. */
+interface PickedNamespace {
+  name: string;
+  fullyQualifiedNamespace: string;
+  resourceId?: string;
+}
+
+/** The API's sentence of a failed call, or a fixed one when the call did not reach it. */
+const failureText = (err: { error?: { message?: string } } | null | undefined) =>
+  err?.error?.message || 'The request did not reach the API of this app.';
 
 /** What the add dialog says is written in plain text, per Azure auth type, or 'RabbitMQ' for its password. */
 const PLAIN_TEXT_NOTICE: Partial<Record<AzureAuthType | 'RabbitMQ', string>> = {
@@ -51,6 +80,9 @@ interface AddConnectionDialogData {
   groups: ConnectionGroup[];
   connection?: ServiceBusConnection;
 }
+
+/** How many subscriptions have their namespaces read at the same time, so an account with hundreds does not ask Azure for all at once. */
+const NAMESPACE_READS_AT_ONCE = 4;
 
 @Component({
   selector: 'app-add-connection-dialog',
@@ -197,98 +229,166 @@ interface AddConnectionDialogData {
             </fieldset>
 
             <div class="auth-fields">
-              @switch (azureAuthType) {
-                @case ('InteractiveBrowser') {
-                  <div class="field">
-                    <label for="conn-fully-qualified-namespace-13">Fully Qualified Namespace</label>
-                    <mat-form-field appearance="outline" subscriptSizing="dynamic">
-                    <input matInput id="conn-fully-qualified-namespace-13" [(ngModel)]="fullyQualifiedNamespace" placeholder="mynamespace.servicebus.windows.net">
-                    <mat-hint>Your Service Bus namespace host, without the scheme</mat-hint>
-                  </mat-form-field>
-                  </div>
-                  <div class="field">
-                    <label for="conn-tenant-id-optional-14">Tenant ID (optional)</label>
-                    <mat-form-field appearance="outline" subscriptSizing="dynamic">
-                    <input matInput id="conn-tenant-id-optional-14" [(ngModel)]="tenantId" placeholder="00000000-0000-0000-0000-000000000000">
-                    <mat-hint>Leave empty to use the user's home tenant</mat-hint>
-                  </mat-form-field>
-                  </div>
-                  <div class="sign-in">
-                    <button matButton="tonal"
-                      (click)="signInWithMicrosoft()"
-                      [disabled]="signingIn() || !fullyQualifiedNamespace">
-                      @if (signingIn()) {
-                        <mat-progress-spinner diameter="18" mode="indeterminate"></mat-progress-spinner>
+              @if (signInPath()) {
+                <div class="pick">
+                  <ol class="steps" aria-label="Steps">
+                    @for (s of steps(); track s.n) {
+                      <li>
+                        <button matButton type="button" class="step" [class.current]="s.n === step()" [attr.aria-current]="s.n === step() ? 'step' : null"
+                          [disabled]="s.n > 1 && !account()" (click)="goTo(s.n)">{{ s.label }}</button>
+                      </li>
+                    }
+                  </ol>
+
+                  @if (step() === 1) {
+                    @if (azureAuthType === 'InteractiveBrowser') {
+                      <div class="field">
+                        <label for="conn-tenant-id-optional-14">Tenant ID (optional)</label>
+                        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                        <input matInput id="conn-tenant-id-optional-14" [(ngModel)]="tenantId" placeholder="00000000-0000-0000-0000-000000000000" autocomplete="off" spellcheck="false">
+                        <mat-hint>Leave empty to use the user's home tenant</mat-hint>
+                      </mat-form-field>
+                      </div>
+                      <div class="sign-in">
+                        <button matButton="tonal" type="button" (click)="signIn()" [disabled]="signInBusy()">
+                          @if (signInBusy()) {
+                            <mat-progress-spinner diameter="18" mode="indeterminate"></mat-progress-spinner>
+                          }
+                          Sign in with Microsoft
+                        </button>
+                        <span class="hint">Opens your browser. The namespace is picked after the sign-in, no longer typed first.</span>
+                      </div>
+                    } @else {
+                      <p class="cli-intro">Uses your current "az login" session. Nothing is typed here.</p>
+                      @if (account(); as found) {
+                        <p class="hint cli-found" role="status">Session found: <strong>{{ found.account }}</strong>, tenant {{ found.tenantDomain || found.tenantId }}</p>
                       }
-                      Sign in with Microsoft
-                    </button>
-                    <span class="hint">
-                      @if (signingIn()) {
-                        Opening browser &mdash; complete sign-in in your browser window.
+                      <div class="sign-in">
+                        <button matButton="tonal" type="button" (click)="step.set(2)" [disabled]="!account()">Continue with this session</button>
+                        <button matButton type="button" (click)="signIn()" [disabled]="signInBusy()">
+                          @if (signInBusy()) {
+                            <mat-progress-spinner diameter="18" mode="indeterminate"></mat-progress-spinner>
+                          }
+                          Check again
+                        </button>
+                      </div>
+                      <span class="hint cli-help">No session, or another account? Run az login in a terminal, then Check again. The app asks the Azure CLI for a token and never sees a password.</span>
+                    }
+                    @if (signInError(); as error) {
+                      <p class="pick-error" role="alert">{{ error }}</p>
+                    }
+                  }
+
+                  @if (step() > 1 && account(); as signed) {
+                    <p class="hint signed">{{ azureAuthType === 'AzureCli' ? 'Azure CLI session of' : 'Signed in as' }} <strong>{{ signed.account }}</strong></p>
+                  }
+
+                  @if (step() === 2) {
+                    <div class="step-two">
+                      <p class="hint">The client and the environment the namespaces are added to</p>
+                      <div class="field">
+                        <label id="conn-pick-client-label" for="conn-pick-client">Client</label>
+                        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                        <mat-select placeholder="No client" id="conn-pick-client" aria-labelledby="conn-pick-client-label" [(ngModel)]="clientId" (selectionChange)="onClientChange()">
+                          <mat-option [value]="null">No client</mat-option>
+                          @for (client of clients(); track client.id) {
+                            <mat-option [value]="client.id">{{ client.name }}</mat-option>
+                          }
+                        </mat-select>
+                      </mat-form-field>
+                      </div>
+                      @if (clientId) {
+                        <div class="field">
+                          <label id="conn-pick-environment-label" for="conn-pick-environment">Environment</label>
+                          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                          <mat-select placeholder="No environment" id="conn-pick-environment" aria-labelledby="conn-pick-environment-label" [(ngModel)]="environmentId">
+                            <mat-option [value]="null">No environment</mat-option>
+                            @for (env of availableEnvironments(); track env.id) {
+                              <mat-option [value]="env.id">{{ env.name }}</mat-option>
+                            }
+                          </mat-select>
+                        </mat-form-field>
+                        </div>
+                      }
+                      <div><button matButton="tonal" type="button" (click)="goTo(3)">Next: pick the namespaces</button></div>
+                    </div>
+                  }
+
+                  @if (step() === 3) {
+                    <p class="hint target">{{ pickTarget() }}</p>
+                    @if (subscriptionsError(); as error) {
+                      <div class="pick-failed" role="alert">
+                        <span><strong>Azure did not list the subscriptions.</strong> {{ error }}</span>
+                        <button matButton="outlined" type="button" (click)="loadSubscriptions()">Retry</button>
+                      </div>
+                    } @else {
+                      <div class="field">
+                        <label id="conn-pick-subscription-label" for="conn-pick-subscription">Azure subscription <span class="count">{{ subscriptions()?.length ?? 0 }} in this account</span></label>
+                        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                        <mat-select id="conn-pick-subscription" aria-labelledby="conn-pick-subscription-label" [value]="subscriptionId()" (selectionChange)="pickSubscription($event.value)">
+                          @for (sub of subscriptions() ?? []; track sub.id) {
+                            <mat-option [value]="sub.id">{{ subscriptionLabel(sub) }}</mat-option>
+                          }
+                        </mat-select>
+                      </mat-form-field>
+                      </div>
+                    }
+                    @let current = namespaceList();
+                    @if (current?.loading) {
+                      <p class="hint loading" role="status">
+                        <mat-progress-spinner diameter="16" mode="indeterminate" aria-hidden="true"></mat-progress-spinner>
+                        Loading the namespaces of this subscription from Azure
+                      </p>
+                    } @else if (current?.error; as error) {
+                      <div class="pick-failed" role="alert">
+                        <span><strong>Azure did not list the namespaces.</strong> {{ error }} Nothing was changed. You can still add a namespace by typing it.</span>
+                        <button matButton="outlined" type="button" (click)="loadNamespaces(subscriptionId())">Retry</button>
+                      </div>
+                    } @else if (current?.list; as list) {
+                      @if (list.length) {
+                        <ul class="namespaces" aria-label="Namespaces of the subscription">
+                          @for (item of list; track item.fullyQualifiedNamespace) {
+                            @let already = alreadyIn(item.fullyQualifiedNamespace);
+                            @let on = !!already || isTicked(item);
+                            <li [class.on]="on && !already">
+                              <mat-checkbox [checked]="on" [disabled]="!!already" (change)="toggle(item)">
+                                <span class="row">
+                                  <span class="host" [class.strong]="on">{{ item.fullyQualifiedNamespace }}</span>
+                                  <span class="where">{{ already ?? 'Resource group ' + item.resourceGroup + ' · ' + item.tier }}</span>
+                                </span>
+                              </mat-checkbox>
+                            </li>
+                          }
+                        </ul>
                       } @else {
-                        Opens your browser. Enter the namespace first.
+                        <p class="hint empty">This subscription holds no Service Bus namespace your account can read.</p>
                       }
-                    </span>
-                  </div>
-                }
-                @case ('ConnectionString') {
-                  <div class="field">
-                    <label for="conn-connection-string-15">Connection String</label>
-                    <mat-form-field appearance="outline" subscriptSizing="dynamic">
-                    <input matInput id="conn-connection-string-15" type="password" autocomplete="off" spellcheck="false" [(ngModel)]="connectionString"
-                      placeholder="Endpoint=sb://...;SharedAccessKeyName=...;SharedAccessKey=...">
-                    <mat-hint>Azure Service Bus connection string with Manage permissions. Masked as you type or paste.</mat-hint>
-                  </mat-form-field>
-                  </div>
-                }
-                @case ('ServicePrincipal') {
-                  <div class="field">
-                    <label for="conn-fully-qualified-namespace-16">Fully Qualified Namespace</label>
-                    <mat-form-field appearance="outline" subscriptSizing="dynamic">
-                    <input matInput id="conn-fully-qualified-namespace-16" [(ngModel)]="fullyQualifiedNamespace" placeholder="mynamespace.servicebus.windows.net">
-                    <mat-hint>Your Service Bus namespace host, without the scheme</mat-hint>
-                  </mat-form-field>
-                  </div>
-                  <div class="grid two">
-                    <div class="field">
-                      <label for="conn-tenant-id-17">Tenant ID</label>
-                      <mat-form-field appearance="outline" subscriptSizing="dynamic">
-                      <input matInput id="conn-tenant-id-17" [(ngModel)]="tenantId" placeholder="00000000-0000-0000-0000-000000000000">
-                    </mat-form-field>
-                    </div>
-                    <div class="field">
-                      <label for="conn-client-id-18">Client ID</label>
-                      <mat-form-field appearance="outline" subscriptSizing="dynamic">
-                      <input matInput id="conn-client-id-18" [(ngModel)]="servicePrincipalClientId" placeholder="App registration client ID">
-                    </mat-form-field>
-                    </div>
-                  </div>
-                  <div class="field">
-                    <label for="conn-client-secret-19">Client Secret</label>
-                    <mat-form-field appearance="outline" subscriptSizing="dynamic">
-                    <input matInput id="conn-client-secret-19" type="password" autocomplete="new-password" [(ngModel)]="clientSecret">
-                  </mat-form-field>
-                  </div>
-                }
-                @case ('AzureCli') {
-                  <div class="field">
-                    <label for="conn-fully-qualified-namespace-20">Fully Qualified Namespace</label>
-                    <mat-form-field appearance="outline" subscriptSizing="dynamic">
-                    <input matInput id="conn-fully-qualified-namespace-20" [(ngModel)]="fullyQualifiedNamespace" placeholder="mynamespace.servicebus.windows.net">
-                    <mat-hint>Uses your current "az login" session</mat-hint>
-                  </mat-form-field>
-                  </div>
-                }
-                @case ('DefaultCredential') {
-                  <div class="field">
-                    <label for="conn-fully-qualified-namespace-21">Fully Qualified Namespace</label>
-                    <mat-form-field appearance="outline" subscriptSizing="dynamic">
-                    <input matInput id="conn-fully-qualified-namespace-21" [(ngModel)]="fullyQualifiedNamespace" placeholder="mynamespace.servicebus.windows.net">
-                    <mat-hint>Uses the default credential chain of this computer, without managed identity</mat-hint>
-                  </mat-form-field>
-                  </div>
-                  <p class="dev-note">For development: the app takes whichever sign-in this computer already has.</p>
-                }
+                    }
+                    <span class="hint pick-summary">{{ summary() }} Ticks are kept when the subscription is changed. Each namespace becomes one connection, named after it.</span>
+                    <div><button matButton type="button" [attr.aria-expanded]="typeByHand()" (click)="typeByHand.set(!typeByHand())">A namespace that is not listed: type it</button></div>
+                    @if (typeByHand()) {
+                      <div class="field">
+                        <label for="conn-pick-typed">Fully Qualified Namespace</label>
+                        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                        <input matInput id="conn-pick-typed" [ngModel]="typedNamespace()" (ngModelChange)="typedNamespace.set($event)" placeholder="mynamespace.servicebus.windows.net" autocomplete="off" spellcheck="false">
+                        <mat-hint>Your Service Bus namespace host, without the scheme. Added to the same client and environment as the ticked ones.</mat-hint>
+                      </mat-form-field>
+                      </div>
+                    }
+                    @if (saveError(); as error) {
+                      <p class="pick-error" role="alert">{{ error }}</p>
+                    }
+                  }
+                </div>
+              } @else if (azureAuthType === 'ConnectionString') {
+                <div class="field">
+                  <label for="conn-connection-string-15">Connection String</label>
+                  <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                  <input matInput id="conn-connection-string-15" type="password" autocomplete="off" spellcheck="false" [(ngModel)]="connectionString"
+                    placeholder="Endpoint=sb://...;SharedAccessKeyName=...;SharedAccessKey=...">
+                  <mat-hint>Azure Service Bus connection string with Manage permissions. Masked as you type or paste.</mat-hint>
+                </mat-form-field>
+                </div>
               }
             </div>
           </div>
@@ -406,6 +506,7 @@ interface AddConnectionDialogData {
         }
       }
 
+      @if (!signInPath()) {
       <div class="grouping-section">
         <h3>Organization (Optional)</h3>
         <p class="hint">Organize this connection by client and environment</p>
@@ -438,10 +539,11 @@ interface AddConnectionDialogData {
           }
         </div>
       </div>
+      }
 
       @if (providerType === ProviderType.RabbitMQ) {
         <ng-container *ngTemplateOutlet="tls"></ng-container>
-      } @else {
+      } @else if (!signInPath()) {
         <ng-container *ngTemplateOutlet="network"></ng-container>
       }
 
@@ -455,8 +557,8 @@ interface AddConnectionDialogData {
     </mat-dialog-content>
 
     <mat-dialog-actions align="end">
-      <button matButton mat-dialog-close>Cancel</button>
-      <button matButton="outlined" (click)="testConnection()" [disabled]="testing() || !isFormValid()">
+      <button matButton [mat-dialog-close]="savedAny()">Cancel</button>
+      <button matButton="outlined" (click)="testConnection()" [disabled]="testing() || signInPath() || !isFormValid()">
         @if (testing()) {
           <mat-progress-spinner diameter="18" mode="indeterminate"></mat-progress-spinner>
         } @else {
@@ -464,11 +566,11 @@ interface AddConnectionDialogData {
         }
         Test
       </button>
-      <button matButton="filled" (click)="save()" [disabled]="saving() || !name || !isFormValid()">
+      <button matButton="filled" (click)="save()" [disabled]="saving() || (signInPath() ? !toCreate().length : !name || !isFormValid())">
         @if (saving()) {
           <mat-progress-spinner diameter="18" mode="indeterminate"></mat-progress-spinner>
         }
-        {{ isEditing ? 'Update' : 'Save' }}
+        {{ saveLabel() }}
       </button>
     </mat-dialog-actions>
   `,
@@ -504,21 +606,39 @@ export class AddConnectionDialogComponent {
   // Azure Service Bus fields
   connectionString = '';
 
-  // Azure identity-based auth fields (Phase 2 Azure auth UI)
+  /** The Azure authentications offered when adding; a stored connection of another type still edits. */
   readonly azureAuthOptions: AzureAuthOption[] = [
-    { value: 'InteractiveBrowser', label: 'Sign in with Microsoft', note: 'Recommended' },
-    { value: 'ConnectionString', label: 'Connection string' },
-    { value: 'ServicePrincipal', label: 'Service Principal', note: 'advanced' },
-    { value: 'AzureCli', label: 'Azure CLI session', note: 'advanced' },
-    { value: 'DefaultCredential', label: 'Default credential' }
+    { value: 'InteractiveBrowser', label: AUTH_LABELS.InteractiveBrowser, note: 'Recommended' },
+    { value: 'ConnectionString', label: AUTH_LABELS.ConnectionString },
+    { value: 'AzureCli', label: AUTH_LABELS.AzureCli, note: 'advanced' }
   ];
   azureAuthType: AzureAuthType = 'InteractiveBrowser';
   fullyQualifiedNamespace = '';
   tenantId = '';
   servicePrincipalClientId = '';
   clientSecret = '';
-  signingIn = signal(false);
-  signedIn = signal(false);
+
+  // Sign in, then pick: the three steps of the add dialog for a sign-in or an Azure CLI session.
+  private directory = inject(AzureDirectoryService);
+  readonly step = signal<1 | 2 | 3>(1);
+  readonly account = signal<AzureDirectoryAccount | null>(null);
+  readonly signInBusy = signal(false);
+  private signInCall?: Subscription;
+  private countsCall?: Subscription;
+  private sessionAsked = false;
+  readonly signInError = signal<string | null>(null);
+  readonly subscriptions = signal<AzureSubscription[] | null>(null);
+  readonly subscriptionsError = signal<string | null>(null);
+  readonly subscriptionId = signal('');
+  readonly namespaceLists = signal<Record<string, NamespaceList>>({});
+  /** The ticked namespaces of every subscription, by host in lower case, so a tick survives a change of subscription. */
+  readonly ticked = signal<Record<string, AzureNamespace>>({});
+  readonly typeByHand = signal(false);
+  readonly typedNamespace = signal('');
+  readonly saveError = signal<string | null>(null);
+  readonly savedAny = signal(false);
+  /** The stored connections, read when the namespaces are opened, to tell which are already in the client and environment. */
+  private readonly stored = signal<Pick<ServiceBusConnection, 'fullyQualifiedNamespace' | 'clientId' | 'environmentId'>[]>([]);
   useWebSockets = false;
   proxyAddress = '';
   azureResourceId = '';
@@ -540,6 +660,7 @@ export class AddConnectionDialogComponent {
 
   constructor(@Inject(MAT_DIALOG_DATA) public data: AddConnectionDialogData) {
     this.clients.set(data.groups.filter(g => g.type === 'client'));
+    inject(DestroyRef).onDestroy(() => this.leaveDirectory());
 
     if (data.connection) {
       this.isEditing = true;
@@ -638,9 +759,7 @@ export class AddConnectionDialogComponent {
         case 'ConnectionString':
           return this.keepsStoredSecret() || (!!this.connectionString && this.connectionString.trim().length > 0);
         case 'InteractiveBrowser':
-          return !!this.fullyQualifiedNamespace
-            && this.fullyQualifiedNamespace.trim().length > 0
-            && (this.isEditing || this.signedIn());
+          return !!this.fullyQualifiedNamespace && this.fullyQualifiedNamespace.trim().length > 0;
         case 'ServicePrincipal':
           return !!this.fullyQualifiedNamespace?.trim()
             && !!this.tenantId?.trim()
@@ -736,7 +855,7 @@ export class AddConnectionDialogComponent {
 
   authLabel(): string {
     if (this.providerType === ProviderType.RabbitMQ) return `Username and password, virtual host ${this.virtualHost}`;
-    return this.azureAuthOptions.find(o => o.value === this.azureAuthType)?.label ?? this.azureAuthType;
+    return AUTH_LABELS[this.azureAuthType] ?? this.azureAuthType;
   }
 
   /** Add only: whether the chosen provider and authentication write a secret in plain text, and what the notice says. */
@@ -757,53 +876,223 @@ export class AddConnectionDialogComponent {
     }
   }
 
-  /**
-   * Resets auth-specific UI state when the user switches between Azure auth
-   * strategies. Sign-in state is invalidated so the user must re-verify.
-   */
-  onAzureAuthTypeChange(): void {
-    this.signedIn.set(false);
+  /** Add, Azure, with a sign-in or the Azure CLI session: the three steps of sign in, then pick. */
+  signInPath(): boolean {
+    return !this.isEditing && this.providerType === ProviderType.AzureServiceBus
+      && (this.azureAuthType === 'InteractiveBrowser' || this.azureAuthType === 'AzureCli');
   }
 
-  /**
-   * Initiates interactive browser sign-in. The backend credential factory
-   * launches the system browser via InteractiveBrowserCredential and returns
-   * once the user completes the flow.
-   */
-  signInWithMicrosoft(): void {
-    if (!this.fullyQualifiedNamespace) {
-      return;
-    }
-    this.signingIn.set(true);
-    const request = {
-      name: this.name || 'Sign-in Test',
-      providerType: this.providerType,
-      authType: 'InteractiveBrowser' as AzureAuthType,
-      fullyQualifiedNamespace: this.fullyQualifiedNamespace,
-      tenantId: this.tenantId || undefined,
-      ...this.azureNetwork()
-    };
+  /** A new authentication starts the steps again; the Azure CLI is asked for its session at once. */
+  /** Ends what this dialog asked of the directory: a sign-in still waiting is dropped, and the session on the API is ended. */
+  private leaveDirectory(): void {
+    this.signInCall?.unsubscribe();
+    this.signInCall = undefined;
+    this.countsCall?.unsubscribe();
+    this.countsCall = undefined;
+    this.signInBusy.set(false);
+    if (!this.sessionAsked) return;
+    this.sessionAsked = false;
+    this.directory.signOut().subscribe({ error: () => undefined });
+  }
 
-    this.connectionService.testConnection(request).subscribe({
-      next: (result: any) => {
-        this.signingIn.set(false);
-        if (result.success) {
-          this.signedIn.set(true);
-          this.snackBar.open('Signed in and connection verified', 'Close', { duration: 3000 });
-        } else {
-          this.signedIn.set(false);
-          this.snackBar.open(result.error || 'Sign-in failed', 'Close', { duration: 6000 });
-        }
+  onAzureAuthTypeChange(): void {
+    this.leaveDirectory();
+    this.step.set(1);
+    this.account.set(null);
+    this.signInError.set(null);
+    this.subscriptions.set(null);
+    this.subscriptionsError.set(null);
+    this.subscriptionId.set('');
+    this.namespaceLists.set({});
+    this.ticked.set({});
+    this.saveError.set(null);
+    if (this.signInPath() && this.azureAuthType === 'AzureCli') this.signIn();
+  }
+
+  steps(): { n: 1 | 2 | 3; label: string }[] {
+    return [
+      { n: 1, label: this.azureAuthType === 'AzureCli' ? '1 Azure CLI session' : '1 Sign in' },
+      { n: 2, label: '2 Client and environment' },
+      { n: 3, label: '3 Namespaces' }
+    ];
+  }
+
+  goTo(n: 1 | 2 | 3): void {
+    this.step.set(n);
+    if (n !== 3) return;
+    if (this.subscriptions() === null) this.loadSubscriptions();
+    this.connectionService.getConnections().subscribe({ next: list => this.stored.set(list), error: () => undefined });
+  }
+
+  /** Signs in through the API: the browser opens for Microsoft, the Azure CLI is asked for a token. */
+  signIn(): void {
+    const auth = this.azureAuthType as AzureDirectoryAuth;
+    this.signInBusy.set(true);
+    this.signInError.set(null);
+    this.account.set(null);
+    this.signInCall?.unsubscribe();
+    this.sessionAsked = true;
+    this.signInCall = this.directory.signIn(auth, auth === 'InteractiveBrowser' ? this.tenantId.trim() || undefined : undefined).subscribe({
+      next: account => {
+        this.signInBusy.set(false);
+        this.account.set(account);
+        if (auth === 'InteractiveBrowser') this.step.set(2);
       },
-      error: (err) => {
-        this.signingIn.set(false);
-        this.signedIn.set(false);
-        this.snackBar.open(
-          'Sign-in failed: ' + (err.error?.message || err.message || 'Unknown error'),
-          'Close',
-          { duration: 6000 }
-        );
+      error: err => {
+        this.signInBusy.set(false);
+        this.signInError.set(failureText(err));
       }
+    });
+  }
+
+  loadSubscriptions(): void {
+    this.subscriptionsError.set(null);
+    this.directory.subscriptions().subscribe({
+      next: list => {
+        this.subscriptions.set(list);
+        if (list.length && !list.some(s => s.id === this.subscriptionId())) this.pickSubscription(list[0].id);
+        this.countsCall?.unsubscribe();
+        const rest = list.filter(s => !this.namespaceLists()[s.id]);
+        this.namespaceLists.update(lists => ({ ...lists, ...Object.fromEntries(rest.map(s => [s.id, { loading: true } as NamespaceList])) }));
+        this.countsCall = from(rest).pipe(
+          mergeMap(s => this.directory.namespaces(s.id).pipe(
+            map((found): NamespaceList => ({ list: found })),
+            catchError(err => of<NamespaceList>({ error: failureText(err) })),
+            map(state => ({ id: s.id, state }))), NAMESPACE_READS_AT_ONCE)
+        ).subscribe(({ id, state }) => this.namespaceLists.update(lists => ({ ...lists, [id]: state })));
+      },
+      error: err => this.subscriptionsError.set(failureText(err))
+    });
+  }
+
+  /** Shows a subscription; its namespaces are read once and kept. */
+  pickSubscription(id: string): void {
+    this.subscriptionId.set(id);
+    if (!this.namespaceLists()[id]?.list) this.loadNamespaces(id);
+  }
+
+  loadNamespaces(id: string): void {
+    const set = (state: NamespaceList) => this.namespaceLists.update(lists => ({ ...lists, [id]: state }));
+    set({ loading: true });
+    this.directory.namespaces(id).subscribe({
+      next: list => set({ list }),
+      error: err => set({ error: failureText(err) })
+    });
+  }
+
+  namespaceList(): NamespaceList | undefined {
+    return this.namespaceLists()[this.subscriptionId()];
+  }
+
+  /** "Contoso Production (3)" once its namespaces are read, the name alone before. */
+  subscriptionLabel(subscription: AzureSubscription): string {
+    const list = this.namespaceLists()[subscription.id]?.list;
+    return list ? `${subscription.displayName} (${list.length})` : subscription.displayName;
+  }
+
+  pickTarget(): string {
+    const name = (id: string | null) => this.data.groups.find(g => g.id === id)?.name;
+    const client = name(this.clientId);
+    if (!client) return 'Added with no client and no environment';
+    const environment = name(this.environmentId);
+    return `Added to ${client}, ${environment ?? 'with no environment'}`;
+  }
+
+  /** "Already in Production" when a stored connection in the chosen client and environment has this host, else null. */
+  alreadyIn(host: string): string | null {
+    const key = host.trim().toLowerCase();
+    const same = (a: string | null | undefined, b: string | null) => (a || null) === b;
+    const found = this.stored().some(c => c.fullyQualifiedNamespace?.toLowerCase() === key
+      && same(c.clientId, this.clientId) && same(c.environmentId, this.environmentId));
+    if (!found) return null;
+    const where = this.data.groups.find(g => g.id === (this.environmentId ?? this.clientId))?.name;
+    return where ? `Already in ${where}` : 'Already added';
+  }
+
+  isTicked(item: AzureNamespace): boolean {
+    return !!this.ticked()[item.fullyQualifiedNamespace.toLowerCase()];
+  }
+
+  toggle(item: AzureNamespace): void {
+    const key = item.fullyQualifiedNamespace.toLowerCase();
+    this.ticked.update(ticked => {
+      const next = { ...ticked };
+      if (next[key]) delete next[key]; else next[key] = item;
+      return next;
+    });
+  }
+
+  /** The ticked namespaces not already in the client and environment. */
+  private picked(): AzureNamespace[] {
+    return Object.values(this.ticked()).filter(n => !this.alreadyIn(n.fullyQualifiedNamespace));
+  }
+
+  summary(): string {
+    const names = this.picked().map(n => n.name);
+    return names.length ? `${names.length} ticked: ${names.join(', ')}.` : 'No namespace ticked yet.';
+  }
+
+  /** One connection per ticked namespace, and the typed one when it is new. */
+  toCreate(): PickedNamespace[] {
+    const items: PickedNamespace[] = this.picked().map(n => ({ name: n.name, fullyQualifiedNamespace: n.fullyQualifiedNamespace, resourceId: n.resourceId }));
+    const typed = this.typeByHand() ? this.typedNamespace().trim() : '';
+    if (typed && !this.alreadyIn(typed) && !items.some(i => i.fullyQualifiedNamespace.toLowerCase() === typed.toLowerCase())) {
+      items.push({ name: typed.split('.')[0], fullyQualifiedNamespace: typed });
+    }
+    return items;
+  }
+
+  saveLabel(): string {
+    if (this.isEditing) return 'Update';
+    const count = this.signInPath() ? this.toCreate().length : 1;
+    return count > 1 ? `Add ${count} connections` : 'Save';
+  }
+
+  /** Saves the picked namespaces one at a time; one that fails is named, and the dialog stays open to retry it. */
+  private saveMany(): void {
+    const items = this.toCreate();
+    const account = this.account();
+    this.saving.set(true);
+    this.saveError.set(null);
+    from(items).pipe(
+      concatMap(item => this.connectionService.saveConnection({
+        name: item.name,
+        providerType: ProviderType.AzureServiceBus,
+        authType: this.azureAuthType,
+        connectionString: '',
+        fullyQualifiedNamespace: item.fullyQualifiedNamespace,
+        tenantId: account?.tenantId || undefined,
+        azureResourceId: item.resourceId && AZURE_RESOURCE_ID.test(item.resourceId) ? item.resourceId : undefined,
+        clientId: this.clientId || undefined,
+        environmentId: this.environmentId || undefined
+      }).pipe(map(() => ({ item, saved: true })), catchError(() => of({ item, saved: false })))),
+      toArray()
+    ).subscribe(results => {
+      const saved = results.filter(r => r.saved).map(r => r.item);
+      const failed = results.filter(r => !r.saved).map(r => r.item);
+      this.saving.set(false);
+      if (saved.length) {
+        this.savedAny.set(true);
+        this.stored.update(list => [...list, ...saved.map(i => ({
+          fullyQualifiedNamespace: i.fullyQualifiedNamespace, clientId: this.clientId || undefined, environmentId: this.environmentId || undefined
+        }))]);
+      }
+      if (!failed.length) {
+        this.snackBar.open(saved.length === 1 ? 'Connection saved' : `${saved.length} connections saved`, 'Close', { duration: 3000 });
+        this.dialogRef.close(true);
+        return;
+      }
+      this.connectionService.getConnections().pipe(catchError(() => of(null))).subscribe(list => {
+        if (list) this.stored.update(known => [...known, ...list]);
+        const left = this.toCreate().map(item => item.name);
+        const lost = failed.filter(f => left.includes(f.name));
+        if (!lost.length) {
+          this.snackBar.open('Connections saved', 'Close', { duration: 3000 });
+          this.dialogRef.close(true);
+          return;
+        }
+        this.saveError.set(`Not saved: ${lost.map(f => f.name).join(', ')}.${saved.length ? ' The others were saved.' : ''} Save again to retry.`);
+      });
     });
   }
 
@@ -887,6 +1176,10 @@ export class AddConnectionDialogComponent {
   }
 
   save() {
+    if (this.signInPath()) {
+      this.saveMany();
+      return;
+    }
     this.saving.set(true);
 
     const connectionData: Partial<ServiceBusConnection> = {

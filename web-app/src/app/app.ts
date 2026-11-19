@@ -16,6 +16,7 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatDialogModule } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { ConnectionService, ConnectionGroupService, ThemeService, EntitySelectionService, DevSettingsService, ResubmitRunService } from './core/services';
+import { AppLogService } from './core/services/app-log.service';
 import { DeadLetterNotificationService, DeadLetterAlert } from './core/services/dead-letter-notification.service';
 import { BugReportService } from './shared/bug-report.service';
 import { AppUpdateService } from './features/settings/app-update.service';
@@ -84,6 +85,10 @@ export class App implements OnInit {
 
   readonly updates = inject(AppUpdateService);
   private readonly bugReport = inject(BugReportService);
+
+  /** The Logs screen and its item on the toolbar exist only while Developer mode is on. */
+  readonly devMode = this.devSettingsService.devMode;
+  readonly logs = inject(AppLogService);
 
   navItems: NavItem[] = [
     { label: 'Connections', route: '/connections' },

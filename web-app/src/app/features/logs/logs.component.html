@@ -1,0 +1,76 @@
+<main class="logs">
+  <div class="head">
+    <h1>Logs</h1>
+    <button mat-stroked-button type="button" [attr.aria-pressed]="paused()" (click)="togglePause()">{{ paused() ? 'Resume' : 'Pause' }}</button>
+    <button mat-stroked-button type="button" [disabled]="shown().length === 0" (click)="copy(shown())">Copy shown</button>
+    <button mat-stroked-button type="button" [disabled]="shown().length === 0" (click)="save()">Save to a file</button>
+    <button mat-button type="button" class="danger" (click)="clear()">Clear</button>
+  </div>
+
+  <p class="notice" role="note">
+    <mat-icon aria-hidden="true">info</mat-icon>
+    <span><strong>What happened since the app opened, kept in memory only.</strong> The last 2,000 lines of the backend, the last 500 of the desktop app and the calls of this screen that got no answer. No connection string, password, key, token or message body is ever written here.</span>
+  </p>
+
+  @if (readError()) {
+    <p class="inline-error" role="alert" data-testid="logs-read-error">{{ readError() }}</p>
+  }
+
+  <div class="filters">
+    <mat-button-toggle-group aria-label="Level" [value]="level()" (change)="level.set($event.value)" hideSingleSelectionIndicator>
+      <mat-button-toggle value="All">All {{ counts().All }}</mat-button-toggle>
+      <mat-button-toggle value="Error">Errors {{ counts().Error }}</mat-button-toggle>
+      <mat-button-toggle value="Warning">Warnings {{ counts().Warning }}</mat-button-toggle>
+      <mat-button-toggle value="Info">Info {{ counts().Info }}</mat-button-toggle>
+    </mat-button-toggle-group>
+    <div class="field">
+      <label id="logs-source-label" for="logs-source">Source</label>
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
+        <mat-select id="logs-source" aria-labelledby="logs-source-label" [value]="source()" (selectionChange)="source.set($event.value)">
+          <mat-option value="">Every source</mat-option>
+          @for (name of sources; track name) {
+            <mat-option [value]="name">{{ name }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+    </div>
+    <div class="field grow">
+      <label for="logs-search">Search</label>
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
+        <input matInput id="logs-search" type="search" [value]="query()" (input)="query.set($any($event.target).value)" placeholder="A word of the line, a route, a type of error">
+      </mat-form-field>
+    </div>
+  </div>
+
+  <p class="status" role="status">{{ paused() ? 'Paused.' : 'Following new lines.' }} {{ shown().length }} of {{ all().length }} lines shown.</p>
+
+  @if (shown().length > 0) {
+    <ul class="lines" aria-label="Log lines, newest first">
+      @for (line of shown(); track line.key) {
+        <li [class.error]="line.level === 'Error'">
+          <button type="button" class="line" [attr.aria-expanded]="isOpen(line)" (click)="toggle(line)">
+            <span class="time">{{ line.time | date: 'HH:mm:ss' }}</span>
+            <span class="level" [class.is-error]="line.level === 'Error'" [class.is-warning]="line.level === 'Warning'">{{ line.level }}</span>
+            <span class="source">{{ line.source }}</span>
+            <span class="text">{{ line.text }}</span>
+          </button>
+          @if (isOpen(line)) {
+            <div class="detail">
+              <dl>
+                @for (fact of line.detail; track fact[0]) {
+                  <dt>{{ fact[0] }}</dt>
+                  <dd>{{ fact[1] }}</dd>
+                }
+              </dl>
+              <button mat-stroked-button type="button" (click)="copy([line])">Copy this line</button>
+            </div>
+          }
+        </li>
+      }
+    </ul>
+  } @else if (all().length === 0) {
+    <p class="muted" data-testid="logs-empty">Nothing was logged yet.</p>
+  } @else {
+    <p class="muted" data-testid="logs-none">No line matches the level, the source and the search.</p>
+  }
+</main>

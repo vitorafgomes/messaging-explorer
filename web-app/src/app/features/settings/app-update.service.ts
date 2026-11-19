@@ -73,8 +73,6 @@ export class AppUpdateService {
   /** The version being downloaded at the user's word, or '' when none is. */
   readonly installingVersion = signal('');
   readonly installError = signal('');
-  /** Whether the version found downloads by itself; false while the app keeps a version the user picked. */
-  readonly downloadsByItself = signal(true);
 
   private get shell(): any {
     return typeof window !== 'undefined' ? (window as any).electronAPI : undefined;
@@ -116,12 +114,13 @@ export class AppUpdateService {
     }
   }
 
-  async download(): Promise<void> {
+  /** Downloads the version the check found, only when it is the version the user agreed to. */
+  async download(agreedVersion: string | null): Promise<void> {
     const shell = this.shell;
-    if (this.blocker() || !shell?.downloadUpdate) return;
+    if (!agreedVersion || agreedVersion !== this.availableVersion() || this.blocker() || !shell?.downloadUpdate) return;
     this.downloadRequested = true;
     this.error.set('');
-    const result = await shell.downloadUpdate();
+    const result = await shell.downloadUpdate(true, agreedVersion);
     if (result?.status === 'error') this.fail('download', result.message);
   }
 
@@ -198,11 +197,10 @@ export class AppUpdateService {
     if (typeof data.percent === 'number') this.percent.set(data.percent);
     if (data.status === 'available') {
       this.releaseNotes.set(releaseNoteLines(data.releaseNotes));
-      this.downloadsByItself.set(data.downloads !== false);
     }
     if (data.status === 'up-to-date' || data.status === 'available') this.lastChecked.set(new Date());
     if (data.status === 'checking') this.downloadRequested = false;
-    if (data.status === 'downloading' || (data.status === 'available' && !this.blocker() && data.downloads !== false)) this.downloadRequested = true;
+    if (data.status === 'downloading') this.downloadRequested = true;
     if (data.status === 'error') {
       this.fail(this.downloadRequested ? 'download' : 'check', data.message);
       return;
