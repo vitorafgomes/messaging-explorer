@@ -2,9 +2,9 @@
 title: "ADR 0008 - An MCP server inside the local API"
 version: "1.0"
 date: 2026-11-19
-changes: "2026-11-19: an assistant can read the logs and change settings of the app, each as its own choice, never the MCP group itself; the SDK calls proven by a throwaway project; the SDK leaves the Origin check to the application. Initial ADR draft"
+changes: "2026-11-19: accepted by the owner, who asked for the implementation with the screen as drawn; an assistant can read the logs and change settings of the app, each as its own choice, never the MCP group itself; the SDK calls proven by a throwaway project; the SDK leaves the Origin check to the application. Initial ADR draft"
 page_type: adr
-status: proposed
+status: accepted
 description: "The local API serves an MCP endpoint, off until the user turns it on, that offers an assistant only the connections the user chose, behind a token of its own, and asks the user in the app before anything is sent, moved or removed."
 supersedes: ""
 superseded_by: ""
@@ -22,8 +22,8 @@ reliability: medium
 
 ## Status
 
-- [x] Proposed
-- [ ] Accepted
+- [ ] Proposed
+- [x] Accepted
 - [ ] Deprecated / superseded
 
 Updated: 2026-11-19.
@@ -95,7 +95,8 @@ To be written with the first phase; none of it exists yet.
 - [[pages/roadmap/after-2-5-0]] - where this sits in the order of work.
 - [[pages/invariants/local-authenticated-api]], [[pages/invariants/secrets-masked-at-the-api-boundary]], [[pages/invariants/bulk-operations-are-at-least-once]], [[pages/invariants/provider-boundaries]].
 
-## Open for the owner
+## Settled with the owner on 2026-11-19
 
-- The exception for local test brokers: a mark on the connection that the user sets, as drawn, or no exception at all.
-- Whether a read on a production connection asks every time, as written, or only the first time in a session.
+- The connections part of the Settings group lists only the connections offered, with "Offer a connection" to add one and "Remove" on each: the owner asked not to list every connection.
+- A connection marked as a local test broker is never asked, as drawn; a read on a production connection asks every time, as written. The owner asked for the implementation with both as they stood.
+- The first phase is reading. It has no confirmation window yet, so it offers the level "Read" only and refuses to offer a connection of a production environment; both open with the phase that brings the window.
