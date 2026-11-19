@@ -18,6 +18,8 @@ What changed when in the project [[pages/services/electron-shell|Electron Shell]
 
 ## 2026-11-19
 
+- A download refused because no update is on offer, while a check runs or after one found none, says so, apart from the refusal of a version that differs from the one agreed to (`web-app/electron/shell-helpers.js#downloadAgreedUpdate`).
+
 - **Electron 42.** The shell moved from Electron 41 to 42.11 for its security fixes, which the 41 line does not receive: one high advisory and seven lower. None of the breaking changes of 42 touches this shell: it shows no notification, renders nothing off screen, never clears storage quotas and makes no named image. `sharp`, which only draws the icons at build time, went to 0.35, and the `uuid` under `exceljs` is overridden to 11.1.1. Checked by starting the packaged Linux build on its own data folder and ports: the API listened, the window read the empty lists with the key, and the quit stopped the API.
 
 - From the review of the pull request: the version an agreement is checked against no longer outlives the offer. The installed updater replaces the update it holds only when it announces one, so the last announced version was already the one it would download; now a check in flight, a check that found nothing newer and an error each void it too, so a stale agreement is refused whatever the library does (`web-app/electron/shell-helpers.js#followFoundVersion`, `web-app/electron/shell-helpers.test.js#the version an agreement can be given for is the one the updater would download now`).

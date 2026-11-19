@@ -24,6 +24,9 @@ public class ConnectionsController : ControllerBase
     /// Thread-safe access via lock.
     /// </summary>
     private static IMessagingProvider? _currentProvider;
+
+    /// <summary>The id of the stored connection <see cref="_currentProvider"/> was connected from; null when none. Guarded by <see cref="_providerLock"/>.</summary>
+    private static string? _currentConnectionId;
     private static readonly object _providerLock = new();
 
     // Static logger used by the SetCurrentProviderAsync helper, which is static
@@ -56,15 +59,17 @@ public class ConnectionsController : ControllerBase
 
     /// <summary>
     /// Sets the current messaging provider instance (thread-safe).
-    /// Disposes the previous provider if one exists.
+    /// Disposes the previous provider if one exists. <paramref name="connectionId"/> is the stored connection the
+    /// provider was connected from, null when the provider is null.
     /// </summary>
-    private static async Task SetCurrentProviderAsync(IMessagingProvider? provider)
+    private static async Task SetCurrentProviderAsync(IMessagingProvider? provider, string? connectionId)
     {
         IMessagingProvider? oldProvider;
         lock (_providerLock)
         {
             oldProvider = _currentProvider;
             _currentProvider = provider;
+            _currentConnectionId = provider == null ? null : connectionId;
         }
 
         // Dispose old provider outside the lock to avoid deadlocks
@@ -276,7 +281,7 @@ public class ConnectionsController : ControllerBase
             }
 
             // Store the provider for use by other controllers
-            await SetCurrentProviderAsync(provider);
+            await SetCurrentProviderAsync(provider, id);
 
             try
             {
@@ -295,7 +300,8 @@ public class ConnectionsController : ControllerBase
                 target = provider.CurrentTarget,
                 providerType = provider.ProviderType.ToString(),
                 // Keep @namespace for backward compatibility with Azure Service Bus
-                @namespace = provider.CurrentTarget
+                @namespace = provider.CurrentTarget,
+                connectionId = id
             });
         }
         catch (Exception ex)
@@ -357,7 +363,7 @@ public class ConnectionsController : ControllerBase
                 var providerType = provider.ProviderType;
 
                 // Clear and dispose the provider
-                await SetCurrentProviderAsync(null);
+                await SetCurrentProviderAsync(null, null);
 
                 _logger.LogInformation("Disconnected from {Target} ({ProviderType})", target, providerType);
 
@@ -388,7 +394,13 @@ public class ConnectionsController : ControllerBase
     [HttpGet("status")]
     public ActionResult GetStatus()
     {
-        var provider = CurrentProvider;
+        IMessagingProvider? provider;
+        string? connectionId;
+        lock (_providerLock)
+        {
+            provider = _currentProvider;
+            connectionId = _currentConnectionId;
+        }
 
         if (provider != null && provider.IsConnected)
         {
@@ -398,7 +410,8 @@ public class ConnectionsController : ControllerBase
                 target = provider.CurrentTarget,
                 providerType = provider.ProviderType.ToString(),
                 // Keep @namespace for backward compatibility
-                @namespace = provider.CurrentTarget
+                @namespace = provider.CurrentTarget,
+                connectionId
             });
         }
 
@@ -504,6 +517,10 @@ public class ConnectionsController : ControllerBase
     public async Task<ActionResult> DeleteConnection(string id)
     {
         await _connectionManager.DeleteConnectionAsync(id);
+        lock (_providerLock)
+        {
+            if (_currentConnectionId == id) _currentConnectionId = null;
+        }
         return NoContent();
     }
 
@@ -752,7 +769,7 @@ public class ConnectionsController : ControllerBase
             if (provider != null)
             {
                 _logger.LogInformation("Disconnecting active {ProviderType} provider before clear", provider.ProviderType);
-                await SetCurrentProviderAsync(null);
+                await SetCurrentProviderAsync(null, null);
             }
 
             // Also disconnect legacy service for backward compatibility

@@ -18,6 +18,8 @@ What changed when in the project [[pages/services/api|Api]] describes, newest fi
 
 ## 2026-11-19
 
+- `GET api/connections/status` and the connect answer name the stored connection that is active as `connectionId`, the id the list already answers; there is none after a disconnect, a connect that failed with nothing active, a clear-all, or the deletion of that connection, which leaves the provider connected (`src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs#_currentConnectionId`, `src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs#DeleteConnection`, `src/ServiceBusExplorer.Api.Tests/ConnectionLastUsedTests.cs#The_status_names_the_stored_connection_that_is_active_and_names_none_after_a_disconnect`, `src/ServiceBusExplorer.Api.Tests/ConnectionLastUsedTests.cs#Deleting_the_active_connection_leaves_the_status_naming_no_stored_connection`).
+
 - A second review by Codex found one log call that formatted a broker's error text into its words, readable on the new Logs route; it now logs the reason code, and a test reads every log call of the two projects for an exception's message (`src/ServiceBusExplorer.Api.Tests/RecentLogTests.cs#No_log_call_of_the_application_formats_the_message_of_an_exception_into_its_words`).
 
 - An operation the broker refuses as not authorised answers 502 with a fixed sentence saying what it needs, on every route, where it was the constant 500; the owner's log lines showed the refusal on reads and it can happen on any operation (`src/ServiceBusExplorer.Api/Controllers/EntityAdministrationResults.cs#Unhandled`, `src/ServiceBusExplorer.Api.Tests/MessageRouteTests.cs#An_operation_the_broker_refuses_as_not_authorised_answers_502_saying_what_it_needs_and_nothing_of_the_broker`).

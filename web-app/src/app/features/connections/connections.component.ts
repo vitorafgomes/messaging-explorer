@@ -395,7 +395,14 @@ export class ConnectionsComponent implements OnInit {
       }
     });
 
+    this.connectionService.connectionStatus$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.markActive());
     this.loadData();
+  }
+
+  /** Marks each connection by {@link isActive}, so the list and the status can answer in either order. */
+  private markActive(): void {
+    this.connections.set(this.connections().map(c => ({ ...c, isConnected: this.isActive(c) })));
+    this.buildTree();
   }
 
   loadData() {
@@ -445,8 +452,8 @@ export class ConnectionsComponent implements OnInit {
 
         this.addDebugLog('Signals updated with new data');
 
-        // Build tree (with auto-expand)
-        this.buildTree();
+        // Mark the active connection and build the tree
+        this.markActive();
 
         // Force change detection and tick
         this.cdr.detectChanges();
@@ -546,15 +553,6 @@ export class ConnectionsComponent implements OnInit {
       takeUntilDestroyed(this.destroyRef)
     ).subscribe({
       next: (status) => {
-        // Update connection status in the UI
-        connection.isConnected = true;
-        // Mark all other connections as disconnected
-        this.connections().forEach(conn => {
-          if (conn.id !== connection.id) {
-            conn.isConnected = false;
-          }
-        });
-
         this.snackBar.open(`Connected to ${status.namespace}`, 'Close', { duration: 3000 });
         // Navigate to entities view automatically after successful connection
         this.router.navigate(['/entities']);
@@ -631,11 +629,12 @@ export class ConnectionsComponent implements OnInit {
     return 'Ungrouped, no environment';
   }
 
-  /** Active by what the service knows now: the id it connected, or the target the API reports. */
+  /** Active by what the service knows now: the id of the active connection when it knows one, else the target the API reports. */
   private isActive(connection: ServiceBusConnection): boolean {
     const service = this.connectionService;
-    return service.currentConnectionId === connection.id
-      || (service.isConnected && service.currentNamespace === getConnectionDisplayTarget(connection));
+    return service.currentConnectionId
+      ? service.currentConnectionId === connection.id
+      : service.isConnected && service.currentNamespace === getConnectionDisplayTarget(connection);
   }
 
   exportConfiguration() {

@@ -145,11 +145,7 @@ export class SettingsComponent {
   }
 
   retry(): void {
-    if (this.updates.failedDuring() === 'download' && this.agreedToUpdate()) {
-      this.downloadUpdate();
-    } else {
-      void this.updates.check();
-    }
+    void this.updates.check();
   }
 
   openBugReport(type: 'bug' | 'feature'): void {

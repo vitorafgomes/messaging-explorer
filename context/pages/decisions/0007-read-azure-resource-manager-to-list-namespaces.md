@@ -2,9 +2,9 @@
 title: "ADR 0007 - Read Azure Resource Manager to list the namespaces"
 version: "1.0"
 date: 2026-11-19
-changes: "Initial ADR draft"
+changes: "2026-11-19: accepted, built and released in 2.5.0. Initial ADR draft"
 page_type: adr
-status: proposed
+status: accepted
 description: "The add dialog signs in first and lists the subscriptions and Service Bus namespaces of the account from Azure Resource Manager, with a token of the Resource Manager scope kept in the API's memory only."
 supersedes: ""
 superseded_by: ""

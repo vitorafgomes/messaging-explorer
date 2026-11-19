@@ -439,8 +439,10 @@ describe('SettingsComponent', () => {
     expect(link).toEqual([`${RELEASES_URL}/tag/v2.5.0`]);
     expect(words(el.querySelector('[data-testid="update-state"] a'))).toBe('Open the release page of 2.5.0 open_in_new');
 
+    const checks = shell.checkForUpdates.mock.calls.length;
     button('refresh Retry')!.click();
-    expect(shell.downloadUpdate).toHaveBeenCalledTimes(2);
+    expect(shell.checkForUpdates.mock.calls.length, 'Retry checks again: after a failed download the shell holds no version an agreement can be given for').toBe(checks + 1);
+    expect(shell.downloadUpdate, 'Retry starts no download by itself').toHaveBeenCalledTimes(1);
   });
 
   it('Retry after a failed download that has no agreement checks again, so the agreement can be given, and downloads nothing', async () => {

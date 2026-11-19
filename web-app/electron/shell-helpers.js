@@ -349,7 +349,8 @@ function followFoundVersion(updater) {
 /** Downloads the update the last check found, only with the user's agreement to that very version. Never throws. */
 async function downloadAgreedUpdate({ agreed, version, found, updater }) {
   if (agreed !== true) return { status: 'error', message: 'Nothing is downloaded without your agreement.' };
-  if (typeof version !== 'string' || version !== found) {
+  if (typeof found !== 'string') return { status: 'error', message: 'No update is on offer right now: a check is running or the last one found none. Check again and agree to the version shown.' };
+  if (version !== found) {
     return { status: 'error', message: 'The version found is not the one you agreed to. Check again and agree to the version shown.' };
   }
   try {

@@ -406,10 +406,16 @@ test('the update found by the check downloads only with the agreement of the use
     assert.deepEqual(await downloadAgreedUpdate({ agreed, version: '2.5.0', found: '2.5.0', updater }), { status: 'error', message: 'Nothing is downloaded without your agreement.' });
     assert.deepEqual(updater.calls, []);
   }
-  for (const [version, found] of [['2.5.0', '2.5.1'], [undefined, '2.5.0'], ['2.5.0', null], [undefined, undefined], [{}, {}]]) {
+  for (const [version, found] of [['2.5.0', '2.5.1'], [undefined, '2.5.0'], [{}, '2.5.0']]) {
     const updater = fakeUpdater();
     assert.deepEqual(await downloadAgreedUpdate({ agreed: true, version, found, updater }),
       { status: 'error', message: 'The version found is not the one you agreed to. Check again and agree to the version shown.' });
+    assert.deepEqual(updater.calls, []);
+  }
+  for (const [version, found] of [['2.5.0', null], [undefined, undefined], [{}, {}]]) {
+    const updater = fakeUpdater();
+    assert.deepEqual(await downloadAgreedUpdate({ agreed: true, version, found, updater }),
+      { status: 'error', message: 'No update is on offer right now: a check is running or the last one found none. Check again and agree to the version shown.' });
     assert.deepEqual(updater.calls, []);
   }
   const updater = fakeUpdater();

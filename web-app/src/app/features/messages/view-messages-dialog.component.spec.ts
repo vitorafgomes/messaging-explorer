@@ -873,6 +873,15 @@ describe('ViewMessagesDialogComponent: transfer dead-letter queue, message state
     const result = (failures: { sequenceNumber: number; error: string }[], successCount = 0): BatchOperationResult =>
       ({ success: failures.length === 0, successCount, failureCount: failures.length, failures });
 
+    it('deferred messages selected on a subscription: one note says the resubmit goes to the topic, to every subscription, and that a filter may keep them from coming back', () => {
+      const { component, el, refresh } = wired({ entityType: 'subscription', topicName: 'sales', entityName: 'eu' }, { active: mixed() }, deferral);
+      selectAll(component);
+      refresh();
+
+      expect(Array.from(el.querySelectorAll('[role="note"]')).map(n => text(n)).filter(t => t.includes('topic')))
+        .toEqual(['Resubmit publishes to the topic sales. Every subscription of sales receives these messages again, not only eu, and a filter on eu may keep them from coming back to it.']);
+    });
+
     it('hidden when the provider does not declare deferral, even with deferred messages selected', () => {
       const { component, el, refresh } = wired({}, { active: mixed() }, withTransfer);
       selectAll(component);

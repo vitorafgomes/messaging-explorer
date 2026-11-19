@@ -1,3 +1,7 @@
+## [2026-11-19] integrate | After 2.5.0: the order of work on one branch
+
+The plan of what is built after the 2.5.0 release, with the MCP server first as the owner asked, listed in the roadmap index.
+
 ## [2026-11-19] feature | Connections as a tree, notes that hide, a body of any AMQP kind, and three gaps of the Connections artboard
 The list by client and environment; release notes that expand and hide; a value or sequence body is read; a refused credential is named, a client is deleted with its environments, an export is saved where the user chooses. [[pages/services/web-app/features-connections]]
 

@@ -18,6 +18,8 @@ What changed when in the project [[pages/services/web-app|Web App]] describes, n
 
 ## 2026-11-19
 
+- Retry after a failed download checks again and starts no download by itself: after a failure the shell holds no version an agreement can be given for, so a repeated download was always refused (`web-app/src/app/features/settings/settings.component.ts#retry`, `web-app/src/app/features/settings/settings.component.spec.ts#a failed download says why, that nothing was installed, retries the download and links the release`). The note for deferred messages selected on a subscription is the same single note as on the dead-letter tabs (`web-app/src/app/features/messages/view-messages-dialog.component.spec.ts#deferred messages selected on a subscription: one note says the resubmit goes to the topic, to every subscription, and that a filter may keep them from coming back`).
+
 - **One note where a subscription resubmits.** The messages dialog and the automatic resubmit showed two notes at once that both said the resubmit goes to the topic: one named the other subscriptions, the other the filters of this one. One note now says both (`web-app/src/app/features/messages/view-messages-dialog.component.spec.ts#the dead-letter tab of a subscription says that the topic sends a resubmit to every subscription`, `web-app/src/app/features/messages/continuous-resubmit-dialog.component.spec.ts#on a subscription the dialog says that the topic sends every resubmitted message to all its subscriptions`); the note on the active tab for selected deferred messages is as it was. The automatic resubmit artboard draws the one note.
 
 - Logs: the screen keeps only its calls that got no answer; a failure the backend answered was shown and counted twice.
@@ -31,6 +33,8 @@ What changed when in the project [[pages/services/web-app|Web App]] describes, n
 - **Connections is a tree of client, environment and connection,** with environments that hide and show and are remembered. [[pages/services/web-app/features-connections]]
 
 - **Add Connection signs in first, then picks.** Three steps as the artboard draws them; Service Principal and Default credential leave the Add screen and still edit. [[pages/services/web-app/features-connections]]
+
+- **Connections keeps the Connected mark when its list is loaded again,** after a navigation back or a reload, where the mark set at connect was lost. The service takes the active id from the status (`web-app/src/app/core/services/connection.service.ts#readStatus`); the screen marks the list each time the list or the status arrives, in either order, and an id the service knows wins over the target, so of two connections to one target only the named one is marked (`web-app/src/app/features/connections/connections.component.ts#markActive`, `web-app/src/app/features/connections/connections.component.spec.ts#the card of the connection the API names as active shows Connected after the list is loaded again`). The end-to-end test that pinned the loss as an expected failure now runs as a plain test (`web-app/e2e/rabbitmq.e2e.ts#the Connections screen marks the active connection after navigating back to it`).
 
 ## 2026-11-16
 
