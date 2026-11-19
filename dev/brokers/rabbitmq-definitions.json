@@ -40,6 +40,33 @@
       "auto_delete": false,
       "internal": false,
       "arguments": {}
+    },
+    {
+      "name": "logs",
+      "vhost": "/",
+      "type": "fanout",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "direct_logs",
+      "vhost": "/",
+      "type": "direct",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "topic_logs",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
     }
   ],
   "queues": [
@@ -65,6 +92,87 @@
       "durable": true,
       "auto_delete": false,
       "arguments": {}
+    },
+    {
+      "name": "hello",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "task_queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "logs.screen",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "logs.file",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "direct_logs.errors",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "direct_logs.all",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "topic_logs.kern",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "topic_logs.critical",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "rpc_queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "rpc.replies",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "stream.hello",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "stream"
+      }
     }
   ],
   "bindings": [
@@ -90,6 +198,70 @@
       "destination": "orders.failed",
       "destination_type": "queue",
       "routing_key": "",
+      "arguments": {}
+    },
+    {
+      "source": "logs",
+      "vhost": "/",
+      "destination": "logs.screen",
+      "destination_type": "queue",
+      "routing_key": "",
+      "arguments": {}
+    },
+    {
+      "source": "logs",
+      "vhost": "/",
+      "destination": "logs.file",
+      "destination_type": "queue",
+      "routing_key": "",
+      "arguments": {}
+    },
+    {
+      "source": "direct_logs",
+      "vhost": "/",
+      "destination": "direct_logs.errors",
+      "destination_type": "queue",
+      "routing_key": "error",
+      "arguments": {}
+    },
+    {
+      "source": "direct_logs",
+      "vhost": "/",
+      "destination": "direct_logs.all",
+      "destination_type": "queue",
+      "routing_key": "info",
+      "arguments": {}
+    },
+    {
+      "source": "direct_logs",
+      "vhost": "/",
+      "destination": "direct_logs.all",
+      "destination_type": "queue",
+      "routing_key": "warning",
+      "arguments": {}
+    },
+    {
+      "source": "direct_logs",
+      "vhost": "/",
+      "destination": "direct_logs.all",
+      "destination_type": "queue",
+      "routing_key": "error",
+      "arguments": {}
+    },
+    {
+      "source": "topic_logs",
+      "vhost": "/",
+      "destination": "topic_logs.kern",
+      "destination_type": "queue",
+      "routing_key": "kern.*",
+      "arguments": {}
+    },
+    {
+      "source": "topic_logs",
+      "vhost": "/",
+      "destination": "topic_logs.critical",
+      "destination_type": "queue",
+      "routing_key": "*.critical",
       "arguments": {}
     }
   ]

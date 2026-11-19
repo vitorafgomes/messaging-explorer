@@ -12,7 +12,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { delay } from 'rxjs/operators';
 import { EntitySelection, QueueInfo, TopicInfo, SubscriptionInfo, TreeNode, SubscriptionNodeData } from '../../core/models';
-import { EntitySelectionService, QueueService, TopicService, ConnectionService, ResubmitRun, ResubmitRunService, TreeDataBuilderService } from '../../core/services';
+import { EntitySelectionService, QueueService, TopicService, ConnectionService, ResubmitRun, ResubmitRunService, TreeDataBuilderService, EntityCounts, EntityCountsService } from '../../core/services';
 import { SendMessageDialogComponent, SendMessageDialogData } from '../messages/send-message-dialog.component';
 import { ImportMessagesDialogComponent } from '../messages/import-messages-dialog.component';
 import { ViewMessagesDialogComponent } from '../messages/view-messages-dialog.component';
@@ -258,32 +258,36 @@ type PropertyRow = [label: string, value: string];
                 </div>
               </header>
 
+              @if (!countsReported()) {
+                <p class="counts-note" role="note" data-testid="no-counts-note">
+                  <mat-icon fontIcon="info" aria-hidden="true" />
+                  This broker does not report message counts, so none is shown. Open a card to read the messages.
+                </p>
+              }
               <div class="entity-stats">
                 <div class="stat-card metric-card clickable" role="button" tabindex="0"
-                  [attr.aria-label]="'View the ' + active + ' active messages'"
+                  [attr.aria-label]="countsReported() ? 'View the ' + active + ' active messages' : 'View the active messages'"
                   (click)="viewMessages(0)"
                   (keydown.enter)="viewMessages(0)"
                   (keydown.space)="$event.preventDefault(); viewMessages(0)">
                   <span class="stat-label">Active</span>
-                  <span class="stat-value metric-value">{{ active | number }}</span>
+                  <span class="stat-value metric-value">{{ countsReported() ? (active | number) : '—' }}</span>
                   <span class="stat-note">Open the active messages</span>
                 </div>
-                @if (!isQueue) {
-                  <app-transfer-monitor
-                    [topicName]="holder.topicName"
-                    [subscriptionName]="holder.name"
-                    (subscriptionUpdated)="onSubscriptionUpdated($event)" />
-                }
+                <app-transfer-monitor
+                  [topicName]="isQueue ? null : holder.topicName"
+                  [entityName]="holder.name"
+                  (countsRead)="onCountsRead($event)" />
                 @if (supports('supportsDeadLetterQueue')) {
                   <div class="dead-letter-card" [class.warning]="deadLetter > 0">
                     <div class="stat-card metric-card clickable" role="button" tabindex="0"
-                      [attr.aria-label]="'View the ' + deadLetter + ' dead-letter messages'"
+                      [attr.aria-label]="countsReported() ? 'View the ' + deadLetter + ' dead-letter messages' : 'View the dead-letter messages'"
                       (click)="viewMessages(1)"
                       (keydown.enter)="viewMessages(1)"
                       (keydown.space)="$event.preventDefault(); viewMessages(1)">
                       <span class="stat-label">@if (deadLetter > 0) {<mat-icon class="label-icon" fontIcon="warning" aria-hidden="true" />}Dead-letter</span>
-                      <span class="stat-value metric-value">{{ deadLetter | number }}</span>
-                      <span class="stat-note">{{ deadLetter > 0 ? 'Open to resubmit or delete' : 'None waiting' }}</span>
+                      <span class="stat-value metric-value">{{ countsReported() ? (deadLetter | number) : '—' }}</span>
+                      <span class="stat-note">{{ !countsReported() ? 'Open the dead-letter messages' : deadLetter > 0 ? 'Open to resubmit or delete' : 'None waiting' }}</span>
                     </div>
                     @if (autoResubmitRun(); as run) {
                       <div class="run-line">
@@ -299,7 +303,7 @@ type PropertyRow = [label: string, value: string];
                     }
                   </div>
                 }
-                @if (isQueue && supports('supportsScheduledMessages')) {
+                @if (isQueue && supports('supportsScheduledMessages') && countsReported() && holder.scheduledMessageCount > 0) {
                   <div class="stat-card metric-card clickable" role="button" tabindex="0"
                     [attr.aria-label]="'View the ' + holder.scheduledMessageCount + ' scheduled messages'"
                     (click)="viewMessages(0, 'Scheduled')"
@@ -310,14 +314,14 @@ type PropertyRow = [label: string, value: string];
                     <span class="stat-note">Not yet deliverable</span>
                   </div>
                 }
-                @if (supports('supportsAutoForwarding')) {
+                @if (supports('supportsAutoForwarding') && countsReported()) {
                   <div class="stat-card metric-card">
                     <span class="stat-label">Transfer</span>
                     <span class="stat-value metric-value">{{ (holder.transferMessageCount ?? 0) | number }}</span>
                     <span class="stat-note">Waiting to be forwarded</span>
                   </div>
                 }
-                @if (supports('supportsAutoForwarding') && supports('supportsDeadLetterQueue')) {
+                @if (supports('supportsAutoForwarding') && supports('supportsDeadLetterQueue') && countsReported() && (holder.transferDeadLetterMessageCount ?? 0) > 0) {
                   <div class="stat-card metric-card"
                     [class.clickable]="transferDeadLetterReachable()"
                     [attr.role]="transferDeadLetterReachable() ? 'button' : null"
@@ -335,7 +339,7 @@ type PropertyRow = [label: string, value: string];
                   <div class="stat-card metric-card">
                     <span class="stat-label">Size</span>
                     <span class="stat-value metric-value">{{ formatSize(holder.sizeInBytes) }}</span>
-                    <span class="stat-note">{{ holder.maxSizeInMegabytes != null ? 'Max Size ' + megabytes(holder.maxSizeInMegabytes) : '' }}</span>
+                    <span class="stat-note">{{ holder.maxSizeInMegabytes ? 'Max Size ' + megabytes(holder.maxSizeInMegabytes) : '' }}</span>
                   </div>
                 }
               </div>
@@ -435,7 +439,9 @@ export class EntityDetailsComponent {
     return count === null ? 'Rules' : `Rules (${count})`;
   });
 
-  // Live subscription counts (updated by TransferMonitorComponent polling)
+  private readonly counts = inject(EntityCountsService);
+
+  // Live counts of the queue or subscription shown (updated by TransferMonitorComponent polling)
   liveActiveCount = signal<number | null>(null);
   liveDeadLetterCount = signal<number | null>(null);
 
@@ -468,6 +474,9 @@ export class EntityDetailsComponent {
       this.rulesCount.set(Array.isArray(rules) ? rules.length : null);
     });
   }
+
+  /** False on a broker that answers no message counts, such as the Service Bus emulator: a card then shows no number. */
+  readonly countsReported = computed(() => this.providerService.capabilities()?.supportsMessageCounts !== false);
 
   /** False only when the connected broker declares it lacks the feature. */
   supports(feature: keyof ProviderCapabilities): boolean {
@@ -584,34 +593,45 @@ export class EntityDetailsComponent {
     return [rows.slice(0, half), rows.slice(half)];
   }
 
+  /** The rows a broker has: one whose concept the provider declares it lacks, or whose value is the "none" of a limit, is left out. */
+  private rowsShown(rows: (PropertyRow | false)[]): PropertyRow[] {
+    return rows.filter((row): row is PropertyRow => row !== false);
+  }
+
+  private hasNoLock(duration: string | null | undefined): boolean {
+    if (!duration) return false;
+    const { days, hours, minutes, seconds, milliseconds } = parseDuration(duration);
+    return days + hours + minutes + seconds + milliseconds === 0;
+  }
+
   queueProperties(queue: QueueInfo): PropertyRow[] {
-    return [
-      ['Max Delivery Count', queue.maxDeliveryCount != null ? String(queue.maxDeliveryCount) : NOT_SET],
-      ['Lock Duration', this.formatDuration(queue.lockDuration)],
+    return this.rowsShown([
+      queue.maxDeliveryCount !== 0 && ['Max Delivery Count', queue.maxDeliveryCount != null ? String(queue.maxDeliveryCount) : NOT_SET],
+      !this.hasNoLock(queue.lockDuration) && ['Lock Duration', this.formatDuration(queue.lockDuration)],
       ['Message TTL', this.formatDuration(queue.defaultMessageTimeToLive)],
-      ['Max Size', queue.maxSizeInMegabytes != null ? `${this.megabytes(queue.maxSizeInMegabytes)}` : NOT_SET],
-      ['Requires Session', queue.requiresSession ? 'Yes' : 'No'],
+      queue.maxSizeInMegabytes !== 0 && ['Max Size', queue.maxSizeInMegabytes != null ? `${this.megabytes(queue.maxSizeInMegabytes)}` : NOT_SET],
+      this.supports('supportsSessions') && ['Requires Session', queue.requiresSession ? 'Yes' : 'No'],
       ['Partitioning', queue.enablePartitioning ? 'Enabled' : 'Disabled'],
       ['Status', queue.status || NOT_SET],
       ['Dead-lettering On Expiration', this.enabledText(queue.deadLetteringOnMessageExpiration)],
       ['Auto Delete On Idle', this.formatDuration(queue.autoDeleteOnIdle)],
-      ['Forward To', queue.forwardTo || NOT_SET],
-      ['Forward Dead-lettered To', queue.forwardDeadLetteredMessagesTo || NOT_SET],
-      ['Duplicate Detection', this.duplicateDetectionText(queue)],
+      this.supports('supportsAutoForwarding') && ['Forward To', queue.forwardTo || NOT_SET],
+      this.supports('supportsAutoForwarding') && ['Forward Dead-lettered To', queue.forwardDeadLetteredMessagesTo || NOT_SET],
+      this.supports('supportsDuplicateDetection') && ['Duplicate Detection', this.duplicateDetectionText(queue)],
       ['User Metadata', queue.userMetadata || NOT_SET],
       ['Created At (UTC)', this.formatDate(queue.createdAt)],
       ['Updated At (UTC)', this.formatDate(queue.updatedAt)],
       ['Accessed At (UTC)', this.formatDate(queue.accessedAt)]
-    ];
+    ]);
   }
 
   topicProperties(topic: TopicInfo): PropertyRow[] {
-    return [
+    return this.rowsShown([
       ['Status', topic.status || NOT_SET],
-      ['Max Size', topic.maxSizeInMegabytes != null ? `${this.megabytes(topic.maxSizeInMegabytes)}` : NOT_SET],
+      topic.maxSizeInMegabytes !== 0 && ['Max Size', topic.maxSizeInMegabytes != null ? `${this.megabytes(topic.maxSizeInMegabytes)}` : NOT_SET],
       ['Message Time To Live', this.formatDuration(topic.defaultMessageTimeToLive)],
       ['Auto Delete On Idle', this.formatDuration(topic.autoDeleteOnIdle)],
-      ['Duplicate Detection', this.duplicateDetectionText(topic)],
+      this.supports('supportsDuplicateDetection') && ['Duplicate Detection', this.duplicateDetectionText(topic)],
       ['Batched Operations', this.enabledText(topic.enableBatchedOperations)],
       ['Partitioning', this.enabledText(topic.enablePartitioning)],
       ['Support Ordering', this.enabledText(topic.supportOrdering)],
@@ -619,21 +639,21 @@ export class EntityDetailsComponent {
       ['Created At (UTC)', this.formatDate(topic.createdAt)],
       ['Updated At (UTC)', this.formatDate(topic.updatedAt)],
       ['Accessed At (UTC)', this.formatDate(topic.accessedAt)]
-    ];
+    ]);
   }
 
   subscriptionProperties(subscription: SubscriptionInfo): PropertyRow[] {
     const yesNo = (value: boolean | null | undefined) => value == null ? NOT_SET : value ? 'Yes' : 'No';
-    return [
+    return this.rowsShown([
       ['Topic Name', subscription.topicName || NOT_SET],
-      ['Lock Duration', this.formatDuration(subscription.lockDuration)],
-      ['Max Delivery Count', subscription.maxDeliveryCount != null ? String(subscription.maxDeliveryCount) : NOT_SET],
+      !this.hasNoLock(subscription.lockDuration) && ['Lock Duration', this.formatDuration(subscription.lockDuration)],
+      subscription.maxDeliveryCount !== 0 && ['Max Delivery Count', subscription.maxDeliveryCount != null ? String(subscription.maxDeliveryCount) : NOT_SET],
       ['Default Message Time To Live', this.formatDuration(subscription.defaultMessageTimeToLive)],
       ['Auto Delete On Idle', this.formatDuration(subscription.autoDeleteOnIdle)],
-      ['Forward To', subscription.forwardTo || NOT_SET],
-      ['Forward Dead-lettered Messages To', subscription.forwardDeadLetteredMessagesTo || NOT_SET],
+      this.supports('supportsAutoForwarding') && ['Forward To', subscription.forwardTo || NOT_SET],
+      this.supports('supportsAutoForwarding') && ['Forward Dead-lettered Messages To', subscription.forwardDeadLetteredMessagesTo || NOT_SET],
       ['Status', subscription.status || NOT_SET],
-      ['Enable Sessions', yesNo(subscription.requiresSession)],
+      this.supports('supportsSessions') && ['Enable Sessions', yesNo(subscription.requiresSession)],
       ['Enable Dead Lettering On Message Expiration', yesNo(subscription.deadLetteringOnMessageExpiration)],
       ['Enable Dead Lettering On Filter Evaluation Exceptions', yesNo(subscription.deadLetteringOnFilterEvaluationExceptions)],
       ['Enable Batched Operations', yesNo(subscription.enableBatchedOperations)],
@@ -641,7 +661,7 @@ export class EntityDetailsComponent {
       ['Created At (UTC)', this.formatDate(subscription.createdAt)],
       ['Updated At (UTC)', this.formatDate(subscription.updatedAt)],
       ['Accessed At (UTC)', this.formatDate(subscription.accessedAt)]
-    ];
+    ]);
   }
 
   getTopicNameFromNode(node: TreeNode): string {
@@ -715,8 +735,8 @@ export class EntityDetailsComponent {
       entityType = 'queue';
       entityName = this.selection.node.name;
       const queueEntity = this.selection.entity as QueueInfo;
-      activeMessageCount = queueEntity?.activeMessageCount;
-      deadLetterMessageCount = queueEntity?.deadLetterMessageCount;
+      activeMessageCount = this.liveActiveCount() ?? queueEntity?.activeMessageCount;
+      deadLetterMessageCount = this.liveDeadLetterCount() ?? queueEntity?.deadLetterMessageCount;
       transferDeadLetterMessageCount = queueEntity?.transferDeadLetterMessageCount;
       targetDetectsDuplicates = queueEntity?.requiresDuplicateDetection;
     } else if (this.selection.type === 'subscription') {
@@ -724,8 +744,8 @@ export class EntityDetailsComponent {
       entityName = this.selection.node.name;
       const subscriptionEntity = this.selection.entity as SubscriptionInfo;
       topicName = subscriptionEntity?.topicName;
-      activeMessageCount = subscriptionEntity?.activeMessageCount;
-      deadLetterMessageCount = subscriptionEntity?.deadLetterMessageCount;
+      activeMessageCount = this.liveActiveCount() ?? subscriptionEntity?.activeMessageCount;
+      deadLetterMessageCount = this.liveDeadLetterCount() ?? subscriptionEntity?.deadLetterMessageCount;
       transferDeadLetterMessageCount = subscriptionEntity?.transferDeadLetterMessageCount;
     } else {
       return;
@@ -938,8 +958,8 @@ export class EntityDetailsComponent {
           this.selectionService.refreshCurrentSelection();
           this.selectionService.refreshTree();
         },
-        error: () => {
-          this.snackBar.open('Failed to purge messages', 'Close', { duration: 3000 });
+        error: err => {
+          this.snackBar.open(messageCallFailure(err, 'Failed to purge messages'), 'Close', { duration: 5000 });
         }
       });
     } else if (this.selection?.type === 'subscription' && this.subscription) {
@@ -952,23 +972,22 @@ export class EntityDetailsComponent {
           this.selectionService.refreshCurrentSelection();
           this.selectionService.refreshTree();
         },
-        error: () => {
-          this.snackBar.open('Failed to purge messages', 'Close', { duration: 3000 });
+        error: err => {
+          this.snackBar.open(messageCallFailure(err, 'Failed to purge messages'), 'Close', { duration: 5000 });
         }
       });
     }
   }
 
-  onSubscriptionUpdated(sub: SubscriptionInfo) {
-    this.liveActiveCount.set(sub.activeMessageCount);
-    this.liveDeadLetterCount.set(sub.deadLetterMessageCount);
+  /** The counts just read for the entity shown: the panel shows them, and so does every other display of that entity. */
+  onCountsRead(read: EntityCounts & { key: string }) {
+    this.counts.put(read.key, read);
 
-    // Update tree node data so badges in the sidebar update in real-time
     const sel = this.selectionService.currentSelection;
-    if (sel?.type === 'subscription' && sel.node?.data) {
-      const nodeData = sel.node.data as SubscriptionNodeData;
-      nodeData.activeMessageCount = sub.activeMessageCount;
-      nodeData.deadLetterMessageCount = sub.deadLetterMessageCount;
+    const entity = sel?.entity as { name?: string; topicName?: string } | undefined;
+    if (entity?.name && read.key === EntityCountsService.key(entity.name, sel?.type === 'subscription' ? entity.topicName : null)) {
+      this.liveActiveCount.set(read.activeMessageCount);
+      this.liveDeadLetterCount.set(read.deadLetterMessageCount);
     }
   }
 

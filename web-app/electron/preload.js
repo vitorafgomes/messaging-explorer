@@ -33,6 +33,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setUpdateChannel: (channel) => ipcRenderer.invoke('set-update-channel', channel),
   getUpdateChannel: () => ipcRenderer.invoke('get-update-channel'),
 
+  // The versions of the chosen channel; takes no argument, so the page cannot name an address or a repository
+  listUpdateVersions: () => ipcRenderer.invoke('list-update-versions'),
+  installUpdateVersion: (version, agreed) => ipcRenderer.invoke('install-update-version', { version, agreed }),
+
   // Why this package cannot update itself, or null
   getSelfUpdateBlocker: () => ipcRenderer.invoke('get-self-update-blocker'),
 

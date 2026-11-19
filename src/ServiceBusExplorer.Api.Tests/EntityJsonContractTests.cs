@@ -55,6 +55,7 @@ public class EntityJsonContractTests
             nameof(IMessagingProvider.GetQueuesAsync) => Task.FromResult<IEnumerable<IQueueEntity>>(new List<QueueInfo> { Queue, new() { Name = "paused", Status = "SendDisabled" } }),
             nameof(IMessagingProvider.GetTopicsAsync) => Task.FromResult<IEnumerable<ITopicEntity>>(new List<TopicInfo> { new() { Name = "events", Status = "ReceiveDisabled" } }),
             nameof(IMessagingProvider.PeekMessagesAsync) => Task.FromResult<IEnumerable<IMessage>>(new List<IMessage> { Message }),
+            "get_" + nameof(IMessagingProvider.Capabilities) => new ServiceBusExplorer.Core.Providers.Azure.AzureProviderCapabilities(),
             nameof(IMessagingProvider.SearchMessagesAsync) => Task.FromResult(new MessageSearchResult { Messages = new List<IMessage> { Message }, TotalPeeked = 1, TotalMatches = 1 }),
             _ => throw new NotSupportedException(m.Name)
         });

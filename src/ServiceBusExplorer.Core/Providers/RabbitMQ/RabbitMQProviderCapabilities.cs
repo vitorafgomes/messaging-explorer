@@ -101,6 +101,9 @@ public class RabbitMQProviderCapabilities : IProviderCapabilities
     public bool SupportsTransferDeadLetter => false;
 
     /// <inheritdoc />
+    public bool SupportsMessageCounts => true;
+
+    /// <inheritdoc />
     public bool SupportsDefinitions => false;
 
     /// <inheritdoc />
@@ -164,7 +167,10 @@ public class RabbitMQProviderCapabilities : IProviderCapabilities
     public bool SupportsManualDeadLetter => false;
 
     /// <inheritdoc />
-    public bool SupportsBulkMessageOperations => false;
+    public bool SupportsMessageSearch => false;
+
+    /// <inheritdoc />
+    public bool SupportsBulkMessageOperations => true;
 
     /// <inheritdoc />
     public bool SupportsBinaryBody => false;

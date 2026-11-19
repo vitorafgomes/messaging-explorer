@@ -61,4 +61,10 @@ public class BatchOperationFailure
     /// Error message describing the failure.
     /// </summary>
     public string Error { get; set; } = string.Empty;
+
+    /// <summary>
+    /// True when the message was sent, or may have been, and was not removed from its source: sending it again would
+    /// deliver a second copy, so a caller never retries it.
+    /// </summary>
+    public bool PossibleDuplicate { get; set; }
 }

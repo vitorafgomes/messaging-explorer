@@ -153,7 +153,7 @@ Each item lists what exists, what to build by layer, the SDK members, and its co
 
 ### 10. Live view of arriving messages
 
-- **Exists:** nothing streams. The subscription panel polls the entity's counts every three seconds (`web-app/src/app/features/entities/transfer-monitor.component.ts#ngOnInit`).
+- **Exists:** nothing streams. The panel polls the counts of the queue or subscription shown every three seconds (`web-app/src/app/features/entities/transfer-monitor.component.ts#ngOnInit`).
 - **Build, if wanted:** a live tail that polls a peek from the last seen sequence number. Not a receiver: a `ServiceBusProcessor` would take messages away from the real consumers.
 - **Performance:** poll interval with a floor, stops when the dialog closes or the window is hidden.
 - **Recommendation:** last. It is the least asked for and the easiest to misuse.

@@ -21,6 +21,9 @@ public class RabbitMQSendBatchTests
         var channel = new Mock<IModel>();
         channel.Setup(c => c.IsOpen).Returns(true);
         channel.Setup(c => c.CreateBasicProperties()).Returns(() => new Mock<IBasicProperties>().SetupAllProperties().Object);
+        var timedOut = false;
+        channel.Setup(c => c.WaitForConfirms(It.IsAny<TimeSpan>(), out timedOut)).Returns(true);
+        connection.Setup(c => c.CreateModel()).Returns(channel.Object);
         var call = 0;
         channel.Setup(c => c.BasicPublish(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<IBasicProperties>(), It.IsAny<ReadOnlyMemory<byte>>()))
             .Callback((string _, string _, bool _, IBasicProperties _, ReadOnlyMemory<byte> body) =>
@@ -85,6 +88,9 @@ public class RabbitMQSendBatchTests
         var channel = new Mock<IModel>();
         channel.Setup(c => c.IsOpen).Returns(true);
         channel.Setup(c => c.CreateBasicProperties()).Returns(() => new Mock<IBasicProperties>().SetupAllProperties().Object);
+        var timedOut = false;
+        channel.Setup(c => c.WaitForConfirms(It.IsAny<TimeSpan>(), out timedOut)).Returns(true);
+        connection.Setup(c => c.CreateModel()).Returns(channel.Object);
         channel.Setup(c => c.BasicPublish(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<IBasicProperties>(), It.IsAny<ReadOnlyMemory<byte>>()))
             .Callback((string _, string _, bool _, IBasicProperties _, ReadOnlyMemory<byte> body) =>
             {

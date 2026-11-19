@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal, DestroyRef } from '@angular/core';
+import { Component, OnInit, computed, inject, signal, DestroyRef } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
@@ -7,11 +7,13 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { Subscription, finalize } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { TopicService, ConnectionService, LoggerService } from '../../core/services';
+import { TopicService, ConnectionService, LoggerService, EntityCounts, EntityCountsService } from '../../core/services';
+import { ProviderService } from '../../core/services/provider.service';
 import { TopicInfo, SubscriptionInfo } from '../../core/models';
 import { SendMessageDialogComponent } from '../messages/send-message-dialog.component';
 import { ViewMessagesDialogComponent } from '../messages/view-messages-dialog.component';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
+import { messageCallFailure } from '../messages/message-call-failure';
 
 @Component({
   selector: 'app-topics',
@@ -92,10 +94,10 @@ import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
                           <span class="counts">
                             Active:
                             <button matButton type="button" class="count" (click)="viewSubscriptionMessages(topic, sub, 0)"
-                                    [attr.aria-label]="'View the ' + sub.activeMessageCount + ' active messages of ' + sub.name">{{ sub.activeMessageCount }}</button>
+                                    [attr.aria-label]="countsReported() ? 'View the ' + countsOf(topic, sub).activeMessageCount + ' active messages of ' + sub.name : 'View the active messages of ' + sub.name">{{ countsReported() ? countsOf(topic, sub).activeMessageCount : '—' }}</button>
                             Dead Letter:
-                            <button matButton type="button" class="count" [class.dead-letter]="sub.deadLetterMessageCount > 0" (click)="viewSubscriptionMessages(topic, sub, 1)"
-                                    [attr.aria-label]="'View the ' + sub.deadLetterMessageCount + ' dead-letter messages of ' + sub.name">{{ sub.deadLetterMessageCount }}</button>
+                            <button matButton type="button" class="count" [class.dead-letter]="countsReported() && countsOf(topic, sub).deadLetterMessageCount > 0" (click)="viewSubscriptionMessages(topic, sub, 1)"
+                                    [attr.aria-label]="countsReported() ? 'View the ' + countsOf(topic, sub).deadLetterMessageCount + ' dead-letter messages of ' + sub.name : 'View the dead-letter messages of ' + sub.name">{{ countsReported() ? countsOf(topic, sub).deadLetterMessageCount : '—' }}</button>
                           </span>
                         </div>
                         <div class="actions">
@@ -106,11 +108,11 @@ import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
                             <mat-icon fontIcon="more_vert" aria-hidden="true"></mat-icon>
                           </button>
                           <mat-menu #purgeMenu="matMenu">
-                            <button mat-menu-item class="danger" (click)="purgeSubscriptionMessages(topic, sub)" [disabled]="sub.activeMessageCount === 0">
+                            <button mat-menu-item class="danger" (click)="purgeSubscriptionMessages(topic, sub)" [disabled]="countsReported() && countsOf(topic, sub).activeMessageCount === 0">
                               <mat-icon fontIcon="delete_sweep" aria-hidden="true"></mat-icon>
                               Purge Messages
                             </button>
-                            <button mat-menu-item class="danger" (click)="purgeSubscriptionDeadLetter(topic, sub)" [disabled]="sub.deadLetterMessageCount === 0">
+                            <button mat-menu-item class="danger" (click)="purgeSubscriptionDeadLetter(topic, sub)" [disabled]="countsReported() && countsOf(topic, sub).deadLetterMessageCount === 0">
                               <mat-icon fontIcon="delete_forever" aria-hidden="true"></mat-icon>
                               Purge Dead Letter
                             </button>
@@ -138,6 +140,16 @@ export class TopicsComponent implements OnInit {
   private dialog = inject(MatDialog);
   private readonly destroyRef = inject(DestroyRef);
   private logger = inject(LoggerService);
+  private readonly counts = inject(EntityCountsService);
+  private readonly providerService = inject(ProviderService);
+
+  /** False on a broker that answers no message counts: a row then shows no number and a purge is not held back by a count. */
+  readonly countsReported = computed(() => this.providerService.capabilities()?.supportsMessageCounts !== false);
+
+  /** The counts a subscription shows: the latest read for it anywhere in the app, or the ones it was listed with. */
+  countsOf(topic: TopicInfo, subscription: EntityCounts & { name: string }): EntityCounts {
+    return this.counts.of(EntityCountsService.key(subscription.name, topic.name)) ?? subscription;
+  }
 
   topics = signal<TopicInfo[]>([]);
   loading = signal(false);
@@ -200,6 +212,7 @@ export class TopicsComponent implements OnInit {
     ).subscribe({
       next: (subscriptions) => {
         this.logger.log(`[TopicsComponent] Loaded ${subscriptions.length} subscriptions for topic ${topic.name}`);
+        subscriptions.forEach(subscription => this.counts.put(EntityCountsService.key(subscription.name, topic.name), subscription));
         topic.subscriptions = subscriptions;
         this.subscriptionsLoaded.add(topic);
         this.topics.set([...this.topics()]);
@@ -254,8 +267,8 @@ export class TopicsComponent implements OnInit {
         entityType: 'subscription',
         entityName: subscription.name,
         topicName: topic.name,
-        activeMessageCount: subscription.activeMessageCount,
-        deadLetterMessageCount: subscription.deadLetterMessageCount,
+        activeMessageCount: this.countsOf(topic, subscription).activeMessageCount,
+        deadLetterMessageCount: this.countsOf(topic, subscription).deadLetterMessageCount,
         targetDetectsDuplicates: topic.requiresDuplicateDetection,
         initialTab
       }
@@ -287,8 +300,8 @@ export class TopicsComponent implements OnInit {
             this.snackBar.open(`Purged all messages from ${subscription.name}`, 'Close', { duration: 3000 });
             this.loadSubscriptions(topic);
           },
-          error: () => {
-            this.snackBar.open('Failed to purge messages', 'Close', { duration: 3000 });
+          error: err => {
+            this.snackBar.open(messageCallFailure(err, 'Failed to purge messages'), 'Close', { duration: 5000 });
           }
         });
       }
@@ -320,8 +333,8 @@ export class TopicsComponent implements OnInit {
             this.snackBar.open(`Purged all dead letter messages from ${subscription.name}`, 'Close', { duration: 3000 });
             this.loadSubscriptions(topic);
           },
-          error: () => {
-            this.snackBar.open('Failed to purge dead letter messages', 'Close', { duration: 3000 });
+          error: err => {
+            this.snackBar.open(messageCallFailure(err, 'Failed to purge dead letter messages'), 'Close', { duration: 5000 });
           }
         });
       }

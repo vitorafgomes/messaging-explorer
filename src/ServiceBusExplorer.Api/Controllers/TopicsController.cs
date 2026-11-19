@@ -134,6 +134,10 @@ public class TopicsController : ControllerBase
         {
             return EntityAdministrationResults.EntityDisabled();
         }
+        catch (InvalidEntityConfigurationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpPost("{name}/messages/batch")]
@@ -344,6 +348,7 @@ public class TopicsController : ControllerBase
         var provider = GetProvider();
         if (provider == null) return NoProviderConnected();
         if (EntityAdministrationResults.SubQueueNotSupported(provider, subQueue) is { } notSupported) return notSupported;
+        if (EntityAdministrationResults.SearchNotSupported(provider) is { } cannotSearch) return cannotSearch;
         try
         {
             var result = await provider.SearchMessagesAsync(topicName, request, subQueue, subscriptionName, HttpContext.RequestAborted);
@@ -391,6 +396,10 @@ public class TopicsController : ControllerBase
         {
             return EntityAdministrationResults.EntityDisabled();
         }
+        catch (MessageReadFailedException ex)
+        {
+            return EntityAdministrationResults.ReadFailed(ex, _logger, $"{topicName}/{subscriptionName}", subQueue);
+        }
     }
 
     [HttpPost("{topicName}/subscriptions/{subscriptionName}/messages/receive")]
@@ -411,6 +420,10 @@ public class TopicsController : ControllerBase
         catch (EntityDisabledException)
         {
             return EntityAdministrationResults.EntityDisabled();
+        }
+        catch (MessageReadFailedException ex)
+        {
+            return EntityAdministrationResults.ReadFailed(ex, _logger, $"{topicName}/{subscriptionName}", MessageSubQueue.Active);
         }
     }
 
@@ -523,6 +536,10 @@ public class TopicsController : ControllerBase
         {
             return EntityAdministrationResults.EntityDisabled();
         }
+        catch (InvalidEntityConfigurationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Purge {SubQueue} messages failed for {TopicName}/{SubscriptionName}", subQueue, topicName, subscriptionName);
@@ -559,6 +576,10 @@ public class TopicsController : ControllerBase
         catch (EntityDisabledException)
         {
             return EntityAdministrationResults.EntityDisabled();
+        }
+        catch (InvalidEntityConfigurationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
         }
         catch (Exception ex)
         {

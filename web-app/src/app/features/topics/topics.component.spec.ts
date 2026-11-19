@@ -1,14 +1,18 @@
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { BehaviorSubject, NEVER, Subject, of, throwError } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { ConnectionService, LoggerService, TopicService } from '../../core/services';
+import { ConnectionService, LoggerService, TopicService, EntityCountsService } from '../../core/services';
+import { ProviderService } from '../../core/services/provider.service';
 import { TopicInfo } from '../../core/models';
 import { TopicsComponent } from './topics.component';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
 
 const topic = (name: string, subscriptionCount: number) =>
   ({ name, subscriptionCount, sizeInBytes: 0, subscriptions: [] }) as unknown as TopicInfo;
+
+const capabilities = signal<{ supportsMessageCounts?: boolean } | null>(null);
 
 describe('TopicsComponent loads the subscriptions of a topic when it is opened, not one request per topic', () => {
   let topicService: { getTopics: ReturnType<typeof vi.fn>; getSubscriptions: ReturnType<typeof vi.fn> };
@@ -19,6 +23,7 @@ describe('TopicsComponent loads the subscriptions of a topic when it is opened, 
       providers: [
         { provide: TopicService, useValue: topicService },
         { provide: ConnectionService, useValue: { isConnected: true, connectionStatus$ } },
+        { provide: ProviderService, useValue: { capabilities } },
         { provide: LoggerService, useValue: { log: () => undefined, error: () => undefined } },
         { provide: MatDialog, useValue: { open: vi.fn() } }
       ]
@@ -68,6 +73,41 @@ describe('TopicsComponent loads the subscriptions of a topic when it is opened, 
     expect(whileLoading).toContain('Loading subscriptions...');
     expect(whileLoading).not.toContain('No subscriptions');
     expect(shown).toContain('invoice-sub');
+  });
+
+  it('a subscription shows the latest counts read for it anywhere in the app, gives what the page read to the other displays, and opens its messages with the counts shown', async () => {
+    capabilities.set(null);
+    topicService.getSubscriptions.mockReturnValue(of([{ name: 'invoice-sub', topicName: 'billing', activeMessageCount: 3, deadLetterMessageCount: 1 }]));
+    const { element, open, fixture } = render();
+    const counts = TestBed.inject(EntityCountsService);
+    const shown = () => Array.from(element.querySelectorAll('.subscription-card button.count')).map(b => b.textContent?.trim());
+    await open('billing');
+    fixture.detectChanges();
+
+    expect(counts.of('subscription:billing/invoice-sub'), 'the page gives what it read').toStrictEqual({ activeMessageCount: 3, deadLetterMessageCount: 1 });
+    expect(shown()).toStrictEqual(['3', '1']);
+
+    counts.put('subscription:billing/invoice-sub', { activeMessageCount: 0, deadLetterMessageCount: 0 });
+    fixture.detectChanges();
+    expect(shown(), 'the row follows a count read by another display').toStrictEqual(['0', '0']);
+
+    const opened = vi.spyOn(fixture.debugElement.injector.get(MatDialog), 'open').mockImplementation(() => ({ afterClosed: () => of(undefined) }) as never);
+    (element.querySelector('.subscription-card button.count') as HTMLElement).click();
+    const data = (opened.mock.calls[0][1] as { data: { activeMessageCount: number; deadLetterMessageCount: number } }).data;
+    expect([data.activeMessageCount, data.deadLetterMessageCount], 'the dialog opens with the counts shown, not the older ones of the list').toStrictEqual([0, 0]);
+  });
+
+  it('on a broker that reports no message counts a subscription shows no number', async () => {
+    capabilities.set({ supportsMessageCounts: false });
+    topicService.getSubscriptions.mockReturnValue(of([{ name: 'invoice-sub', topicName: 'billing', activeMessageCount: 0, deadLetterMessageCount: 0 }]));
+    const { element, open, fixture } = render();
+    await open('billing');
+    fixture.detectChanges();
+
+    expect(Array.from(element.querySelectorAll('.subscription-card button.count')).map(b => [b.textContent?.trim(), b.getAttribute('aria-label')])).toStrictEqual([
+      ['—', 'View the active messages of invoice-sub'], ['—', 'View the dead-letter messages of invoice-sub']
+    ]);
+    capabilities.set(null);
   });
 
   it('a subscription list the API fails to return is reported and the topic closes, so opening it again retries', async () => {
@@ -157,6 +197,7 @@ describe('TopicsComponent purges a subscription from the More actions menu', () 
       providers: [
         { provide: TopicService, useValue: topicService },
         { provide: ConnectionService, useValue: { isConnected: true, connectionStatus$: NEVER } },
+        { provide: ProviderService, useValue: { capabilities } },
         { provide: LoggerService, useValue: { log: () => undefined, error: () => undefined } }
       ]
     });

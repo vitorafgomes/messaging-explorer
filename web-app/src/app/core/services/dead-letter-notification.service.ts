@@ -1,4 +1,5 @@
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, signal, computed, inject } from '@angular/core';
+import { EntityCountsService } from './entity-counts.service';
 import { SubscriptionInfo } from '../models/topic.model';
 
 export interface DeadLetterAlert {
@@ -11,26 +12,32 @@ export interface DeadLetterAlert {
   providedIn: 'root'
 })
 export class DeadLetterNotificationService {
-  private readonly _alerts = signal<DeadLetterAlert[]>([]);
+  private readonly counts = inject(EntityCountsService);
+  private readonly subscriptions = signal<DeadLetterAlert[]>([]);
 
-  readonly alerts = this._alerts.asReadonly();
-  readonly alertCount = computed(() => this._alerts().length);
-  readonly hasAlerts = computed(() => this._alerts().length > 0);
+  /**
+   * The subscriptions that hold dead-letter messages, the largest first. Each count is the latest one read for
+   * that subscription anywhere in the app, or the one it was listed with.
+   */
+  readonly alerts = computed(() => this.subscriptions()
+    .map(s => ({
+      ...s,
+      deadLetterMessageCount: this.counts.of(EntityCountsService.key(s.subscriptionName, s.topicName))?.deadLetterMessageCount ?? s.deadLetterMessageCount
+    }))
+    .filter(s => s.deadLetterMessageCount > 0)
+    .sort((a, b) => b.deadLetterMessageCount - a.deadLetterMessageCount));
+  readonly alertCount = computed(() => this.alerts().length);
+  readonly hasAlerts = computed(() => this.alerts().length > 0);
 
   updateFromSubscriptions(subscriptions: SubscriptionInfo[]): void {
-    const filtered = subscriptions
-      .filter(s => s.deadLetterMessageCount > 0)
-      .map(s => ({
-        topicName: s.topicName,
-        subscriptionName: s.name,
-        deadLetterMessageCount: s.deadLetterMessageCount
-      }))
-      .sort((a, b) => b.deadLetterMessageCount - a.deadLetterMessageCount);
-
-    this._alerts.set(filtered);
+    this.subscriptions.set(subscriptions.map(s => ({
+      topicName: s.topicName,
+      subscriptionName: s.name,
+      deadLetterMessageCount: s.deadLetterMessageCount
+    })));
   }
 
   clear(): void {
-    this._alerts.set([]);
+    this.subscriptions.set([]);
   }
 }

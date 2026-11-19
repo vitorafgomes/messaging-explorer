@@ -451,7 +451,9 @@ public class ConnectionsController : ControllerBase
 
         try
         {
-            var capabilities = _providerFactory.GetProviderCapabilities(type);
+            var capabilities = CurrentProvider is { } connected && connected.ProviderType == type
+                ? connected.Capabilities
+                : _providerFactory.GetProviderCapabilities(type);
 
             return Ok(new
             {
@@ -476,6 +478,8 @@ public class ConnectionsController : ControllerBase
                 supportsDefinitions = capabilities.SupportsDefinitions,
                 supportsNamespaceProperties = capabilities.SupportsNamespaceProperties,
                 supportsManualDeadLetter = capabilities.SupportsManualDeadLetter,
+                supportsMessageSearch = capabilities.SupportsMessageSearch,
+                supportsMessageCounts = capabilities.SupportsMessageCounts,
                 supportsBulkMessageOperations = capabilities.SupportsBulkMessageOperations,
                 supportsBinaryBody = capabilities.SupportsBinaryBody,
                 maxMessageSizeInBytes = capabilities.MaxMessageSizeInBytes,

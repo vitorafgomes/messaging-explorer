@@ -43,6 +43,10 @@ test.describe('Azure Service Bus emulator', () => {
     await treeNode(page, SEED.queue).click();
     await expect(page.locator('.entity-title h2')).toHaveText(SEED.queue);
     await expect(page.locator('.entity-title')).toContainText('Queue');
+    await expect(page.getByTestId('no-counts-note'), 'the emulator reports no message counts, and the panel says so').toBeVisible();
+    await expect(page.locator('.entity-stats .stat-value').first(), 'no number where the broker gives none').toHaveText('—');
+    await expect(page.locator('.entity-stats .stat-label').filter({ hasText: 'Transfer dead-letter' })).toHaveCount(0);
+    await expect(page.locator('.entity-tree .count-chip'), 'no count beside a row of the tree').toHaveCount(0);
     await shoot(page, 'queue-servicebus');
 
     await openTopicOnTopicsScreen(page);
@@ -56,6 +60,8 @@ test.describe('Azure Service Bus emulator', () => {
     await page.getByRole('button', { name: 'View Messages' }).click();
     await expect(messagesDialog(page)).toContainText(`Messages: ${SEED.queue}`);
     await expect(messageBodies(page)).toHaveText(SEED.activeBodies);
+    await expect(messagesDialog(page).getByRole('button', { name: /Active Messages/ }), 'the tab counts what it loaded').toContainText(String(SEED.activeBodies.length));
+    await expect(messagesDialog(page).getByRole('button', { name: /Transfer dead-letter/ }), 'the emulator has no transfer dead-letter queue to open').toHaveCount(0);
     await shoot(page, 'messages-active-servicebus');
 
     await messagesDialog(page).getByRole('button', { name: /Dead Letter/ }).click();

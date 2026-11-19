@@ -890,6 +890,18 @@ public sealed class AzureServiceBusProviderTests(AzureServiceBusFixture fixture)
         Assert.Equal(["active"], await fixture.DrainAsync(queue));
     }
 
+    [Fact]
+    public async Task On_the_emulator_the_transfer_dead_letter_queue_of_a_subscription_is_not_read_and_the_peek_says_the_broker_did_not_answer()
+    {
+        var topic = await TopicWithSubscriptionAsync("tdlq-sub");
+
+        var refused = await Assert.ThrowsAsync<MessageReadFailedException>(
+            () => _messaging.PeekMessagesAsync(topic, 10, MessageSubQueue.TransferDeadLetter, "audit"));
+
+        Assert.Equal("The broker did not return the messages of this entity (GeneralError).", refused.Message);
+        Assert.Empty(await _messaging.PeekMessagesAsync(topic, 10, MessageSubQueue.DeadLetter, "audit"));
+    }
+
     /// <summary>
     /// Peeks, searches, deletes and resubmits the given sequence number on the transfer dead-letter queue and returns
     /// the peeked count, the searched count, the messages scanned, and each batch's successes and single failure.

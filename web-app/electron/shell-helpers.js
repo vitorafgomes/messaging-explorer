@@ -173,14 +173,152 @@ function selfUpdateBlocker(platform, env) {
   return null;
 }
 
-/** Downloads an update as soon as it is found and installs it on quit, only where this package can replace itself. */
-function configureAutoUpdate(updater, platform, env) {
+const RELEASES_API_URL = 'https://api.github.com/repos/vitorafgomes/messaging-explorer/releases?per_page=100';
+const RELEASE_TAG = /^v(\d+\.\d+\.\d+(-beta\.\d+)?)$/;
+const MAX_UPDATE_VERSIONS = 30;
+const MAX_NOTES_LENGTH = 20000;
+const UPDATE_FEED_FILES = { linux: 'latest-linux.yml', win32: 'latest.yml', darwin: 'latest-mac.yml' };
+const RELEASE_DOWNLOAD_URL = 'https://github.com/vitorafgomes/messaging-explorer/releases/download';
+const RELEASE_FEED = { provider: 'github', owner: 'vitorafgomes', repo: 'messaging-explorer' };
+const VERSION = /^(\d+)\.(\d+)\.(\d+)(?:-beta\.(\d+))?$/;
+
+/**
+ * The versions of a channel out of what the release page answered, newest first as it gives them, at most 30:
+ * 'latest' lists the releases whose tag is vX.Y.Z, 'beta' only those whose tag is vX.Y.Z-beta.N. A draft, a tag
+ * of any other form and an entry that is not a release are left out. The notes are the text of the release, cut
+ * at 20000 characters; they come from outside the app and are for display as text only. Null when the answer is
+ * not a list.
+ */
+function updateVersions(releases, channel, installedVersion, platform) {
+  if (!Array.isArray(releases)) return null;
+  const versions = [];
+  for (const release of releases) {
+    const tag = typeof release?.tag_name === 'string' ? RELEASE_TAG.exec(release.tag_name) : null;
+    if (!tag || release.draft === true || (channel === 'beta') !== (tag[2] !== undefined)) continue;
+    versions.push({
+      version: tag[1],
+      date: typeof release.published_at === 'string' ? release.published_at : '',
+      notes: typeof release.body === 'string' ? release.body.slice(0, MAX_NOTES_LENGTH) : '',
+      installed: tag[1] === installedVersion,
+      older: isOlderVersion(tag[1], installedVersion),
+      installable: Array.isArray(release.assets) && release.assets.some(asset => asset?.name === UPDATE_FEED_FILES[platform])
+    });
+    if (versions.length === MAX_UPDATE_VERSIONS) break;
+  }
+  return versions;
+}
+
+/**
+ * Reads the versions of a channel from the release page of this repository, whose address is fixed here. Never
+ * throws: a list that could not be read answers status 'error' with a sentence that says why.
+ */
+async function readUpdateVersions({ fetchFn, channel, installedVersion, platform }) {
+  const notAList = { status: 'error', message: 'The release page answered something that is not a list of releases.' };
+  let response;
+  try {
+    response = await fetchFn(RELEASES_API_URL);
+  } catch {
+    return { status: 'error', message: 'The release list could not be reached. Check the connection to the internet.' };
+  }
+  if (!response.ok) {
+    return response.status === 403 || response.status === 429
+      ? { status: 'error', message: 'The release page is limiting requests from this address. Try again in an hour.' }
+      : { status: 'error', message: `The release page answered ${response.status}.` };
+  }
+  let versions;
+  try {
+    versions = updateVersions(await response.json(), channel, installedVersion, platform);
+  } catch {
+    return notAList;
+  }
+  return versions ? { status: 'ok', channel, versions } : notAList;
+}
+
+/** Whether a version comes before another: by its three numbers, then a beta before the release of the same number, then by the beta's number. */
+function isOlderVersion(version, than) {
+  const a = VERSION.exec(version);
+  const b = VERSION.exec(than);
+  if (!a || !b) return false;
+  const rank = parts => [Number(parts[1]), Number(parts[2]), Number(parts[3]), parts[4] === undefined ? Infinity : Number(parts[4])];
+  const [left, right] = [rank(a), rank(b)];
+  for (let i = 0; i < left.length; i++) {
+    if (left[i] !== right[i]) return left[i] < right[i];
+  }
+  return false;
+}
+
+/**
+ * Copies the connections file beside the original, named with the version being left, before an older version is
+ * installed. No file yet is no failure; a copy that fails says why and never throws.
+ */
+function backupDataFile(filePath, installedVersion, { exists, copy }) {
+  if (!exists(filePath)) return { status: 'ok', file: null };
+  const file = filePath.replace(/\.json$/, `.before-downgrade-from-${installedVersion}.json`);
+  try {
+    copy(filePath, file);
+    return { status: 'ok', file };
+  } catch (err) {
+    return { status: 'error', message: `The connections file could not be copied: ${err.message}` };
+  }
+}
+
+/**
+ * Downloads one version the user picked and agreed to, ready to install on restart. Only a version of the last
+ * list read, with the package of this platform, other than the installed one, on a package that can replace itself.
+ * The address is built here from the fixed repository. The updater reads that release alone and may go back to an
+ * older version for this one download; whatever happens it is put back as it was. Never throws.
+ */
+async function installUpdateVersion({ updater, version, agreed, listed, installedVersion, channel, platform, env, backup, keepsPickedVersion = false }) {
+  const refuse = message => ({ status: 'error', message });
+  if (typeof version !== 'string' || !VERSION.test(version)) return refuse('That is not a version of this app.');
+  const picked = Array.isArray(listed) ? listed.find(entry => entry?.version === version) : undefined;
+  if (!picked) return refuse(`Version ${version} is not in the list that was read. Read the versions again.`);
+  if (agreed !== true) return refuse('Nothing is installed without your agreement.');
+  if (version === installedVersion) return refuse(`Version ${version} is the one you have.`);
+  if (selfUpdateBlocker(platform, env) !== null) return refuse('This package cannot replace itself. Download the version from the release page.');
+  if (picked.installable !== true) return refuse(`The release of version ${version} holds no package this app can install here. Download it from the release page.`);
+  const notInstalled = reason => refuse(`Version ${version} was not installed: ${reason}`);
+  if (isOlderVersion(version, installedVersion)) {
+    const copied = backup();
+    if (copied?.status !== 'ok') return notInstalled(copied?.message ?? 'The connections file could not be copied.');
+  }
+  let downloaded = false;
+  try {
+    updater.setFeedURL({ provider: 'generic', url: `${RELEASE_DOWNLOAD_URL}/v${version}` });
+    updater.channel = 'latest';
+    updater.allowPrerelease = true;
+    updater.allowDowngrade = true;
+    updater.autoDownload = false;
+    const found = (await updater.checkForUpdates())?.updateInfo?.version;
+    if (found !== version) return notInstalled(`the updater answered version ${found}. Try again in a moment.`);
+    await updater.downloadUpdate();
+    downloaded = true;
+    return { status: 'ok', version };
+  } catch (err) {
+    return notInstalled(err?.message ?? 'the updater did not say why');
+  } finally {
+    updater.setFeedURL(RELEASE_FEED);
+    applyUpdateChannel(updater, channel);
+    configureAutoUpdate(updater, platform, env, keepsPickedVersion || downloaded);
+  }
+}
+
+/**
+ * Installs a downloaded update on quit only where this package can replace itself, and downloads one as soon as it
+ * is found only when, besides, no version the user picked is being kept: a picked version is replaced only by a
+ * download the user asks for.
+ */
+function configureAutoUpdate(updater, platform, env, keepsPickedVersion = false) {
   const canReplaceItself = selfUpdateBlocker(platform, env) === null;
-  updater.autoDownload = canReplaceItself;
+  updater.autoDownload = canReplaceItself && !keepsPickedVersion;
   updater.autoInstallOnAppQuit = canReplaceItself;
 }
 
 module.exports = {
+  installUpdateVersion,
+  isOlderVersion,
+  backupDataFile,
+  UPDATE_FEED_FILES,
   dataFilePath,
   showDataFile,
   openDevTools,
@@ -193,5 +331,8 @@ module.exports = {
   applicationMenuTemplate,
   mainWindowOptions,
   shellShortcut,
-  selfUpdateBlocker
+  selfUpdateBlocker,
+  updateVersions,
+  readUpdateVersions,
+  RELEASES_API_URL
 };

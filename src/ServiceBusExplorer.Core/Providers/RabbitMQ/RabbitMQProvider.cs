@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Exceptions;
 using ServiceBusExplorer.Core.Abstractions;
@@ -16,6 +18,7 @@ public class RabbitMQProvider : IMessagingProvider
 {
     private static readonly TimeSpan ConfirmTimeout = TimeSpan.FromSeconds(10);
 
+    private readonly ILogger _logger;
     private IConnection? _connection;
     private IModel? _channel;
     private RabbitMQManagementClient? _managementClient;
@@ -53,21 +56,18 @@ public class RabbitMQProvider : IMessagingProvider
 
         if (!rabbitConfig.IsValid())
         {
-            Console.WriteLine($"[RabbitMQ] Config validation failed for '{rabbitConfig.Name}'");
+            _logger.LogWarning("The RabbitMQ connection '{Name}' is not valid, so it was not tested.", rabbitConfig.Name);
             return false;
         }
 
         try
         {
-            Console.WriteLine($"[RabbitMQ] Testing connection to {rabbitConfig.HostName}:{rabbitConfig.ManagementPort}...");
-            using var testClient = new RabbitMQManagementClient(rabbitConfig);
-            var result = await testClient.TestConnectionAsync();
-            Console.WriteLine($"[RabbitMQ] Test result: {(result ? "Success" : "Failed")}");
-            return result;
+            using var testClient = new RabbitMQManagementClient(rabbitConfig, _logger);
+            return await testClient.TestConnectionAsync();
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[RabbitMQ] Test failed: {ex.Message}");
+            _logger.LogWarning(ex, "The RabbitMQ connection test of {Host}:{Port} failed.", rabbitConfig.HostName, rabbitConfig.ManagementPort);
             return false;
         }
     }
@@ -102,7 +102,7 @@ public class RabbitMQProvider : IMessagingProvider
         _channel = _connection.CreateModel();
 
         // Create Management API client
-        _managementClient = new RabbitMQManagementClient(rabbitConfig);
+        _managementClient = new RabbitMQManagementClient(rabbitConfig, _logger);
 
         // Set current target to virtual host
         CurrentTarget = $"{rabbitConfig.HostName}:{rabbitConfig.Port}{rabbitConfig.VirtualHost}";
@@ -250,8 +250,7 @@ public class RabbitMQProvider : IMessagingProvider
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[RabbitMQ] Error detecting pattern for exchange '{exchange.Name}': {ex.Message}");
-                // Continue with other exchanges even if one fails
+                _logger.LogWarning(ex, "The messaging pattern of the RabbitMQ exchange '{Exchange}' could not be detected.", exchange.Name);
             }
         }
 
@@ -294,8 +293,7 @@ public class RabbitMQProvider : IMessagingProvider
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[RabbitMQ] Error detecting pattern for exchange '{exchange.Name}': {ex.Message}");
-            // Return exchange without pattern detection if it fails
+            _logger.LogWarning(ex, "The messaging pattern of the RabbitMQ exchange '{Exchange}' could not be detected.", exchange.Name);
         }
 
         return exchange;
@@ -482,9 +480,9 @@ public class RabbitMQProvider : IMessagingProvider
             ActiveMessageCount = queue?.ActiveMessageCount ?? 0,
             DeadLetterMessageCount = dlqQueue?.ActiveMessageCount ?? 0,
             Status = queue?.Status ?? "Active",
-            CreatedAt = queue?.CreatedAt ?? DateTimeOffset.UtcNow,
-            UpdatedAt = queue?.UpdatedAt ?? DateTimeOffset.UtcNow,
-            AccessedAt = queue?.AccessedAt ?? DateTimeOffset.UtcNow,
+            CreatedAt = queue?.CreatedAt ?? default,
+            UpdatedAt = queue?.UpdatedAt ?? default,
+            AccessedAt = queue?.AccessedAt ?? default,
             MaxDeliveryCount = queue?.MaxDeliveryCount ?? 0,
             DefaultMessageTimeToLive = queue?.DefaultMessageTimeToLive ?? TimeSpan.MaxValue,
             LockDuration = queue?.LockDuration ?? TimeSpan.Zero,
@@ -539,6 +537,8 @@ public class RabbitMQProvider : IMessagingProvider
         var isDeadLetter = subQueue == MessageSubQueue.DeadLetter;
         if (isDeadLetter && await _managementClient!.GetQueueAsync(queueName, cancellationToken) is null)
             return [];
+        if (await IsStreamAsync(queueName, cancellationToken))
+            throw new MessageReadFailedException(StreamNotRead);
 
         // Use AMQP BasicGet directly for reliable message reading
         // Peek mode: get message, read body, then nack with requeue=true
@@ -561,6 +561,16 @@ public class RabbitMQProvider : IMessagingProvider
                 messages.Add(message);
             }
         }
+        catch (Exception ex) when (ClosedReason(ex) is { } reason)
+        {
+            throw new MessageReadFailedException(reason.ReplyCode switch
+            {
+                404 => "the queue does not exist",
+                405 => "the queue is exclusive to another connection",
+                540 => "a stream is not read this way",
+                _ => $"AMQP {reason.ReplyCode}"
+            }, ex);
+        }
         finally
         {
             if (lastTag != 0 && channel.IsOpen)
@@ -571,37 +581,18 @@ public class RabbitMQProvider : IMessagingProvider
     }
 
     /// <inheritdoc />
-    public Task<long?> SendMessageAsync(string entityName, SendMessageRequest request)
+    /// <remarks>
+    /// A failure is an <see cref="InvalidEntityConfigurationException"/> whose message says why the broker did not take
+    /// the message; see <see cref="SendConfirmed"/> for where a send goes.
+    /// </remarks>
+    public async Task<long?> SendMessageAsync(string entityName, SendMessageRequest request)
     {
         EnsureConnected();
 
-        var properties = _channel!.CreateBasicProperties();
-        ConfigureBasicProperties(properties, request);
-
-        var body = Encoding.UTF8.GetBytes(request.Body);
-
-        // For queues, publish to default exchange with queue name as routing key
-        // For exchanges, use the Subject or empty string as routing key
-        var exchange = "";
-        var routingKey = entityName;
-
-        // Check if this is an exchange (topic) by trying to determine if it's a queue
-        // In practice, the caller should know whether they're sending to a queue or exchange
-        // For now, we'll use the convention that topics start with specific patterns or
-        // if Subject is provided, we assume it's an exchange
-        if (!string.IsNullOrEmpty(request.Subject))
-        {
-            exchange = entityName;
-            routingKey = request.Subject;
-        }
-
-        _channel.BasicPublish(
-            exchange: exchange,
-            routingKey: routingKey,
-            basicProperties: properties,
-            body: body);
-
-        return Task.FromResult<long?>(null);
+        var result = await Task.Run(() => SendConfirmed(entityName, [request], CancellationToken.None));
+        if (result.Failures.Count > 0)
+            throw new InvalidEntityConfigurationException([result.Failures[0].Error]);
+        return null;
     }
 
     /// <inheritdoc />
@@ -610,10 +601,33 @@ public class RabbitMQProvider : IMessagingProvider
         EnsureConnected();
 
         var messages = requests.ToList();
+        return await Task.Run(() => SendConfirmed(entityName, messages, cancellationToken), cancellationToken);
+    }
+
+    private const string SendNotRouted = "The broker could not route the message: no queue receives it.";
+    private const string SendNotAccepted = "The broker did not accept the message.";
+    private const string SendTimedOut = "The broker did not confirm the message in time; it may have been sent.";
+    private const string SendNoSuchName = "No queue or exchange has this name.";
+
+    /// <summary>
+    /// Sends each message on a channel of its own with <c>mandatory</c> and a publisher confirm, one at a time, and stops
+    /// at the first that fails: to the queue named <paramref name="entityName"/> through the default exchange when there
+    /// is one, whatever the subject, and otherwise to the exchange of that name with the subject as routing key. A
+    /// message the broker returned, did not accept or did not confirm in time fails with a sentence that says which,
+    /// so a message no queue received is never counted as sent.
+    /// </summary>
+    private SendMessagesResult SendConfirmed(string entityName, List<SendMessageRequest> messages, CancellationToken cancellationToken)
+    {
         var result = new SendMessagesResult();
+        var isQueue = IsQueue(entityName);
+        using var channel = _connection!.CreateModel();
+        var returned = 0;
+        channel.BasicReturn += (_, _) => Volatile.Write(ref returned, 1);
+        channel.ConfirmSelect();
+
         for (var i = 0; i < messages.Count; i++)
         {
-            string? error = null;
+            string? error;
             if (cancellationToken.IsCancellationRequested)
             {
                 if (result.SentCount == 0) cancellationToken.ThrowIfCancellationRequested();
@@ -621,16 +635,33 @@ public class RabbitMQProvider : IMessagingProvider
             }
             else
             {
+                var request = messages[i];
+                var properties = channel.CreateBasicProperties();
+                ConfigureBasicProperties(properties, request);
+                Volatile.Write(ref returned, 0);
                 try
                 {
-                    await SendMessageAsync(entityName, messages[i]);
-                    result.SentCount++;
-                    continue;
+                    channel.BasicPublish(isQueue ? "" : entityName, isQueue ? entityName : request.Subject ?? "", mandatory: true, properties, Encoding.UTF8.GetBytes(request.Body));
+                    var confirmed = channel.WaitForConfirms(ConfirmTimeout, out var timedOut);
+                    error = timedOut ? SendTimedOut
+                        : !confirmed ? SendNotAccepted
+                        : Volatile.Read(ref returned) == 1 ? SendNotRouted
+                        : null;
+                }
+                catch (Exception ex) when (ClosedReason(ex) is { ReplyCode: 404 })
+                {
+                    error = SendNoSuchName;
                 }
                 catch (Exception) when (result.SentCount > 0)
                 {
                     error = SendMessageFailure.Unconfirmed;
                 }
+            }
+
+            if (error == null)
+            {
+                result.SentCount++;
+                continue;
             }
 
             result.Failures.Add(new SendMessageFailure { Index = i, Error = error });
@@ -641,15 +672,41 @@ public class RabbitMQProvider : IMessagingProvider
         return result;
     }
 
+    /// <summary>
+    /// Whether a queue has this name, asked on a channel of its own, since the broker closes it when there is none (404)
+    /// and when the queue is exclusive to another connection (405), which is still a queue.
+    /// </summary>
+    private bool IsQueue(string name)
+    {
+        using var probe = _connection!.CreateModel();
+        try
+        {
+            probe.QueueDeclarePassive(name);
+            return true;
+        }
+        catch (OperationInterruptedException ex) when (ex.ShutdownReason is { ReplyCode: 404 or 405 })
+        {
+            return ex.ShutdownReason.ReplyCode == 405;
+        }
+    }
+
+    private static ShutdownEventArgs? ClosedReason(Exception ex) => ex switch
+    {
+        AlreadyClosedException closed => closed.ShutdownReason,
+        OperationInterruptedException interrupted => interrupted.ShutdownReason,
+        _ => null
+    };
+
     /// <inheritdoc />
-    public Task<IEnumerable<IMessage>> ReceiveMessagesAsync(string entityName, int count = 10, string? subscriptionName = null)
+    /// <remarks>A stream is refused before the broker is asked, as on a peek.</remarks>
+    public async Task<IEnumerable<IMessage>> ReceiveMessagesAsync(string entityName, int count = 10, string? subscriptionName = null)
     {
         EnsureConnected();
 
         var queueName = subscriptionName ?? entityName;
+        if (await IsStreamAsync(queueName, CancellationToken.None))
+            throw new MessageReadFailedException(StreamNotRead);
 
-        // Use AMQP BasicGet directly for reliable message reading
-        // Consume mode: get message, read body, then ack to remove
         var messages = new List<IMessage>();
         for (var i = 0; i < count; i++)
         {
@@ -658,12 +715,10 @@ public class RabbitMQProvider : IMessagingProvider
                 break;
 
             messages.Add(MapBasicGetToMessageInfo(result, false));
-
-            // Ack to consume/remove the message
             _channel.BasicAck(result.DeliveryTag, multiple: false);
         }
 
-        return Task.FromResult<IEnumerable<IMessage>>(messages);
+        return messages;
     }
 
     /// <inheritdoc />
@@ -690,6 +745,12 @@ public class RabbitMQProvider : IMessagingProvider
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// The messages up to the last chosen position are held unacknowledged; the chosen ones are acknowledged, which
+    /// removes them, and the others go back in their order. Nothing is published. A queue with a consumer is refused,
+    /// since a position may no longer name the message that was shown. With <paramref name="all"/> the queue is purged,
+    /// and a stream is refused first, as on a purge.
+    /// </remarks>
     public async Task<BatchOperationResult> DeleteMessagesAsync(string entityName, long[] sequenceNumbers, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, bool all = false, CancellationToken cancellationToken = default)
     {
         if (subQueue == MessageSubQueue.TransferDeadLetter)
@@ -699,60 +760,19 @@ public class RabbitMQProvider : IMessagingProvider
 
         var queueName = QueueOf(subscriptionName ?? entityName, subQueue);
 
-        var result = new BatchOperationResult();
-
-        // Fast path: delete everything maps to a queue purge.
         if (all)
         {
-            var purged = _channel!.QueuePurge(queueName);
-            result.SuccessCount = checked((int)purged);
-            return result;
+            if (await IsStreamAsync(queueName, cancellationToken))
+                throw new InvalidEntityConfigurationException([StreamNotPurged]);
+            return new BatchOperationResult { SuccessCount = checked((int)_channel!.QueuePurge(queueName)) };
         }
 
         if (sequenceNumbers == null || sequenceNumbers.Length == 0)
-        {
-            return result;
-        }
+            return new BatchOperationResult();
 
-        var targetIndices = new HashSet<long>(sequenceNumbers);
-        var maxIndex = sequenceNumbers.Max();
-
-        // Consume up to maxIndex messages from the queue
-        var messages = (await _managementClient!.GetMessagesAsync(queueName, (int)maxIndex, "ack_requeue_false", "auto")).ToList();
-
-        for (int i = 0; i < messages.Count; i++)
-        {
-            var position = i + 1; // 1-based index matching pseudo-sequence numbers
-            var msg = messages[i];
-
-            if (targetIndices.Contains(position))
-            {
-                // Target message: discard (don't republish) = delete
-                result.SuccessCount++;
-            }
-            else
-            {
-                // Non-target message: republish back to the same queue
-                try
-                {
-                    var properties = MapPropertiesToPublishDictionary(msg.Properties);
-                    var payload = msg.Payload ?? string.Empty;
-                    var encoding = msg.PayloadEncoding == "base64" ? "base64" : "string";
-                    await _managementClient.PublishToQueueAsync(queueName, payload, properties, encoding);
-                }
-                catch (Exception ex)
-                {
-                    result.FailureCount++;
-                    result.Failures.Add(new BatchOperationFailure
-                    {
-                        SequenceNumber = position,
-                        Error = $"Failed to re-queue non-target message: {ex.Message}"
-                    });
-                }
-            }
-        }
-
-        return result;
+        var positions = sequenceNumbers.Distinct().Order().ToArray();
+        var stream = await IsStreamAsync(queueName, cancellationToken);
+        return await Task.Run(() => TransferConfirmed(null, queueName, positions, "Not deleted", subQueue, stream, cancellationToken), cancellationToken);
     }
 
     /// <inheritdoc />
@@ -777,29 +797,66 @@ public class RabbitMQProvider : IMessagingProvider
 
         var queueName = subscriptionName ?? entityName;
         var positions = sequenceNumbers.Distinct().Order().ToArray();
-        return await Task.Run(() => ResubmitConfirmed(queueName, $"{queueName}.dlq", positions, cancellationToken), cancellationToken);
+        var stream = await IsStreamAsync($"{queueName}.dlq", cancellationToken);
+        return await Task.Run(() => TransferConfirmed(queueName, $"{queueName}.dlq", positions, "Not resubmitted", MessageSubQueue.DeadLetter, stream, cancellationToken), cancellationToken);
     }
 
     /// <summary>A channel closed by the broker for access refused (403) or a failed precondition (406): the message was not taken.</summary>
     private static bool IsBrokerRefusal(Exception ex)
     {
-        var reason = ex switch
-        {
-            AlreadyClosedException closed => closed.ShutdownReason,
-            OperationInterruptedException interrupted => interrupted.ShutdownReason,
-            _ => null
-        };
-        return reason is { Initiator: ShutdownInitiator.Peer, ReplyCode: 403 or 406 }
-            && !reason.ReplyText.Contains("delivery acknowledgement", StringComparison.OrdinalIgnoreCase);
+        return ClosedForAFrameItReceived(ClosedReason(ex));
     }
 
-    private BatchOperationResult ResubmitConfirmed(string queueName, string deadLetterQueue, long[] positions, CancellationToken cancellationToken)
+    /// <summary>
+    /// A close the broker answered to a frame of this channel, access refused (403) or a failed precondition (406): it
+    /// processed every frame before that one. A 406 for an expired delivery comes from the broker's own clock instead.
+    /// </summary>
+    private static bool ClosedForAFrameItReceived(ShutdownEventArgs? reason) =>
+        reason is { Initiator: ShutdownInitiator.Peer, ReplyCode: 403 or 406 }
+        && !reason.ReplyText.Contains("delivery acknowledgement", StringComparison.OrdinalIgnoreCase);
+
+    private const string StreamNotRead = "a stream is not read this way";
+    private const string StreamNotPurged = "A stream cannot be purged: it keeps its messages until its retention removes them.";
+
+    /// <summary>
+    /// Whether the queue is a stream, read from the management API before the broker is asked for a message: a stream
+    /// answers a get by closing the whole connection. When the management API cannot be reached, times out or
+    /// answers what cannot be read, the type is unknown, the answer is false and the broker decides.
+    /// </summary>
+    private async Task<bool> IsStreamAsync(string queueName, CancellationToken cancellationToken)
     {
+        try
+        {
+            return (await _managementClient!.GetQueueAsync(queueName, cancellationToken))?.QueueType == "stream";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException
+            || (ex is OperationCanceledException && !cancellationToken.IsCancellationRequested))
+        {
+            return false;
+        }
+    }
+
+    /// <summary>The highest position a bulk call holds messages up to: the most a peek shows.</summary>
+    private const int MaxPosition = 1000;
+
+    /// <summary>
+    /// Holds the messages of <paramref name="sourceQueue"/> up to the last of <paramref name="positions"/> and, for each
+    /// chosen one, publishes it to <paramref name="targetQueue"/> with a confirm and then acknowledges it, or only
+    /// acknowledges it when there is no target; the others go back in their order. The publish and its confirm run on a
+    /// channel of their own, so a publish the broker refuses closes that one and the held messages are still requeued
+    /// by the channel that holds them, not returned by its death. The batch stops at the first
+    /// failure, and a removal the broker did not prove is reported, never counted as a success. A position beyond
+    /// <see cref="MaxPosition"/> is refused before anything is read, so the messages held are bounded.
+    /// </summary>
+    private BatchOperationResult TransferConfirmed(string? targetQueue, string sourceQueue, long[] positions, string not, MessageSubQueue subQueue, bool sourceIsStream, CancellationToken cancellationToken)
+    {
+        var source = subQueue == MessageSubQueue.DeadLetter ? "the dead-letter queue" : "the queue";
+        var stoppedAfterAFailure = $"{not}: the batch stopped after an earlier message failed. The message is still in {source}.";
         var result = new BatchOperationResult();
-        void Fail(long position, string error)
+        void Fail(long position, string error, bool possibleDuplicate = false)
         {
             result.FailureCount++;
-            result.Failures.Add(new BatchOperationFailure { SequenceNumber = position, Error = error });
+            result.Failures.Add(new BatchOperationFailure { SequenceNumber = position, Error = error, PossibleDuplicate = possibleDuplicate });
         }
         BatchOperationResult FailAll(string error)
         {
@@ -807,33 +864,49 @@ public class RabbitMQProvider : IMessagingProvider
             return result;
         }
 
+        if (sourceIsStream)
+            return FailAll($"{not}: {StreamNotRead}. Nothing was sent or removed.");
+        if (positions[^1] > MaxPosition)
+            return FailAll($"{not}: a position beyond {MaxPosition} cannot be reached. Nothing was sent or removed.");
+
         using var channel = _connection!.CreateModel();
         uint consumers;
         try
         {
-            consumers = channel.QueueDeclarePassive(deadLetterQueue).ConsumerCount;
+            consumers = channel.QueueDeclarePassive(sourceQueue).ConsumerCount;
         }
         catch (OperationInterruptedException)
         {
-            return FailAll("Not resubmitted: this queue has no dead-letter queue.");
+            return FailAll(subQueue == MessageSubQueue.DeadLetter ? $"{not}: this queue has no dead-letter queue." : $"{not}: the queue does not exist.");
         }
         if (consumers > 0)
-            return FailAll("Not resubmitted: the dead-letter queue has a consumer, so the position of a message may have changed. Nothing was sent or removed.");
+            return FailAll($"{not}: {source} has a consumer, so the position of a message may have changed. Nothing was sent or removed.");
 
         var returned = 0;
-        channel.BasicReturn += (_, _) => Volatile.Write(ref returned, 1);
-        channel.ConfirmSelect();
+        using var publisher = targetQueue != null ? _connection.CreateModel() : null;
+        if (publisher != null)
+        {
+            publisher.BasicReturn += (_, _) => Volatile.Write(ref returned, 1);
+            publisher.ConfirmSelect();
+        }
         var held = new List<BasicGetResult?>();
-        var sent = new List<long>();
+        var removed = new List<long>();
         string? stopped = null;
         try
         {
-            while (held.Count < positions[^1])
+            try
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                var delivery = channel.BasicGet(deadLetterQueue, autoAck: false);
-                if (delivery == null) break;
-                held.Add(delivery);
+                while (held.Count < positions[^1])
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var delivery = channel.BasicGet(sourceQueue, autoAck: false);
+                    if (delivery == null) break;
+                    held.Add(delivery);
+                }
+            }
+            catch (Exception ex) when (ex is AlreadyClosedException or OperationInterruptedException or IOException)
+            {
+                return FailAll($"{not}: {source} could not be read ({ex.Message}). Nothing was sent or removed.");
             }
 
             foreach (var position in positions)
@@ -845,64 +918,70 @@ public class RabbitMQProvider : IMessagingProvider
                 }
                 if (cancellationToken.IsCancellationRequested)
                 {
-                    Fail(position, "Not resubmitted: the operation was cancelled. The message is still in the dead-letter queue.");
+                    Fail(position, $"{not}: the operation was cancelled. The message is still in {source}.");
                     continue;
                 }
                 if (position < 1 || position > held.Count)
                 {
-                    Fail(position, "Not resubmitted: no message at this position in the dead-letter queue.");
+                    Fail(position, $"{not}: no message at this position in {source}.");
                     continue;
                 }
 
                 var message = held[(int)position - 1]!;
-                try
+                if (publisher != null)
                 {
-                    Volatile.Write(ref returned, 0);
-                    channel.BasicPublish("", queueName, mandatory: true, message.BasicProperties, message.Body);
-                }
-                catch (Exception ex) when (ex is AlreadyClosedException or OperationInterruptedException or IOException)
-                {
-                    Fail(position, $"Not resubmitted: {ex.Message}. The message is still in the dead-letter queue.");
-                    stopped = StoppedAfterAFailure;
-                    continue;
-                }
+                    try
+                    {
+                        Volatile.Write(ref returned, 0);
+                        publisher.BasicPublish("", targetQueue, mandatory: true, message.BasicProperties, message.Body);
+                    }
+                    catch (Exception ex) when (ex is AlreadyClosedException or OperationInterruptedException or IOException)
+                    {
+                        Fail(position, $"{not}: {ex.Message}. The message is still in {source}.");
+                        stopped = stoppedAfterAFailure;
+                        continue;
+                    }
 
-                bool confirmed, timedOut;
-                try
-                {
-                    confirmed = channel.WaitForConfirms(ConfirmTimeout, out timedOut);
-                }
-                catch (Exception ex) when (ex is AlreadyClosedException or OperationInterruptedException or IOException)
-                {
-                    Fail(position, IsBrokerRefusal(ex)
-                        ? $"Not resubmitted: the broker refused the message ({ex.Message}). It is still in the dead-letter queue."
-                        : "The connection failed before the broker confirmed: the message may have been sent and is still in the dead-letter queue. Possible duplicate.");
-                    stopped = StoppedAfterAFailure;
-                    continue;
-                }
-                if (timedOut)
-                {
-                    Fail(position, "The broker did not confirm in time: the message may have been sent and is still in the dead-letter queue. Possible duplicate.");
-                    stopped = StoppedAfterAFailure;
-                    continue;
-                }
-                if (!confirmed || Volatile.Read(ref returned) == 1)
-                {
-                    Fail(position, "Not resubmitted: the broker did not accept the message. It is still in the dead-letter queue.");
-                    stopped = StoppedAfterAFailure;
-                    continue;
+                    bool confirmed, timedOut;
+                    try
+                    {
+                        confirmed = publisher.WaitForConfirms(ConfirmTimeout, out timedOut);
+                    }
+                    catch (Exception ex) when (ex is AlreadyClosedException or OperationInterruptedException or IOException)
+                    {
+                        if (IsBrokerRefusal(ex))
+                            Fail(position, $"{not}: the broker refused the message ({ex.Message}). It is still in {source}.");
+                        else
+                            Fail(position, $"The connection failed before the broker confirmed: the message may have been sent and is still in {source}. It may be duplicated.", possibleDuplicate: true);
+                        stopped = stoppedAfterAFailure;
+                        continue;
+                    }
+                    if (timedOut)
+                    {
+                        Fail(position, $"The broker did not confirm in time: the message may have been sent and is still in {source}. It may be duplicated.", possibleDuplicate: true);
+                        stopped = stoppedAfterAFailure;
+                        continue;
+                    }
+                    if (!confirmed || Volatile.Read(ref returned) == 1)
+                    {
+                        Fail(position, $"{not}: the broker did not accept the message. It is still in {source}.");
+                        stopped = stoppedAfterAFailure;
+                        continue;
+                    }
                 }
 
                 try
                 {
                     channel.BasicAck(message.DeliveryTag, multiple: false);
                     held[(int)position - 1] = null;
-                    sent.Add(position);
+                    removed.Add(position);
                 }
                 catch (Exception ex) when (ex is AlreadyClosedException or OperationInterruptedException or IOException)
                 {
-                    Fail(position, "Sent, but not removed from the dead-letter queue. Possible duplicate.");
-                    stopped = StoppedAfterAFailure;
+                    Fail(position, targetQueue != null
+                        ? $"Sent, but not removed from {source}. It may be duplicated."
+                        : $"The removal from {source} was not confirmed. The message may still be there.", possibleDuplicate: targetQueue != null);
+                    stopped = stoppedAfterAFailure;
                 }
             }
         }
@@ -915,20 +994,19 @@ public class RabbitMQProvider : IMessagingProvider
             }
             catch (Exception ex) when (ex is AlreadyClosedException or OperationInterruptedException or IOException)
             {
-                // A channel that closes requeues every delivery it still holds.
             }
         }
 
         if (RemovalsSettled(channel))
-            result.SuccessCount += sent.Count;
+            result.SuccessCount += removed.Count;
         else
-            foreach (var position in sent)
-                Fail(position, "Sent, but its removal from the dead-letter queue was not confirmed. Possible duplicate.");
+            foreach (var position in removed)
+                Fail(position, targetQueue != null
+                    ? $"Sent, but its removal from {source} was not confirmed. It may be duplicated."
+                    : $"The removal from {source} was not confirmed. The message may still be there.", possibleDuplicate: targetQueue != null);
 
         return result;
     }
-
-    private const string StoppedAfterAFailure = "Not resubmitted: the batch stopped after an earlier message failed. The message is still in the dead-letter queue.";
 
     /// <summary>
     /// Whether the broker processed every acknowledgement sent on the channel: a close it answered comes after them, and a
@@ -937,20 +1015,25 @@ public class RabbitMQProvider : IMessagingProvider
     private static bool RemovalsSettled(IModel channel)
     {
         if (!channel.IsOpen)
-            return channel.CloseReason is { Initiator: ShutdownInitiator.Peer, ReplyCode: 403 or 406 };
+            return ClosedForAFrameItReceived(channel.CloseReason);
         try
         {
             channel.Close();
             return true;
         }
-        catch (Exception ex) when (ex is AlreadyClosedException or OperationInterruptedException or IOException)
+        catch (Exception)
         {
             return false;
         }
     }
 
     /// <inheritdoc />
-    /// <remarks>RabbitMQ has no duplicate detection, so <paramref name="newMessageIdOnDuplicateDetection"/> changes nothing.</remarks>
+    /// <remarks>
+    /// Send first, remove after, as a resubmit: each chosen message is published to the target queue with a publisher
+    /// confirm and removed from its source only once the broker confirmed it; a target that does not exist returns the
+    /// message, which then stays in the source. RabbitMQ has no duplicate detection, so
+    /// <paramref name="newMessageIdOnDuplicateDetection"/> changes nothing.
+    /// </remarks>
     public async Task<BatchOperationResult> MoveMessagesAsync(string sourceEntityName, string targetQueueName, long[] sequenceNumbers, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, bool newMessageIdOnDuplicateDetection = false, CancellationToken cancellationToken = default)
     {
         if (subQueue == MessageSubQueue.TransferDeadLetter)
@@ -958,64 +1041,29 @@ public class RabbitMQProvider : IMessagingProvider
 
         EnsureConnected();
 
-        var sourceQueue = QueueOf(sourceEntityName, subQueue);
+        if (sequenceNumbers == null || sequenceNumbers.Length == 0)
+            return new BatchOperationResult();
 
-        var targetIndices = new HashSet<long>(sequenceNumbers);
-        var maxIndex = sequenceNumbers.Max();
-        var result = new BatchOperationResult();
-
-        // Consume up to maxIndex messages from the source queue
-        var messages = (await _managementClient!.GetMessagesAsync(sourceQueue, (int)maxIndex, "ack_requeue_false", "auto")).ToList();
-
-        for (int i = 0; i < messages.Count; i++)
-        {
-            var position = i + 1;
-            var msg = messages[i];
-            var properties = MapPropertiesToPublishDictionary(msg.Properties);
-            var payload = msg.Payload ?? string.Empty;
-            var encoding = msg.PayloadEncoding == "base64" ? "base64" : "string";
-
-            try
-            {
-                if (targetIndices.Contains(position))
-                {
-                    // Target message: publish to the target queue
-                    await _managementClient.PublishToQueueAsync(targetQueueName, payload, properties, encoding);
-                    result.SuccessCount++;
-                }
-                else
-                {
-                    // Non-target message: republish back to the source queue
-                    await _managementClient.PublishToQueueAsync(sourceQueue, payload, properties, encoding);
-                }
-            }
-            catch (Exception ex)
-            {
-                result.FailureCount++;
-                result.Failures.Add(new BatchOperationFailure
-                {
-                    SequenceNumber = position,
-                    Error = ex.Message
-                });
-            }
-        }
-
-        return result;
+        var sourceQueue = QueueOf(subscriptionName ?? sourceEntityName, subQueue);
+        var positions = sequenceNumbers.Distinct().Order().ToArray();
+        var stream = await IsStreamAsync(sourceQueue, cancellationToken);
+        return await Task.Run(() => TransferConfirmed(targetQueueName, sourceQueue, positions, "Not moved", subQueue, stream, cancellationToken), cancellationToken);
     }
 
     /// <inheritdoc />
-    public Task PurgeMessagesAsync(string entityName, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, CancellationToken cancellationToken = default)
+    /// <remarks>A stream is refused before the broker is asked: it answers a purge by closing the whole connection.</remarks>
+    public async Task PurgeMessagesAsync(string entityName, MessageSubQueue subQueue = MessageSubQueue.Active, string? subscriptionName = null, CancellationToken cancellationToken = default)
     {
         if (subQueue == MessageSubQueue.TransferDeadLetter)
-            return Task.FromException(TransferDeadLetterNotSupported());
+            throw TransferDeadLetterNotSupported();
 
         EnsureConnected();
 
         var queueName = QueueOf(subscriptionName ?? entityName, subQueue);
+        if (await IsStreamAsync(queueName, cancellationToken))
+            throw new InvalidEntityConfigurationException([StreamNotPurged]);
 
-        // Use AMQP channel directly for purge - more reliable than Management API
         _channel!.QueuePurge(queueName);
-        return Task.CompletedTask;
     }
 
     private void ConfigureBasicProperties(IBasicProperties properties, SendMessageRequest request)
@@ -1218,9 +1266,9 @@ public class RabbitMQProvider : IMessagingProvider
         MessageSubQueue subQueue = MessageSubQueue.Active,
         string? subscriptionName = null,
         CancellationToken cancellationToken = default)
-        => subQueue == MessageSubQueue.TransferDeadLetter
-            ? Task.FromException<MessageSearchResult>(TransferDeadLetterNotSupported())
-            : Task.FromResult(new MessageSearchResult());
+        => Task.FromException<MessageSearchResult>(subQueue == MessageSubQueue.TransferDeadLetter
+            ? TransferDeadLetterNotSupported()
+            : new NotSupportedException("RabbitMQ does not support searching messages."));
 
     /// <inheritdoc />
     public Task<BatchOperationResult> CancelScheduledMessagesAsync(string entityName, long[] sequenceNumbers, CancellationToken cancellationToken = default) =>
@@ -1301,28 +1349,6 @@ public class RabbitMQProvider : IMessagingProvider
             _channel = _connection!.CreateModel();
     }
 
-    private static Dictionary<string, object> MapPropertiesToPublishDictionary(MessageProperties? props)
-    {
-        var dict = new Dictionary<string, object>();
-        if (props == null) return dict;
-
-        if (props.ContentType != null) dict["content_type"] = props.ContentType;
-        if (props.ContentEncoding != null) dict["content_encoding"] = props.ContentEncoding;
-        if (props.DeliveryMode.HasValue) dict["delivery_mode"] = props.DeliveryMode.Value;
-        if (props.Priority.HasValue) dict["priority"] = props.Priority.Value;
-        if (props.CorrelationId != null) dict["correlation_id"] = props.CorrelationId;
-        if (props.ReplyTo != null) dict["reply_to"] = props.ReplyTo;
-        if (props.Expiration != null) dict["expiration"] = props.Expiration;
-        if (props.MessageId != null) dict["message_id"] = props.MessageId;
-        if (props.Timestamp.HasValue) dict["timestamp"] = props.Timestamp.Value;
-        if (props.Type != null) dict["type"] = props.Type;
-        if (props.UserId != null) dict["user_id"] = props.UserId;
-        if (props.AppId != null) dict["app_id"] = props.AppId;
-        if (props.Headers != null) dict["headers"] = props.Headers;
-
-        return dict;
-    }
-
     #endregion
 
     #region IAsyncDisposable
@@ -1337,15 +1363,16 @@ public class RabbitMQProvider : IMessagingProvider
 
     #region Construction
 
-    public RabbitMQProvider()
+    public RabbitMQProvider(ILogger<RabbitMQProvider>? logger = null)
     {
+        _logger = logger ?? NullLogger<RabbitMQProvider>.Instance;
     }
 
     /// <summary>
     /// A provider over a connection and a management client that are already open, for tests that answer the
     /// management API with a handler of their own.
     /// </summary>
-    internal RabbitMQProvider(IConnection connection, RabbitMQManagementClient managementClient, IModel? channel = null)
+    internal RabbitMQProvider(IConnection connection, RabbitMQManagementClient managementClient, IModel? channel = null) : this()
     {
         _connection = connection;
         _managementClient = managementClient;

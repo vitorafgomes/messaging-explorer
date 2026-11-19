@@ -29,9 +29,10 @@ test.describe('RabbitMQ', () => {
     await card.getByRole('button', { name: 'Connect' }).click();
     await expect(page).toHaveURL(/#\/entities$/);
     await expect(page.locator('mat-toolbar .broker', { hasText: 'Connected to' })).toContainText(`localhost:${env('E2E_RABBIT_AMQP_PORT')}`);
-    for (const name of [SEED.queue, `${SEED.queue}.dlq`, SEED.subscription, SEED.topic]) {
+    for (const name of [SEED.queue, `${SEED.queue}.dlq`, SEED.topic]) {
       await expect(treeNode(page, name)).toBeVisible();
     }
+    await expect(treeNode(page, SEED.subscription), 'a queue bound to an exchange is not listed under Queues').toHaveCount(0);
     await shoot(page, 'entities-rabbitmq');
   });
 
@@ -54,12 +55,14 @@ test.describe('RabbitMQ', () => {
     await page.locator('mat-dialog-container').getByRole('button', { name: 'Cancel' }).click();
   });
 
-  test('a binding under an exchange opens the queue it feeds, which is listed once, under Queues', async ({ page }) => {
+  test('a queue bound to an exchange is listed once, under the exchange, and its binding opens it as a queue', async ({ page }) => {
     await open(page, 'entities');
+    await expect(treeNode(page, SEED.subscription), 'the bound queue is not listed under Queues').toHaveCount(0);
     await openSubscription(page, SEED.topic, SEED.subscription);
     await expect(page.locator('.entity-title h2')).toHaveText(SEED.subscription);
     await expect(page.locator('.entity-title')).toContainText('Queue');
-    await expect(treeNode(page, SEED.subscription), 'the queue row under Queues is the selected one').toHaveAttribute('aria-current', 'true');
+    const binding = page.locator('.tree-children .node-binding', { has: page.locator('.node-name', { hasText: SEED.subscription }) });
+    await expect(binding, 'the binding row of the queue that opened is the selected one').toHaveAttribute('aria-current', 'true');
     await shoot(page, 'binding-rabbitmq');
   });
 
@@ -77,6 +80,12 @@ test.describe('RabbitMQ', () => {
     await dialog.getByRole('button', { name: /Dead Letter/ }).click();
     await expect(messageBodies(page).first()).toHaveText(SEED.deadLetterBodies[0]);
     await shoot(page, 'messages-deadletter-rabbitmq');
+
+    await messageBodies(page).first().click();
+    const body = dialog.locator('.message-detail pre.body-content');
+    await expect(body, 'the whole body is on screen when a message is opened').toBeInViewport({ ratio: 1 });
+    expect(await body.evaluate(el => el.clientHeight >= el.scrollHeight && el.clientHeight >= 64), 'the body box is as tall as the body, never squeezed').toBe(true);
+    await shoot(page, 'message-details-rabbitmq');
   });
 
   test('peek lists each message of the queue once', async ({ page }) => {

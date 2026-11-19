@@ -4,7 +4,7 @@ const { spawn } = require('child_process');
 const { autoUpdater } = require('electron-updater');
 const crypto = require('crypto');
 const Store = require('electron-store');
-const { dataFilePath, showDataFile, openDevTools, isSafeExternalUrl, normalizeUpdateChannel, applyUpdateChannel, waitForHealth, stopProcess, applicationMenuTemplate, mainWindowOptions, shellShortcut, selfUpdateBlocker, configureAutoUpdate } = require('./shell-helpers');
+const { dataFilePath, showDataFile, openDevTools, isSafeExternalUrl, normalizeUpdateChannel, applyUpdateChannel, waitForHealth, stopProcess, applicationMenuTemplate, mainWindowOptions, shellShortcut, selfUpdateBlocker, configureAutoUpdate, readUpdateVersions, installUpdateVersion, backupDataFile } = require('./shell-helpers');
 
 // Generate a per-session API secret for Electron <-> .NET API authentication
 const API_SECRET = crypto.randomBytes(32).toString('hex');
@@ -835,7 +835,8 @@ ipcMain.handle('get-api-secret', () => API_SECRET);
 ipcMain.handle('get-api-port', () => apiPort);
 
 // === Auto Updater ===
-configureAutoUpdate(autoUpdater, process.platform, process.env);
+const keepsPickedVersion = () => store.get('pickedVersion') === app.getVersion();
+configureAutoUpdate(autoUpdater, process.platform, process.env, keepsPickedVersion());
 applyUpdateChannel(autoUpdater, normalizeUpdateChannel(store.get('updateChannel', 'latest')) ?? 'latest');
 
 function sendUpdateStatus(status, data = {}) {
@@ -851,7 +852,7 @@ autoUpdater.on('checking-for-update', () => {
 
 autoUpdater.on('update-available', (info) => {
   console.log('[Updater] Update available:', info.version);
-  sendUpdateStatus('available', { version: info.version, releaseNotes: info.releaseNotes });
+  sendUpdateStatus('available', { version: info.version, releaseNotes: info.releaseNotes, downloads: !keepsPickedVersion() });
 });
 
 autoUpdater.on('update-not-available', () => {
@@ -918,6 +919,50 @@ ipcMain.handle('get-update-channel', () => {
   return normalizeUpdateChannel(store.get('updateChannel', 'latest')) ?? 'latest';
 });
 
+// IPC: The versions of the chosen channel, read from the release page; takes no argument
+let lastListedVersions = [];
+let pickedVersionDownloaded = false;
+let installingPickedVersion = false;
+
+ipcMain.handle('list-update-versions', async () => {
+  const result = await readUpdateVersions({
+    fetchFn: (url) => fetch(url, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'messaging-explorer' }, signal: AbortSignal.timeout(15000) }),
+    channel: normalizeUpdateChannel(store.get('updateChannel', 'latest')) ?? 'latest',
+    installedVersion: app.getVersion(),
+    platform: process.platform
+  });
+  if (result.status === 'ok') lastListedVersions = result.versions;
+  return result;
+});
+
+// IPC: Download one version of the last list, picked and agreed to by the user; the address is built by the helper
+ipcMain.handle('install-update-version', async (event, request) => {
+  if (isDev) return { status: 'error', message: 'A development run installs nothing.' };
+  if (installingPickedVersion) return { status: 'error', message: 'A version is already being downloaded.' };
+  installingPickedVersion = true;
+  try {
+    const fs = require('fs');
+    const dataFile = dataFilePath(app.getPath('userData'));
+    const result = await installUpdateVersion({
+      updater: autoUpdater,
+      version: request?.version, agreed: request?.agreed, listed: lastListedVersions,
+      installedVersion: app.getVersion(),
+      channel: normalizeUpdateChannel(store.get('updateChannel', 'latest')) ?? 'latest',
+      platform: process.platform,
+      env: process.env,
+      backup: () => backupDataFile(dataFile, app.getVersion(), { exists: fs.existsSync, copy: fs.copyFileSync }),
+      keepsPickedVersion: keepsPickedVersion()
+    });
+    if (result.status === 'ok') {
+      pickedVersionDownloaded = true;
+      store.set('pickedVersion', result.version);
+    }
+    return result;
+  } finally {
+    installingPickedVersion = false;
+  }
+});
+
 // Check for updates shortly after launch and then on a fixed interval so
 // long-running sessions (the app is often left open all day) still pick up
 // new releases without requiring a restart.
@@ -927,6 +972,7 @@ const UPDATE_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
 function scheduleUpdateChecks() {
   if (isDev) return;
   const runCheck = () => {
+    if (pickedVersionDownloaded) return;
     autoUpdater.checkForUpdates().then(result => result?.downloadPromise?.catch(() => {})).catch(err => {
       console.log('[Updater] Auto-check failed (offline?):', err.message);
     });

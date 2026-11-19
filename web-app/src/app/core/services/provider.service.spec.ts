@@ -40,6 +40,19 @@ describe('ProviderService holds the capabilities of the connected provider', () 
     expect(service.isFeatureSupported('supportsDeadLetterQueue')).toBe(false);
   });
 
+  it('each connection reads the capabilities again, so a second connection of the same provider that reports no message counts is not shown the first one\'s', () => {
+    capabilitiesResponse = () => of({ supportsMessageCounts: true });
+    status$.next(rabbitConnected);
+    expect(service.capabilities()?.supportsMessageCounts).toBe(true);
+
+    status$.next({ connected: false });
+    capabilitiesResponse = () => of({ supportsMessageCounts: false });
+    status$.next(rabbitConnected);
+
+    expect(get.mock.calls.filter(call => call[0] === 'connections/providers/1/capabilities').length, 'one read for each connection').toBe(2);
+    expect(service.capabilities()?.supportsMessageCounts).toBe(false);
+  });
+
   it('while the capabilities load, the built-in defaults of the connected provider apply', () => {
     capabilitiesResponse = () => new Subject<ProviderCapabilities>();
 

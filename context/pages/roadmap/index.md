@@ -26,4 +26,6 @@ Initiatives, the backlog, audits and the follow-ups tracker.
 - [[pages/roadmap/tests-of-everything|Tests of everything]] - Four phases: the providers against real brokers in Docker, every controller, the web app where it acts on messages, the packaged app.
 - [[pages/roadmap/code-audit-2026-11|Code audit, November 2026]] - The line-by-line bug hunt of the back end and the front end: findings by area and severity, improvements, and where to start.
 - [[pages/roadmap/improvement-plan|Improvement plan]] - The order of work in seven phases: land what is open, gates that tell the truth, message and secret safety, a release that works on three systems, dependencies, the API boundary, tests and structure.
+- [[pages/roadmap/rabbitmq-and-service-bus-completion|RabbitMQ and Azure Service Bus: what is left]] - Ten phases, in order, that close the two brokers: what each needs from the owner, what proves it and what stays out.
+- [[pages/roadmap/settings-data-and-updates|Settings: a version picker and a Monitoring history]] - Choosing which version to install, with its notes and an agreement, and an optional history behind Monitoring kept for a period the user sets: what to build, the order and the open decisions.
 - [[pages/roadmap/followups|Follow-ups]] - The tracker of known gaps, by risk, and the owner decisions pending.

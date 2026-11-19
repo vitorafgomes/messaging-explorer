@@ -5,6 +5,7 @@ export * from './connection-group.service';
 export * from './queue.service';
 export * from './topic.service';
 export * from './entity-selection.service';
+export * from './entity-counts.service';
 export * from './message-search.service';
 export * from './advanced-message-filter.service';
 export * from './tree-data-builder.service';

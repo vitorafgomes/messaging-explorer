@@ -347,3 +347,19 @@ table {
   font: var(--mat-sys-body-small);
   color: var(--mat-sys-on-surface-variant);
 }
+
+.counts-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
+
+  mat-icon {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
+  }
+}

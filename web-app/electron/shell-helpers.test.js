@@ -399,8 +399,239 @@ test('an update downloads on its own and installs on quit only where the package
   }
 });
 
+test('a version the user picked is kept: while it is the one running nothing newer downloads or installs by itself', () => {
+  const updater = { autoDownload: true, autoInstallOnAppQuit: true };
+  configureAutoUpdate(updater, 'linux', { APPIMAGE: '/opt/app.AppImage' }, true);
+  assert.deepEqual(updater, { autoDownload: false, autoInstallOnAppQuit: true }, 'nothing downloads by itself, and what the user downloads still installs on quit');
+
+  configureAutoUpdate(updater, 'linux', { APPIMAGE: '/opt/app.AppImage' }, false);
+  assert.deepEqual(updater, { autoDownload: true, autoInstallOnAppQuit: true }, 'a version that was not picked updates as before');
+});
+
 test('main.js configures the updater through configureAutoUpdate and sets autoDownload nowhere else', () => {
   const main = require('node:fs').readFileSync(require('node:path').join(__dirname, 'main.js'), 'utf8');
-  assert.match(main, /^configureAutoUpdate\(autoUpdater, process\.platform, process\.env\);$/m);
+  assert.match(main, /^configureAutoUpdate\(autoUpdater, process\.platform, process\.env, keepsPickedVersion\(\)\);$/m);
+  assert.match(main, /^const keepsPickedVersion = \(\) => store\.get\('pickedVersion'\) === app\.getVersion\(\);$/m, 'the version the user picked is kept while it is the one running');
   assert.doesNotMatch(main, /autoUpdater\.(autoDownload|autoInstallOnAppQuit)\s*=/);
+});
+
+const { updateVersions, readUpdateVersions, RELEASES_API_URL } = require('./shell-helpers');
+
+const release = (tag, extra = {}) => ({ tag_name: tag, published_at: '2026-11-15T20:12:48Z', body: `notes of ${tag}`, draft: false, ...extra });
+
+test('Stable lists the releases that are not betas and Beta lists only the betas, newest first as the release page gives them', () => {
+  const releases = [release('v2.4.5-beta.7'), release('v2.4.4'), release('v2.4.5-beta.6'), release('v2.4.3')];
+
+  assert.deepEqual(updateVersions(releases, 'latest', '2.4.3').map(v => v.version), ['2.4.4', '2.4.3']);
+  assert.deepEqual(updateVersions(releases, 'beta', '2.4.3').map(v => v.version), ['2.4.5-beta.7', '2.4.5-beta.6']);
+});
+
+test('each version carries its date, its notes as the text the release holds, and whether it is the installed one', () => {
+  const [newer, installed] = updateVersions([release('v2.4.4', { body: '<script>alert(1)</script>\n- a fix' }), release('v2.4.3')], 'latest', '2.4.3');
+
+  assert.deepEqual(newer, { version: '2.4.4', date: '2026-11-15T20:12:48Z', notes: '<script>alert(1)</script>\n- a fix', installed: false, older: false, installable: false });
+  assert.equal(installed.installed, true);
+});
+
+test('a release whose tag is not a version of this app, a draft, and an entry that is not a release are left out', () => {
+  const releases = [release('nightly'), release('v2.4'), release('v2.4.4-rc.1'), release('v2.4.4', { draft: true }), null, 'text', { tag_name: 7 }, release('v2.4.2')];
+
+  assert.deepEqual(updateVersions(releases, 'latest', '').map(v => v.version), ['2.4.2']);
+});
+
+test('at most 30 versions are listed and notes longer than 20000 characters are cut', () => {
+  const many = Array.from({ length: 40 }, (_, i) => release(`v1.0.${40 - i}`, { body: 'x'.repeat(30000) }));
+
+  const versions = updateVersions(many, 'latest', '');
+
+  assert.equal(versions.length, 30);
+  assert.equal(versions[0].version, '1.0.40');
+  assert.equal(versions[0].notes.length, 20000);
+});
+
+test('an answer that is not a list of releases is no list at all, never an empty one', () => {
+  for (const answer of [null, undefined, { message: 'API rate limit exceeded' }, 'text']) {
+    assert.equal(updateVersions(answer, 'latest', ''), null);
+  }
+});
+
+test('the release list is read from the fixed address of this repository, and the versions come back for the channel', async () => {
+  const asked = [];
+  const fetchFn = async url => { asked.push(url); return { ok: true, status: 200, json: async () => [release('v2.4.4'), release('v2.4.5-beta.7')] }; };
+
+  const answer = await readUpdateVersions({ fetchFn, channel: 'beta', installedVersion: '2.4.5-beta.7' });
+
+  assert.deepEqual(asked, [RELEASES_API_URL]);
+  assert.equal(RELEASES_API_URL, 'https://api.github.com/repos/vitorafgomes/messaging-explorer/releases?per_page=100');
+  assert.deepEqual(answer, { status: 'ok', channel: 'beta', versions: [{ version: '2.4.5-beta.7', date: '2026-11-15T20:12:48Z', notes: 'notes of v2.4.5-beta.7', installed: true, older: false, installable: false }] });
+});
+
+test('a release list that cannot be read says why: no answer, a request limit, another status, a body that is not a list', async () => {
+  const read = fetchFn => readUpdateVersions({ fetchFn, channel: 'latest', installedVersion: '2.4.3' });
+
+  assert.deepEqual(await read(async () => { throw new Error('getaddrinfo ENOTFOUND api.github.com'); }),
+    { status: 'error', message: 'The release list could not be reached. Check the connection to the internet.' });
+  for (const status of [403, 429]) {
+    assert.deepEqual(await read(async () => ({ ok: false, status, json: async () => ({}) })),
+      { status: 'error', message: 'The release page is limiting requests from this address. Try again in an hour.' });
+  }
+  assert.deepEqual(await read(async () => ({ ok: false, status: 503, json: async () => ({}) })),
+    { status: 'error', message: 'The release page answered 503.' });
+  assert.deepEqual(await read(async () => ({ ok: true, status: 200, json: async () => ({ message: 'unexpected' }) })),
+    { status: 'error', message: 'The release page answered something that is not a list of releases.' });
+  assert.deepEqual(await read(async () => ({ ok: true, status: 200, json: async () => { throw new SyntaxError('Unexpected token <'); } })),
+    { status: 'error', message: 'The release page answered something that is not a list of releases.' });
+});
+
+test('main.js lists the versions only through readUpdateVersions, with the stored channel and the installed version, and takes nothing from the renderer', () => {
+  const main = require('node:fs').readFileSync(require('node:path').join(__dirname, 'main.js'), 'utf8');
+  assert.match(main, /ipcMain\.handle\('list-update-versions', async \(\) => \{\n  const result = await readUpdateVersions\(\{/);
+  assert.doesNotMatch(main, /api\.github\.com/);
+  const handler = main.slice(main.indexOf("ipcMain.handle('list-update-versions'"), main.indexOf('// Check for updates shortly after launch'));
+  assert.match(handler, /signal: AbortSignal\.timeout\(15000\)/, 'the request gives up after 15 seconds');
+  assert.match(handler, /headers: \{ Accept: 'application\/vnd\.github\+json', 'User-Agent': 'messaging-explorer' \}/, 'the headers are fixed and carry nothing of the user or the machine');
+  assert.match(handler, /channel: normalizeUpdateChannel\(store\.get\('updateChannel', 'latest'\)\) \?\? 'latest'/, 'the channel is the stored one');
+  assert.match(handler, /installedVersion: app\.getVersion\(\)/);
+});
+
+const { installUpdateVersion, isOlderVersion, backupDataFile, UPDATE_FEED_FILES } = require('./shell-helpers');
+
+const listedVersions = [
+  { version: '2.4.5-beta.7', installed: true, installable: true },
+  { version: '2.4.5-beta.8', installed: false, installable: true },
+  { version: '2.4.3', installed: false, installable: true },
+  { version: '2.4.2', installed: false, installable: false }
+];
+
+function fakeUpdater({ checkFails, downloadFails, found = '2.4.3' } = {}) {
+  const calls = [];
+  return {
+    calls,
+    channel: 'beta', allowPrerelease: true, allowDowngrade: false, autoDownload: true, autoInstallOnAppQuit: true,
+    setFeedURL(feed) { calls.push(['setFeedURL', feed]); },
+    async checkForUpdates() {
+      calls.push(['check', { allowDowngrade: this.allowDowngrade, autoDownload: this.autoDownload, channel: this.channel }]);
+      if (checkFails) throw new Error('feed not found');
+      return { updateInfo: { version: found } };
+    },
+    async downloadUpdate() { calls.push(['download']); if (downloadFails) throw new Error('disk full'); }
+  };
+}
+
+const installRequest = (overrides = {}) => ({
+  updater: fakeUpdater(), version: '2.4.3', agreed: true, listed: listedVersions, installedVersion: '2.4.5-beta.7',
+  channel: 'beta', platform: 'linux', env: { APPIMAGE: '/opt/app.AppImage' }, backup: () => ({ status: 'ok' }), ...overrides
+});
+
+test('a version is older than another by its numbers, and a beta is older than the release of the same number', () => {
+  assert.equal(isOlderVersion('2.4.3', '2.4.5-beta.7'), true);
+  assert.equal(isOlderVersion('2.4.5-beta.7', '2.4.5'), true);
+  assert.equal(isOlderVersion('2.4.5-beta.6', '2.4.5-beta.7'), true);
+  assert.equal(isOlderVersion('2.4.10', '2.4.9'), false);
+  assert.equal(isOlderVersion('2.4.5', '2.4.5'), false);
+  assert.equal(isOlderVersion('2.4.5-beta.8', '2.4.5-beta.7'), false);
+});
+
+test('a listed version says whether its release holds the update file of this platform', () => {
+  const releases = [
+    { tag_name: 'v2.4.3', assets: [{ name: 'latest-linux.yml' }, { name: 'latest.yml' }] },
+    { tag_name: 'v2.4.2', assets: [{ name: 'latest-mac.yml' }] },
+    { tag_name: 'v2.4.1' }
+  ];
+  assert.deepEqual(updateVersions(releases, 'latest', '2.4.0', 'linux').map(v => [v.version, v.installable]), [['2.4.3', true], ['2.4.2', false], ['2.4.1', false]]);
+  assert.deepEqual(updateVersions(releases, 'latest', '2.4.0', 'darwin').map(v => v.installable), [false, true, false]);
+  assert.deepEqual(UPDATE_FEED_FILES, { linux: 'latest-linux.yml', win32: 'latest.yml', darwin: 'latest-mac.yml' });
+});
+
+test('installing a picked version points the updater at that release alone, allows the downgrade for that one install, downloads, and puts the updater back as it was', async () => {
+  const request = installRequest();
+  const result = await installUpdateVersion(request);
+
+  assert.deepEqual(result, { status: 'ok', version: '2.4.3' });
+  assert.deepEqual(request.updater.calls, [
+    ['setFeedURL', { provider: 'generic', url: 'https://github.com/vitorafgomes/messaging-explorer/releases/download/v2.4.3' }],
+    ['check', { allowDowngrade: true, autoDownload: false, channel: 'latest' }],
+    ['download'],
+    ['setFeedURL', { provider: 'github', owner: 'vitorafgomes', repo: 'messaging-explorer' }]
+  ]);
+  const { channel, allowPrerelease, allowDowngrade, autoDownload, autoInstallOnAppQuit } = request.updater;
+  assert.deepEqual({ channel, allowPrerelease, allowDowngrade, autoDownload, autoInstallOnAppQuit },
+    { channel: 'beta', allowPrerelease: true, allowDowngrade: false, autoDownload: false, autoInstallOnAppQuit: true },
+    'after a picked version was downloaded nothing else downloads by itself in this run, and it installs on quit');
+});
+
+test('a picked version that cannot be read or downloaded says why, installs nothing, and the updater is put back as it was', async () => {
+  for (const [failure, message] of [[{ checkFails: true }, 'feed not found'], [{ downloadFails: true }, 'disk full']]) {
+    const request = installRequest({ updater: fakeUpdater(failure) });
+    const result = await installUpdateVersion(request);
+
+    assert.deepEqual(result, { status: 'error', message: `Version 2.4.3 was not installed: ${message}` });
+    assert.deepEqual(request.updater.calls.at(-1), ['setFeedURL', { provider: 'github', owner: 'vitorafgomes', repo: 'messaging-explorer' }]);
+    assert.equal(request.updater.allowDowngrade, false);
+    assert.equal(request.updater.autoDownload, true);
+    assert.equal(request.updater.channel, 'beta');
+  }
+});
+
+test('a check that answers another version, as one already running for the newest would, downloads nothing and says so', async () => {
+  const request = installRequest({ updater: fakeUpdater({ found: '2.4.5-beta.8' }) });
+
+  assert.deepEqual(await installUpdateVersion(request), { status: 'error', message: 'Version 2.4.3 was not installed: the updater answered version 2.4.5-beta.8. Try again in a moment.' });
+  assert.equal(request.updater.calls.some(call => call[0] === 'download'), false, 'nothing was downloaded');
+  assert.equal(request.updater.allowDowngrade, false);
+});
+
+test('a version is installed only when it is a version of the last list, has the package of this platform, is not the installed one, and the user agreed; anything else never reaches the updater', async () => {
+  const refused = [
+    [{ version: 'https://example.net/evil' }, 'That is not a version of this app.'],
+    [{ version: '../v2.4.3' }, 'That is not a version of this app.'],
+    [{ version: undefined }, 'That is not a version of this app.'],
+    [{ version: '2.4.4' }, 'Version 2.4.4 is not in the list that was read. Read the versions again.'],
+    [{ listed: [] }, 'Version 2.4.3 is not in the list that was read. Read the versions again.'],
+    [{ agreed: false }, 'Nothing is installed without your agreement.'],
+    [{ agreed: 'true' }, 'Nothing is installed without your agreement.'],
+    [{ version: '2.4.5-beta.7' }, 'Version 2.4.5-beta.7 is the one you have.'],
+    [{ version: '2.4.2' }, 'The release of version 2.4.2 holds no package this app can install here. Download it from the release page.'],
+    [{ env: {} }, 'This package cannot replace itself. Download the version from the release page.']
+  ];
+  for (const [overrides, message] of refused) {
+    const request = installRequest(overrides);
+    assert.deepEqual(await installUpdateVersion(request), { status: 'error', message }, JSON.stringify(overrides));
+    assert.deepEqual(request.updater.calls, [], `the updater was called for ${JSON.stringify(overrides)}`);
+  }
+});
+
+test('before an older version is installed the connections file is copied beside the original, and a copy that fails stops the install', async () => {
+  const backups = [];
+  const older = installRequest({ backup: () => { backups.push('older'); return { status: 'ok' }; } });
+  await installUpdateVersion(older);
+  const newer = installRequest({ updater: fakeUpdater({ found: '2.4.5-beta.8' }), version: '2.4.5-beta.8', backup: () => { backups.push('newer'); return { status: 'ok' }; } });
+  await installUpdateVersion(newer);
+  assert.deepEqual(backups, ['older'], 'only a downgrade copies the file');
+
+  const failing = installRequest({ backup: () => ({ status: 'error', message: 'The connections file could not be copied: EACCES' }) });
+  assert.deepEqual(await installUpdateVersion(failing), { status: 'error', message: 'Version 2.4.3 was not installed: The connections file could not be copied: EACCES' });
+  assert.deepEqual(failing.updater.calls, []);
+});
+
+test('the copy of the connections file is named with the version left, and no file yet is no failure', () => {
+  const copies = [];
+  const copy = (from, to) => copies.push([from, to]);
+  assert.deepEqual(backupDataFile('/data/workspace.json', '2.4.5-beta.7', { exists: () => true, copy }), { status: 'ok', file: '/data/workspace.before-downgrade-from-2.4.5-beta.7.json' });
+  assert.deepEqual(copies, [['/data/workspace.json', '/data/workspace.before-downgrade-from-2.4.5-beta.7.json']]);
+  assert.deepEqual(backupDataFile('/data/workspace.json', '2.4.5-beta.7', { exists: () => false, copy }), { status: 'ok', file: null });
+  assert.deepEqual(backupDataFile('/data/workspace.json', '2.4.5-beta.7', { exists: () => true, copy: () => { throw new Error('EACCES'); } }),
+    { status: 'error', message: 'The connections file could not be copied: EACCES' });
+});
+
+test('main.js installs a picked version only through installUpdateVersion, with the versions of the last list it read, and the automatic check stands aside once one was downloaded', () => {
+  const main = require('node:fs').readFileSync(path.join(__dirname, 'main.js'), 'utf8');
+  const handler = main.slice(main.indexOf("ipcMain.handle('install-update-version'"), main.indexOf('// Check for updates shortly after launch'));
+  assert.match(handler, /ipcMain\.handle\('install-update-version', async \(event, request\) => \{/);
+  assert.match(handler, /version: request\?\.version, agreed: request\?\.agreed, listed: lastListedVersions,/);
+  assert.match(handler, /if \(result\.status === 'ok'\) \{\n      pickedVersionDownloaded = true;\n      store\.set\('pickedVersion', result\.version\);\n    \}/, 'the picked version is remembered so that it is kept after the restart');
+  assert.match(handler, /if \(installingPickedVersion\) return \{ status: 'error', message: 'A version is already being downloaded\.' \};\n  installingPickedVersion = true;\n  try \{/, 'one install at a time');
+  assert.match(handler, /\} finally \{\n    installingPickedVersion = false;\n  \}/);
+  assert.match(main, /if \(pickedVersionDownloaded\) return;\n\s+autoUpdater\.checkForUpdates\(\)/);
+  assert.doesNotMatch(main, /releases\/download/);
 });

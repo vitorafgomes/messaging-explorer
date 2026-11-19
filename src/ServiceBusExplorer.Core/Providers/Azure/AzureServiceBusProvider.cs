@@ -38,7 +38,7 @@ public class AzureServiceBusProvider : IMessagingProvider
     public ProviderType ProviderType => ProviderType.AzureServiceBus;
 
     /// <inheritdoc />
-    public IProviderCapabilities Capabilities => AzureProviderCapabilities.Instance;
+    public IProviderCapabilities Capabilities => AzureProviderCapabilities.For(_currentConfig);
 
     #endregion
 
@@ -1272,9 +1272,15 @@ public class AzureServiceBusProvider : IMessagingProvider
         EnsureConnected();
 
         await using var receiver = CreateReceiver(_client!, entityName, subscriptionName, subQueue);
-        var messages = await RefuseDisabledAsync(() => PeekCoreAsync(receiver, count, fromSequenceNumber, cancellationToken));
-
-        return messages.Select(m => MapToMessageInfo(m, subQueue != MessageSubQueue.Active, includeBody));
+        try
+        {
+            var messages = await RefuseDisabledAsync(() => PeekCoreAsync(receiver, count, fromSequenceNumber, cancellationToken));
+            return messages.Select(m => MapToMessageInfo(m, subQueue != MessageSubQueue.Active, includeBody));
+        }
+        catch (ServiceBusException ex)
+        {
+            throw new MessageReadFailedException(CauseOf(ex), ex);
+        }
     }
 
     /// <summary>
@@ -1485,36 +1491,47 @@ public class AzureServiceBusProvider : IMessagingProvider
         });
 
         const int maxReceiveAttempts = 5;
-        for (var attempt = 0; attempt < maxReceiveAttempts; attempt++)
+        var found = false;
+        try
         {
-            var messages = await receiver.ReceiveMessagesAsync(100, TimeSpan.FromSeconds(3));
-
-            if (messages.Count == 0)
-                break;
-
-            var found = false;
-            var abandonTasks = new List<Task>();
-
-            foreach (var msg in messages)
+            for (var attempt = 0; attempt < maxReceiveAttempts; attempt++)
             {
-                if (msg.SequenceNumber == sequenceNumber)
+                var messages = await receiver.ReceiveMessagesAsync(100, TimeSpan.FromSeconds(3));
+
+                if (messages.Count == 0)
+                    break;
+
+                var abandonTasks = new List<Task>();
+
+                foreach (var msg in messages)
                 {
-                    await receiver.CompleteMessageAsync(msg);
-                    found = true;
+                    if (msg.SequenceNumber == sequenceNumber)
+                    {
+                        await receiver.CompleteMessageAsync(msg);
+                        found = true;
+                    }
+                    else
+                    {
+                        abandonTasks.Add(receiver.AbandonMessageAsync(msg));
+                    }
                 }
-                else
-                {
-                    abandonTasks.Add(receiver.AbandonMessageAsync(msg));
-                }
+
+                await Task.WhenAll(abandonTasks);
+
+                if (found)
+                    return;
             }
-
-            await Task.WhenAll(abandonTasks);
-
-            if (found)
-                return;
+        }
+        catch (ServiceBusException) when (found)
+        {
+            return;
+        }
+        catch (ServiceBusException ex)
+        {
+            throw new InvalidEntityConfigurationException([string.Format(ResubmitDuplicateError, $"the broker did not remove it ({CauseOf(ex)}).")]);
         }
 
-        // Message was already resubmitted successfully even if we couldn't remove it from DLQ
+        throw new InvalidEntityConfigurationException([string.Format(ResubmitDuplicateError, "it was not found among the messages read to remove it.")]);
     }
 
     /// <inheritdoc />
@@ -2238,7 +2255,8 @@ public class AzureServiceBusProvider : IMessagingProvider
                 result.Failures.Add(new BatchOperationFailure
                 {
                     SequenceNumber = message.SequenceNumber,
-                    Error = string.Format(duplicateError, SendOutcomeUnknown)
+                    Error = string.Format(duplicateError, SendOutcomeUnknown),
+                    PossibleDuplicate = true
                 });
             }
 
@@ -2383,7 +2401,8 @@ public class AzureServiceBusProvider : IMessagingProvider
                     result.Failures.Add(new BatchOperationFailure
                     {
                         SequenceNumber = r.SequenceNumber,
-                        Error = string.Format(duplicateError, r.Error)
+                        Error = string.Format(duplicateError, r.Error),
+                        PossibleDuplicate = true
                     });
                 }
             }
@@ -2583,7 +2602,8 @@ public class AzureServiceBusProvider : IMessagingProvider
                     result.Failures.Add(new BatchOperationFailure
                     {
                         SequenceNumber = r.SequenceNumber,
-                        Error = string.Format(MoveDuplicateError, r.Error)
+                        Error = string.Format(MoveDuplicateError, r.Error),
+                        PossibleDuplicate = true
                     });
                 }
             }

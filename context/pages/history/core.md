@@ -1,9 +1,9 @@
 ---
 title: "Core history"
-version: "1.1"
+version: "1.2"
 date: 2026-11-13
-updated: 2026-11-14
-changes: "v1.1: dated entries above the version notes"
+updated: 2026-11-16
+changes: "v1.2: 2026-11-16, a RabbitMQ close that throws. v1.1: dated entries above the version notes"
 page_type: reference
 status: active
 description: "What changed in the Core project and when, newest first, as the service page header recorded it until 2026-11-13."
@@ -15,6 +15,29 @@ reliability: high
 # Core history
 
 What changed when in the project [[pages/services/core|Core]] describes, newest first.
+
+## 2026-11-16
+
+- The RabbitMQ provider writes to the application's logger, no longer to the console (`src/ServiceBusExplorer.Core.Tests/Providers/RabbitMQLoggingAndDatesTests.cs#A_connection_test_the_broker_does_not_answer_is_a_warning_in_the_application_log_with_no_password_and_nothing_on_the_console`), and a queue or an exchange carries no date, because the broker reports none. The gap "RabbitMQ logs to the console" is closed.
+
+- The Azure capabilities follow the connection: the development emulator declares no message counts and no transfer dead-letter queue. [[pages/services/core/azure-sub-queues]]
+
+- RabbitMQ receive and purge on a stream are refused before the broker is asked; either one closed the whole connection. RabbitMQ search throws and `SupportsMessageSearch` is declared; it answered an empty result ([[pages/services/core/rabbitmq-and-legacy]]).
+
+- A batch failure carries `PossibleDuplicate`, set by both providers where a message was sent, or may have been, and was not removed; the web app read it from the words of the text.
+- Azure single resubmit. Was: when the original could not be removed after the copy was sent, the call returned as if all was done. Is: it throws `InvalidEntityConfigurationException` with the possible-duplicate sentence, which the route answers as a 400 ([[pages/invariants/bulk-operations-are-at-least-once]]). `Defect_single_resubmit_of_a_message_deep_in_the_dead_letter_queue_sends_it_and_leaves_it_there` changed on purpose: it now expects that sentence.
+- Closed without a change, on reading the code and its tests: a send that fails partway through a resubmit or move cycle has reported its messages as possible duplicates since 2026-11-13 (`src/ServiceBusExplorer.Core.Tests/Providers/Azure/AzureServiceBusProviderSubQueueTests.cs#A_resubmit_or_move_whose_second_send_times_out_reports_both_sends_as_possible_duplicates_and_nothing_as_not_found`); the follow-up that said otherwise was stale.
+
+- RabbitMQ send. Was: published on the shared channel with no `mandatory` and no confirm, to an exchange when the message had a subject and to the default exchange otherwise. Is: confirmed, on a channel of its own, to the queue of that name or else the exchange ([[pages/services/core/rabbitmq-and-legacy]]). `Defect_send_to_a_fanout_exchange_without_subject_is_dropped_and_reports_success` changed on purpose; the setup of `RabbitMQSendBatchTests` gained a confirm and the send's own channel, its assertions are the same.
+- RabbitMQ peek. Was: a refusal left the provider as an exception of the RabbitMQ client, and a peek of a stream closed the connection. Is: `MessageReadFailedException`, and a stream is refused before the broker is asked.
+
+- `SupportsBulkMessageOperations` is true for RabbitMQ; it was false since 2026-11-15. `RabbitMQ_declares_no_bulk_message_operations_and_Azure_Service_Bus_does` changed on purpose into `RabbitMQ_and_Azure_Service_Bus_both_declare_bulk_message_operations_and_only_RabbitMQ_names_a_message_by_position`.
+
+- RabbitMQ bulk delete and move. Was: both consumed up to the highest position through the management API and republished, so a failed or unrouted republish lost the message, the token was never read and move ignored the subscription. Is: both run on the resubmit's send-first path ([[pages/services/core/rabbitmq-and-legacy]]). `Defect_move_to_a_missing_queue_reports_success_and_the_message_is_gone` changed on purpose into `A_move_to_a_missing_queue_reports_the_failure_and_the_message_stays_in_the_source`.
+
+- Azure peek, the broker not answering. Was: any broker failure of a peek but a disabled entity left the provider as the SDK's `ServiceBusException`. Is: it leaves as `MessageReadFailedException` with a fixed sentence and the failure reason by name ([[pages/services/core/azure-sub-queues]]). Three tests of `AzureServiceBusProviderSubQueueTests.cs` changed on purpose: they asserted the SDK type and now assert the neutral one with the SDK error as its inner exception.
+
+- RabbitMQ resubmit, the close that proves the removals. Was: only a closed channel, an interrupted operation or an I/O error from the close counted as an unproven removal; any other exception, a timeout among them, left the call with no result, so the messages already sent were not reported. Is: any exception from the close reports each sent message as a possible duplicate (`src/ServiceBusExplorer.Core/Providers/RabbitMQ/RabbitMQProvider.cs#RemovalsSettled`). New test: `src/ServiceBusExplorer.Core.Tests/Providers/RabbitMQResubmitFailureTests.cs#A_close_that_times_out_leaves_the_removal_unproven_and_reports_the_sent_message_as_a_possible_duplicate` ([[pages/services/core/rabbitmq-and-legacy]]).
 
 ## 2026-11-15
 

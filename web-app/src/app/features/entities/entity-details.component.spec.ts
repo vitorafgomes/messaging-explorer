@@ -1,10 +1,11 @@
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import { BehaviorSubject, NEVER, of, throwError } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { EntityDetailsComponent } from './entity-details.component';
-import { ConnectionService, EntitySelectionService, QueueService, ResubmitRun, ResubmitRunService, SessionService, TopicService, TreeDataBuilderService } from '../../core/services';
+import { ConnectionService, EntityCountsService, EntitySelectionService, QueueService, ResubmitRun, ResubmitRunService, SessionService, TopicService, TreeDataBuilderService } from '../../core/services';
 import { EntitySelection, TreeNode } from '../../core/models';
 import { ConfirmDialogComponent } from '../../shared/confirm-dialog.component';
 import { DEFAULT_AZURE_CAPABILITIES, DEFAULT_RABBITMQ_CAPABILITIES, ProviderService } from '../../core/services/provider.service';
@@ -71,6 +72,30 @@ describe('EntityDetailsComponent purge confirmation', () => {
     });
     onSubscription.sendMessage();
     expect(dialog.open.mock.calls[0][1].data, 'the subscription time to live is not the topic one').toStrictEqual({ entityType: 'topic', entityName: 'events' });
+  });
+
+  it('the counts read for the entity shown are written where the tree and every other display read them', () => {
+    const onQueue = create({
+      type: 'queue',
+      node: { id: 'orders', name: 'orders', type: 'queue', icon: 'inbox', expandable: false, level: 1 },
+      entity: { name: 'orders', activeMessageCount: 120, deadLetterMessageCount: 7 } as never
+    });
+    onQueue.onCountsRead({ key: 'queue:orders', activeMessageCount: 118, deadLetterMessageCount: 9 });
+    onQueue.onCountsRead({ key: 'queue:invoices', activeMessageCount: 1, deadLetterMessageCount: 1 });
+    expect([onQueue.liveActiveCount(), onQueue.liveDeadLetterCount()], 'a read that arrives late for another entity is not shown as this one').toStrictEqual([118, 9]);
+    expect(TestBed.inject(EntityCountsService).of('queue:invoices'), 'and is kept for the entity it was read for').toStrictEqual({ activeMessageCount: 1, deadLetterMessageCount: 1 });
+    expect(TestBed.inject(EntityCountsService).of('queue:orders')).toStrictEqual({ activeMessageCount: 118, deadLetterMessageCount: 9 });
+
+    TestBed.resetTestingModule();
+    const onSubscription = create({
+      type: 'subscription',
+      node: { id: 'events/billing', name: 'billing', type: 'subscription', icon: 'mail', expandable: false, level: 2, data: { topicName: 'events', activeMessageCount: 5, deadLetterMessageCount: 2 } as never },
+      entity: { topicName: 'events', name: 'billing', activeMessageCount: 5, deadLetterMessageCount: 2 } as never
+    });
+    const node = onSubscription['selectionService'].currentSelection!.node;
+    onSubscription.onCountsRead({ key: 'subscription:events/billing', activeMessageCount: 4, deadLetterMessageCount: 3 });
+    expect(TestBed.inject(EntityCountsService).of('subscription:events/billing')).toStrictEqual({ activeMessageCount: 4, deadLetterMessageCount: 3 });
+    expect(node.data, 'the node the tree was given is left as it was loaded').toMatchObject({ activeMessageCount: 5, deadLetterMessageCount: 2 });
   });
 
   describe('the purge confirmation names the entity, its parent, the connection and the live count', () => {
@@ -240,9 +265,26 @@ describe('EntityDetailsComponent panels', () => {
       expect(all(render(queue({}), DEFAULT_AZURE_CAPABILITIES), '.stat-label')).toContain('Scheduled');
     });
 
-    it('the six cards of a queue on Azure, even when every count is 0: Active, Dead-letter, Scheduled, Transfer, Transfer dead-letter and Size', () => {
-      const el = render(queue({ transferMessageCount: 0, transferDeadLetterMessageCount: 0 }), DEFAULT_AZURE_CAPABILITIES);
+    it('the six cards of a queue on Azure that holds scheduled and transfer dead-letter messages: Active, Dead-letter, Scheduled, Transfer, Transfer dead-letter and Size', () => {
+      const el = render(queue({ scheduledMessageCount: 2, transferMessageCount: 0, transferDeadLetterMessageCount: 1 }), DEFAULT_AZURE_CAPABILITIES);
       expect(all(el, '.stat-label')).toEqual(['Active', 'Dead-letter', 'Scheduled', 'Transfer', 'Transfer dead-letter', 'Size']);
+    });
+
+    it('the Scheduled card and the Transfer dead-letter card are shown only when the entity holds such messages', () => {
+      const el = render(queue({ scheduledMessageCount: 0, transferMessageCount: 0, transferDeadLetterMessageCount: 0 }), DEFAULT_AZURE_CAPABILITIES);
+      expect(all(el, '.stat-label')).toEqual(['Active', 'Dead-letter', 'Transfer', 'Size']);
+    });
+
+    it('a broker that reports no message counts shows no number: Active and Dead-letter say "—" and still open, the other count cards are not shown, and a note says why', () => {
+      const el = render(queue({ activeMessageCount: 0, deadLetterMessageCount: 0, scheduledMessageCount: 0, transferDeadLetterMessageCount: 0 }),
+        { ...DEFAULT_AZURE_CAPABILITIES, supportsMessageCounts: false, supportsTransferDeadLetter: false });
+
+      expect(all(el, '.stat-label')).toEqual(['Active', 'Dead-letter', 'Size']);
+      expect(all(el, '.stat-card .stat-value').slice(0, 2)).toEqual(['—', '—']);
+      expect(Array.from(el.querySelectorAll('.stat-card[role="button"]')).map(c => c.getAttribute('aria-label'))).toEqual(['View the active messages', 'View the dead-letter messages']);
+      expect(text(el.querySelector('[data-testid="no-counts-note"]'))).toContain('This broker does not report message counts, so none is shown. Open a card to read the messages.');
+      TestBed.resetTestingModule();
+      expect(render(queue({}), DEFAULT_AZURE_CAPABILITIES).querySelector('[data-testid="no-counts-note"]'), 'a broker that reports counts shows no note').toBeNull();
     });
 
     it('the Transfer card counts the messages on their way to the forward target, with "Waiting to be forwarded"', () => {
@@ -251,8 +293,8 @@ describe('EntityDetailsComponent panels', () => {
       expect(Array.from(card.children).map(text)).toStrictEqual(['Transfer', '6', 'Waiting to be forwarded']);
     });
 
-    it('a subscription on Azure shows Active, Dead-letter, Transfer and Transfer dead-letter', () => {
-      const el = render(subscription({}), DEFAULT_AZURE_CAPABILITIES);
+    it('a subscription on Azure that holds transfer dead-letter messages shows Active, Dead-letter, Transfer and Transfer dead-letter', () => {
+      const el = render(subscription({ transferDeadLetterMessageCount: 1 }), DEFAULT_AZURE_CAPABILITIES);
       expect(all(el, '.stat-label')).toEqual(['Active', 'Dead-letter', 'Transfer', 'Transfer dead-letter']);
     });
 
@@ -405,14 +447,26 @@ describe('EntityDetailsComponent panels', () => {
       expect(statCard(el, 'Transfer dead-letter')).toBe('4');
     });
 
-    it('a value the API did not send is "Not set", not 0 or false, and a zero transfer dead-letter count still shows its card with 0', () => {
+    it('a value the API did not send is "Not set", not 0 or false, and a zero transfer dead-letter count shows no card', () => {
       const el = render(queue({ transferDeadLetterMessageCount: 0 }));
 
       for (const label of ['Lock Duration', 'Message TTL', 'Status', 'Created At (UTC)', 'Updated At (UTC)', 'Accessed At (UTC)', 'Dead-lettering On Expiration',
         'Auto Delete On Idle', 'Forward To', 'Forward Dead-lettered To', 'Duplicate Detection', 'User Metadata']) {
         expect(property(el, label), label).toBe('Not set');
       }
-      expect(statCard(el, 'Transfer dead-letter')).toBe('0');
+      expect(all(el, '.stat-label')).not.toContain('Transfer dead-letter');
+    });
+
+    it('a broker without sessions, forwarding or duplicate detection, and a queue with no lock, delivery limit or size limit, lists none of those rows; its dates say "Not set"', () => {
+      const el = render(queue({ maxDeliveryCount: 0, lockDuration: '00:00:00', maxSizeInMegabytes: 0, requiresSession: false, createdAt: '0001-01-01T00:00:00+00:00' }), DEFAULT_RABBITMQ_CAPABILITIES);
+      const labels = Array.from(el.querySelectorAll('.property-table th, .property-table dt, .properties .key')).map(text);
+
+      for (const label of ['Max Delivery Count', 'Lock Duration', 'Max Size', 'Requires Session', 'Forward To', 'Forward Dead-lettered To', 'Duplicate Detection']) {
+        expect(labels.some(l => l.startsWith(label)), `${label} is not a row`).toBe(false);
+        expect(text(el), label).not.toContain(label);
+      }
+      expect(property(el, 'Created At (UTC)')).toBe('Not set');
+      expect(property(el, 'Message TTL'), 'a row the broker has stays').not.toBe('');
     });
 
     it('duplicate detection that is off says Disabled, without a window', () => {
@@ -621,10 +675,10 @@ describe('EntityDetailsComponent: the subscription panel has a Transfer Dead Let
     expect(open).not.toHaveBeenCalled();
   });
 
-  it('a zero count still shows the card with 0, as Main.dc.html draws every count card', () => {
+  it('a zero count shows no Transfer dead-letter card: there is nothing to open', () => {
     const el = render(subscription(0), { ...DEFAULT_AZURE_CAPABILITIES, supportsTransferDeadLetter: true });
 
-    expect(card(el)?.querySelector('.metric-value')?.textContent?.trim()).toBe('0');
+    expect(card(el)).toBeFalsy();
   });
 });
 
@@ -939,7 +993,7 @@ describe('EntityDetailsComponent as Main.dc.html draws the panel', () => {
       state$: of({ loading: false, error: null, ...state }), currentSelection: state.selection, isLoading: false,
       select: vi.fn(), clearSelection: vi.fn(), refreshTree: vi.fn(), refreshCurrentSelection: vi.fn()
     };
-    queueService = { purgeMessages: vi.fn(() => of({ success: true })), deleteQueue: vi.fn(() => of(undefined)) };
+    queueService = { getQueue: vi.fn(() => NEVER), purgeMessages: vi.fn(() => of({ success: true })), deleteQueue: vi.fn(() => of(undefined)) };
     topicService = {
       getSubscription: vi.fn(() => NEVER), purgeMessages: vi.fn(() => of({ success: true })),
       deleteTopic: vi.fn(() => of(undefined)), deleteSubscription: vi.fn(() => of(undefined))
@@ -1002,7 +1056,7 @@ describe('EntityDetailsComponent as Main.dc.html draws the panel', () => {
     expect(active()!.getAttribute('aria-label')).toBe('View the 5 active messages');
     expect(el.querySelector('.live-badge, .sparkline'), 'the artboard draws no Live badge and no sparkline').toBeNull();
 
-    fixture.componentInstance.onSubscriptionUpdated({ activeMessageCount: 9, deadLetterMessageCount: 3 } as never);
+    fixture.componentInstance.onCountsRead({ key: EntityCountsService.key(fixture.componentInstance['selectionService'].currentSelection!.entity!.name, (fixture.componentInstance['selectionService'].currentSelection!.entity as { topicName?: string }).topicName), activeMessageCount: 9, deadLetterMessageCount: 3 });
     fixture.detectChanges();
     expect(text(active()!.querySelector('.stat-value')), 'the count read every 3 seconds').toBe('9');
     expect(active()!.getAttribute('aria-label')).toBe('View the 9 active messages');
@@ -1115,6 +1169,22 @@ describe('EntityDetailsComponent as Main.dc.html draws the panel', () => {
     closed = true;
     (await openMenu(fixture))[3].click();
     expect(queueService['purgeMessages']).toHaveBeenCalledWith('orders', 'deadletter');
+  });
+
+  it('a purge the API refuses says why, for a queue and for a subscription, instead of only that it failed', async () => {
+    const refused = () => throwError(() => new HttpErrorResponse({ status: 400, error: { message: 'A stream cannot be purged: it keeps its messages until its retention removes them.' } }));
+    let fixture = render({ selection: queue() });
+    queueService['purgeMessages'].mockImplementation(refused);
+    closed = true;
+    (await openMenu(fixture))[3].click();
+    expect(snackBar.open.mock.calls.at(-1)![0]).toBe('Failed to purge messages: A stream cannot be purged: it keeps its messages until its retention removes them.');
+    TestBed.resetTestingModule();
+
+    fixture = render({ selection: subscription() });
+    topicService['purgeMessages'].mockImplementation(refused);
+    closed = true;
+    (await openMenu(fixture))[1].click();
+    expect(snackBar.open.mock.calls.at(-1)![0]).toBe('Failed to purge messages: A stream cannot be purged: it keeps its messages until its retention removes them.');
   });
 
   it('Delete subscription names the subscription, its topic, the connection and what it holds, asks for its name to be typed, and deletes only once confirmed', async () => {

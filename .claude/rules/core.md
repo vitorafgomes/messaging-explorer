@@ -33,8 +33,8 @@ A change never adds a gap and never widens one.
 ## Hot spots
 
 - `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs#DeleteMessagesCoreAsync` - 2382 lines; `DeleteMessagesCoreAsync`, `ResubmitCoreAsync` (`src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs#ResubmitCoreAsync`) and `MoveCoreAsync` (`src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs#MoveCoreAsync`) repeat one scan loop three times with small differences; a fix to one belongs in all three.
-- `src/ServiceBusExplorer.Core/Providers/RabbitMQ/RabbitMQManagementClient.cs#GetMessagesAsync` - 1193 lines of HTTP plumbing and response DTOs; `GetMessagesAsync` with `ack_requeue_false` is the destructive read every RabbitMQ bulk call relies on.
-- `src/ServiceBusExplorer.Core/Providers/RabbitMQ/RabbitMQProvider.cs#DeleteMessagesAsync` - 1150 lines; the three bulk methods (`src/ServiceBusExplorer.Core/Providers/RabbitMQ/RabbitMQProvider.cs#DeleteMessagesAsync`, `src/ServiceBusExplorer.Core/Providers/RabbitMQ/RabbitMQProvider.cs#ResubmitDeadLetterMessagesAsync`, `src/ServiceBusExplorer.Core/Providers/RabbitMQ/RabbitMQProvider.cs#MoveMessagesAsync`) are the least safe code in the library.
+- `src/ServiceBusExplorer.Core/Providers/RabbitMQ/RabbitMQManagementClient.cs#GetMessagesAsync` - 1193 lines of HTTP plumbing and response DTOs; `GetMessagesAsync` with `ack_requeue_false` is a destructive read no provider member calls any more.
+- `src/ServiceBusExplorer.Core/Providers/RabbitMQ/RabbitMQProvider.cs#DeleteMessagesAsync` - 1150 lines; the three bulk methods (`src/ServiceBusExplorer.Core/Providers/RabbitMQ/RabbitMQProvider.cs#DeleteMessagesAsync`, `src/ServiceBusExplorer.Core/Providers/RabbitMQ/RabbitMQProvider.cs#ResubmitDeadLetterMessagesAsync`, `src/ServiceBusExplorer.Core/Providers/RabbitMQ/RabbitMQProvider.cs#MoveMessagesAsync`) share one member, `TransferConfirmed`: hold, send with a confirm, remove after.
 - `src/ServiceBusExplorer.Core/Services/ServiceBusService.cs#ServiceBusService` - 780 lines of legacy code that is effectively unused.
 - `src/ServiceBusExplorer.Core/Services/FileWorkspaceManager.cs#SaveConnectionAsync` - the one write path that stores a connection a caller sent (`ClearAllAsync` only empties the file) and the place masking rules meet persistence.
 - `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs#TryPurgeServerSideAsync` - reflection call to an internal SDK method; breaks silently to the slow drain when the SDK changes.
@@ -59,6 +59,7 @@ Read the one row your change matches. Pages are under `context/pages/services/co
 | Export or import of entity definitions | `azure-definitions.md` |
 | Purge, bulk delete, resubmit or move on Azure | `azure-bulk-operations.md` |
 | `RabbitMQProvider`, `RabbitMQManagementClient`, `ServiceBusService` | `rabbitmq-and-legacy.md` |
+| A RabbitMQ send, peek, receive, purge, search, or bulk resubmit, delete or move | `rabbitmq-message-operations.md` |
 | `FileWorkspaceManager`, the metrics services | `workspace-and-metrics.md` |
 | A test in `ServiceBusExplorer.Core.Tests` | `tests-unit-azure.md`, `tests-unit-definitions-and-workspace.md` |
 | A test in `ServiceBusExplorer.IntegrationTests` | `tests-integration.md` |

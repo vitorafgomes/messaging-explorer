@@ -2,8 +2,8 @@
 title: "Web App: Hot spots and known gaps"
 version: "1.0"
 date: 2026-11-13
-updated: 2026-11-13
-changes: "v1.0: split out of the Web App service page"
+updated: 2026-11-16
+changes: "2026-11-16: the possible-duplicate gap is now the second guard only. v1.0: split out of the Web App service page"
 page_type: service
 status: active
 description: "Read when a change touches a hot spot of the app or a gap recorded as it was found."
@@ -28,7 +28,7 @@ One topic of [[pages/services/web-app|Web App]]; the map lists the others.
 
 ## Known gaps
 
-- A row of the entities tree is a `div` that selects on a click: it is not reachable by keyboard and has no role. Making it a button needs the create button out of the row first, because a button cannot hold a button: `web-app/src/app/features/entities/entities-tree.component.ts#@for (node of shown(category.children); track node.id) {`.
+- A row of the entities tree is a `div` that selects on a click: it is not reachable by keyboard and has no role. Making it a button needs the create button out of the row first, because a button cannot hold a button: `web-app/src/app/features/entities/entities-tree.component.ts#@for (node of shown(listed(category)); track node.id) {`.
 - The property rows of the entity panel carry the class names the subscription specs read (`form-section`, `section-header`, `info-table`, `label-cell`, `value-cell`) beside their own; they style nothing and go when those specs may change: `web-app/src/app/features/entities/entity-details.component.ts#propertyTable`.
 - Provider registry, shell and provider components are not wired into any route: `web-app/src/app/features/entities/entities-container.component.ts#<app-entity-details></app-entity-details>`.
 - `docs/ADDING_PROVIDERS.md#### Architecture Flow` describes a flow the code does not run.
@@ -42,7 +42,7 @@ One topic of [[pages/services/web-app|Web App]]; the map lists the others.
 - Eight tests are skipped: the refresh variants in `web-app/src/app/core/services/metrics.service.spec.ts#getQueueMetricsWithRefresh`, with a TODO about timers under zoneless Angular.
 - Bulk progress is a single final update, not per batch: `web-app/src/app/features/messages/view-messages-dialog.component.ts#takeUntilDestroyed`.
 - After a cancel the message list and counters are not refreshed: `web-app/src/app/features/messages/view-messages-dialog.component.ts#executeCancelScheduled`.
-- A possible duplicate is recognised by the provider's English text, not a field: a change of that text in the Azure provider would make Retry Failed resend duplicates again, and RabbitMQ writes no such text. Ceiling until `BatchOperationFailure` carries a flag: `web-app/src/app/core/services/bulk-operations.service.ts#isPossibleDuplicate`.
+- The text match for a possible duplicate stays as a second guard beside the flag the API answers since 2026-11-16: `web-app/src/app/core/services/bulk-operations.service.ts#isPossibleDuplicate`. It can go once no API without the flag can answer.
 - The drain-all decision compares the selection with the count the messages dialog received when it opened, not a fresh read; if the entity grew past what was loaded, a selection equal to that stale count still drains everything present at execution, behind the acknowledgement: `web-app/src/app/features/messages/view-messages-dialog.component.ts`.
 - A disabled-entity failure of a resubmit or a move is listed as retryable: only a possible duplicate is kept out of the retry list (`web-app/src/app/features/messages/view-messages-dialog.component.ts#resultsDialogRef`, `web-app/src/app/features/messages/view-messages-dialog.component.ts`), so Retry Failed resends by hand to an entity that is still disabled.
 - The export dialog still takes a dead-letter boolean and says "(Dead Letter)" for an export from the transfer dead-letter tab: `web-app/src/app/features/messages/export-messages-dialog.component.ts`.

@@ -2,11 +2,11 @@
 title: "Local brokers in Docker"
 version: "1.0"
 date: 2026-11-12
-changes: "Initial runbook"
+changes: "2026-11-16: the RabbitMQ tutorial scenarios and the seeding script. Initial runbook"
 page_type: runbook
 status: active
 description: "Start RabbitMQ and the Azure Service Bus emulator on this machine and connect the app to them, to try a change by hand without touching a real broker."
-updated: 2026-11-15
+updated: 2026-11-16
 source:
   - chat
   - "dev/brokers/docker-compose.yml"
@@ -46,12 +46,24 @@ Every port is published on `127.0.0.1` only (`dev/brokers/docker-compose.yml:14`
 
 Or import them all at once: Connections, Import, the file `dev/brokers/messaging-explorer-import.json`. It adds the client "Local brokers" with three connections: "Local Service Bus" and "Local RabbitMQ" in the environment Development, and "Local Service Bus (marked Production)", the same emulator in the environment "Production (test)", marked Production, to try the typed-name confirmations without a real namespace. The file is checked by `src/ServiceBusExplorer.Api.Tests/ImportPreviewTests.cs#The_local_brokers_file_imports_its_three_connections_under_one_client_with_a_development_and_a_production_environment`.
 
-`SAS_KEY_VALUE` is the literal text the emulator expects, not a placeholder. The RabbitMQ management page is at `http://localhost:15672`.
+`SAS_KEY_VALUE` is the literal text the emulator expects, not a placeholder. The emulator (image 2.0.1, read on 2026-11-16) answers zero for every message count of a queue or a subscription, active and dead-letter alike, while a peek returns the messages; the app recognises the emulator by `UseDevelopmentEmulator=true` and shows no count on the tree and a dash on the cards of the panel, and a real namespace is needed to see counts move. The RabbitMQ management page is at `http://localhost:15672`.
 
 ## What is in them
 
 - **Service Bus** (`dev/brokers/servicebus-config.json`): queues `orders` (30 s lock, 3 deliveries, dead-lettering on expiry), `billing/invoices` (sessions, a name with a slash) and `notifications`; topic `order-events` with subscriptions `warehouse` and `email`.
-- **RabbitMQ** (`dev/brokers/rabbitmq-definitions.json`): exchanges `orders` (topic) and `orders.dlx` (fanout); queues `orders.created` (dead-letters to `orders.dlx`), `orders.audit` and `orders.failed`, with their bindings.
+- **RabbitMQ** (`dev/brokers/rabbitmq-definitions.json`): exchanges `orders` (topic) and `orders.dlx` (fanout); queues `orders.created` (dead-letters to `orders.dlx`), `orders.audit` and `orders.failed`, with their bindings. Since 2026-11-16 also one set per tutorial scenario of [[pages/roadmap/rabbitmq-messaging-scenarios]]:
+
+  | Scenario | In the broker |
+  |---|---|
+  | 1 Hello World | queue `hello` |
+  | 2 Work Queues | queue `task_queue`, a quorum queue |
+  | 3 Publish/Subscribe | exchange `logs` (fanout), bound to `logs.screen` and `logs.file` |
+  | 4 Routing | exchange `direct_logs` (direct): `direct_logs.errors` bound with `error`, `direct_logs.all` bound with `info`, `warning` and `error` |
+  | 5 Topics | exchange `topic_logs` (topic): `topic_logs.kern` bound with `kern.*`, `topic_logs.critical` bound with `*.critical` |
+  | 6 RPC | queue `rpc_queue`, and `rpc.replies` in place of the callback queue |
+  | Streams 1 and 2 | stream `stream.hello` |
+
+  The tutorials use queues that are exclusive to the client that declared them for scenario 3 and for the callback of scenario 6; a definitions file cannot hold those, so durable queues stand for them. `dev/brokers/seed-rabbitmq.sh` publishes sample messages for each scenario through the management API on loopback; a run adds them again. A broker that is already running takes the new definitions with `curl -u explorer:explorer -H 'content-type: application/json' -X POST http://127.0.0.1:15672/api/definitions -d @dev/brokers/rabbitmq-definitions.json`, which adds and changes nothing else.
 
 ## Why there is a proxy in front of the emulator
 

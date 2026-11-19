@@ -86,4 +86,19 @@ public class RabbitMQSubQueueTests
         Assert.Null(withoutBody.Body);
         Assert.Equal(("orders.created", 7L, "dlx", true), (withoutBody.Subject, withoutBody.SizeInBytes, withoutBody.DeadLetterSource, withoutBody.IsDeadLettered));
     }
+
+    [Theory]
+    [InlineData("payload", 7L)]
+    [InlineData("", 0L)]
+    [InlineData("ção", 5L)]
+    public void A_RabbitMQ_message_is_Active_and_its_size_is_the_bytes_of_its_body_with_or_without_the_body_read(string body, long bytes)
+    {
+        var result = new RabbitMQ.Client.BasicGetResult(1, false, "", "orders", 0, null, System.Text.Encoding.UTF8.GetBytes(body));
+
+        var withBody = RabbitMQProvider.MapBasicGetToMessageInfo(result, isDeadLettered: false);
+        var withoutBody = RabbitMQProvider.MapBasicGetToMessageInfo(result, isDeadLettered: false, includeBody: false);
+
+        Assert.Equal(("Active", bytes), (withBody.State, withBody.SizeInBytes));
+        Assert.Equal(("Active", bytes), (withoutBody.State, withoutBody.SizeInBytes));
+    }
 }

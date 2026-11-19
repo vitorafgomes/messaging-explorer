@@ -133,6 +133,7 @@ public class QueuesController : ControllerBase
         var provider = GetProvider();
         if (provider == null) return NoProviderConnected();
         if (EntityAdministrationResults.SubQueueNotSupported(provider, subQueue) is { } notSupported) return notSupported;
+        if (EntityAdministrationResults.SearchNotSupported(provider) is { } cannotSearch) return cannotSearch;
         try
         {
             var result = await provider.SearchMessagesAsync(name, request, subQueue, cancellationToken: HttpContext.RequestAborted);
@@ -180,6 +181,10 @@ public class QueuesController : ControllerBase
         {
             return EntityAdministrationResults.EntityDisabled();
         }
+        catch (MessageReadFailedException ex)
+        {
+            return EntityAdministrationResults.ReadFailed(ex, _logger, name, subQueue);
+        }
     }
 
     [HttpPost("{name}/messages")]
@@ -199,6 +204,10 @@ public class QueuesController : ControllerBase
         catch (EntityDisabledException)
         {
             return EntityAdministrationResults.EntityDisabled();
+        }
+        catch (InvalidEntityConfigurationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
         }
     }
 
@@ -255,6 +264,10 @@ public class QueuesController : ControllerBase
         catch (EntityDisabledException)
         {
             return EntityAdministrationResults.EntityDisabled();
+        }
+        catch (MessageReadFailedException ex)
+        {
+            return EntityAdministrationResults.ReadFailed(ex, _logger, name, MessageSubQueue.Active);
         }
     }
 
@@ -465,6 +478,10 @@ public class QueuesController : ControllerBase
         {
             return EntityAdministrationResults.EntityDisabled();
         }
+        catch (InvalidEntityConfigurationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Purge {SubQueue} messages failed for queue {QueueName}", subQueue, name);
@@ -501,6 +518,10 @@ public class QueuesController : ControllerBase
         catch (EntityDisabledException)
         {
             return EntityAdministrationResults.EntityDisabled();
+        }
+        catch (InvalidEntityConfigurationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
         }
         catch (Exception ex)
         {

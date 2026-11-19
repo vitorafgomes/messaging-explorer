@@ -272,20 +272,22 @@ public sealed class AzureServiceBusProviderDefectTests(AzureServiceBusFixture fi
     }
 
     /// <summary>
-    /// Correct: resubmitting one dead-lettered message sends it and removes it from the dead-letter
-    /// queue wherever it sits, or reports that it could not be removed.
+    /// Narrowed 2026-11-16: resubmitting one message that sits deep in the dead-letter queue still sends the copy
+    /// and leaves the original there, and now says so as a possible duplicate. Correct: it removes the original
+    /// wherever it sits, or sends nothing.
     /// </summary>
     [Fact]
-    public async Task Defect_single_resubmit_of_a_message_deep_in_the_dead_letter_queue_sends_it_and_leaves_it_there()
+    public async Task Defect_single_resubmit_of_a_message_deep_in_the_dead_letter_queue_sends_it_leaves_it_there_and_says_it_may_be_duplicated()
     {
         var queue = await CreateQueueAsync("deep-dlq");
         var bodies = Enumerable.Range(0, 350).Select(i => $"m{i}").ToArray();
         await fixture.SendToDeadLetterAsync(queue, bodies);
         var deepest = await SequenceOfAsync(queue, "m349", subQueue: MessageSubQueue.DeadLetter);
 
-        await _messaging.ResubmitDeadLetterMessageAsync(queue, deepest);
+        var said = await Assert.ThrowsAsync<InvalidEntityConfigurationException>(() => _messaging.ResubmitDeadLetterMessageAsync(queue, deepest));
         var stillDeadLettered = (await _messaging.PeekMessagesAsync(queue, 500, subQueue: MessageSubQueue.DeadLetter)).Select(m => m.SequenceNumber).ToList();
 
+        Assert.Equal("Message was resubmitted but could not be removed from the dead-letter queue and may be duplicated on retry: it was not found among the messages read to remove it.", said.Message);
         Assert.Equal(["m349"], await fixture.DrainAsync(queue));
         Assert.Equal(350, stillDeadLettered.Count);
         Assert.Contains(deepest, stillDeadLettered);

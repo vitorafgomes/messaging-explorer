@@ -60,7 +60,7 @@ export const DEFAULT_RABBITMQ_CAPABILITIES: ProviderCapabilities = {
   supportsDeferral: false,
   supportsDuplicateDetection: false,
   supportsAutoForwarding: false,
-  supportsBulkMessageOperations: false,
+  supportsBulkMessageOperations: true,
   supportsEntityUpdate: false,
   supportsSubscriptionRules: false,
   supportedExchangeTypes: ['direct', 'fanout', 'topic', 'headers'],
@@ -126,7 +126,11 @@ export class ProviderService {
           this.providerStateSubject.next(DISCONNECTED_STATE);
           return EMPTY;
         }
-        return this.selectProvider(toProviderType(status.providerType));
+        const providerType = toProviderType(status.providerType);
+        const cache = new Map(this.capabilitiesCacheSubject.value);
+        cache.delete(providerType);
+        this.capabilitiesCacheSubject.next(cache);
+        return this.selectProvider(providerType);
       })
     ).subscribe();
   }

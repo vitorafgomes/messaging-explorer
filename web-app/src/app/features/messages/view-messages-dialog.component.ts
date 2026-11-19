@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal, DestroyRef, HostListener } from '@angular/core';
+import { ChangeDetectorRef, computed, Component, OnInit, inject, signal, effect, untracked, DestroyRef, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ScrollingModule } from '@angular/cdk/scrolling';
@@ -14,7 +14,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { QueueService, TopicService, ConnectionService, MessageSearchService, AdvancedMessageFilterService, BulkOperationsService, MessageExportService, isPossibleDuplicate } from '../../core/services';
+import { QueueService, TopicService, ConnectionService, MessageSearchService, AdvancedMessageFilterService, BulkOperationsService, MessageExportService, EntityCountsService, isPossibleDuplicate } from '../../core/services';
 import { isDuplicateRefusal, NEW_MESSAGE_ID_OPTION } from '../../core/services/bulk-operations.service';
 import { MessageInfo, AdvancedFilterState, FilterLogic, SubQueue, BatchOperationResult, DeferredAction, DeferredBatchRequest, ActiveAction, SUB_QUEUE_LABEL } from '../../core/models';
 import { hexView, HexView } from '../../shared/message-body';
@@ -157,18 +157,18 @@ const SCAN_NOTICE = 'The broker cannot lock one message by its number, so the ap
       <nav class="sub-queues" [attr.aria-label]="'Sub-queues of ' + data.entityName">
         <button mat-button type="button" class="sub-queue-tab" [class.current]="selectedTabIndex === 0" [attr.aria-current]="selectedTabIndex === 0 ? 'true' : null" (click)="setTab(0)">
           Active Messages
-          <span class="count">{{ activeMessageCount() ?? activeMessages.length }}</span>
+          <span class="count">{{ (countsReported() ? activeMessageCount() : undefined) ?? activeMessages.length }}</span>
         </button>
         @if (capabilities()?.supportsDeadLetterQueue !== false) {
           <button mat-button type="button" class="sub-queue-tab" [class.current]="selectedTabIndex === 1" [attr.aria-current]="selectedTabIndex === 1 ? 'true' : null" (click)="setTab(1)">
             Dead Letter
-            <span class="count dead-letter">{{ deadLetterMessageCount() ?? deadLetterMessages.length }}</span>
+            <span class="count dead-letter">{{ (countsReported() ? deadLetterMessageCount() : undefined) ?? deadLetterMessages.length }}</span>
           </button>
         }
         @if (capabilities()?.supportsTransferDeadLetter === true) {
           <button mat-button type="button" class="sub-queue-tab" [class.current]="selectedTabIndex === 2" [attr.aria-current]="selectedTabIndex === 2 ? 'true' : null" (click)="setTab(2)">
             Transfer dead-letter
-            <span class="count">{{ transferDeadLetterMessageCount() ?? transferMessages.length }}</span>
+            <span class="count">{{ (countsReported() ? transferDeadLetterMessageCount() : undefined) ?? transferMessages.length }}</span>
           </button>
         }
       </nav>
@@ -571,6 +571,24 @@ const SCAN_NOTICE = 'The broker cannot lock one message by its number, so the ap
               <mat-icon fontIcon="close" aria-hidden="true"></mat-icon>
             </button>
           </div>
+          <div class="body-head">
+            <h3 class="section-title">Body</h3>
+            <button mat-button type="button" (click)="copyBody(selectedMessage)">
+              <mat-icon fontIcon="content_copy" aria-hidden="true"></mat-icon>
+              {{ selectedMessage.bodyEncoding === 'base64' ? 'Copy base64' : 'Copy body' }}
+            </button>
+          </div>
+          @if (selectedMessage.bodyEncoding === 'base64') {
+            @let hex = binaryView(selectedMessage);
+            <p class="state-note" role="note" data-testid="binary-body-note">
+              <mat-icon fontIcon="info" aria-hidden="true"></mat-icon>
+              Binary body of {{ hex.totalBytes | number }} bytes ({{ selectedMessage.contentType || 'no content type' }}): it is not UTF-8 text, so it is shown as hex{{ hex.shownBytes < hex.totalBytes ? ', the first ' + hex.shownBytes + ' bytes' : '' }}. Copy base64 takes every byte as it is.
+            </p>
+            <pre class="body-content hex" data-testid="binary-body-hex" aria-label="Body as hex">{{ hex.rows.join('\n') }}</pre>
+          } @else {
+            <pre class="body-content" [innerHTML]="formatBody(selectedMessage.body) | highlight:getActiveFilterText():{ mode: getActiveRegexMode() ? 'regex' : 'text', caseSensitive: false }"></pre>
+          }
+
           <div class="detail-grid">
             <div class="detail-item">
               <label>Message ID</label>
@@ -643,24 +661,6 @@ const SCAN_NOTICE = 'The broker cannot lock one message by its number, so the ap
                 <div class="property"><dt class="key">Dead Letter Error Description</dt><dd class="value">{{ selectedMessage.deadLetterErrorDescription || '-' }}</dd></div>
               </dl>
             </div>
-          }
-
-          <div class="body-head">
-            <h3 class="section-title">Body</h3>
-            <button mat-button type="button" (click)="copyBody(selectedMessage)">
-              <mat-icon fontIcon="content_copy" aria-hidden="true"></mat-icon>
-              {{ selectedMessage.bodyEncoding === 'base64' ? 'Copy base64' : 'Copy body' }}
-            </button>
-          </div>
-          @if (selectedMessage.bodyEncoding === 'base64') {
-            @let hex = binaryView(selectedMessage);
-            <p class="state-note" role="note" data-testid="binary-body-note">
-              <mat-icon fontIcon="info" aria-hidden="true"></mat-icon>
-              Binary body of {{ hex.totalBytes | number }} bytes ({{ selectedMessage.contentType || 'no content type' }}): it is not UTF-8 text, so it is shown as hex{{ hex.shownBytes < hex.totalBytes ? ', the first ' + hex.shownBytes + ' bytes' : '' }}. Copy base64 takes every byte as it is.
-            </p>
-            <pre class="body-content hex" data-testid="binary-body-hex" aria-label="Body as hex">{{ hex.rows.join('\n') }}</pre>
-          } @else {
-            <pre class="body-content" [innerHTML]="formatBody(selectedMessage.body) | highlight:getActiveFilterText():{ mode: getActiveRegexMode() ? 'regex' : 'text', caseSensitive: false }"></pre>
           }
 
           @if (selectedMessage.applicationProperties && hasProperties(selectedMessage.applicationProperties)) {
@@ -752,9 +752,30 @@ const SCAN_NOTICE = 'The broker cannot lock one message by its number, so the ap
   styleUrl: './view-messages-dialog.component.scss'
 })
 export class ViewMessagesDialogComponent implements OnInit {
-  /** Delete, Move and Edit & Resubmit are offered unless the broker declares it cannot do them safely, as RabbitMQ does. */
+  /** Delete, Move and Edit & Resubmit are offered unless the broker declares it cannot do them safely. */
   bulkOperations(): boolean {
     return this.capabilities()?.supportsBulkMessageOperations !== false;
+  }
+
+  /** The broker names a message by its place in the queue, as RabbitMQ does, so a number shown is stale once a message ahead of it is removed. */
+  byPosition(): boolean {
+    return this.capabilities()?.supportsSequenceNumbers === false;
+  }
+
+  /**
+   * By position, an operation that was cancelled or whose call failed leaves ticks that may name other messages:
+   * the rows are unticked and the list is read again, after the given dialog is closed when there is one.
+   */
+  private forgetPositions(subQueue: SubQueue, afterClosed?: { afterClosed(): Observable<unknown> }) {
+    if (!this.byPosition()) {
+      return;
+    }
+    this.bulkOperationsService.clearSelection(subQueue);
+    if (afterClosed) {
+      afterClosed.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.load(subQueue));
+    } else {
+      this.load(subQueue);
+    }
   }
 
   /** The active connection and its environment, for the line under the title. */
@@ -805,8 +826,32 @@ export class ViewMessagesDialogComponent implements OnInit {
   selectedTabIndex = 0;
 
   // Message count signals for automatic UI updates
+  /** False on a broker that answers no message counts: a tab then shows how many messages it loaded. */
+  readonly countsReported = computed(() => this.capabilities()?.supportsMessageCounts !== false);
   activeMessageCount = signal<number | undefined>(undefined);
   deadLetterMessageCount = signal<number | undefined>(undefined);
+  private readonly counts = inject(EntityCountsService);
+  private readonly countsKey = EntityCountsService.key(this.data.entityName, this.data.entityType === 'subscription' ? this.data.topicName : null);
+
+  /** The tabs show the counts last read for the entity anywhere in the app, as the tree and the panel do. */
+  private readonly followCounts = effect(() => {
+    const read = this.counts.of(this.countsKey);
+    if (read) {
+      untracked(() => {
+        this.activeMessageCount.set(read.activeMessageCount);
+        this.deadLetterMessageCount.set(read.deadLetterMessageCount);
+      });
+    }
+  });
+
+  /** A count this dialog changes, after an operation or a new read, is the one the tree and the panel then show. */
+  private readonly shareCounts = effect(() => {
+    const activeMessageCount = this.activeMessageCount();
+    const deadLetterMessageCount = this.deadLetterMessageCount();
+    if (activeMessageCount !== undefined && deadLetterMessageCount !== undefined) {
+      untracked(() => this.counts.put(this.countsKey, { activeMessageCount, deadLetterMessageCount }));
+    }
+  });
   transferDeadLetterMessageCount = signal<number | undefined>(undefined);
 
   // Filter properties
@@ -855,6 +900,7 @@ export class ViewMessagesDialogComponent implements OnInit {
   ];
 
   private countChange$ = new Subject<number>();
+  private readonly changeDetector = inject(ChangeDetectorRef, { optional: true });
 
   ngOnInit() {
     // Set initial tab from data
@@ -872,6 +918,9 @@ export class ViewMessagesDialogComponent implements OnInit {
     }
     if (this.data.transferDeadLetterMessageCount !== undefined) {
       this.transferDeadLetterMessageCount.set(this.data.transferDeadLetterMessageCount);
+    }
+    if (this.data.activeMessageCount !== undefined && this.data.deadLetterMessageCount !== undefined) {
+      this.counts.put(this.countsKey, { activeMessageCount: this.data.activeMessageCount, deadLetterMessageCount: this.data.deadLetterMessageCount });
     }
 
     if (this.data.initialStateFilter === 'Scheduled' && this.subQueue === 'active') {
@@ -930,10 +979,11 @@ export class ViewMessagesDialogComponent implements OnInit {
   private clearCurrentTab() {
     this.selectedMessage = null;
     switch (this.subQueue) {
-      case 'active': this.activeMessages = []; break;
-      case 'deadletter': this.deadLetterMessages = []; break;
-      case 'transferdeadletter': this.transferMessages = []; break;
+      case 'active': this.activeMessages = []; this.filteredActiveMessages = []; break;
+      case 'deadletter': this.deadLetterMessages = []; this.filteredDeadLetterMessages = []; break;
+      case 'transferdeadletter': this.transferMessages = []; this.filteredTransferMessages = []; break;
     }
+    this.changeDetector?.markForCheck();
   }
 
   /** Opens the automatic resubmit of this dead-letter queue, as the entity panel does, and reads the tab again after a run. */
@@ -1001,7 +1051,7 @@ export class ViewMessagesDialogComponent implements OnInit {
     }
     this.loadFailures.update(f => ({
       ...f,
-      [subQueue]: { disabled, detail: disabled ? '' : `${messageCallFailure(err, 'The local API answered with an error')}.` },
+      [subQueue]: { disabled, detail: disabled ? '' : `${messageCallFailure(err, 'The local API answered with an error').replace(/\.$/, '')}.` },
     }));
   }
 
@@ -1476,7 +1526,7 @@ export class ViewMessagesDialogComponent implements OnInit {
   }
 
   resubmit(msg: MessageInfo) {
-    if (!this.bulkOperations()) {
+    if (this.byPosition()) {
       this.resubmitAsBatchOfOne(msg);
       return;
     }
@@ -1517,7 +1567,10 @@ export class ViewMessagesDialogComponent implements OnInit {
         }
         this.loadDeadLetterMessages();
       },
-      error: err => this.snackBar.open(messageCallFailure(err, 'Failed to resubmit message'), 'Close', { duration: 3000 })
+      error: err => {
+        this.forgetPositions('deadletter');
+        this.snackBar.open(messageCallFailure(err, 'Failed to resubmit message'), 'Close', { duration: 3000 });
+      }
     });
   }
 
@@ -1685,6 +1738,7 @@ export class ViewMessagesDialogComponent implements OnInit {
       takeUntilDestroyed(this.destroyRef)
     ).subscribe(() => {
       cancelled = true;
+      this.forgetPositions(subQueue, progressDialogRef);
     });
 
     observable.pipe(
@@ -1722,7 +1776,7 @@ export class ViewMessagesDialogComponent implements OnInit {
               entityName: this.data.entityName,
               entityType: this.data.entityType,
               subQueue,
-              allowRetry: retryable.length > 0
+              allowRetry: retryable.length > 0 && !this.byPosition()
             } as BulkOperationResultsDialogData
           });
 
@@ -1761,6 +1815,7 @@ export class ViewMessagesDialogComponent implements OnInit {
       error: (err) => {
         console.error('Failed to resubmit messages:', err);
         progressDialogRef.close();
+        this.forgetPositions(subQueue);
 
         // Check if it's a connection error
         if (err.status === 500 && err.error?.error?.includes('Not connected')) {
@@ -2403,6 +2458,7 @@ export class ViewMessagesDialogComponent implements OnInit {
       takeUntilDestroyed(this.destroyRef)
     ).subscribe(() => {
       cancelled = true;
+      this.forgetPositions(subQueue, progressDialogRef);
     });
 
     observable.pipe(
@@ -2464,6 +2520,7 @@ export class ViewMessagesDialogComponent implements OnInit {
         // Close the progress dialog instead of leaving it fake-completed, and
         // surface a retry hint so the user knows the operation can be reattempted.
         progressDialogRef.close();
+        this.forgetPositions(subQueue);
         this.snackBar.open(messageCallFailure(err, 'Failed to delete messages. Please try again.'), 'Close', { duration: 5000 });
       }
     });
@@ -2606,6 +2663,7 @@ export class ViewMessagesDialogComponent implements OnInit {
       takeUntilDestroyed(this.destroyRef)
     ).subscribe(() => {
       cancelled = true;
+      this.forgetPositions(subQueue, progressDialogRef);
     });
 
     this.queueService.moveMessages(this.data.entityName, targetQueueName, sequenceNumbers, isDeadLetter, newMessageId).pipe(
@@ -2641,7 +2699,7 @@ export class ViewMessagesDialogComponent implements OnInit {
               entityType: this.data.entityType,
               subQueue,
               targetQueue: targetQueueName,
-              allowRetry: retryable.length > 0
+              allowRetry: retryable.length > 0 && !this.byPosition()
             } as BulkOperationResultsDialogData
           });
 
@@ -2675,6 +2733,7 @@ export class ViewMessagesDialogComponent implements OnInit {
       error: (err) => {
         console.error('Failed to move messages:', err);
         progressDialogRef.close();
+        this.forgetPositions(subQueue);
         this.snackBar.open(messageCallFailure(err, 'Failed to move messages'), 'Close', { duration: 3000 });
       }
     });

@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
 import { toObservable } from '@angular/core/rxjs-interop';
+import { ProviderService } from '../../core/services/provider.service';
 import { Subject, TimeoutError, forkJoin, interval, of } from 'rxjs';
 import { filter, switchMap, takeUntil, timeout } from 'rxjs/operators';
 import { MatButtonModule } from '@angular/material/button';
@@ -123,6 +124,12 @@ interface SnapshotHistory {
         <mat-tab-group mat-stretch-tabs="false" animationDuration="0ms" [selectedIndex]="tab()" (selectedIndexChange)="tab.set($event)">
           <mat-tab label="Overview">
         <div class="overview">
+          @if (!countsReported()) {
+            <p class="counts-note" role="note" data-testid="no-counts-note">
+              <mat-icon fontIcon="info" aria-hidden="true" />
+              This broker does not report message counts: the numbers below are what it answers, not how many messages it holds.
+            </p>
+          }
           <div class="summary-cards">
             <div class="summary-card">
               <span class="card-label">Active</span>
@@ -278,6 +285,9 @@ interface SnapshotHistory {
 export class MonitoringComponent implements OnInit, OnDestroy {
   private monitoringService = inject(MonitoringService);
   private connectionService = inject(ConnectionService);
+  /** False on a broker that answers no message counts, such as the Service Bus emulator. */
+  private readonly providerService = inject(ProviderService);
+  readonly countsReported = computed(() => this.providerService.capabilities()?.supportsMessageCounts !== false);
   private destroy$ = new Subject<void>();
 
   loading = signal(false);

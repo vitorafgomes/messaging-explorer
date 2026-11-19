@@ -20,8 +20,8 @@ export function isDuplicateRefusal(failure: Pick<BatchOperationFailure, 'error'>
  * source: resending it would deliver a second copy, so it is never retried.
  */
 export function isPossibleDuplicate(failure: BatchOperationFailure): boolean {
-  // ponytail: matches the text the Azure provider writes for a send whose complete failed; replace with a field once BatchOperationFailure carries one.
-  return /may be duplicated/i.test(failure.error);
+  // ponytail: the text is a second guard for a failure that carries no flag; drop it once no API without the flag can answer.
+  return failure.possibleDuplicate === true || /may be duplicated/i.test(failure.error);
 }
 
 /**

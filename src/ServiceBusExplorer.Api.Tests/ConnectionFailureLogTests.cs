@@ -242,7 +242,8 @@ public class ConnectionFailureLogTests
             Password = RabbitPassword,
         }));
 
-        Assert.Contains("[RabbitMQ] Management API error", console, StringComparison.Ordinal);
+        Assert.Contains(entries, e => e.Text.Contains("did not answer the connection test", StringComparison.Ordinal));
+        Assert.DoesNotContain("[RabbitMQ]", console, StringComparison.Ordinal);
         AssertNoSecret(entries, console);
     }
 

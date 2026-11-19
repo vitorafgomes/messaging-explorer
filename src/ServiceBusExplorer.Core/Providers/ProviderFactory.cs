@@ -38,7 +38,8 @@ public class ProviderFactory : IProviderFactory
         {
             ProviderType.AzureServiceBus => new AzureServiceBusProvider(
                 _loggerFactory?.CreateLogger<AzureServiceBusProvider>()),
-            ProviderType.RabbitMQ => new RabbitMQProvider(),
+            ProviderType.RabbitMQ => new RabbitMQProvider(
+                _loggerFactory?.CreateLogger<RabbitMQProvider>()),
             _ => throw new ArgumentOutOfRangeException(
                 nameof(providerType),
                 providerType,
