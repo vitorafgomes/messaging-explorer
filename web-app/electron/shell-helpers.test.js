@@ -418,6 +418,24 @@ test('the update found by the check downloads only with the agreement of the use
   assert.deepEqual(await downloadAgreedUpdate({ agreed: true, version: '2.5.0', found: '2.5.0', updater: fakeUpdater({ downloadFails: true }) }), { status: 'error', message: 'disk full' });
 });
 
+test('the version an agreement can be given for is the one the updater would download now: none while a check runs, after one found nothing, or after an error', () => {
+  const { followFoundVersion } = require('./shell-helpers');
+  const updater = new (require('node:events'))();
+  const found = followFoundVersion(updater);
+  assert.equal(found(), null);
+  updater.emit('update-available', { version: '2.5.0' });
+  assert.equal(found(), '2.5.0');
+  updater.emit('checking-for-update');
+  assert.equal(found(), null, 'a check in flight may replace what the updater holds');
+  updater.emit('update-available', { version: '2.5.1' });
+  assert.equal(found(), '2.5.1');
+  updater.emit('update-not-available', { version: '2.4.0' });
+  assert.equal(found(), null, 'after a check that found nothing newer no update is on offer, so none can be agreed to');
+  updater.emit('update-available', { version: '2.5.1' });
+  updater.emit('error', new Error('feed not found'));
+  assert.equal(found(), null);
+});
+
 test('main.js never writes the text or the stack of an error to its console, only the error itself, of which the shell log keeps the name', () => {
   const main = require('node:fs').readFileSync(require('node:path').join(__dirname, 'main.js'), 'utf8');
   const calls = main.match(/console\.(log|warn|error)\([^;]*;/g) ?? [];
@@ -428,8 +446,8 @@ test('main.js configures the updater through configureAutoUpdate, sets autoDownl
   const main = require('node:fs').readFileSync(require('node:path').join(__dirname, 'main.js'), 'utf8');
   assert.match(main, /^configureAutoUpdate\(autoUpdater, process\.platform, process\.env\);$/m);
   assert.doesNotMatch(main, /autoUpdater\.(autoDownload|autoInstallOnAppQuit)\s*=/);
-  assert.match(main, /ipcMain\.handle\('download-update', \(event, request\) => downloadAgreedUpdate\(\{ agreed: request\?\.agreed, version: request\?\.version, found: foundVersion, updater: autoUpdater \}\)\);/);
-  assert.match(main, /autoUpdater\.on\('update-available', \(info\) => \{\n  foundVersion = info\.version;/);
+  assert.match(main, /ipcMain\.handle\('download-update', \(event, request\) => downloadAgreedUpdate\(\{ agreed: request\?\.agreed, version: request\?\.version, found: foundVersion\(\), updater: autoUpdater \}\)\);/);
+  assert.match(main, /^const foundVersion = followFoundVersion\(autoUpdater\);$/m);
   assert.equal(main.match(/autoUpdater\.downloadUpdate\(/g), null, 'main.js itself never starts a download');
 });
 

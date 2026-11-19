@@ -18,6 +18,8 @@ What changed when in the project [[pages/services/electron-shell|Electron Shell]
 
 ## 2026-11-19
 
+- From the review of the pull request: the version an agreement is checked against no longer outlives the offer. The installed updater replaces the update it holds only when it announces one, so the last announced version was already the one it would download; now a check in flight, a check that found nothing newer and an error each void it too, so a stale agreement is refused whatever the library does (`web-app/electron/shell-helpers.js#followFoundVersion`, `web-app/electron/shell-helpers.test.js#the version an agreement can be given for is the one the updater would download now`).
+
 - From the same review: the shell logs an error as the error, never its text or stack, and `download-update` carries the version the agreement was given for.
 
 - **An update downloads only with the user's agreement,** decided by the owner: the check announces, `download-update` refuses without `agreed`, and the special case of a picked version is gone. [[pages/services/electron-shell/updates-packaging-and-release]]

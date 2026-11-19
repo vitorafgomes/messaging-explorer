@@ -332,6 +332,20 @@ function configureAutoUpdate(updater, platform, env) {
   updater.autoInstallOnAppQuit = selfUpdateBlocker(platform, env) === null;
 }
 
+/**
+ * Follows the checks of the updater and answers the version an agreement can be given for: the one last announced,
+ * and none while a check runs, after a check that found nothing newer, or after an error. The updater replaces the
+ * update it holds only when it announces one, so the answer is never a version other than the one it would download.
+ */
+function followFoundVersion(updater) {
+  let found = null;
+  updater.on('checking-for-update', () => { found = null; });
+  updater.on('update-available', (info) => { found = info.version; });
+  updater.on('update-not-available', () => { found = null; });
+  updater.on('error', () => { found = null; });
+  return () => found;
+}
+
 /** Downloads the update the last check found, only with the user's agreement to that very version. Never throws. */
 async function downloadAgreedUpdate({ agreed, version, found, updater }) {
   if (agreed !== true) return { status: 'error', message: 'Nothing is downloaded without your agreement.' };
@@ -400,6 +414,7 @@ function captureConsole(target, shellLog) {
 
 module.exports = {
   downloadAgreedUpdate,
+  followFoundVersion,
   createShellLog,
   captureConsole,
   saveExportFile,

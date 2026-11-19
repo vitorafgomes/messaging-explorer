@@ -4,7 +4,7 @@ const { spawn } = require('child_process');
 const { autoUpdater } = require('electron-updater');
 const crypto = require('crypto');
 const Store = require('electron-store');
-const { dataFilePath, showDataFile, openDevTools, isSafeExternalUrl, normalizeUpdateChannel, applyUpdateChannel, waitForHealth, stopProcess, applicationMenuTemplate, mainWindowOptions, shellShortcut, selfUpdateBlocker, configureAutoUpdate, readUpdateVersions, installUpdateVersion, backupDataFile, saveExportFile, createShellLog, captureConsole, downloadAgreedUpdate } = require('./shell-helpers');
+const { dataFilePath, showDataFile, openDevTools, isSafeExternalUrl, normalizeUpdateChannel, applyUpdateChannel, waitForHealth, stopProcess, applicationMenuTemplate, mainWindowOptions, shellShortcut, selfUpdateBlocker, configureAutoUpdate, readUpdateVersions, installUpdateVersion, backupDataFile, saveExportFile, createShellLog, captureConsole, downloadAgreedUpdate, followFoundVersion } = require('./shell-helpers');
 
 // Generate a per-session API secret for Electron <-> .NET API authentication
 const API_SECRET = crypto.randomBytes(32).toString('hex');
@@ -853,10 +853,9 @@ autoUpdater.on('checking-for-update', () => {
   sendUpdateStatus('checking');
 });
 
-let foundVersion = null;
+const foundVersion = followFoundVersion(autoUpdater);
 
 autoUpdater.on('update-available', (info) => {
-  foundVersion = info.version;
   console.log('[Updater] Update available:', info.version);
   sendUpdateStatus('available', { version: info.version, releaseNotes: info.releaseNotes });
 });
@@ -894,7 +893,7 @@ ipcMain.handle('check-for-updates', async () => {
 });
 
 // IPC: Download update
-ipcMain.handle('download-update', (event, request) => downloadAgreedUpdate({ agreed: request?.agreed, version: request?.version, found: foundVersion, updater: autoUpdater }));
+ipcMain.handle('download-update', (event, request) => downloadAgreedUpdate({ agreed: request?.agreed, version: request?.version, found: foundVersion(), updater: autoUpdater }));
 
 // IPC: Install update (restart)
 ipcMain.handle('install-update', () => {
