@@ -2,7 +2,7 @@
 title: "ADR 0008 - An MCP server inside the local API"
 version: "1.0"
 date: 2026-11-19
-changes: "2026-11-19: an assistant can read the logs, as its own choice; the SDK calls proven by a throwaway project; the SDK leaves the Origin check to the application. Initial ADR draft"
+changes: "2026-11-19: an assistant can read the logs and change settings of the app, each as its own choice, never the MCP group itself; the SDK calls proven by a throwaway project; the SDK leaves the Origin check to the application. Initial ADR draft"
 page_type: adr
 status: proposed
 description: "The local API serves an MCP endpoint, off until the user turns it on, that offers an assistant only the connections the user chose, behind a token of its own, and asks the user in the app before anything is sent, moved or removed."
@@ -59,6 +59,8 @@ What was read on 2026-11-19, and what was not:
 **What a tool answers.** The same data the routes answer: masked secrets, the per-message report of a bulk operation with its possible duplicates, and fixed sentences for errors, never the text of a broker's exception. The Settings group says plainly that names, counts and message bodies read by an assistant leave the computer.
 
 **The logs of the app.** Asked by the owner on 2026-11-19: an assistant can read the logs the Logs screen shows. A tool answers the lines of the backend store (`src/ServiceBusExplorer.Api/Logs/RecentLogStore.cs#RecentLogStore`), filtered by level and text, which by rule carry no secret, no message body and no exception text. It is a choice of its own in the Settings group, off by default, because a log line can name the target or an entity of a connection that is not offered. The lines of the desktop shell and of the screen live outside the API; they reach the tool only once the shell and the screen hand them to the API, which is a later phase.
+
+**The settings of the app.** Asked by the owner on 2026-11-19: an assistant can turn settings of the app on and off. It is a choice of its own in the Settings group, off by default. A tool reads the settings and changes the ones on a fixed list: the theme, Developer mode, the update channel and the Monitoring history. Three things are never on that list, whatever is chosen: the MCP server group itself (the switch, the token, the level of a connection, the choices for logs and settings), so an assistant cannot widen its own reach; clearing the data; and installing or downloading an update, which keeps the user's agreement to the exact version. These settings live in the screen and in the desktop shell, not in the API, so the tool hands the change to the app through the same channel that carries a request for confirmation, and the change shows in the record.
 
 **A record.** What assistants asked for and what happened is kept in memory while the app is open, with no message body and no secret, and shown in Settings.
 
