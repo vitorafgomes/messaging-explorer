@@ -80,7 +80,7 @@ What was read on 2026-11-19, and what was not:
 - **No confirmation in the app, trust the client's own prompts** - the specification asks clients to confirm, but a client can be set to allow everything, and the broker is production.
 - **Confirmation through elicitation** - not every client supports it, and the answer would pass through the assistant's side.
 - **Read only** - the owner asked for the complete version; reading stays the first phase.
-- **Status quo (do nothing)** - the assistant keeps working from tests and logs, with no view of the brokers.
+- **Status quo** - the assistant keeps working from tests and logs only.
 
 ## Enforcement
 
