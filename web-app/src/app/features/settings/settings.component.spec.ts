@@ -516,7 +516,7 @@ describe('SettingsComponent', () => {
     const { el, refresh } = await render();
     const devSettings = TestBed.inject(DevSettingsService);
     const toggle = el.querySelector('mat-checkbox input[type="checkbox"]') as HTMLElement;
-    expect(el.querySelector('mat-checkbox')!.textContent).toContain('Show the Debug button on the Connections screen');
+    expect(el.querySelector('mat-checkbox')!.textContent).toContain('Show the Logs screen in the toolbar and the Debug button on the Connections screen');
 
     toggle.click();
     await refresh();

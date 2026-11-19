@@ -31,6 +31,9 @@ input::placeholder{color:currentColor;opacity:.72}
       <a href="Connections.dc.html" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none; font-weight: 500">Connections</a>
       <a href="Main.dc.html" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none; font-weight: 500">Entities</a>
       <a href="Monitoring.dc.html" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none; font-weight: 500">Monitoring</a>
+      <sc-if value="{{devMode}}" hint-placeholder-val="{{false}}">
+        <a href="Logs.dc.html" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none; font-weight: 500">Logs</a>
+      </sc-if>
     </nav>
     <span aria-hidden="true" style="flex: none; width: 1px; height: 24px; background: {{bar.sep}}"></span>
     <sc-if value="{{hasConn}}" hint-placeholder-val="{{true}}">
@@ -392,7 +395,7 @@ input::placeholder{color:currentColor;opacity:.72}
           <span style="flex: 0 0 168px; font-weight: 500">Developer mode</span>
           <label style="display: flex; align-items: center; gap: 10px; min-height: 32px; cursor: pointer">
             <input type="checkbox" checked="{{devMode}}" onChange="{{toggleDev}}" style="width: 18px; height: 18px; margin: 0; accent-color: {{t.primary}}">
-            <span>Show the Debug button on the Connections screen</span>
+            <span>Show the Logs screen in the toolbar and the Debug button on the Connections screen</span>
           </label>
           <span style="display: inline-flex; align-items: center; gap: 4px"><kbd style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid {{t.outline}}; border-bottom-width: 2px; border-radius: 4px; background: {{t.surfaceLow}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px">Ctrl</kbd><kbd style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid {{t.outline}}; border-bottom-width: 2px; border-radius: 4px; background: {{t.surfaceLow}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px">Shift</kbd><kbd style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid {{t.outline}}; border-bottom-width: 2px; border-radius: 4px; background: {{t.surfaceLow}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px">D</kbd></span>
           <span style="flex: 1"></span>
