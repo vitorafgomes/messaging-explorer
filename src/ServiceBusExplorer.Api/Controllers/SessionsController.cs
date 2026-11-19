@@ -127,7 +127,7 @@ public class SessionsController : ControllerBase
         {
             _logger.LogError(ex, "Session {Operation} failed for {EntityPath} session {SessionId}",
                 operation, subscriptionName == null ? entityName : $"{entityName}/{subscriptionName}", sessionId);
-            return StatusCode(500, new { message = EntityAdministrationResults.InternalError });
+            return EntityAdministrationResults.Unhandled(ex);
         }
     }
 

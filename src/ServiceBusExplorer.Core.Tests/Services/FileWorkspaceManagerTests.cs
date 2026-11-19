@@ -454,6 +454,44 @@ public sealed class FileWorkspaceManagerTests : IDisposable
     }
 
     [Fact]
+    public async Task Deleting_a_client_deletes_its_environments_and_keeps_its_connections_with_no_client_and_no_environment()
+    {
+        var manager = NewManager();
+        var client = await manager.SaveGroupAsync(new ConnectionGroup { Name = "Contoso", Type = "client" });
+        var other = await manager.SaveGroupAsync(new ConnectionGroup { Name = "Fabrikam", Type = "client" });
+        var production = await manager.SaveGroupAsync(new ConnectionGroup { Name = "Production", Type = "environment", ParentId = client.Id });
+        var kept = await manager.SaveGroupAsync(new ConnectionGroup { Name = "Production", Type = "environment", ParentId = other.Id });
+        await manager.SaveConnectionAsync(new ServiceBusConnection { Id = "a", Name = "in-environment", ConnectionString = "Endpoint=sb://a/;SharedAccessKeyName=k;SharedAccessKey=secret-a", ClientId = client.Id, EnvironmentId = production.Id });
+        await manager.SaveConnectionAsync(new ServiceBusConnection { Id = "b", Name = "in-client", ClientId = client.Id });
+        await manager.SaveConnectionAsync(new ServiceBusConnection { Id = "c", Name = "elsewhere", ClientId = other.Id, EnvironmentId = kept.Id });
+
+        await manager.DeleteGroupAsync(client.Id);
+
+        var reread = NewManager();
+        Assert.Equal([other.Id, kept.Id], (await reread.GetGroupsAsync()).Select(g => g.Id));
+        var connections = (await reread.GetConnectionsAsync()).ToDictionary(c => c.Id);
+        Assert.Equal(3, connections.Count);
+        Assert.Equal((null, null), (connections["a"].ClientId, connections["a"].EnvironmentId));
+        Assert.Equal((null, null), (connections["b"].ClientId, connections["b"].EnvironmentId));
+        Assert.Equal((other.Id, kept.Id), (connections["c"].ClientId, connections["c"].EnvironmentId));
+        Assert.Equal("Endpoint=sb://a/;SharedAccessKeyName=k;SharedAccessKey=secret-a", (await reread.GetConnectionWithSecretAsync("a"))!.ConnectionString);
+    }
+
+    [Fact]
+    public async Task Deleting_an_environment_keeps_its_connections_in_their_client_with_no_environment()
+    {
+        var manager = NewManager();
+        var client = await manager.SaveGroupAsync(new ConnectionGroup { Name = "Contoso", Type = "client" });
+        var production = await manager.SaveGroupAsync(new ConnectionGroup { Name = "Production", Type = "environment", ParentId = client.Id });
+        await manager.SaveConnectionAsync(new ServiceBusConnection { Id = "a", Name = "in-environment", ClientId = client.Id, EnvironmentId = production.Id });
+
+        await manager.DeleteGroupAsync(production.Id);
+
+        var connection = (await NewManager().GetConnectionsAsync()).Single();
+        Assert.Equal((client.Id, null), (connection.ClientId, connection.EnvironmentId));
+    }
+
+    [Fact]
     public async Task Clear_all_reports_how_many_connections_and_groups_it_deleted()
     {
         var manager = NewManager();

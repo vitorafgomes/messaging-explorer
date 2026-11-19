@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using RabbitMQ.Client.Exceptions;
+using ServiceBusExplorer.Core.Abstractions;
 using ServiceBusExplorer.Core.Models;
 using ServiceBusExplorer.Core.Providers;
 using ServiceBusExplorer.Core.Providers.Azure;
@@ -140,11 +141,11 @@ public sealed class RabbitMQConnectionFailureLogTests(RabbitMqFixture fixture)
         var capture = new CapturingLoggerFactory();
 
         var console = await CaptureConsoleAsync(() =>
-            Assert.ThrowsAsync<BrokerUnreachableException>(() => capture.CreateProviderFactory().CreateConnectedProviderAsync(WrongPasswordConnection())));
+            Assert.ThrowsAsync<BrokerCredentialsRefusedException>(() => capture.CreateProviderFactory().CreateConnectedProviderAsync(WrongPasswordConnection())));
 
         var failure = capture.Entries.FirstOrDefault(e => e.Category == typeof(ProviderFactory).FullName && e.Level == LogLevel.Error);
         Assert.True(failure != null, "The refused connect was not logged by the factory.");
-        Assert.Equal(typeof(BrokerUnreachableException).FullName, failure.ExceptionType);
+        Assert.Equal(typeof(BrokerCredentialsRefusedException).FullName, failure.ExceptionType);
         Assert.Contains("ACCESS_REFUSED", failure.Text, StringComparison.Ordinal);
         capture.AssertNoSecret(Needles, console);
     }

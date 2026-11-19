@@ -16,6 +16,7 @@ reliability: high
 
 The architecture decision records, newest first.
 
+- [[pages/decisions/0007-read-azure-resource-manager-to-list-namespaces|ADR 0007 - Read Azure Resource Manager to list the namespaces]] *(proposed 2026-11-19)* - The add dialog signs in first and lists the subscriptions and namespaces of the account; the Resource Manager token stays in the API's memory.
 - [[pages/decisions/0006-choose-the-version-to-install|ADR 0006 - Choose the version to install, per channel]] *(proposed 2026-11-15)* - Settings lists the releases of Stable or Beta and installs the one picked, older ones included, only on the user's click; the automatic check stays as it is.
 - [[pages/decisions/0003-azure-authentication-strategy|ADR 0003 - Azure authentication strategy]] *(accepted 2026-04-19)* - Identity before keys: five supported credentials, two rejected, and resource discovery, which is the part not built.
 - [[pages/decisions/0004-the-in-repo-documentation-folder-is-named-context|ADR 0004 - The in-repo documentation folder is named context]] *(accepted 2026-11-13)* - `vault/` became `context/`; ADR 0001 otherwise stands.

@@ -146,7 +146,7 @@ public class QueuesController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Search {SubQueue} messages failed for queue {QueueName}", subQueue, name);
-            return StatusCode(500, new { message = "An internal error occurred." });
+            return EntityAdministrationResults.Unhandled(ex);
         }
     }
 
@@ -304,7 +304,7 @@ public class QueuesController : ControllerBase
         catch (Exception ex)
         {
             logger.LogError(ex, "Cancel scheduled messages failed for {EntityName}", name);
-            return controller.StatusCode(500, new { message = "An internal error occurred." });
+            return EntityAdministrationResults.Unhandled(ex);
         }
     }
 
@@ -352,7 +352,7 @@ public class QueuesController : ControllerBase
         catch (Exception ex)
         {
             logger.LogError(ex, "Deferred messages batch failed for {EntityPath}", entityPath);
-            return controller.StatusCode(500, new { message = EntityAdministrationResults.InternalError });
+            return EntityAdministrationResults.Unhandled(ex);
         }
     }
 
@@ -394,7 +394,7 @@ public class QueuesController : ControllerBase
         catch (Exception ex)
         {
             logger.LogError(ex, "Active messages batch failed for {EntityPath}", entityPath);
-            return controller.StatusCode(500, new { message = EntityAdministrationResults.InternalError });
+            return EntityAdministrationResults.Unhandled(ex);
         }
     }
 
@@ -422,7 +422,7 @@ public class QueuesController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Resubmit dead-letter message failed for queue {QueueName} seq {SequenceNumber}", name, sequenceNumber);
-            return StatusCode(500, new { message = "An internal error occurred." });
+            return EntityAdministrationResults.Unhandled(ex);
         }
     }
 
@@ -453,7 +453,7 @@ public class QueuesController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Resubmit batch {SubQueue} failed for queue {QueueName}", subQueue, name);
-            return StatusCode(500, new { message = "An internal error occurred." });
+            return EntityAdministrationResults.Unhandled(ex);
         }
     }
 
@@ -485,7 +485,7 @@ public class QueuesController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Purge {SubQueue} messages failed for queue {QueueName}", subQueue, name);
-            return StatusCode(500, new { message = "An internal error occurred." });
+            return EntityAdministrationResults.Unhandled(ex);
         }
     }
 
@@ -526,7 +526,7 @@ public class QueuesController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Delete {SubQueue} messages batch failed for queue {QueueName}", subQueue, name);
-            return StatusCode(500, new { message = "An internal error occurred." });
+            return EntityAdministrationResults.Unhandled(ex);
         }
     }
 
@@ -556,7 +556,7 @@ public class QueuesController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Move {SubQueue} messages failed from queue {QueueName} to {TargetQueueName}", subQueue, name, request.TargetQueueName);
-            return StatusCode(500, new { message = "An internal error occurred." });
+            return EntityAdministrationResults.Unhandled(ex);
         }
     }
 }

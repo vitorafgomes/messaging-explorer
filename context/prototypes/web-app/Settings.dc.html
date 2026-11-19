@@ -150,13 +150,30 @@ input::placeholder{color:currentColor;opacity:.72}
         <section aria-label="The version picked" style="display: flex; flex-direction: column; align-items: flex-start; gap: 10px; margin-top: 16px; padding: 16px; border: 1px solid {{t.outlineVariant}}; border-radius: 8px; background: {{t.surfaceLow}}">
           <h3 style="margin: 0; font-size: 16px; line-height: 24px; font-weight: 500">What version {{sel.version}} has</h3>
           <p style="margin: 0; color: {{t.onSurfaceVariant}}">{{sel.relation}}</p>
-          <div style="display: flex; flex-direction: column; gap: 4px; width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}">
-            <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Release notes of {{sel.version}} (sample text)</span>
-            <ul style="display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0 0 0 20px">
-              <sc-for list="{{sel.notes}}" as="n" hint-placeholder-count="3">
-                <li>{{n.text}}</li>
-              </sc-for>
-            </ul>
+          <div style="display: flex; flex-direction: column; gap: 4px; width: 100%; box-sizing: border-box; padding: 4px 12px 10px; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}">
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+              <button type="button" onClick="{{notes.toggle}}" aria-expanded="{{notes.expanded}}" class="hov" style="display: flex; align-items: center; gap: 8px; flex: 1 1 240px; min-height: 44px; padding: 0 4px; border: 0; border-radius: 8px; background: transparent; color: {{t.onSurface}}; font: inherit; text-align: left; cursor: pointer">
+                <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; transform: {{notes.turn}}"><path d="M9 6l6 6-6 6"></path></svg>
+                <span style="font-weight: 500">Release notes of {{sel.version}}</span>
+                <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">{{notes.count}}</span>
+              </button>
+              <span style="display: inline-flex; align-items: center; flex: none; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; font-weight: 400; color: {{t.onSurfaceVariant}}; white-space: nowrap">Built 2026-11-19: expand and hide</span>
+            </div>
+            <sc-if value="{{notes.open}}" hint-placeholder-val="{{true}}">
+              <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 0 4px 0 30px">
+                <ul style="display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0 0 0 16px">
+                  <sc-for list="{{notes.lines}}" as="n" hint-placeholder-count="3">
+                    <li>{{n.text}}</li>
+                  </sc-for>
+                </ul>
+                <sc-if value="{{notes.long}}" hint-placeholder-val="{{false}}">
+                  <button type="button" onClick="{{notes.more}}" aria-expanded="{{notes.allShown}}" class="hov" style="display: inline-flex; align-items: center; height: 32px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; cursor: pointer">{{notes.moreLabel}}</button>
+                </sc-if>
+              </div>
+            </sc-if>
+            <sc-if value="{{notes.closed}}" hint-placeholder-val="{{false}}">
+              <span style="padding: 0 4px 0 30px; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Hidden. Open them to read what this version has.</span>
+            </sc-if>
           </div>
           <sc-if value="{{selOlder}}" hint-placeholder-val="{{false}}">
             <p style="margin: 0; padding: 10px 12px; border-radius: 8px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}">This goes back to an older version. What a newer version saved may not be read by it; your connections file is copied beside the original first.</p>
@@ -194,7 +211,7 @@ input::placeholder{color:currentColor;opacity:.72}
         <sc-if value="{{available}}" hint-placeholder-val="{{false}}">
           <div aria-live="polite" style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 16px; padding: 16px; border-radius: 8px; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}">
             <h3 style="display: flex; align-items: center; gap: 8px; margin: 0; font-size: 16px; line-height: 24px; font-weight: 500"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"></path></svg>Version 2.5.0 is available</h3>
-            <p style="margin: 0">You have 2.4.0. It is downloading in the background and installs the next time you quit the app.</p>
+            <p style="margin: 0">You have 2.4.0. Nothing downloads or installs until you agree.</p>
             <div style="display: flex; flex-direction: column; gap: 4px; width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}">
               <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Release notes of 2.5.0 (sample text)</span>
               <ul style="display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0 0 0 20px">
@@ -203,8 +220,12 @@ input::placeholder{color:currentColor;opacity:.72}
                 <li>Fix: the download bar no longer covers the toolbar</li>
               </ul>
             </div>
+            <label style="display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer">
+              <input type="checkbox" checked="{{agreedUp}}" onChange="{{toggleAgreeUp}}" style="width: 18px; height: 18px; margin: 0; accent-color: {{t.primary}}">
+              <span>I have read what this version has and want to install it</span>
+            </label>
             <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 4px">
-              <button type="button" onClick="{{startDownload}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px 0 16px; border: 0; border-radius: 999px; background: {{t.primary}}; color: {{t.onPrimary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"></path></svg>Download</button>
+              <button type="button" disabled="{{cannotDownload}}" onClick="{{startDownload}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 20px 0 16px; border: 0; border-radius: 999px; background: {{upBg}}; color: {{upFg}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: {{upCursor}}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"></path></svg>Download</button>
               <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; text-decoration: none; white-space: nowrap; cursor: pointer; color: {{t.onSecondaryContainer}}; text-decoration: underline">Open the release page<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"></path></svg></button>
             </div>
             <div style="display: flex; gap: 8px; flex-wrap: wrap">
@@ -532,7 +553,7 @@ const UPDATE_STATES = ['upToDate', 'available', 'downloading', 'ready', 'failed'
 const CLEAR_WORDS = 'clear all data';
 const VERSIONS = {
   latest: [
-    { version: '2.4.5', date: 'Nov 20, 2026', tag: 'Newest on Stable', rank: 1, notes: ['RabbitMQ: delete, move and Edit & Resubmit of chosen messages', 'The count beside an entity in the tree follows the panel in real time', 'Fix: the Transfer dead-letter tab says why the broker did not answer'] },
+    { version: '2.4.5', date: 'Nov 20, 2026', tag: 'Newest on Stable', rank: 1, notes: ['RabbitMQ: delete, move and Edit & Resubmit of chosen messages', 'The count beside an entity in the tree follows the panel in real time', 'Settings: pick the version to install, with its notes', 'Add Connection: sign in first, then pick the namespaces', 'Connections grouped by client and environment', 'Logs screen in Developer mode', 'The Service Bus emulator shows no false count', 'Fix: the Transfer dead-letter tab says why the broker did not answer'] },
     { version: '2.4.4', date: 'Nov 14, 2026', tag: 'Newer', rank: 1, notes: ['Automatic resubmit keeps running when its dialog is closed', 'Fix: a queue with a message time to live no longer breaks the tree'] },
     { version: '2.4.0', date: 'Nov 12, 2026', tag: 'Installed', rank: 0, notes: ['Edit a queue, a topic or a subscription', 'Subscription rules', 'Transfer dead-letter tab'] },
     { version: '2.3.0', date: 'Sep 7, 2026', tag: 'Older', rank: -1, notes: ['Monitoring screen', 'Export and import of connections'] }
@@ -610,12 +631,24 @@ class Component extends DCLogic {
       upToDate: upd === 'upToDate', available: upd === 'available', downloading: upd === 'downloading', ready: upd === 'ready',
       failed: upd === 'failed', cannot: upd === 'cannotSelfUpdate',
       checkNow: () => this.setState({ upd: undefined }),
-      startDownload: () => this.setState({ upd: 'downloading' }),
+      startDownload: () => { if (s.agreedUp) this.setState({ upd: 'downloading', agreedUp: false }); },
+      agreedUp: !!s.agreedUp, toggleAgreeUp: () => this.setState({ agreedUp: !s.agreedUp }), cannotDownload: !s.agreedUp,
+      upBg: s.agreedUp ? t.primary : t.surfaceHigh, upFg: s.agreedUp ? t.onPrimary : t.onSurfaceVariant, upCursor: s.agreedUp ? 'pointer' : 'not-allowed',
       retryUpdate: () => this.setState({ upd: 'downloading' }),
       devMode, toggleDev: () => this.setState({ dev: !devMode }),
       historyOn, toggleHistory: () => this.setState({ history: !historyOn }),
       keepOpts: seg([['1', '1 day'], ['7', '7 days'], ['30', '30 days'], ['90', '90 days']], keep, v => this.setState({ keep: v })),
-      versionOpts, pickVer: ev => this.setState({ ver: ev.target.value, agreed: false }), sel, selOlder: sel.rank < 0, selInstalled: sel.rank === 0, selCanInstall: sel.rank !== 0,
+      notes: (() => {
+        const open = s.notesOpen ?? true, all = !!s.notesAll, total = sel.notes.length, long = total > 4;
+        return {
+          open, closed: !open, expanded: open ? 'true' : 'false', turn: open ? 'rotate(90deg)' : 'none',
+          count: total + (total === 1 ? ' line' : ' lines'), long, allShown: all ? 'true' : 'false',
+          lines: sel.notes.slice(0, long && !all ? 4 : total),
+          moreLabel: all ? 'Show fewer' : 'Show all ' + total + ' lines',
+          toggle: () => this.setState({ notesOpen: !open }), more: () => this.setState({ notesAll: !all })
+        };
+      })(),
+      versionOpts, pickVer: ev => this.setState({ ver: ev.target.value, agreed: false, notesOpen: true, notesAll: false }), sel, selOlder: sel.rank < 0, selInstalled: sel.rank === 0, selCanInstall: sel.rank !== 0,
       agreed, toggleAgree: () => this.setState({ agreed: !agreed }), cannotInstall: !agreed, install: () => this.setState({ upd: 'downloading', agreed: false }),
       installBg: agreed ? t.primary : t.surfaceHigh, installFg: agreed ? t.onPrimary : t.onSurfaceVariant, installCursor: agreed ? 'pointer' : 'not-allowed',
       showDialog: dlg !== 'none', dlgBug: dlg === 'bug', dlgClear: dlg === 'clear',

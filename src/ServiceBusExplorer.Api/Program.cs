@@ -121,6 +121,9 @@ builder.Services.AddSingleton<IServiceBusService>(sp =>
     return new ServiceBusService(logger);
 });
 
+var recentLogs = new ServiceBusExplorer.Api.Logs.RecentLogStore();
+builder.Services.AddSingleton(recentLogs);
+builder.Logging.AddProvider(recentLogs);
 builder.Services.AddSingleton<MonitoringStore>();
 builder.Services.AddHostedService<MonitoringBackgroundService>();
 
@@ -139,6 +142,8 @@ builder.Configuration.GetSection(AzureMonitorOptions.SectionName).Bind(azureMoni
 
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<AzureNamespaceMetricsReader>();
+// The Azure directory of "sign in, then pick": one session for the process, its token in memory only.
+builder.Services.AddSingleton(sp => new AzureNamespaceDirectory(logger: sp.GetService<ILogger<AzureNamespaceDirectory>>()));
 if (azureMonitorOptions.IsConfigured)
 {
     bootstrapLogger.LogInformation(
@@ -172,10 +177,16 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-// Outermost, so an exception from any later middleware or controller answers one constant
-// body in every environment; the framework logs the exception, the client never sees it.
+// Outermost, so an exception from any later middleware or controller answers a fixed sentence
+// in every environment: 500, or 502 when a broker refused the operation as not authorised.
+// The framework logs the exception, the client never sees its text.
 app.UseExceptionHandler(errorApp => errorApp.Run(context =>
-    context.Response.WriteAsJsonAsync(new { message = "An internal error occurred." })));
+{
+    var answer = ServiceBusExplorer.Api.Controllers.EntityAdministrationResults.Unhandled(
+        context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error);
+    context.Response.StatusCode = answer.StatusCode ?? StatusCodes.Status500InternalServerError;
+    return context.Response.WriteAsJsonAsync(answer.Value);
+}));
 
 // Host filtering must run before auth so unknown hosts get rejected first.
 app.UseHostFiltering();
@@ -215,6 +226,19 @@ app.Use(async (context, next) =>
     }
 
     await next();
+});
+
+app.Use(async (context, next) =>
+{
+    var started = System.Diagnostics.Stopwatch.GetTimestamp();
+    await next();
+    var status = context.Response.StatusCode;
+    if (status >= 400 && !context.Request.Path.StartsWithSegments("/api/logs", StringComparison.OrdinalIgnoreCase))
+    {
+        var took = (long)System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+        recentLogs.Add(status >= 500 ? LogLevel.Error : LogLevel.Warning, "Request",
+            $"{context.Request.Method} {context.Request.Path} answered {status} in {took} ms");
+    }
 });
 
 // Disable HTTPS redirection for Electron compatibility

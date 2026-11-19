@@ -723,6 +723,81 @@ public class AzureServiceBusProviderBatchTests
     }
 
     [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task A_resubmit_or_move_whose_send_is_refused_as_not_authorised_or_times_out_midway_reports_what_it_sent_as_possible_duplicates(bool move, bool timesOut)
+    {
+        var receiver = BuildReceiver(new List<IReadOnlyList<ServiceBusReceivedMessage>>
+        {
+            new[] { Msg(1, 1, "order-1"), Msg(2, 1, "order-2"), Msg(3, 1, "order-3") }
+        });
+        var sender = new Mock<ServiceBusSender>();
+        sender.Setup(s => s.CreateMessageBatchAsync(It.IsAny<CancellationToken>())).Returns(() =>
+        {
+            var store = new List<ServiceBusMessage>();
+            return new ValueTask<ServiceBusMessageBatch>(ServiceBusModelFactory.ServiceBusMessageBatch(long.MaxValue, store, new CreateMessageBatchOptions(), _ => store.Count == 0));
+        });
+        sender.SetupSequence(s => s.SendMessagesAsync(It.IsAny<ServiceBusMessageBatch>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask)
+            .Throws(timesOut ? new TimeoutException("no answer") : new UnauthorizedAccessException("Send claim(s) are required"));
+
+        var result = move
+            ? await AzureServiceBusProvider.MoveCoreAsync(receiver.Object, sender.Object, [1, 2, 3], CancellationToken.None)
+            : await AzureServiceBusProvider.ResubmitCoreAsync(receiver.Object, sender.Object, [1, 2, 3], CancellationToken.None);
+
+        Assert.True(result.Failures.Where(f => f.PossibleDuplicate).Select(f => f.SequenceNumber).Order().SequenceEqual([1L, 2L]),
+            $"A message already sent when the call stopped is reported as a possible duplicate, never lost with the error. Failures: {string.Join("; ", result.Failures.Select(f => $"{f.SequenceNumber}: {f.Error}"))}");
+        var notReached = Assert.Single(result.Failures, f => f.SequenceNumber == 3);
+        Assert.Equal(timesOut
+            ? "Not reached: the call stopped because the broker did not answer in time."
+            : "Not reached: the call stopped because the broker refused it as not authorised.", notReached.Error);
+        Assert.False(notReached.PossibleDuplicate, "A message never handed to a send is not a possible duplicate.");
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task A_resubmit_or_move_whose_later_receive_is_refused_or_times_out_keeps_the_messages_it_already_finished(bool move, bool timesOut)
+    {
+        var receiver = BuildReceiver([]);
+        receiver.SetupSequence(r => r.ReceiveMessagesAsync(It.IsAny<int>(), It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { Msg(1, 1, "order-1") })
+            .ThrowsAsync(timesOut ? new TimeoutException("no answer") : new UnauthorizedAccessException("Listen claim(s) are required"));
+        var sender = new Mock<ServiceBusSender>();
+        sender.Setup(s => s.CreateMessageBatchAsync(It.IsAny<CancellationToken>())).Returns(() => new ValueTask<ServiceBusMessageBatch>(NewTestBatch()));
+        sender.Setup(s => s.SendMessagesAsync(It.IsAny<ServiceBusMessageBatch>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+
+        var result = move
+            ? await AzureServiceBusProvider.MoveCoreAsync(receiver.Object, sender.Object, [1, 2], CancellationToken.None)
+            : await AzureServiceBusProvider.ResubmitCoreAsync(receiver.Object, sender.Object, [1, 2], CancellationToken.None);
+
+        Assert.True(result.SuccessCount == 1, $"The message sent and removed before the call stopped stays reported as done; it reported {result.SuccessCount}.");
+        var notReached = Assert.Single(result.Failures);
+        Assert.Equal((2L, false, timesOut
+            ? "Not reached: the call stopped because the broker did not answer in time."
+            : "Not reached: the call stopped because the broker refused it as not authorised."), (notReached.SequenceNumber, notReached.PossibleDuplicate, notReached.Error));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_resubmit_or_move_refused_as_not_authorised_before_anything_was_sent_lets_the_refusal_through(bool move)
+    {
+        var receiver = new Mock<ServiceBusReceiver>();
+        receiver.Setup(r => r.ReceiveMessagesAsync(It.IsAny<int>(), It.IsAny<TimeSpan?>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new UnauthorizedAccessException("Listen claim(s) are required"));
+        var sender = new Mock<ServiceBusSender>();
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => move
+            ? AzureServiceBusProvider.MoveCoreAsync(receiver.Object, sender.Object, [1], CancellationToken.None)
+            : AzureServiceBusProvider.ResubmitCoreAsync(receiver.Object, sender.Object, [1], CancellationToken.None));
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task A_delete_or_move_on_an_active_entity_stops_before_receiving_again_an_unselected_message_at_its_limit_and_reports_the_rest_not_reached(bool move)

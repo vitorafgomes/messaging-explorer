@@ -4,10 +4,14 @@ const { spawn } = require('child_process');
 const { autoUpdater } = require('electron-updater');
 const crypto = require('crypto');
 const Store = require('electron-store');
-const { dataFilePath, showDataFile, openDevTools, isSafeExternalUrl, normalizeUpdateChannel, applyUpdateChannel, waitForHealth, stopProcess, applicationMenuTemplate, mainWindowOptions, shellShortcut, selfUpdateBlocker, configureAutoUpdate, readUpdateVersions, installUpdateVersion, backupDataFile } = require('./shell-helpers');
+const { dataFilePath, showDataFile, openDevTools, isSafeExternalUrl, normalizeUpdateChannel, applyUpdateChannel, waitForHealth, stopProcess, applicationMenuTemplate, mainWindowOptions, shellShortcut, selfUpdateBlocker, configureAutoUpdate, readUpdateVersions, installUpdateVersion, backupDataFile, saveExportFile, createShellLog, captureConsole, downloadAgreedUpdate } = require('./shell-helpers');
 
 // Generate a per-session API secret for Electron <-> .NET API authentication
 const API_SECRET = crypto.randomBytes(32).toString('hex');
+
+// What this process writes to its console is also kept for the Logs screen of Developer mode
+const shellLog = createShellLog({ hidden: [[app.getPath('home'), '~'], [API_SECRET, '***']] });
+captureConsole(console, shellLog);
 
 // Persistent settings store (update channel preference)
 const store = new Store({
@@ -41,7 +45,7 @@ function loadPortConfig() {
         }
       }
     } catch (err) {
-      console.warn(`[loadPortConfig] Failed to parse ${candidate}: ${err.message}`);
+      console.warn(`[loadPortConfig] Failed to parse ${candidate}:`, err);
     }
   }
   console.warn('[loadPortConfig] config.json not found, using defaults 5917/4297');
@@ -229,6 +233,7 @@ function createTray() {
 
 // Helper function to fetch data from API
 async function fetchFromAPI(endpoint) {
+  if (!apiHealthy) return [];
   return new Promise((resolve) => {
     const http = require('http');
 
@@ -649,7 +654,7 @@ function startApi() {
         recordApiExit(code, signal);
       });
     } catch (err) {
-      console.error('[startApi] Failed to spawn dev API:', err.message);
+      console.error('[startApi] Failed to spawn dev API:', err);
       return `it could not be launched (${err.message})`;
     }
     return null;
@@ -686,7 +691,7 @@ function startApi() {
       fs.chmodSync(executable, 0o755);
       console.log('[startApi] Fixed execute permissions');
     } catch (chmodErr) {
-      console.error('[startApi] Failed to fix permissions:', chmodErr.message);
+      console.error('[startApi] Failed to fix permissions:', chmodErr);
       return 'the API executable could not be made executable';
     }
   }
@@ -721,8 +726,7 @@ function startApi() {
     });
 
     apiProcess.on('error', (err) => {
-      console.error(`[startApi] Failed to start API process: ${err.message}`);
-      console.error('[startApi] Error details:', err);
+      console.error('[startApi] Failed to start API process:', err);
       recordApiError(err);
     });
 
@@ -734,8 +738,7 @@ function startApi() {
       recordApiExit(code, signal);
     });
   } catch (err) {
-    console.error('[startApi] Exception while spawning API:', err.message);
-    console.error('[startApi] Stack trace:', err.stack);
+    console.error('[startApi] Exception while spawning API:', err);
     return `it could not be launched (${err.message})`;
   }
 
@@ -771,6 +774,7 @@ async function openWindowWhenApiReady(startFailure) {
       hasExited: () => apiExit !== null
     });
     apiHealthy = result.healthy;
+    if (apiHealthy) updateTrayMenu();
     if (!result.healthy) {
       failure = result.reason === 'timeout'
         ? `it did not answer within ${timeoutMs / 1000} seconds`
@@ -835,8 +839,7 @@ ipcMain.handle('get-api-secret', () => API_SECRET);
 ipcMain.handle('get-api-port', () => apiPort);
 
 // === Auto Updater ===
-const keepsPickedVersion = () => store.get('pickedVersion') === app.getVersion();
-configureAutoUpdate(autoUpdater, process.platform, process.env, keepsPickedVersion());
+configureAutoUpdate(autoUpdater, process.platform, process.env);
 applyUpdateChannel(autoUpdater, normalizeUpdateChannel(store.get('updateChannel', 'latest')) ?? 'latest');
 
 function sendUpdateStatus(status, data = {}) {
@@ -850,9 +853,12 @@ autoUpdater.on('checking-for-update', () => {
   sendUpdateStatus('checking');
 });
 
+let foundVersion = null;
+
 autoUpdater.on('update-available', (info) => {
+  foundVersion = info.version;
   console.log('[Updater] Update available:', info.version);
-  sendUpdateStatus('available', { version: info.version, releaseNotes: info.releaseNotes, downloads: !keepsPickedVersion() });
+  sendUpdateStatus('available', { version: info.version, releaseNotes: info.releaseNotes });
 });
 
 autoUpdater.on('update-not-available', () => {
@@ -871,7 +877,7 @@ autoUpdater.on('update-downloaded', (info) => {
 });
 
 autoUpdater.on('error', (err) => {
-  console.error('[Updater] Error:', err.message);
+  console.error('[Updater] Error:', err);
   sendUpdateStatus('error', { message: err.message });
 });
 
@@ -888,14 +894,7 @@ ipcMain.handle('check-for-updates', async () => {
 });
 
 // IPC: Download update
-ipcMain.handle('download-update', async () => {
-  try {
-    await autoUpdater.downloadUpdate();
-    return { status: 'ok' };
-  } catch (err) {
-    return { status: 'error', message: err.message };
-  }
-});
+ipcMain.handle('download-update', (event, request) => downloadAgreedUpdate({ agreed: request?.agreed, version: request?.version, found: foundVersion, updater: autoUpdater }));
 
 // IPC: Install update (restart)
 ipcMain.handle('install-update', () => {
@@ -950,12 +949,10 @@ ipcMain.handle('install-update-version', async (event, request) => {
       channel: normalizeUpdateChannel(store.get('updateChannel', 'latest')) ?? 'latest',
       platform: process.platform,
       env: process.env,
-      backup: () => backupDataFile(dataFile, app.getVersion(), { exists: fs.existsSync, copy: fs.copyFileSync }),
-      keepsPickedVersion: keepsPickedVersion()
+      backup: () => backupDataFile(dataFile, app.getVersion(), { exists: fs.existsSync, copy: fs.copyFileSync })
     });
     if (result.status === 'ok') {
       pickedVersionDownloaded = true;
-      store.set('pickedVersion', result.version);
     }
     return result;
   } finally {
@@ -974,7 +971,7 @@ function scheduleUpdateChecks() {
   const runCheck = () => {
     if (pickedVersionDownloaded) return;
     autoUpdater.checkForUpdates().then(result => result?.downloadPromise?.catch(() => {})).catch(err => {
-      console.log('[Updater] Auto-check failed (offline?):', err.message);
+      console.log('[Updater] Auto-check failed (offline?):', err);
     });
   };
   setTimeout(runCheck, UPDATE_CHECK_INITIAL_DELAY_MS);
@@ -1003,5 +1000,15 @@ ipcMain.handle('get-data-file', () => dataFilePath(app.getPath('userData')));
 
 ipcMain.handle('show-data-file', () =>
   showDataFile(dataFilePath(app.getPath('userData')), (file) => require('fs').existsSync(file), (file) => shell.showItemInFolder(file)));
+
+ipcMain.handle('save-export-file', (event, request) => saveExportFile({
+  name: request?.name, content: request?.content,
+  showSaveDialog: (options) => dialog.showSaveDialog(mainWindow, options),
+  writeFile: (file, text) => require('fs').promises.writeFile(file, text, 'utf8')
+}));
+
+ipcMain.handle('get-shell-logs', (event, after) => shellLog.after(after));
+
+ipcMain.handle('clear-shell-logs', () => shellLog.clear());
 
 ipcMain.handle('open-dev-tools', (event) => openDevTools(event.sender, mainWindow));

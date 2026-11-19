@@ -23,7 +23,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Auto-updater
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
-  downloadUpdate: () => ipcRenderer.invoke('download-update'),
+  downloadUpdate: (agreed, version) => ipcRenderer.invoke('download-update', { agreed: agreed === true, version }),
   installUpdate: () => ipcRenderer.invoke('install-update'),
   onUpdateStatus: (callback) => {
     ipcRenderer.on('update-status', (event, data) => callback(data));
@@ -43,6 +43,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // The data file of the app, and showing it in the file manager; neither takes an argument
   getDataFile: () => ipcRenderer.invoke('get-data-file'),
   showDataFile: () => ipcRenderer.invoke('show-data-file'),
+  saveExportFile: (name, content) => ipcRenderer.invoke('save-export-file', { name, content }),
+
+  // The lines the desktop app logged after an id, and forgetting them; the page names no file and no process
+  getShellLogs: (after) => ipcRenderer.invoke('get-shell-logs', Number.isFinite(after) ? after : 0),
+  clearShellLogs: () => ipcRenderer.invoke('clear-shell-logs'),
 
   // Opens the developer tools of this window; takes no argument, so the page cannot choose another
   openDevTools: () => ipcRenderer.invoke('open-dev-tools'),

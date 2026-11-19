@@ -28,7 +28,7 @@ One topic of [[pages/services/api|Api]]; the provider side is on [[pages/service
 - **400, count.** "sequenceNumbers must hold 1 to 1000 sequence numbers." for none or more than 1000, before the provider is called.
 - **200** with the result, refusals included: a number not found, the delivery-limit stop and a settle the broker refused are failures of the result, not error codes. The request token reaches the provider.
 - **409** "The entity is disabled for this operation." for a disabled entity.
-- **500**, the constant `{ "message": "An internal error occurred." }` for anything else, the cause logged.
+- **500**, the constant `{ "message": "An internal error occurred." }` for anything else, the cause logged; a refusal as not authorised is the 502 of [[pages/services/api/cancellation-and-errors]].
 - **401** without the `X-Api-Key`, as on every route.
 
 Pinned in `src/ServiceBusExplorer.Api.Tests/MessageRouteTests.cs`: `An_active_dead_letter_or_defer_route_hands_the_provider_the_entity_the_numbers_and_the_request_token_and_answers_the_result_per_sequence_number`, `An_active_dead_letter_hands_the_provider_the_reason_and_the_description`, `A_provider_that_declares_no_dead_letter_or_deferral_answers_400_to_an_active_settle_and_is_never_called`, `An_active_settle_above_1000_or_without_a_number_answers_400_and_is_never_called`, `An_active_settle_on_a_disabled_entity_answers_409_and_another_failure_the_constant_500`, `An_active_settle_without_the_api_key_is_refused_with_401`. Removing the capability check of `ActiveBatch` fails the third on its four routes.

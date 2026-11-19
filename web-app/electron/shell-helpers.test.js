@@ -383,7 +383,7 @@ test('Open developer tools does nothing and does not throw when the window is go
   assert.deepEqual(opened, [], 'no developer tools open when the window is gone');
 });
 
-test('an update downloads on its own and installs on quit only where the package can replace itself', () => {
+test('an update never downloads on its own, and what the user agreed to download installs on quit only where the package can replace itself', () => {
   const cases = [
     ['the Windows installer', 'win32', {}, true],
     ['the AppImage', 'linux', { APPIMAGE: '/home/user/Messaging-Explorer.AppImage' }, true],
@@ -392,28 +392,47 @@ test('an update downloads on its own and installs on quit only where the package
     ['the deb', 'linux', {}, false]
   ];
   for (const [name, platform, env, expected] of cases) {
-    const updater = { autoDownload: !expected, autoInstallOnAppQuit: !expected };
+    const updater = { autoDownload: true, autoInstallOnAppQuit: !expected };
     configureAutoUpdate(updater, platform, env);
-    assert.equal(updater.autoDownload, expected, `${name}: autoDownload`);
+    assert.equal(updater.autoDownload, false, `${name}: autoDownload`);
     assert.equal(updater.autoInstallOnAppQuit, expected, `${name}: autoInstallOnAppQuit`);
   }
 });
 
-test('a version the user picked is kept: while it is the one running nothing newer downloads or installs by itself', () => {
-  const updater = { autoDownload: true, autoInstallOnAppQuit: true };
-  configureAutoUpdate(updater, 'linux', { APPIMAGE: '/opt/app.AppImage' }, true);
-  assert.deepEqual(updater, { autoDownload: false, autoInstallOnAppQuit: true }, 'nothing downloads by itself, and what the user downloads still installs on quit');
-
-  configureAutoUpdate(updater, 'linux', { APPIMAGE: '/opt/app.AppImage' }, false);
-  assert.deepEqual(updater, { autoDownload: true, autoInstallOnAppQuit: true }, 'a version that was not picked updates as before');
+test('the update found by the check downloads only with the agreement of the user to that version, and a failed download says why', async () => {
+  const { downloadAgreedUpdate } = require('./shell-helpers');
+  for (const agreed of [undefined, false, 'true', 1, {}]) {
+    const updater = fakeUpdater();
+    assert.deepEqual(await downloadAgreedUpdate({ agreed, version: '2.5.0', found: '2.5.0', updater }), { status: 'error', message: 'Nothing is downloaded without your agreement.' });
+    assert.deepEqual(updater.calls, []);
+  }
+  for (const [version, found] of [['2.5.0', '2.5.1'], [undefined, '2.5.0'], ['2.5.0', null], [undefined, undefined], [{}, {}]]) {
+    const updater = fakeUpdater();
+    assert.deepEqual(await downloadAgreedUpdate({ agreed: true, version, found, updater }),
+      { status: 'error', message: 'The version found is not the one you agreed to. Check again and agree to the version shown.' });
+    assert.deepEqual(updater.calls, []);
+  }
+  const updater = fakeUpdater();
+  assert.deepEqual(await downloadAgreedUpdate({ agreed: true, version: '2.5.0', found: '2.5.0', updater }), { status: 'ok' });
+  assert.deepEqual(updater.calls, [['download']]);
+  assert.deepEqual(await downloadAgreedUpdate({ agreed: true, version: '2.5.0', found: '2.5.0', updater: fakeUpdater({ downloadFails: true }) }), { status: 'error', message: 'disk full' });
 });
 
-test('main.js configures the updater through configureAutoUpdate and sets autoDownload nowhere else', () => {
+test('main.js never writes the text or the stack of an error to its console, only the error itself, of which the shell log keeps the name', () => {
   const main = require('node:fs').readFileSync(require('node:path').join(__dirname, 'main.js'), 'utf8');
-  assert.match(main, /^configureAutoUpdate\(autoUpdater, process\.platform, process\.env, keepsPickedVersion\(\)\);$/m);
-  assert.match(main, /^const keepsPickedVersion = \(\) => store\.get\('pickedVersion'\) === app\.getVersion\(\);$/m, 'the version the user picked is kept while it is the one running');
-  assert.doesNotMatch(main, /autoUpdater\.(autoDownload|autoInstallOnAppQuit)\s*=/);
+  const calls = main.match(/console\.(log|warn|error)\([^;]*;/g) ?? [];
+  assert.deepEqual(calls.filter(call => /\.message|\.stack/.test(call)), []);
 });
+
+test('main.js configures the updater through configureAutoUpdate, sets autoDownload nowhere else, and downloads only through the agreement', () => {
+  const main = require('node:fs').readFileSync(require('node:path').join(__dirname, 'main.js'), 'utf8');
+  assert.match(main, /^configureAutoUpdate\(autoUpdater, process\.platform, process\.env\);$/m);
+  assert.doesNotMatch(main, /autoUpdater\.(autoDownload|autoInstallOnAppQuit)\s*=/);
+  assert.match(main, /ipcMain\.handle\('download-update', \(event, request\) => downloadAgreedUpdate\(\{ agreed: request\?\.agreed, version: request\?\.version, found: foundVersion, updater: autoUpdater \}\)\);/);
+  assert.match(main, /autoUpdater\.on\('update-available', \(info\) => \{\n  foundVersion = info\.version;/);
+  assert.equal(main.match(/autoUpdater\.downloadUpdate\(/g), null, 'main.js itself never starts a download');
+});
+
 
 const { updateVersions, readUpdateVersions, RELEASES_API_URL } = require('./shell-helpers');
 
@@ -568,7 +587,7 @@ test('a picked version that cannot be read or downloaded says why, installs noth
     assert.deepEqual(result, { status: 'error', message: `Version 2.4.3 was not installed: ${message}` });
     assert.deepEqual(request.updater.calls.at(-1), ['setFeedURL', { provider: 'github', owner: 'vitorafgomes', repo: 'messaging-explorer' }]);
     assert.equal(request.updater.allowDowngrade, false);
-    assert.equal(request.updater.autoDownload, true);
+    assert.equal(request.updater.autoDownload, false);
     assert.equal(request.updater.channel, 'beta');
   }
 });
@@ -629,9 +648,132 @@ test('main.js installs a picked version only through installUpdateVersion, with 
   const handler = main.slice(main.indexOf("ipcMain.handle('install-update-version'"), main.indexOf('// Check for updates shortly after launch'));
   assert.match(handler, /ipcMain\.handle\('install-update-version', async \(event, request\) => \{/);
   assert.match(handler, /version: request\?\.version, agreed: request\?\.agreed, listed: lastListedVersions,/);
-  assert.match(handler, /if \(result\.status === 'ok'\) \{\n      pickedVersionDownloaded = true;\n      store\.set\('pickedVersion', result\.version\);\n    \}/, 'the picked version is remembered so that it is kept after the restart');
+  assert.match(handler, /if \(result\.status === 'ok'\) \{\n      pickedVersionDownloaded = true;\n    \}/);
   assert.match(handler, /if \(installingPickedVersion\) return \{ status: 'error', message: 'A version is already being downloaded\.' \};\n  installingPickedVersion = true;\n  try \{/, 'one install at a time');
   assert.match(handler, /\} finally \{\n    installingPickedVersion = false;\n  \}/);
   assert.match(main, /if \(pickedVersionDownloaded\) return;\n\s+autoUpdater\.checkForUpdates\(\)/);
   assert.doesNotMatch(main, /releases\/download/);
+});
+
+const { saveExportFile } = require('./shell-helpers');
+
+test('an export is written where the user chose in the save dialog, which is offered only the file name', async () => {
+  const offered = [];
+  const written = [];
+  const result = await saveExportFile({
+    name: '../../etc/servicebus-full-config-2026-11-19.json', content: '{"connections":[]}',
+    showSaveDialog: async (options) => { offered.push(options); return { canceled: false, filePath: '/home/user/Documents/export.json' }; },
+    writeFile: async (file, text) => { written.push([file, text]); }
+  });
+
+  assert.deepEqual(result, { status: 'saved', file: 'export.json' });
+  assert.deepEqual(offered, [{ title: 'Save the export', defaultPath: 'servicebus-full-config-2026-11-19.json', filters: [{ name: 'JSON', extensions: ['json'] }] }]);
+  assert.deepEqual(written, [['/home/user/Documents/export.json', '{"connections":[]}']]);
+});
+
+test('a save dialog the user cancels writes nothing and is no error', async () => {
+  let wrote = false;
+  const result = await saveExportFile({ name: 'a.json', content: '{}', showSaveDialog: async () => ({ canceled: true }), writeFile: async () => { wrote = true; } });
+
+  assert.deepEqual(result, { status: 'cancelled' });
+  assert.equal(wrote, false);
+});
+
+test('an export that cannot be written says why, and what is not a text of a sane size is refused before the dialog opens', async () => {
+  const failing = await saveExportFile({
+    name: 'a.json', content: '{}', showSaveDialog: async () => ({ canceled: false, filePath: '/readonly/a.json' }),
+    writeFile: async () => { const err = new Error('EACCES: permission denied'); err.code = 'EACCES'; throw err; }
+  });
+  assert.deepEqual(failing, { status: 'error', message: 'The file could not be written (EACCES).' });
+
+  let opened = 0;
+  const dialog = async () => { opened++; return { canceled: true }; };
+  for (const content of [undefined, 42, { a: 1 }, 'x'.repeat(20 * 1024 * 1024 + 1)]) {
+    assert.deepEqual(await saveExportFile({ name: 'a.json', content, showSaveDialog: dialog, writeFile: async () => {} }),
+      { status: 'error', message: 'There is nothing to write, or it is too large.' });
+  }
+  assert.equal(opened, 0);
+});
+
+test('main.js saves an export only through saveExportFile and the system save dialog', () => {
+  const main = require('node:fs').readFileSync(path.join(__dirname, 'main.js'), 'utf8');
+  assert.match(main, /ipcMain\.handle\('save-export-file', \(event, request\) => saveExportFile\(\{\n  name: request\?\.name, content: request\?\.content,\n  showSaveDialog: \(options\) => dialog\.showSaveDialog\(mainWindow, options\),/);
+});
+
+
+const { createShellLog, captureConsole } = require('./shell-helpers');
+
+test('the shell log keeps a line with its time, level, category and words, and answers only what came after an id', () => {
+  const log = createShellLog({ now: () => new Date('2026-11-19T10:40:11Z') });
+  log.add('Info', ['[startApi] API process spawned with PID:', 4242]);
+  log.add('Warning', ['config.json not found']);
+
+  assert.deepEqual(log.after(0), [
+    { id: 1, time: '2026-11-19T10:40:11.000Z', level: 'Info', category: 'startApi', text: 'API process spawned with PID: 4242' },
+    { id: 2, time: '2026-11-19T10:40:11.000Z', level: 'Warning', category: '', text: 'config.json not found' }
+  ]);
+  assert.deepEqual(log.after(1).map(line => line.id), [2]);
+  assert.deepEqual(log.after('not a number').map(line => line.id), [1, 2]);
+
+  log.clear();
+  assert.deepEqual(log.after(0), []);
+  log.add('Info', ['again']);
+  assert.deepEqual(log.after(0).map(line => line.id), [3]);
+});
+
+test('the shell log never keeps what the API process wrote, the API secret, the home folder, an error text or an object', () => {
+  const log = createShellLog({ hidden: [['/home/someone', '~'], ['SENTINEL-SECRET', '***']] });
+  log.add('Info', ['[API] info: connection string Endpoint=sb://x;SharedAccessKey=SENTINEL']);
+  log.add('Error', ['[API ERROR] Unhandled exception SENTINEL']);
+  log.add('Info', ['[startApi] Data path: /home/someone/.config/app key SENTINEL-SECRET']);
+  const failure = Object.assign(new Error('SENTINEL in the text'), { code: 'ENOENT' });
+  log.add('Error', ['[startApi] Error details:', failure, { password: 'SENTINEL' }]);
+
+  const kept = log.after(0);
+  assert.deepEqual(kept.map(line => line.text), ['Data path: ~/.config/app key ***', 'Error details: Error (ENOENT) [object]']);
+  assert.doesNotMatch(JSON.stringify(kept), /SENTINEL|someone/);
+});
+
+test('the shell log is bounded and cuts a long line', () => {
+  const log = createShellLog({ limit: 3 });
+  for (let i = 1; i <= 5; i++) log.add('Info', [`line ${i}`]);
+  log.add('Info', ['x'.repeat(5000)]);
+
+  const kept = log.after(0);
+  assert.deepEqual(kept.map(line => line.id), [4, 5, 6]);
+  assert.equal(kept[2].text.length, 1000);
+});
+
+test('capturing the console keeps each call at its level and still writes it where it went before', () => {
+  const written = [];
+  const target = { log: (...args) => written.push(['log', ...args]), warn: (...args) => written.push(['warn', ...args]), error: (...args) => written.push(['error', ...args]) };
+  const log = createShellLog();
+  captureConsole(target, log);
+
+  target.log('one');
+  target.warn('two');
+  target.error('three');
+
+  assert.deepEqual(log.after(0).map(line => [line.level, line.text]), [['Info', 'one'], ['Warning', 'two'], ['Error', 'three']]);
+  assert.deepEqual(written, [['log', 'one'], ['warn', 'two'], ['error', 'three']]);
+});
+
+test('a shell log that fails to keep a line never breaks the console call that carried it', () => {
+  const target = { log: () => {}, warn: () => {}, error: () => {} };
+  captureConsole(target, { add: () => { throw new Error('full'); } });
+  assert.doesNotThrow(() => target.error('still written'));
+});
+
+test('main.js asks the API for the tray menu only once the API is healthy, and refreshes the menu when it becomes so', () => {
+  const main = require('node:fs').readFileSync(require('node:path').join(__dirname, 'main.js'), 'utf8');
+  assert.match(main, /async function fetchFromAPI\(endpoint\) \{\n  if \(!apiHealthy\) return \[\];/);
+  assert.match(main, /apiHealthy = result\.healthy;\n    if \(apiHealthy\) updateTrayMenu\(\);/);
+});
+
+test('main.js captures its console into the shell log and answers the two log channels without trusting an argument', () => {
+  const main = require('node:fs').readFileSync(require('node:path').join(__dirname, 'main.js'), 'utf8');
+  assert.match(main, /captureConsole\(console, shellLog\)/);
+  assert.match(main, /hidden: \[\[app\.getPath\('home'\), '~'\], \[API_SECRET, '\*\*\*'\]\]/);
+  assert.match(main, /ipcMain\.handle\('get-shell-logs', \(event, after\) => shellLog\.after\(after\)\)/);
+  assert.match(main, /ipcMain\.handle\('clear-shell-logs', \(\) => shellLog\.clear\(\)\)/);
 });

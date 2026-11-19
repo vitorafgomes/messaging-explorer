@@ -73,7 +73,7 @@ public class MonitoringController : ControllerBase
         catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
         {
             _logger.LogError(ex, "Reading the counts of {Entity} failed", isQueue ? queue : $"{topic}/subscriptions/{subscription}");
-            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "An internal error occurred." });
+            return EntityAdministrationResults.Unhandled(ex);
         }
     }
 }

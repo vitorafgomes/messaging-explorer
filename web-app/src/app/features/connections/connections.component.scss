@@ -326,3 +326,94 @@
 .debug-log {
   max-height: 150px;
 }
+
+.tree-tools {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.client-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.client-name {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  padding: 0 8px 6px;
+  border-bottom: 1px solid var(--mat-sys-outline);
+  font: var(--mat-sys-title-medium);
+}
+
+.count {
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.environment {
+  display: flex;
+  flex-direction: column;
+  margin-left: 16px;
+}
+
+.environment-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--mat-sys-on-surface);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--mat-sys-surface-container-low);
+  }
+
+  .count {
+    flex: 1;
+  }
+}
+
+.connection-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 8px 28px;
+  padding: 0;
+  list-style: none;
+}
+
+.connection-list > li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 8px 0 8px 12px;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+
+  .identity {
+    flex: 1 1 220px;
+    min-width: 0;
+  }
+
+  .target {
+    flex: 1 1 240px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .last-used {
+    flex: 0 1 180px;
+  }
+}

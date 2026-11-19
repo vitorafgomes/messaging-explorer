@@ -619,8 +619,8 @@ public class ServiceBusService : IServiceBusService, IAsyncDisposable
         catch (ServiceBusException ex)
         {
             _logger.LogError(ex,
-                "Failed to resubmit dead letter message {SequenceNumber} from {DeadLetterPath}: {ErrorMessage}",
-                sequenceNumber, deadLetterPath, ex.Message);
+                "Failed to resubmit dead letter message {SequenceNumber} from {DeadLetterPath}: {Reason}",
+                sequenceNumber, deadLetterPath, ex.Reason);
             throw new InvalidOperationException($"Failed to resubmit message: {ex.Message}", ex);
         }
     }

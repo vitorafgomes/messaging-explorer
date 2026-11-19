@@ -38,6 +38,7 @@ Read the page your change touches, not all of them.
 | [[pages/services/core/how-the-rules-are-kept\|How the rules are kept]] | an invariant this project keeps, or a review of a change that could break one; each rule in full with the code and tests that keep it |
 | [[pages/services/core/public-contract\|Public contract and flow]] | IMessagingProvider, IProviderCapabilities, IConnectionConfig and the entities, ProviderFactory, the workspace and metrics interfaces, or how the API reaches a provider |
 | [[pages/services/core/azure-provider\|Azure provider]] | AzureServiceBusProvider and its clients, the Azure auth types and AzureCredentialFactory, search, entity administration, or the counts of one entity |
+| [[pages/services/core/azure-directory\|Azure directory]] | AzureNamespaceDirectory: the sign-in of the add dialog, the subscriptions and namespaces read from Azure Resource Manager, the token kept in memory |
 | [[pages/services/core/azure-connection-and-namespace\|Azure transport and namespace]] | AMQP or AMQP over WebSockets, a proxy, and the namespace properties (tier, units, alias, message size) |
 | [[pages/services/core/azure-sub-queues\|Azure sub-queues and scheduled messages]] | CreateReceiver and the sub-queues, the transfer dead-letter queue, scheduled messages and their cancel, or a disabled entity on Azure |
 | [[pages/services/core/azure-deferred\|Azure deferred messages]] | the delete, resubmit or dead-letter of a deferred message by sequence number, `SupportsDeferral`, and their routes |

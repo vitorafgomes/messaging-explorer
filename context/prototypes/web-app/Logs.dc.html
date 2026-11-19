@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Logs, shown in Developer mode</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.hov:hover{background-image:linear-gradient(rgba(128,128,128,.16),rgba(128,128,128,.16)) !important}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #ffffff;outline-offset:0;box-shadow:0 0 0 4px #005cbb !important}
+input::placeholder{color:currentColor;opacity:.72}
+</style>
+</helmet>
+<div style="min-height: 900px; box-sizing: border-box; display: flex; flex-direction: column; background: {{t.surface}}; color: {{t.onSurface}}; font-family: Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 14px; line-height: 20px">
+
+  <div style="display: flex; align-items: center; gap: 8px; height: 28px; box-sizing: border-box; padding: 0 16px; background: {{t.surfaceHigh}}; color: {{t.onSurfaceVariant}}; border-bottom: 1px solid {{t.outlineVariant}}; font-size: 12px; line-height: 16px">
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M4 10h16M10 10v10"></path></svg>
+    <strong style="font-weight: 600; color: {{t.onSurface}}; white-space: nowrap">Built 2026-11-19</strong>
+    <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Logs: a screen beside Monitoring, in the toolbar only while Developer mode is on in Settings</span>
+  </div>
+
+  <header style="display: flex; align-items: center; gap: 16px; height: 56px; box-sizing: border-box; padding: 0 8px 0 12px; background: {{bar.bg}}; color: {{bar.fg}}; border-bottom: 1px solid {{bar.line}}">
+    <nav aria-label="Main" style="display: flex; align-items: center; gap: 4px">
+      <a href="Connections.dc.html" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none; font-weight: 500">Connections</a>
+      <a href="Main.dc.html" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none; font-weight: 500">Entities</a>
+      <a href="Monitoring.dc.html" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none; font-weight: 500">Monitoring</a>
+      <a href="Logs.dc.html" aria-current="page" class="hov" style="display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px; border-radius: 999px; background: {{bar.navOn}}; color: {{bar.navOnFg}}; text-decoration: underline; text-underline-offset: 6px; text-decoration-thickness: 2px; font-weight: 700">Logs
+        <sc-if value="{{hasErrors}}" hint-placeholder-val="{{true}}">
+          <span style="display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; box-sizing: border-box; padding: 0 6px; border-radius: 999px; background: {{t.errorContainer}}; color: {{t.onErrorContainer}}; font-size: 12px; line-height: 16px; font-weight: 700; text-decoration: none"><span aria-hidden="true">{{errorCount}}</span><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap">{{errorCount}} errors</span></span>
+        </sc-if>
+      </a>
+    </nav>
+    <span aria-hidden="true" style="flex: none; width: 1px; height: 24px; background: {{bar.sep}}"></span>
+    <span style="flex: 1; min-width: 0; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">contoso-prod.servicebus.windows.net</span>
+    <a href="Settings.dc.html" aria-label="Settings" title="Settings" class="hov" style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h9M19 7h1M4 17h1M11 17h9"></path><circle cx="16" cy="7" r="3"></circle><circle cx="8" cy="17" r="3"></circle></svg></a>
+  </header>
+
+  <main style="flex: 1; min-width: 0; box-sizing: border-box; padding: 20px 24px 32px; display: flex; flex-direction: column; gap: 16px">
+    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+      <h1 style="flex: 1 1 200px; margin: 0; font-size: 22px; line-height: 28px; font-weight: 500">Logs</h1>
+      <button type="button" onClick="{{togglePause}}" aria-pressed="{{pausedPressed}}" class="hov" style="display: inline-flex; align-items: center; height: 40px; padding: 0 16px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; cursor: pointer">{{pauseLabel}}</button>
+      <button type="button" class="hov" style="display: inline-flex; align-items: center; height: 40px; padding: 0 16px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; cursor: pointer">Copy shown</button>
+      <button type="button" class="hov" style="display: inline-flex; align-items: center; height: 40px; padding: 0 16px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; cursor: pointer">Save to a file</button>
+      <button type="button" class="hov" style="display: inline-flex; align-items: center; height: 40px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: {{t.error}}; font: inherit; font-weight: 500; cursor: pointer">Clear</button>
+    </div>
+
+    <p style="display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 10px 14px; border-radius: 8px; background: {{t.secondaryContainer}}; color: {{t.onSecondaryContainer}}">
+      <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v6M12 7.5h.01"></path></svg>
+      <span><strong style="font-weight: 600">What happened since the app opened, kept in memory only.</strong> The last 2,000 lines of the backend, the last 500 of the desktop app and the calls of this screen that got no answer. No connection string, password, key, token or message body is ever written here.</span>
+    </p>
+
+    <div style="display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap">
+      <div role="group" aria-label="Level" style="display: inline-flex; flex-wrap: wrap; border: 1px solid {{t.outline}}; border-radius: 999px; overflow: hidden">
+        <sc-for list="{{levels}}" as="l" hint-placeholder-count="4">
+          <button type="button" onClick="{{l.pick}}" aria-pressed="{{l.pressed}}" class="hov" style="min-height: 40px; padding: 0 16px; border: 0; background: {{l.bg}}; color: {{l.fg}}; font: inherit; font-weight: {{l.weight}}; font-variant-numeric: tabular-nums; cursor: pointer">{{l.label}}</button>
+        </sc-for>
+      </div>
+      <label style="display: flex; flex-direction: column; gap: 4px; flex: 0 1 200px; min-width: 0">
+        <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Source</span>
+        <select onChange="{{setSource}}" style="height: 40px; box-sizing: border-box; padding: 0 8px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit">
+          <option value="">Every source</option><option value="Backend">Backend</option><option value="Desktop app">Desktop app</option><option value="Screen">Screen</option>
+        </select>
+      </label>
+      <label style="display: flex; flex-direction: column; gap: 4px; flex: 1 1 240px; min-width: 0">
+        <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Search</span>
+        <input type="search" onChange="{{setQuery}}" placeholder="A word of the line, a route, a type of error" style="height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit">
+      </label>
+    </div>
+
+    <p role="status" style="margin: 0; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">{{shownText}}</p>
+
+    <ul aria-label="Log lines, newest first" style="display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; border: 1px solid {{t.outlineVariant}}; border-radius: 8px; overflow: hidden; font-variant-numeric: tabular-nums">
+      <sc-for list="{{lines}}" as="x" hint-placeholder-count="7">
+        <li style="border-bottom: 1px solid {{t.outlineVariant}}">
+          <button type="button" onClick="{{x.toggle}}" aria-expanded="{{x.expanded}}" class="hov" style="display: flex; align-items: flex-start; gap: 12px; width: 100%; box-sizing: border-box; padding: 8px 12px; border: 0; background: {{x.bg}}; color: {{t.onSurface}}; font: inherit; text-align: left; cursor: pointer">
+            <span style="flex: 0 0 84px; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; color: {{t.onSurfaceVariant}}">{{x.time}}</span>
+            <span style="display: inline-flex; align-items: center; justify-content: center; flex: 0 0 72px; height: 20px; border-radius: 4px; background: {{x.chipBg}}; color: {{x.chipFg}}; font-size: 12px; line-height: 16px; font-weight: 700">{{x.level}}</span>
+            <span style="flex: 0 0 96px; font-size: 12px; line-height: 20px; color: {{t.onSurfaceVariant}}">{{x.source}}</span>
+            <span style="flex: 1; min-width: 0; overflow-wrap: anywhere">{{x.text}}</span>
+          </button>
+          <sc-if value="{{x.open}}" hint-placeholder-val="{{false}}">
+            <div style="display: flex; flex-direction: column; gap: 8px; padding: 4px 12px 12px 108px; background: {{x.bg}}">
+              <dl style="display: grid; grid-template-columns: max-content 1fr; gap: 2px 16px; margin: 0; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px">
+                <sc-for list="{{x.detail}}" as="d" hint-placeholder-count="4">
+                  <dt style="color: {{t.onSurfaceVariant}}">{{d.k}}</dt>
+                  <dd style="margin: 0; overflow-wrap: anywhere">{{d.v}}</dd>
+                </sc-for>
+              </dl>
+              <div><button type="button" class="hov" style="display: inline-flex; align-items: center; height: 32px; padding: 0 12px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; cursor: pointer">Copy this line</button></div>
+            </div>
+          </sc-if>
+        </li>
+      </sc-for>
+    </ul>
+    <sc-if value="{{none}}" hint-placeholder-val="{{false}}">
+      <p style="margin: 0; color: {{t.onSurfaceVariant}}">No line matches the level, the source and the search.</p>
+    </sc-if>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Preview"},"$preview":{"width":1280,"height":900}}'>
+const LIGHT = { surface:'#f9f9ff', surfaceLow:'#f2f3fa', surfaceContainer:'#ecedf4', surfaceHigh:'#e6e8ee',
+  onSurface:'#191c20', onSurfaceVariant:'#43474e', outline:'#73777f', outlineVariant:'#c3c6cf',
+  primary:'#005cbb', onPrimary:'#ffffff', secondaryContainer:'#dae2f9', onSecondaryContainer:'#131c2b',
+  error:'#ba1a1a', errorContainer:'#ffdad6', onErrorContainer:'#410002', warnContainer:'#ffdea3', onWarnContainer:'#261900' };
+const DARK = { surface:'#111318', surfaceLow:'#191c20', surfaceContainer:'#1d2024', surfaceHigh:'#282a2f',
+  onSurface:'#e2e2e9', onSurfaceVariant:'#c3c6cf', outline:'#8d9199', outlineVariant:'#43474e',
+  primary:'#abc7ff', onPrimary:'#002f65', secondaryContainer:'#3e4759', onSecondaryContainer:'#dae2f9',
+  error:'#ffb4ab', errorContainer:'#93000a', onErrorContainer:'#ffdad6', warnContainer:'#5c4300', onWarnContainer:'#ffdea3' };
+const LINES = [
+  { id: 7, time: '10:42:07', level: 'Error', source: 'Backend', text: 'GET /api/queues/orders/deadletter answered 500: the body of a message could not be read.',
+    detail: [['Route', 'GET /api/queues/{name}/deadletter?count=20'], ['Status', '500'], ['Error', 'NotSupportedException'], ['Where', 'AzureServiceBusProvider.MapToMessageInfo'], ['Request', '0HNG4T2K9P1QD:00000004'], ['Took', '412 ms']] },
+  { id: 6, time: '10:42:07', level: 'Error', source: 'Screen', text: 'GET queues/orders/deadletter got no answer.',
+    detail: [['Call', 'GET queues/orders/deadletter'], ['Status', 'no answer']] },
+  { id: 5, time: '10:41:52', level: 'Warning', source: 'Backend', text: 'Azure Resource Manager answered 403 to a directory read.',
+    detail: [['Route', 'GET /api/azure-directory/subscriptions/{id}/namespaces'], ['Status', '502'], ['Reason', 'forbidden']] },
+  { id: 4, time: '10:41:30', level: 'Info', source: 'Backend', text: 'Connected to contoso-prod.servicebus.windows.net with Sign in with Microsoft.',
+    detail: [['Route', 'POST /api/connections/{id}/connect'], ['Status', '200'], ['Took', '1,930 ms']] },
+  { id: 3, time: '10:41:02', level: 'Warning', source: 'Desktop app', text: 'The release list could not be reached. Check the connection to the internet.',
+    detail: [['Channel', 'list-update-versions'], ['Update channel', 'beta']] },
+  { id: 2, time: '10:40:11', level: 'Info', source: 'Desktop app', text: 'The local API is healthy on a port of this computer.',
+    detail: [['Started in', '2,140 ms'], ['Version', '2.4.5-beta.8']] },
+  { id: 1, time: '10:40:09', level: 'Info', source: 'Backend', text: 'Now listening on the loopback address only.',
+    detail: [['Environment', 'Production']] }
+];
+
+class Component extends DCLogic {
+  renderVals() {
+    const s = this.state || {};
+    const dark = (this.props.theme ?? 'light') === 'dark';
+    const t = dark ? DARK : LIGHT;
+    const bar = dark
+      ? { bg: t.surfaceContainer, fg: t.onSurface, line: t.outlineVariant, sep: t.outlineVariant, navOn: t.secondaryContainer, navOnFg: t.onSecondaryContainer }
+      : { bg: t.primary, fg: t.onPrimary, line: t.primary, sep: 'rgba(255,255,255,.4)', navOn: 'rgba(255,255,255,.18)', navOnFg: t.onPrimary };
+    const level = s.level ?? 'All';
+    const source = s.source ?? '';
+    const query = (s.query ?? '').toLowerCase();
+    const open = s.open ?? { 7: true };
+    const count = name => LINES.filter(l => l.level === name).length;
+    const shown = LINES.filter(l => (level === 'All' || l.level === level) && (!source || l.source === source) && (!query || (l.text + ' ' + l.detail.map(d => d[1]).join(' ')).toLowerCase().includes(query)));
+    const chip = l => l === 'Error' ? [t.errorContainer, t.onErrorContainer] : l === 'Warning' ? [t.warnContainer, t.onWarnContainer] : [t.surfaceHigh, t.onSurfaceVariant];
+    return {
+      t, bar, errorCount: count('Error'), hasErrors: count('Error') > 0,
+      levels: [['All', 'All ' + LINES.length], ['Error', 'Errors ' + count('Error')], ['Warning', 'Warnings ' + count('Warning')], ['Info', 'Info ' + count('Info')]].map(l => {
+        const on = l[0] === level;
+        return { label: l[1], pressed: on ? 'true' : 'false', bg: on ? t.secondaryContainer : 'transparent', fg: on ? t.onSecondaryContainer : t.onSurface, weight: on ? 600 : 500, pick: () => this.setState({ level: l[0] }) };
+      }),
+      setSource: ev => this.setState({ source: ev.target.value }),
+      setQuery: ev => this.setState({ query: ev.target.value }),
+      togglePause: () => this.setState({ paused: !s.paused }),
+      pauseLabel: s.paused ? 'Resume' : 'Pause', pausedPressed: s.paused ? 'true' : 'false',
+      shownText: (s.paused ? 'Paused. ' : 'Following new lines. ') + shown.length + ' of ' + LINES.length + ' lines shown.',
+      none: shown.length === 0,
+      lines: shown.map(l => {
+        const c = chip(l.level);
+        const isOpen = !!open[l.id];
+        return { time: l.time, level: l.level, source: l.source, text: l.text, chipBg: c[0], chipFg: c[1],
+          bg: l.level === 'Error' ? t.surfaceLow : 'transparent', open: isOpen, expanded: isOpen ? 'true' : 'false',
+          toggle: () => this.setState({ open: Object.assign({}, open, { [l.id]: !isOpen }) }),
+          detail: l.detail.map(d => ({ k: d[0], v: d[1] })) };
+      })
+    };
+  }
+}
+</script>
+</body>
+</html>

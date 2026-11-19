@@ -79,7 +79,7 @@ describe('AppUpdateService', () => {
   it('a failed download is reported as a download with the reason the updater gave', async () => {
     const { updates, push } = await start();
     push({ status: 'available', version: '2.5.0' });
-    await updates.download();
+    await updates.download('2.5.0');
     push({ status: 'downloading', percent: 42 });
     push({ status: 'error', message: 'net::ERR_CONNECTION_RESET' });
 
@@ -98,14 +98,6 @@ describe('AppUpdateService', () => {
     expect(updates.status()).toBe('error');
     expect(updates.failedDuring()).toBe('download');
     expect(updates.error()).toBe('net::ERR_CONNECTION_RESET');
-  });
-
-  it('an automatic download that fails before any progress is reported as a download', async () => {
-    const { updates, push } = await start();
-    push({ status: 'available', version: '2.5.0' });
-    push({ status: 'error', message: 'net::ERR_CONNECTION_RESET' });
-
-    expect(updates.failedDuring()).toBe('download');
   });
 
   it('a later scheduled check that fails after a finished download is reported as a check', async () => {
@@ -140,7 +132,7 @@ describe('AppUpdateService', () => {
     const { updates, shell, push } = await start({ getSelfUpdateBlocker: async () => 'windows-portable' });
     push({ status: 'available', version: '2.5.0' });
 
-    await updates.download();
+    await updates.download('2.5.0');
     updates.install();
 
     expect(shell.downloadUpdate).not.toHaveBeenCalled();

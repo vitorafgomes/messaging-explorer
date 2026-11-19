@@ -122,10 +122,120 @@ mat-dialog-content {
   color: var(--mat-sys-on-surface-variant);
 }
 
-.dev-note {
+.pick {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+
+  p {
+    margin: 0;
+  }
+
+  .sign-in {
+    margin-bottom: 0;
+  }
+
+  .step-two {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .count {
+    font-weight: 400;
+  }
+
+  strong {
+    font-weight: 600;
+    color: var(--mat-sys-on-surface);
+  }
+}
+
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
   margin: 0;
+  padding: 0;
+  list-style: none;
+
+  .step {
+    height: 32px;
+    color: var(--mat-sys-on-surface-variant);
+    font: var(--mat-sys-label-medium);
+
+    &.current {
+      background: var(--mat-sys-secondary-container);
+      color: var(--mat-sys-on-secondary-container);
+      font-weight: 700;
+    }
+  }
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pick-failed {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--mat-sys-error-container);
+  color: var(--mat-sys-on-error-container);
+
+  strong {
+    color: inherit;
+  }
+}
+
+.pick-error {
   font: var(--mat-sys-body-small);
-  color: var(--mat-sys-on-surface-variant);
+  color: var(--mat-sys-error);
+}
+
+.namespaces {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    min-height: 44px;
+    padding: 2px 8px 2px 0;
+    border-radius: 8px;
+
+    &.on {
+      background: var(--mat-sys-secondary-container);
+      color: var(--mat-sys-on-secondary-container);
+    }
+  }
+
+  .row {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .host {
+    overflow-wrap: anywhere;
+
+    &.strong {
+      font-weight: 600;
+    }
+  }
+
+  .where {
+    font: var(--mat-sys-body-small);
+    color: var(--mat-sys-on-surface-variant);
+  }
 }
 
 .store-notice {

@@ -13,9 +13,12 @@ test.describe('Connections dialogs as Connections.dc.html draws them', () => {
     await page.getByRole('button', { name: 'Add Connection' }).click();
     const dialog = page.locator('mat-dialog-container');
     await expect(dialog).toContainText('Add Connection');
+    await expect(dialog.getByRole('radio'), 'three ways to authenticate when adding').toHaveCount(3);
+    await expect(dialog.locator('ol[aria-label="Steps"] li'), 'sign in, then client and environment, then namespaces').toHaveText(['1 Sign in', '2 Client and environment', '3 Namespaces']);
+    await expect(dialog.getByLabel('Fully Qualified Namespace'), 'no namespace is typed before the sign-in').toHaveCount(0);
     await shoot(page, 'dlg-add-azure-signin');
 
-    for (const [auth, name] of [['Connection string', 'connstring'], ['Service Principal', 'principal'], ['Azure CLI session', 'cli']] as const) {
+    for (const [auth, name] of [['Connection string', 'connstring'], ['Azure CLI session', 'cli']] as const) {
       await dialog.getByRole('radio', { name: auth }).check();
       await shoot(page, `dlg-add-azure-${name}`);
     }

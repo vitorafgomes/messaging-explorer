@@ -49,7 +49,7 @@ public class NamespaceController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Export of the entity definitions failed");
-            return InternalError();
+            return EntityAdministrationResults.Unhandled(ex);
         }
     }
 
@@ -78,7 +78,7 @@ public class NamespaceController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Read of the namespace properties failed");
-            return InternalError();
+            return EntityAdministrationResults.Unhandled(ex);
         }
     }
 
@@ -121,7 +121,7 @@ public class NamespaceController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Import of the entity definitions failed");
-            return InternalError();
+            return EntityAdministrationResults.Unhandled(ex);
         }
     }
 
@@ -150,7 +150,4 @@ public class NamespaceController : ControllerBase
 
         return buffer.ToArray();
     }
-
-    private ObjectResult InternalError() =>
-        new(new { message = EntityAdministrationResults.InternalError }) { StatusCode = StatusCodes.Status500InternalServerError };
 }

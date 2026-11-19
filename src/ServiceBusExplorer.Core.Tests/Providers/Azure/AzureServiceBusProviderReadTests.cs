@@ -144,6 +144,57 @@ public class AzureServiceBusProviderReadTests
         Assert.Equal(11L, message.SizeInBytes);
     }
 
+    private static ServiceBusReceivedMessage ReceivedWith(global::Azure.Core.Amqp.AmqpMessageBody body)
+    {
+        var amqp = new global::Azure.Core.Amqp.AmqpAnnotatedMessage(body);
+        amqp.Header.DeliveryCount = 0;
+        return ServiceBusReceivedMessage.FromAmqpMessage(amqp, BinaryData.FromBytes(Guid.NewGuid().ToByteArray()));
+    }
+
+    [Fact]
+    public void A_body_sent_as_an_AMQP_value_that_is_text_is_read_as_that_text_with_and_without_the_body_asked()
+    {
+        var received = ReceivedWith(global::Azure.Core.Amqp.AmqpMessageBody.FromValue("price €12"));
+
+        var withBody = AzureServiceBusProvider.MapToMessageInfo(received, isDeadLettered: true);
+        var withoutBody = AzureServiceBusProvider.MapToMessageInfo(received, isDeadLettered: true, includeBody: false);
+
+        Assert.Equal(("price €12", "text", 11L), (withBody.Body, withBody.BodyEncoding, withBody.SizeInBytes));
+        Assert.Equal("AmqpValue", withBody.BodyType);
+        Assert.Equal("Text", AzureServiceBusProvider.MapToMessageInfo(ServiceBusModelFactory.ServiceBusReceivedMessage(body: BinaryData.FromString("x")), isDeadLettered: false).BodyType);
+        Assert.Equal((null, 11L), (withoutBody.Body, withoutBody.SizeInBytes));
+    }
+
+    [Fact]
+    public void A_body_sent_as_an_AMQP_value_that_is_bytes_is_read_as_those_bytes()
+    {
+        byte[] bytes = [0x00, 0xFF, 0x41];
+
+        var message = AzureServiceBusProvider.MapToMessageInfo(ReceivedWith(global::Azure.Core.Amqp.AmqpMessageBody.FromValue(bytes)), isDeadLettered: false);
+
+        Assert.Equal("base64", message.BodyEncoding);
+        Assert.True(Convert.FromBase64String(message.Body!).SequenceEqual(bytes));
+    }
+
+    [Fact]
+    public void A_body_sent_as_an_AMQP_value_of_another_kind_or_as_a_sequence_is_read_as_its_JSON_never_a_failure()
+    {
+        var map = ReceivedWith(global::Azure.Core.Amqp.AmqpMessageBody.FromValue(new Dictionary<string, object> { ["orderId"] = 7 }));
+        var sequence = ReceivedWith(global::Azure.Core.Amqp.AmqpMessageBody.FromSequence([new List<object> { "a", 1 }, new List<object> { "b" }]));
+
+        Assert.Equal("""{"orderId":7}""", AzureServiceBusProvider.MapToMessageInfo(map, isDeadLettered: false).Body);
+        Assert.Equal("""[["a",1],["b"]]""", AzureServiceBusProvider.MapToMessageInfo(sequence, isDeadLettered: false).Body);
+        Assert.Equal("AmqpSequence", AzureServiceBusProvider.MapToMessageInfo(sequence, isDeadLettered: false).BodyType);
+    }
+
+    [Fact]
+    public void A_body_sent_as_a_value_JSON_cannot_write_is_read_as_its_text_never_a_failure()
+    {
+        var message = AzureServiceBusProvider.MapToMessageInfo(ReceivedWith(global::Azure.Core.Amqp.AmqpMessageBody.FromValue(double.NaN)), isDeadLettered: false);
+
+        Assert.Equal("NaN", message.Body);
+    }
+
     [Fact]
     public void A_body_that_is_not_valid_utf8_is_read_as_the_base64_of_its_exact_bytes_never_with_replaced_bytes()
     {

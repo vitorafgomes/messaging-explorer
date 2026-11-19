@@ -1,3 +1,9 @@
+## [2026-11-19] feature | Connections as a tree, notes that hide, a body of any AMQP kind, and three gaps of the Connections artboard
+The list by client and environment; release notes that expand and hide; a value or sequence body is read; a refused credential is named, a client is deleted with its environments, an export is saved where the user chooses. [[pages/services/web-app/features-connections]]
+
+## [2026-11-19] feature | Add Connection signs in first, then picks the client, the environment and the namespaces
+The API reads Azure Resource Manager with a token kept in memory; Service Principal and Default credential leave the Add screen. [[pages/decisions/0007-read-azure-resource-manager-to-list-namespaces]]
+
 ## [2026-11-16] fix | RabbitMQ logs through the application and shows no invented date or Azure-only row
 Eight console writes became log entries; the dates are not set; the panel leaves out rows the broker lacks. [[pages/history/core]]
 

@@ -561,7 +561,21 @@ public class FileWorkspaceManager : IConnectionManager, IConnectionGroupManager
         lock (_lock)
         {
             var workspace = LoadWorkspace();
-            workspace.Groups.RemoveAll(g => g.Id == id);
+            var removed = workspace.Groups.Where(g => g.Id == id || g.ParentId == id).Select(g => g.Id).ToHashSet();
+            workspace.Groups.RemoveAll(g => removed.Contains(g.Id));
+            foreach (var connection in workspace.Connections)
+            {
+                if (connection.ClientId != null && removed.Contains(connection.ClientId))
+                {
+                    connection.ClientId = null;
+                    connection.EnvironmentId = null;
+                }
+                else if (connection.EnvironmentId != null && removed.Contains(connection.EnvironmentId))
+                {
+                    connection.EnvironmentId = null;
+                }
+            }
+
             SaveWorkspace(workspace);
             return Task.CompletedTask;
         }

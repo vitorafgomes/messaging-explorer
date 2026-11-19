@@ -1,5 +1,7 @@
 using System.Globalization;
 using System.Net;
+using System.Text;
+using System.Text.Json;
 using Azure.Core.Pipeline;
 using Azure.Messaging.ServiceBus;
 using Azure.Messaging.ServiceBus.Administration;
@@ -133,12 +135,14 @@ public class AzureServiceBusProvider : IMessagingProvider
 
     /// <summary>
     /// The messaging client's options: AMQP over WebSockets when the connection asks for it, otherwise AMQP, and the
-    /// proxy with this computer's default credentials. The config has passed <see cref="AzureConnectionConfig.IsValid"/>.
+    /// proxy with this computer's default credentials, and the retry policy that gives up early on a refusal as not
+    /// authorised. The config has passed <see cref="AzureConnectionConfig.IsValid"/>.
     /// </summary>
     internal static ServiceBusClientOptions BuildClientOptions(AzureConnectionConfig config) => new()
     {
         TransportType = config.UseWebSockets ? ServiceBusTransportType.AmqpWebSockets : ServiceBusTransportType.AmqpTcp,
         WebProxy = Proxy(config),
+        RetryOptions = new ServiceBusRetryOptions { CustomRetryPolicy = new RefusalAwareRetryPolicy(new ServiceBusRetryOptions()) },
     };
 
     /// <summary>
@@ -1277,9 +1281,9 @@ public class AzureServiceBusProvider : IMessagingProvider
             var messages = await RefuseDisabledAsync(() => PeekCoreAsync(receiver, count, fromSequenceNumber, cancellationToken));
             return messages.Select(m => MapToMessageInfo(m, subQueue != MessageSubQueue.Active, includeBody));
         }
-        catch (ServiceBusException ex)
+        catch (Exception ex) when (ex is ServiceBusException or UnauthorizedAccessException or InvalidOperationException or TimeoutException or NotSupportedException)
         {
-            throw new MessageReadFailedException(CauseOf(ex), ex);
+            throw new MessageReadFailedException(ex is not UnauthorizedAccessException ? CauseOf(ex) : BrokerRefusal.Detail(ex) is { } named ? $"not authorised: {named}" : NotAuthorisedToRead, ex);
         }
     }
 
@@ -1522,11 +1526,11 @@ public class AzureServiceBusProvider : IMessagingProvider
                     return;
             }
         }
-        catch (ServiceBusException) when (found)
+        catch (Exception ex) when (found && ex is ServiceBusException or UnauthorizedAccessException or TimeoutException)
         {
             return;
         }
-        catch (ServiceBusException ex)
+        catch (Exception ex) when (ex is ServiceBusException or UnauthorizedAccessException or TimeoutException)
         {
             throw new InvalidEntityConfigurationException([string.Format(ResubmitDuplicateError, $"the broker did not remove it ({CauseOf(ex)}).")]);
         }
@@ -1637,6 +1641,8 @@ public class AzureServiceBusProvider : IMessagingProvider
     private static readonly TimeSpan ScanReceiveWait = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan ScanSafetyTimeout = TimeSpan.FromMinutes(2);
     private const string NotFoundError = "Not found within scan window";
+    private const string NotReachedNotAuthorisedError = "Not reached: the call stopped because the broker refused it as not authorised.";
+    private const string NotReachedTimedOutError = "Not reached: the call stopped because the broker did not answer in time.";
     private const string MoveDuplicateError = "Message was moved to the target but could not be removed from the source and may be duplicated: {0}";
     private const string ResubmitDuplicateError = "Message was resubmitted but could not be removed from the dead-letter queue and may be duplicated on retry: {0}";
     private const string SendOutcomeUnknown = "the send failed and the broker may have accepted it.";
@@ -2210,6 +2216,10 @@ public class AzureServiceBusProvider : IMessagingProvider
             // than surfacing an unhandled error. Already-resubmitted targets keep their
             // outcome; the rest are reported as not found below.
         }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or TimeoutException && result.SuccessCount + result.FailureCount > 0)
+        {
+            missingError = ex is TimeoutException ? NotReachedTimedOutError : NotReachedNotAuthorisedError;
+        }
 
         foreach (var sequenceNumber in targets.Except(located))
         {
@@ -2547,6 +2557,10 @@ public class AzureServiceBusProvider : IMessagingProvider
             // than surfacing an unhandled error. Already-moved targets keep their outcome;
             // the rest are reported as not found below.
         }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or TimeoutException && result.SuccessCount + result.FailureCount > 0)
+        {
+            missingError = ex is TimeoutException ? NotReachedTimedOutError : NotReachedNotAuthorisedError;
+        }
 
         foreach (var sequenceNumber in targets.Except(located))
         {
@@ -2697,6 +2711,8 @@ public class AzureServiceBusProvider : IMessagingProvider
 
     private static string CancelFailureText(Exception ex) =>
         ex is ServiceBusException { Reason: ServiceBusFailureReason.MessageNotFound } ? NotScheduledError : CancelFailedError;
+
+    private const string NotAuthorisedToRead = "not authorised: reading needs the Listen right, which the role Azure Service Bus Data Receiver or a key with that right gives, and the network rules of the namespace must accept this computer";
 
     private static string CauseOf(Exception ex) => ex is ServiceBusException sb ? sb.Reason.ToString() : ex.GetType().Name;
 
@@ -2931,13 +2947,48 @@ public class AzureServiceBusProvider : IMessagingProvider
         return message;
     }
 
+    /// <summary>
+    /// The bytes of a body however it was sent. The SDK's own Body reads only a body sent as AMQP data and throws
+    /// for the other two kinds, which other clients send: a value that is text or bytes is read as it is, any other
+    /// value and a sequence as their JSON, and a value JSON cannot write (a number that is not finite, a nesting too deep) as its text.
+    /// </summary>
+    private static ReadOnlyMemory<byte> BodyBytes(ServiceBusReceivedMessage message)
+    {
+        var body = message.GetRawAmqpMessage().Body;
+        if (body.TryGetData(out var data))
+        {
+            var segments = data?.ToArray() ?? [];
+            return segments.Length == 1 ? segments[0] : segments.SelectMany(segment => segment.ToArray()).ToArray();
+        }
+
+        object? content = body.TryGetValue(out var value) ? value : body.TryGetSequence(out var sequence) ? sequence : null;
+        switch (content)
+        {
+            case null: return ReadOnlyMemory<byte>.Empty;
+            case string text: return Encoding.UTF8.GetBytes(text);
+            case byte[] raw: return raw;
+            case ArraySegment<byte> segment: return segment;
+        }
+
+        try
+        {
+            return JsonSerializer.SerializeToUtf8Bytes(content);
+        }
+        catch (Exception ex) when (ex is NotSupportedException or JsonException or ArgumentException)
+        {
+            return Encoding.UTF8.GetBytes(content.ToString() ?? "");
+        }
+    }
+
     internal static MessageInfo MapToMessageInfo(ServiceBusReceivedMessage message, bool isDeadLettered, bool includeBody = true)
     {
         string? body = null;
         var bodyEncoding = MessageBodyEncoding.Text;
+        var bytes = BodyBytes(message);
+        var amqpBody = message.GetRawAmqpMessage().Body;
         if (includeBody)
         {
-            var (text, isBinary) = DecodeBytes(message.Body.ToMemory().Span);
+            var (text, isBinary) = DecodeBytes(bytes.Span);
             body = text;
             if (isBinary)
                 bodyEncoding = MessageBodyEncoding.Base64;
@@ -2955,13 +3006,14 @@ public class AzureServiceBusProvider : IMessagingProvider
             Subject = message.Subject,
             ContentType = message.ContentType,
             Body = body,
+            BodyType = amqpBody.TryGetData(out _) ? "Text" : amqpBody.TryGetValue(out _) ? "AmqpValue" : "AmqpSequence",
             BodyEncoding = bodyEncoding,
             SequenceNumber = message.SequenceNumber,
             DeliveryCount = message.DeliveryCount,
             EnqueuedTime = message.EnqueuedTime,
             ScheduledEnqueueTime = message.ScheduledEnqueueTime,
             State = message.State.ToString(),
-            SizeInBytes = message.Body.ToMemory().Length,
+            SizeInBytes = bytes.Length,
             ExpiresAt = message.ExpiresAt,
             TimeToLive = message.TimeToLive,
             IsDeadLettered = isDeadLettered,

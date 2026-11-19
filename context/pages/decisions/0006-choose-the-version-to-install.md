@@ -70,7 +70,7 @@ The owner asked, on 2026-11-16, for two things this page does not say. They add 
 - **The notes of the picked version are shown.** Picking a version installs nothing: the screen shows what that version has, the text of its release notes, shown as text and never as markup. For the installed version it shows the notes and nothing to install.
 - **Install needs the user's agreement.** Install is offered only after the user ticks that they read what the version has and want it, for a newer version and for an older one alike.
 
-Still open, and the owner's to decide: whether the newest version found by the automatic check may keep downloading by itself and installing on quit, as it has since 2026-11-13, or needs the same agreement. The work is ordered on [[pages/roadmap/settings-data-and-updates]].
+Decided by the owner on 2026-11-19: the newest version found by the automatic check needs the same agreement. The check still runs by itself and only announces the version; nothing downloads until the user ticks the agreement in Settings. The work is ordered on [[pages/roadmap/settings-data-and-updates]].
 
 ## Related
 

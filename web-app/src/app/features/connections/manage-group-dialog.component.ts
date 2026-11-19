@@ -371,15 +371,21 @@ export class ManageGroupDialogComponent {
 
   private confirmGroupDelete(group: ConnectionGroup, kind: 'client' | 'environment') {
     const names = this.connectionsOf(group).map(c => c.name);
+    const environments = kind === 'client' ? this.environments().filter(e => e.parentId === group.id) : [];
     const data: ConfirmDialogData = {
       title: `Delete ${kind}?`,
       icon: 'warning',
-      message: `This removes the ${kind} ${group.name} from this computer. `
+      message: `This removes the ${kind} ${group.name} from this computer`
+        + (environments.length ? `, with its environments: ${environments.map(e => e.name).join(', ')}. ` : '. ')
         + (names.length
-          ? `These connections stay saved and lose this ${kind}: ${names.join(', ')}. `
+          ? (environments.length
+            ? `These connections stay saved and go to No client, with no environment: ${names.join(', ')}. `
+            : `These connections stay saved and lose this ${kind}: ${names.join(', ')}. `)
           : `No connection is in this ${kind}. `)
         + 'Nothing on a broker is changed.',
       confirmText: `Delete ${kind}`,
+      typedName: environments.some(e => e.isProduction) ? group.name : undefined,
+      typedLabel: 'Type the name of the client to confirm',
     };
     return this.dialog.open(ConfirmDialogComponent, { width: '480px', data }).afterClosed();
   }
@@ -458,22 +464,12 @@ export class ManageGroupDialogComponent {
   }
 
   deleteClient(client: ConnectionGroup) {
-    const envCount = this.environments().filter(e => e.parentId === client.id).length;
-
-    if (envCount > 0) {
-      this.snackBar.open(
-        `Cannot delete client with ${envCount} environment(s). Delete environments first.`,
-        'Close',
-        { duration: 5000 }
-      );
-      return;
-    }
-
     this.confirmGroupDelete(client, 'client').subscribe(confirmed => {
       if (!confirmed) return;
       this.groupService.deleteGroup(client.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
         next: () => {
           this.clients.set(this.clients().filter(c => c.id !== client.id));
+          this.environments.set(this.environments().filter(e => e.parentId !== client.id));
           this.snackBar.open('Client deleted', 'Close', { duration: 3000 });
         },
         error: () => {

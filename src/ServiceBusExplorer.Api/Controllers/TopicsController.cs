@@ -361,7 +361,7 @@ public class TopicsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Search {SubQueue} subscription messages failed for {TopicName}/{SubscriptionName}", subQueue, topicName, subscriptionName);
-            return StatusCode(500, new { message = "An internal error occurred." });
+            return EntityAdministrationResults.Unhandled(ex);
         }
     }
 
@@ -478,7 +478,7 @@ public class TopicsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Resubmit dead-letter failed for {TopicName}/{SubscriptionName} seq {SequenceNumber}", topicName, subscriptionName, sequenceNumber);
-            return StatusCode(500, new { message = "An internal error occurred." });
+            return EntityAdministrationResults.Unhandled(ex);
         }
     }
 
@@ -509,7 +509,7 @@ public class TopicsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Resubmit {SubQueue} batch failed for {TopicName}/{SubscriptionName}", subQueue, topicName, subscriptionName);
-            return StatusCode(500, new { message = "An internal error occurred." });
+            return EntityAdministrationResults.Unhandled(ex);
         }
     }
 
@@ -543,7 +543,7 @@ public class TopicsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Purge {SubQueue} messages failed for {TopicName}/{SubscriptionName}", subQueue, topicName, subscriptionName);
-            return StatusCode(500, new { message = "An internal error occurred." });
+            return EntityAdministrationResults.Unhandled(ex);
         }
     }
 
@@ -584,7 +584,7 @@ public class TopicsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Delete {SubQueue} messages batch failed for {TopicName}/{SubscriptionName}", subQueue, topicName, subscriptionName);
-            return StatusCode(500, new { message = "An internal error occurred." });
+            return EntityAdministrationResults.Unhandled(ex);
         }
     }
 
@@ -614,7 +614,7 @@ public class TopicsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Move {SubQueue} messages failed from {TopicName}/{SubscriptionName} to {TargetQueueName}", subQueue, topicName, subscriptionName, request.TargetQueueName);
-            return StatusCode(500, new { message = "An internal error occurred." });
+            return EntityAdministrationResults.Unhandled(ex);
         }
     }
 }

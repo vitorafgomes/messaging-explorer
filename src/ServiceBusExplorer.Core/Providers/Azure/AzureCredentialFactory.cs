@@ -47,13 +47,7 @@ public static class AzureCredentialFactory
             // user's desktop on first GetTokenAsync() call. The SDK runs a temporary
             // HTTP listener on InteractiveBrowserRedirectUri to capture the OAuth redirect.
             // TenantId is optional; null falls back to the "common" authority.
-            AzureAuthType.InteractiveBrowser => new InteractiveBrowserCredential(
-                new InteractiveBrowserCredentialOptions
-                {
-                    TenantId = config.TenantId,
-                    AuthorityHost = AzureAuthorityHosts.AzurePublicCloud,
-                    RedirectUri = new Uri(InteractiveBrowserRedirectUri)
-                }),
+            AzureAuthType.InteractiveBrowser => ForDirectory(AzureAuthType.InteractiveBrowser, config.TenantId),
 
             AzureAuthType.ConnectionString =>
                 throw new InvalidOperationException("Connection string auth does not use TokenCredential"),
@@ -64,4 +58,42 @@ public static class AzureCredentialFactory
                 "Unknown AzureAuthType")
         };
     }
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, TokenCredential> SignedIn = new();
+
+    private static string Key(string? tenantId) => tenantId?.Trim().ToLowerInvariant() ?? "";
+
+    /// <summary>
+    /// Makes a sign-in with Microsoft that completed the shared one of the tenant it signed into as well, so a
+    /// connection saved with that tenant's id finds it. A credential this factory did not make is left out.
+    /// </summary>
+    internal static void ShareSignIn(string tenantId, TokenCredential credential)
+    {
+        if (credential is OneSignInAtATime)
+        {
+            SignedIn[Key(tenantId)] = credential;
+        }
+    }
+
+    /// <summary>Forgets every sign-in with Microsoft, so the next one opens the browser and another account can sign in.</summary>
+    public static void ForgetSignIns() => SignedIn.Clear();
+
+    /// <summary>
+    /// Creates the credential the Azure directory signs in with, from the authentication and an optional tenant only:
+    /// sign in with Microsoft or the Azure CLI session. Sign in with Microsoft is one credential per tenant for the
+    /// whole run, shared by the directory and by every connection, so the browser opens once and not once per use.
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">Any other <see cref="AzureAuthType"/>.</exception>
+    public static TokenCredential ForDirectory(AzureAuthType authType, string? tenantId) => authType switch
+    {
+        AzureAuthType.InteractiveBrowser => SignedIn.GetOrAdd(Key(tenantId), tenant =>
+            new OneSignInAtATime(new InteractiveBrowserCredential(new InteractiveBrowserCredentialOptions
+            {
+                TenantId = tenant.Length == 0 ? null : tenant,
+                AuthorityHost = AzureAuthorityHosts.AzurePublicCloud,
+                RedirectUri = new Uri(InteractiveBrowserRedirectUri)
+            }))),
+        AzureAuthType.AzureCli => new AzureCliCredential(new AzureCliCredentialOptions { TenantId = tenantId }),
+        _ => throw new ArgumentOutOfRangeException(nameof(authType), authType, "The directory signs in with Microsoft or the Azure CLI only.")
+    };
 }

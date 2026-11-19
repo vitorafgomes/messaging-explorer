@@ -54,6 +54,7 @@ Read the one row your change matches. Pages are under `context/pages/services/co
 |---|---|
 | `IMessagingProvider`, capabilities, `ProviderFactory`, the entity types | `public-contract.md` |
 | Azure clients, credentials, search, entity administration, counts | `azure-provider.md` |
+| `AzureNamespaceDirectory`: the sign-in for listing, subscriptions and namespaces from Resource Manager | `azure-directory.md` |
 | A sub-queue, scheduled messages, a disabled entity | `azure-sub-queues.md` |
 | Azure sessions | `azure-sessions.md` |
 | Export or import of entity definitions | `azure-definitions.md` |

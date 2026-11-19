@@ -42,3 +42,5 @@ One topic of [[pages/services/web-app|Web App]]; the map lists the others.
 - `monitoring/` - snapshot and history trend (`web-app/src/app/features/monitoring/monitoring.component.ts#MonitoringComponent`) and, since 2026-11-13, the counts of every entity ([[pages/services/web-app/features-monitoring]]).
 
 **Install of the picked version (2026-11-16).** Under the notes of a version other than the installed one, Settings says what will be installed, warns when it goes back to an older version, and enables Install only after the agreement box is ticked; picking another version unticks it (`web-app/src/app/features/settings/settings.component.ts#agreedToInstall`). A release with no package for the system, or a package that cannot replace itself, shows the page of that version and no Install.
+
+**The notes expand and hide (2026-11-19).** The notes of the picked version sit under a header that names how many lines they hold; notes longer than four lines show the first four and the rest on demand (`web-app/src/app/features/settings/settings.component.ts#notesShown`). Hiding the notes does not change the agreement or Install, at the owner's word on 2026-11-19.

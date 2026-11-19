@@ -98,7 +98,15 @@ public class RabbitMQProvider : IMessagingProvider
             Ssl = { Enabled = rabbitConfig.UseSsl }
         };
 
-        _connection = factory.CreateConnection();
+        try
+        {
+            _connection = factory.CreateConnection();
+        }
+        catch (BrokerUnreachableException ex) when (ex.InnerException is AuthenticationFailureException)
+        {
+            throw new BrokerCredentialsRefusedException(ex);
+        }
+
         _channel = _connection.CreateModel();
 
         // Create Management API client
@@ -1114,6 +1122,20 @@ public class RabbitMQProvider : IMessagingProvider
     }
 
     /// <summary>
+    /// A header value as the screen and JSON can show it: the client hands text over as bytes at every depth, as in
+    /// the x-death list a dead-lettered message carries, and a time as its own type.
+    /// </summary>
+    private static object HeaderValue(object? value) => value switch
+    {
+        null => "",
+        byte[] bytes => Encoding.UTF8.GetString(bytes),
+        AmqpTimestamp time => DateTimeOffset.FromUnixTimeSeconds(time.UnixTime).ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture),
+        IDictionary<string, object> table => table.ToDictionary(entry => entry.Key, entry => HeaderValue(entry.Value)),
+        System.Collections.IList list => list.Cast<object?>().Select(HeaderValue).ToList(),
+        _ => value
+    };
+
+    /// <summary>
     /// Maps a BasicGetResult from the AMQP channel to a MessageInfo.
     /// Uses direct byte access for reliable message body reading.
     /// </summary>
@@ -1129,11 +1151,7 @@ public class RabbitMQProvider : IMessagingProvider
         {
             foreach (var kvp in props.Headers)
             {
-                // RabbitMQ headers can be byte arrays (for string values)
-                if (kvp.Value is byte[] headerBytes)
-                    applicationProperties[kvp.Key] = Encoding.UTF8.GetString(headerBytes);
-                else
-                    applicationProperties[kvp.Key] = kvp.Value;
+                applicationProperties[kvp.Key] = HeaderValue(kvp.Value);
             }
         }
 

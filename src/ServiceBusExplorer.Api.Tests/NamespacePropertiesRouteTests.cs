@@ -58,9 +58,20 @@ public class NamespacePropertiesRouteTests
     public async Task A_failed_read_answers_the_constant_500_without_the_broker_text()
     {
         var answered = await SendAsync("GET", Path, null,
-            Fails(nameof(IMessagingProvider.GetNamespacePropertiesAsync), new UnauthorizedAccessException(Sentinel)));
+            Fails(nameof(IMessagingProvider.GetNamespacePropertiesAsync), new TimeoutException(Sentinel)));
 
         Assert.Equal((HttpStatusCode.InternalServerError, ConstantBody), (answered.Status, answered.Body));
+    }
+
+    [Fact]
+    public async Task A_read_the_broker_refuses_as_not_authorised_answers_502_with_the_fixed_sentence_and_no_broker_text()
+    {
+        var answered = await SendAsync("GET", Path, null,
+            Fails(nameof(IMessagingProvider.GetNamespacePropertiesAsync), new UnauthorizedAccessException(Sentinel)));
+
+        Assert.Equal(HttpStatusCode.BadGateway, answered.Status);
+        Assert.StartsWith("{\"message\":\"The broker refused this operation as not authorised.", answered.Body);
+        Assert.DoesNotContain(Sentinel, answered.Body);
     }
 
     [Fact]

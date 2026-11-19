@@ -43,7 +43,7 @@ reliability: medium
 | Shell | List the releases of the channel shown, as ADR 0006 decides: at most 30, newest first; Stable lists the releases that are not pre-releases, Beta lists only the pre-releases. Each entry carries the version, the date, the text of its notes and whether this platform has a package in it. The notes are what 2026-11-16 adds. |
 | Shell | Install a picked version, as ADR 0006 decides: only a tag of the release form that was in the last list the shell read, the address built from the fixed owner and repository; the downgrade is allowed for that one install and refused again after it, whether it succeeded or failed. |
 | Shell | Before an older version installs, copy the connections file beside the original, named with the version left. |
-| Shell | The automatic check stays as it is, as ADR 0006 decides. Whether the newest version may still download by itself and install on quit, now that the owner asked for an agreement before any install, is open question 1. |
+| Shell | The automatic check stays as it is, as ADR 0006 decides. Since 2026-11-19 the check only announces a version: it downloads when the user ticks the agreement, as [[pages/services/electron-shell/updates-packaging-and-release]] says. |
 | Web app | The Version rows, the notes of the picked version, the agreement box and Install, as the artboard draws them. The installed version shows its notes and nothing to install. A package that cannot update itself shows the notes and the link to the release page. |
 
 ### What must hold
@@ -108,7 +108,7 @@ Each row is one lane and one pull request. The artboards are the spec, so they c
 
 ## Open questions for the owner
 
-1. **Automatic updates.** ADR 0006 keeps the automatic check, and since 2026-11-13 a newer version downloads by itself and installs on quit. The owner asked on 2026-11-16 that nothing installs without the user's agreement after reading what the version has. Does that hold for the newest version found by the automatic check too, or only for a version picked from the list?
+1. **Automatic updates.** ADR 0006 keeps the automatic check, and since 2026-11-13 a newer version downloads by itself and installs on quit. The owner asked on 2026-11-16 that nothing installs without the user's agreement after reading what the version has. Does that hold for the newest version found by the automatic check too, or only for a version picked from the list? **Answered on 2026-11-19: for both; built the same day.**
 2. **Where the history is kept.** A SQLite file is the recommendation: it serves the charts and a period of months, and it is one new dependency in the packaged API. The alternative is a text file with one line per record, with no dependency and poor for charts.
 3. **The periods.** 1, 7, 30 and 90 days, as drawn?
 4. **Clear all data** also deletes the history, as drawn?

@@ -694,11 +694,13 @@ const SCAN_NOTICE = 'The broker cannot lock one message by its number, so the ap
 
           @if (subQueue === 'deadletter') {
             <div class="message-actions">
-              @if (bulkOperations()) {
+              @if (bulkOperations() && bodyIsData(selectedMessage)) {
                 <button mat-stroked-button type="button" (click)="editAndResubmit(selectedMessage)">
                   <mat-icon fontIcon="edit" aria-hidden="true"></mat-icon>
                   Edit & Resubmit
                 </button>
+              } @else if (bulkOperations()) {
+                <p class="state-note" role="note" data-testid="not-editable-note"><mat-icon fontIcon="info" aria-hidden="true"></mat-icon>This body was not sent as bytes, so what is shown is a rendering of it. Resubmit sends the original; editing it here would send something else, so it is not offered.</p>
               }
               <button mat-flat-button type="button" class="tonal" (click)="resubmit(selectedMessage)">
                 <mat-icon fontIcon="replay" aria-hidden="true"></mat-icon>
@@ -1572,6 +1574,11 @@ export class ViewMessagesDialogComponent implements OnInit {
         this.snackBar.open(messageCallFailure(err, 'Failed to resubmit message'), 'Close', { duration: 3000 });
       }
     });
+  }
+
+  /** Whether the body shown is the body itself: one sent as an AMQP value or sequence is shown as a rendering of it. */
+  bodyIsData(msg: MessageInfo): boolean {
+    return msg.bodyType !== 'AmqpValue' && msg.bodyType !== 'AmqpSequence';
   }
 
   editAndResubmit(msg: MessageInfo) {

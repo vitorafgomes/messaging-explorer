@@ -4,6 +4,13 @@
       <a mat-button class="nav-link" [routerLink]="item.route" routerLinkActive="active-link" ariaCurrentWhenActive="page"
         [disabled]="!!item.needsConnection && !connected()" [disabledInteractive]="false">{{ item.label }}</a>
     }
+    @if (devMode()) {
+      <a mat-button class="nav-link" routerLink="/logs" routerLinkActive="active-link" ariaCurrentWhenActive="page" data-testid="nav-logs">Logs
+        @if (logs.errorCount() > 0) {
+          <span class="nav-count"><span aria-hidden="true">{{ logs.errorCount() }}</span><span class="visually-hidden">{{ logs.errorCount() }} errors</span></span>
+        }
+      </a>
+    }
   </nav>
   <span class="nav-separator" aria-hidden="true"></span>
 

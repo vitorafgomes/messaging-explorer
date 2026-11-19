@@ -19,11 +19,34 @@ import { ExportConnectionsDialogComponent, ExportConnectionsDialogResult } from 
 import { ImportConnectionsDialogComponent, ImportConnectionsDialogData } from './import-connections-dialog.component';
 import { EnvironmentChipComponent } from '../../shared/environment-chip.component';
 
-interface ConnectionSection {
+interface EnvironmentBlock {
   key: string;
-  label: string;
+  /** The name of the environment, or null for the connections of a client that are in none. */
+  name: string | null;
+  isProduction: boolean;
+  count: string;
+  hasActive: boolean;
   connections: ServiceBusConnection[];
   emptyText: string;
+}
+
+interface ClientBlock {
+  key: string;
+  name: string;
+  count: string;
+  environments: EnvironmentBlock[];
+}
+
+const COLLAPSED_KEY = 'connections-collapsed';
+
+/** The environments left closed, as kept on this computer; none when nothing was kept or it cannot be read. */
+function readCollapsed(): Record<string, boolean> {
+  try {
+    const kept: unknown = JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? '[]');
+    return Array.isArray(kept) ? Object.fromEntries(kept.filter(key => typeof key === 'string').map(key => [key, true])) : {};
+  } catch {
+    return {};
+  }
 }
 
 /** The sentence for the reason code the connect route answers, with the target; the general line when it gave none. */
@@ -33,6 +56,7 @@ function connectFailureSentence(code: unknown, target: string): string {
     case 'host-not-found': return `The host of ${target} was not found. Check the host name.`;
     case 'timeout': return `The broker at ${target} did not answer in time. Check the host name, the port and the network.`;
     case 'tls': return `The TLS handshake with ${target} failed. Check the TLS setting and the port.`;
+    case 'credentials-refused': return `The broker at ${target} refused the user name or the password. Check the user name and the password.`;
     default: return 'Check the target, the credentials and the port of this connection.';
   }
 }
@@ -178,45 +202,42 @@ const plural = (count: number, one: string, many: string) => `${count} ${count =
           </section>
         }
         <div class="connections-content">
-          <table class="connections-table">
-            <caption>Saved connections, grouped by client and environment</caption>
-            <thead>
-              <tr>
-                <th scope="col">Connection</th>
-                <th scope="col">Broker</th>
-                <th scope="col">Target</th>
-                <th scope="col">Environment</th>
-                <th scope="col">Last used</th>
-                <th scope="col" class="actions-col">Actions</th>
-              </tr>
-            </thead>
-            @for (section of sections(); track section.key) {
-              <tbody>
-                <tr>
-                  <th colspan="6" scope="rowgroup" class="group-header">{{ section.label }}</th>
-                </tr>
-                @for (connection of section.connections; track connection.id) {
-                  <tr class="connection-card" [class.active]="connection.isConnected">
-                    <td>
-                      <div class="name-line">
-                        <h3 class="connection-name">{{ connection.name }}</h3>
-                        @if (connection.isConnected) {
-                          <span class="badge connected-chip">
-                            <mat-icon aria-hidden="true">check_circle</mat-icon>
-                            Connected
-                          </span>
-                        }
-                      </div>
-                      <div class="auth-line">{{ getAuthLabel(connection) }}</div>
-                    </td>
-                    <td>{{ getProviderName(connection.providerType) }}</td>
-                    <td class="target">{{ getConnectionTarget(connection) }}</td>
-                    <td>
-                      <app-environment-chip [name]="environmentOf(connection)?.name" [isProduction]="!!environmentOf(connection)?.isProduction" />
-                    </td>
-                    <td class="last-used muted">{{ connection.lastUsedAt ? (connection.lastUsedAt | date:'medium') : 'Never' }}</td>
-                    <td class="actions-col">
-                      <div class="row-actions">
+          <div class="tree-tools">
+            <button matButton type="button" (click)="expandAll()">Expand all</button>
+            <button matButton type="button" (click)="collapseAll()">Collapse all</button>
+          </div>
+          @for (client of clientBlocks(); track client.key) {
+            <section class="client-block" [attr.aria-label]="'Connections of ' + client.name">
+              <h2 class="client-name">{{ client.name }} <span class="count">{{ client.count }}</span></h2>
+              @for (env of client.environments; track env.key) {
+                <div class="environment">
+                  <button type="button" class="environment-row" [attr.aria-expanded]="isOpen(env.key)" (click)="toggle(env.key)">
+                    <mat-icon aria-hidden="true">{{ isOpen(env.key) ? 'expand_more' : 'chevron_right' }}</mat-icon>
+                    <app-environment-chip [name]="env.name" [isProduction]="env.isProduction" />
+                    <span class="count">{{ env.count }}</span>
+                    @if (!isOpen(env.key) && env.hasActive) {
+                      <span class="badge connected-chip"><mat-icon aria-hidden="true">check_circle</mat-icon>Connected</span>
+                    }
+                  </button>
+                  @if (isOpen(env.key)) {
+                    <ul class="connection-list">
+                      @for (connection of env.connections; track connection.id) {
+                        <li class="connection-card" [class.active]="connection.isConnected">
+                          <div class="identity">
+                            <div class="name-line">
+                              <h3 class="connection-name">{{ connection.name }}</h3>
+                              @if (connection.isConnected) {
+                                <span class="badge connected-chip">
+                                  <mat-icon aria-hidden="true">check_circle</mat-icon>
+                                  Connected
+                                </span>
+                              }
+                            </div>
+                            <div class="auth-line">{{ getProviderName(connection.providerType) }} · {{ getAuthLabel(connection) }}</div>
+                          </div>
+                          <span class="target">{{ getConnectionTarget(connection) }}</span>
+                          <span class="last-used muted">{{ connection.lastUsedAt ? (connection.lastUsedAt | date:'medium') : 'Never' }}</span>
+                          <div class="row-actions">
                         @if (connection.isConnected) {
                           <a matButton="outlined" routerLink="/entities">Open entities</a>
                         } @else {
@@ -245,17 +266,17 @@ const plural = (count: number, one: string, many: string) => `${count} ${count =
                           <mat-icon>delete</mat-icon>
                           Delete
                         </button>
-                      </div>
-                    </td>
-                  </tr>
-                } @empty {
-                  <tr>
-                    <td colspan="6" class="muted none">{{ section.emptyText }}</td>
-                  </tr>
-                }
-              </tbody>
-            }
-          </table>
+                          </div>
+                        </li>
+                      } @empty {
+                        <li class="muted none">{{ env.emptyText }}</li>
+                      }
+                    </ul>
+                  }
+                </div>
+              }
+            </section>
+          }
         </div>
       }
     </div>
@@ -303,32 +324,56 @@ export class ConnectionsComponent implements OnInit {
       + `${plural(environments, 'environment', 'environments')}. One connection is active at a time.`;
   });
 
-  /** The client and environment tree flattened into the row groups of the table, ungrouped connections last. */
-  readonly sections = computed<ConnectionSection[]>(() => {
-    const sections: ConnectionSection[] = [];
-    for (const client of this.groupedTree()) {
-      for (const env of client.children) {
-        sections.push({
-          key: env.group.id,
-          label: `${client.group.name}, ${env.group.name}`,
-          connections: env.connections,
-          emptyText: 'No connections in this environment'
-        });
-      }
+  /** The connections as the list draws them: a block for each client, its environments inside, the ones with no client last. */
+  readonly clientBlocks = computed<ClientBlock[]>(() => {
+    const environment = (key: string, name: string | null, isProduction: boolean, connections: ServiceBusConnection[], emptyText: string): EnvironmentBlock => ({
+      key, name, isProduction, connections, emptyText,
+      count: plural(connections.length, 'connection', 'connections'),
+      hasActive: connections.some(c => c.isConnected)
+    });
+    const blocks: ClientBlock[] = this.groupedTree().map(client => {
+      const environments = client.children.map(env =>
+        environment(env.group.id, env.group.name, !!env.group.isProduction, env.connections, 'No connections in this environment'));
       if (client.connections.length > 0 || client.children.length === 0) {
-        sections.push({
-          key: client.group.id,
-          label: client.group.name,
-          connections: client.connections,
-          emptyText: 'No connections in this client'
-        });
+        environments.push(environment(client.group.id, null, false, client.connections, 'No connections in this client'));
       }
+      const total = environments.reduce((sum, env) => sum + env.connections.length, 0);
+      return { key: client.group.id, name: client.group.name, count: plural(total, 'connection', 'connections'), environments };
+    });
+    const loose = this.ungroupedConnections();
+    if (loose.length > 0) {
+      blocks.push({ key: 'ungrouped', name: 'No client', count: plural(loose.length, 'connection', 'connections'), environments: [environment('ungrouped', null, false, loose, '')] });
     }
-    if (this.ungroupedConnections().length > 0) {
-      sections.push({ key: 'ungrouped', label: 'Ungrouped Connections', connections: this.ungroupedConnections(), emptyText: '' });
-    }
-    return sections;
+    return blocks;
   });
+
+  /** The environments the user closed, by key; kept on this computer so the list opens as it was left. */
+  private readonly collapsed = signal<Record<string, boolean>>(readCollapsed());
+
+  isOpen(key: string): boolean {
+    return !this.collapsed()[key];
+  }
+
+  toggle(key: string): void {
+    this.setCollapsed({ ...this.collapsed(), [key]: this.isOpen(key) });
+  }
+
+  expandAll(): void {
+    this.setCollapsed({});
+  }
+
+  collapseAll(): void {
+    this.setCollapsed(Object.fromEntries(this.clientBlocks().flatMap(client => client.environments.map(env => [env.key, true]))));
+  }
+
+  private setCollapsed(next: Record<string, boolean>): void {
+    this.collapsed.set(next);
+    try {
+      localStorage.setItem(COLLAPSED_KEY, JSON.stringify(Object.keys(next).filter(key => next[key])));
+    } catch {
+      return;
+    }
+  }
 
   /** The environment group a connection is placed in, if any. */
   environmentOf(connection: ServiceBusConnection): ConnectionGroup | undefined {
@@ -473,6 +518,7 @@ export class ConnectionsComponent implements OnInit {
   }
 
   editConnection(connection: ServiceBusConnection) {
+    this.connectError.set(null);
     const dialogRef = this.dialog.open(AddConnectionDialogComponent, {
       width: '620px',
       maxWidth: '95vw',
@@ -548,6 +594,8 @@ export class ConnectionsComponent implements OnInit {
         { label: 'Client and environment', value: this.groupLabel(connection) },
       ],
       confirmText: 'Delete connection',
+      typedName: this.environmentOf(connection)?.isProduction ? connection.name : undefined,
+      typedLabel: 'Type the name of the connection to confirm',
       context: {
         subject: connection.name,
         where: `to ${target}`,
@@ -575,8 +623,12 @@ export class ConnectionsComponent implements OnInit {
 
   /** The client and environment of a connection, as the delete confirmation of Connections.dc.html names it. */
   private groupLabel(connection: ServiceBusConnection): string {
-    const section = this.sections().find(s => s.connections.includes(connection));
-    return !section || section.key === 'ungrouped' ? 'Ungrouped, no environment' : section.label;
+    for (const client of this.clientBlocks()) {
+      const environment = client.environments.find(env => env.connections.includes(connection));
+      if (!environment || client.key === 'ungrouped') continue;
+      return environment.name ? `${client.name}, ${environment.name}` : client.name;
+    }
+    return 'Ungrouped, no environment';
   }
 
   /** Active by what the service knows now: the id it connected, or the target the API reports. */
@@ -629,12 +681,27 @@ export class ConnectionsComponent implements OnInit {
         });
         this.addDebugLog(`Exported: ${config.connections?.length || 0} connections, ${config.groups?.length || 0} groups`);
 
-        // Create a downloadable file
+        const fileName = `servicebus-full-config-${new Date().toISOString().split('T')[0]}.json`;
+        const shell = typeof window !== 'undefined' ? (window as any).electronAPI : undefined;
+        if (typeof shell?.saveExportFile === 'function') {
+          void Promise.resolve(shell.saveExportFile(fileName, jsonString)).catch(() => null).then((result: any) => {
+            if (result?.status === 'cancelled') return;
+            if (result?.status !== 'saved') {
+              this.snackBar.open(`The export was not saved. ${result?.message ?? 'The desktop app gave no answer.'}`, 'Close', { duration: 8000 });
+              return;
+            }
+            this.snackBar.open(
+              includeSecrets ? `Export saved as ${result.file}. File contains plaintext credentials — store securely.` : `Export saved as ${result.file} (connections + groups, secrets masked)`,
+              'Close', { duration: 6000 });
+          });
+          return;
+        }
+
         const blob = new Blob([jsonString], { type: 'application/json' });
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `servicebus-full-config-${new Date().toISOString().split('T')[0]}.json`;
+        link.download = fileName;
         link.click();
         window.URL.revokeObjectURL(url);
 

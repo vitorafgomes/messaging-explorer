@@ -234,6 +234,28 @@ async function readUpdateVersions({ fetchFn, channel, installedVersion, platform
   return versions ? { status: 'ok', channel, versions } : notAList;
 }
 
+const MAX_EXPORT_LENGTH = 20 * 1024 * 1024;
+
+/**
+ * Writes an export where the user chooses in the system's save dialog. The renderer gives the text and a file name
+ * to suggest, of which only the last segment is used; it never names a folder. Cancelling writes nothing. Never
+ * throws: a write that fails says why by its error code, never by a path.
+ */
+async function saveExportFile({ name, content, showSaveDialog, writeFile }) {
+  if (typeof content !== 'string' || content.length === 0 || content.length > MAX_EXPORT_LENGTH) {
+    return { status: 'error', message: 'There is nothing to write, or it is too large.' };
+  }
+  const suggested = path.basename(typeof name === 'string' && name ? name : 'export.json').replace(/[^A-Za-z0-9._-]/g, '_');
+  const chosen = await showSaveDialog({ title: 'Save the export', defaultPath: suggested, filters: [{ name: 'JSON', extensions: ['json'] }] });
+  if (!chosen || chosen.canceled || !chosen.filePath) return { status: 'cancelled' };
+  try {
+    await writeFile(chosen.filePath, content);
+    return { status: 'saved', file: path.basename(chosen.filePath) };
+  } catch (err) {
+    return { status: 'error', message: `The file could not be written (${err?.code ?? 'unknown'}).` };
+  }
+}
+
 /** Whether a version comes before another: by its three numbers, then a beta before the release of the same number, then by the beta's number. */
 function isOlderVersion(version, than) {
   const a = VERSION.exec(version);
@@ -268,7 +290,7 @@ function backupDataFile(filePath, installedVersion, { exists, copy }) {
  * The address is built here from the fixed repository. The updater reads that release alone and may go back to an
  * older version for this one download; whatever happens it is put back as it was. Never throws.
  */
-async function installUpdateVersion({ updater, version, agreed, listed, installedVersion, channel, platform, env, backup, keepsPickedVersion = false }) {
+async function installUpdateVersion({ updater, version, agreed, listed, installedVersion, channel, platform, env, backup }) {
   const refuse = message => ({ status: 'error', message });
   if (typeof version !== 'string' || !VERSION.test(version)) return refuse('That is not a version of this app.');
   const picked = Array.isArray(listed) ? listed.find(entry => entry?.version === version) : undefined;
@@ -282,7 +304,6 @@ async function installUpdateVersion({ updater, version, agreed, listed, installe
     const copied = backup();
     if (copied?.status !== 'ok') return notInstalled(copied?.message ?? 'The connections file could not be copied.');
   }
-  let downloaded = false;
   try {
     updater.setFeedURL({ provider: 'generic', url: `${RELEASE_DOWNLOAD_URL}/v${version}` });
     updater.channel = 'latest';
@@ -292,29 +313,96 @@ async function installUpdateVersion({ updater, version, agreed, listed, installe
     const found = (await updater.checkForUpdates())?.updateInfo?.version;
     if (found !== version) return notInstalled(`the updater answered version ${found}. Try again in a moment.`);
     await updater.downloadUpdate();
-    downloaded = true;
     return { status: 'ok', version };
   } catch (err) {
     return notInstalled(err?.message ?? 'the updater did not say why');
   } finally {
     updater.setFeedURL(RELEASE_FEED);
     applyUpdateChannel(updater, channel);
-    configureAutoUpdate(updater, platform, env, keepsPickedVersion || downloaded);
+    configureAutoUpdate(updater, platform, env);
   }
 }
 
 /**
- * Installs a downloaded update on quit only where this package can replace itself, and downloads one as soon as it
- * is found only when, besides, no version the user picked is being kept: a picked version is replaced only by a
- * download the user asks for.
+ * An update never downloads on its own: a check only announces it. What the user agreed to download installs on quit
+ * only where this package can replace itself.
  */
-function configureAutoUpdate(updater, platform, env, keepsPickedVersion = false) {
-  const canReplaceItself = selfUpdateBlocker(platform, env) === null;
-  updater.autoDownload = canReplaceItself && !keepsPickedVersion;
-  updater.autoInstallOnAppQuit = canReplaceItself;
+function configureAutoUpdate(updater, platform, env) {
+  updater.autoDownload = false;
+  updater.autoInstallOnAppQuit = selfUpdateBlocker(platform, env) === null;
+}
+
+/** Downloads the update the last check found, only with the user's agreement to that very version. Never throws. */
+async function downloadAgreedUpdate({ agreed, version, found, updater }) {
+  if (agreed !== true) return { status: 'error', message: 'Nothing is downloaded without your agreement.' };
+  if (typeof version !== 'string' || version !== found) {
+    return { status: 'error', message: 'The version found is not the one you agreed to. Check again and agree to the version shown.' };
+  }
+  try {
+    await updater.downloadUpdate();
+    return { status: 'ok' };
+  } catch (err) {
+    return { status: 'error', message: err?.message ?? 'the updater did not say why' };
+  }
+}
+
+const SHELL_LOG_LINE_LENGTH = 1000;
+
+/**
+ * The lines the desktop app wrote to its console since it opened, kept in memory for the Logs screen. What the API
+ * process wrote is left out: the backend keeps its own lines, without the text of an exception. Of an Error only its
+ * name and code are kept, of any other object nothing, and each pair of `hidden` is replaced in the words.
+ */
+function createShellLog({ limit = 500, hidden = [], now = () => new Date() } = {}) {
+  let lines = [];
+  let lastId = 0;
+  const word = (arg) => {
+    if (typeof arg === 'string') return arg;
+    if (arg instanceof Error) return arg.code ? `${arg.name} (${arg.code})` : arg.name;
+    return arg !== null && typeof arg === 'object' ? '[object]' : String(arg);
+  };
+  return {
+    add(level, args) {
+      let text = args.map(word).join(' ');
+      if (/^\[API( ERROR)?\]/.test(text)) return;
+      for (const [secret, shown] of hidden) {
+        if (secret) text = text.split(secret).join(shown);
+      }
+      const category = /^\[([^\]]+)\]\s*/.exec(text);
+      lines.push({
+        id: ++lastId, time: now().toISOString(), level, category: category ? category[1] : '',
+        text: (category ? text.slice(category[0].length) : text).slice(0, SHELL_LOG_LINE_LENGTH)
+      });
+      if (lines.length > limit) lines = lines.slice(-limit);
+    },
+    after(id) {
+      const from = Number.isFinite(id) ? id : 0;
+      return lines.filter(line => line.id > from);
+    },
+    clear() {
+      lines = [];
+    }
+  };
+}
+
+/** Makes `log`, `warn` and `error` of a console also keep their line in the shell log; the call itself never fails for it. */
+function captureConsole(target, shellLog) {
+  for (const [method, level] of [['log', 'Info'], ['warn', 'Warning'], ['error', 'Error']]) {
+    const original = target[method].bind(target);
+    target[method] = (...args) => {
+      try {
+        shellLog.add(level, args);
+      } catch {}
+      original(...args);
+    };
+  }
 }
 
 module.exports = {
+  downloadAgreedUpdate,
+  createShellLog,
+  captureConsole,
+  saveExportFile,
   installUpdateVersion,
   isOlderVersion,
   backupDataFile,

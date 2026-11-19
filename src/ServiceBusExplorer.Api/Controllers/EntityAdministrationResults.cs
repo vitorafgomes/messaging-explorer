@@ -14,6 +14,26 @@ internal static class EntityAdministrationResults
 {
     public const string UpdateNotSupported = "This provider does not support updating entities.";
     public const string InternalError = "An internal error occurred.";
+    public const string NotAuthorised = "The broker refused this operation as not authorised. On Azure Service Bus the identity or the key of the connection needs the right the operation uses: Listen to read or remove messages, Send to send, Manage to create, change or count; and the network rules of the namespace must accept this computer.";
+
+    /// <summary>
+    /// The answer to an error no route named: 502 with a fixed sentence when the broker refused the operation as not
+    /// authorised, anywhere down the chain of the exception, and the constant 500 otherwise. Never the exception's text.
+    /// A refusal thrown under System.IO is the file system's, a data file this user may not open, and stays a 500.
+    /// </summary>
+    public static ObjectResult Unhandled(Exception? ex)
+    {
+        for (var depth = 0; ex is not null && depth < 5; ex = ex.InnerException, depth++)
+        {
+            if (ex is UnauthorizedAccessException && ex.StackTrace?.Contains("at System.IO.", StringComparison.Ordinal) != true)
+            {
+                var message = BrokerRefusal.Detail(ex) is { } named ? $"The broker refused this operation as not authorised: {named}." : NotAuthorised;
+                return new ObjectResult(new { message }) { StatusCode = StatusCodes.Status502BadGateway };
+            }
+        }
+
+        return new ObjectResult(new { message = InternalError }) { StatusCode = StatusCodes.Status500InternalServerError };
+    }
 
     public static BadRequestObjectResult NameRequired() => new(new { message = "name is required." });
 
@@ -25,7 +45,7 @@ internal static class EntityAdministrationResults
     /// </summary>
     public static ObjectResult ReadFailed(MessageReadFailedException ex, ILogger logger, string entityPath, MessageSubQueue subQueue)
     {
-        logger.LogWarning(ex, "The broker did not return the {SubQueue} messages of {EntityPath}", subQueue, entityPath);
+        logger.LogWarning(ex, "The broker did not return the {SubQueue} messages of {EntityPath}: {Reason}", subQueue, entityPath, ex.Message);
         return new ObjectResult(new { message = ex.Message }) { StatusCode = StatusCodes.Status502BadGateway };
     }
 
@@ -95,7 +115,7 @@ internal static class EntityAdministrationResults
                 return new BadRequestObjectResult(new { message = ex.Message });
             default:
                 logger.LogError(ex, "Administration of {EntityKind} {EntityPath} failed", kind, entityPath);
-                return new ObjectResult(new { message = InternalError }) { StatusCode = StatusCodes.Status500InternalServerError };
+                return Unhandled(ex);
         }
     }
 

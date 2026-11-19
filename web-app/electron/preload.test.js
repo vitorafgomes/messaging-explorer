@@ -80,3 +80,29 @@ test('installUpdateVersion sends only a version and the agreement on the install
   assert.deepEqual(invoked, ['install-update-version']);
   assert.deepEqual(invokedArgs, [[{ version: '2.4.3', agreed: true }]]);
 });
+
+test('saveExportFile sends a file name and the text on the save-export-file channel, and no path', () => {
+  const { exposed, invoked, invokedArgs } = loadPreload();
+  exposed.electronAPI.saveExportFile('export.json', '{}', '/etc/passwd');
+  assert.deepEqual(invoked, ['save-export-file']);
+  assert.deepEqual(invokedArgs, [[{ name: 'export.json', content: '{}' }]]);
+});
+
+
+test('getShellLogs sends only a number on the get-shell-logs channel, and clearShellLogs sends nothing', () => {
+  const { exposed, invoked, invokedArgs } = loadPreload();
+  exposed.electronAPI.getShellLogs(7, 'extra');
+  exposed.electronAPI.getShellLogs({ evil: true });
+  exposed.electronAPI.clearShellLogs('extra');
+  assert.deepEqual(invoked, ['get-shell-logs', 'get-shell-logs', 'clear-shell-logs']);
+  assert.deepEqual(invokedArgs, [[7], [0], []]);
+});
+
+test('downloadUpdate sends the agreement as true only when it was given as true, with the version it was given for', () => {
+  const { exposed, invoked, invokedArgs } = loadPreload();
+  exposed.electronAPI.downloadUpdate(true, '2.5.0');
+  exposed.electronAPI.downloadUpdate();
+  exposed.electronAPI.downloadUpdate('yes', '2.5.0');
+  assert.deepEqual(invoked, ['download-update', 'download-update', 'download-update']);
+  assert.deepEqual(invokedArgs, [[{ agreed: true, version: '2.5.0' }], [{ agreed: false, version: undefined }], [{ agreed: false, version: '2.5.0' }]]);
+});

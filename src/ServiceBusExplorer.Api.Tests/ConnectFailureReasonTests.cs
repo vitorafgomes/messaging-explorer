@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using ServiceBusExplorer.Core.Abstractions;
 using ServiceBusExplorer.Core.Models;
 using ServiceBusExplorer.Core.Providers;
 using ServiceBusExplorer.Core.Services;
@@ -67,12 +68,14 @@ public class ConnectFailureReasonTests
         { nameof(SocketError.TimedOut), "timeout", "The broker did not answer in time." },
         { nameof(TimeoutException), "timeout", "The broker did not answer in time." },
         { nameof(AuthenticationException), "tls", "The TLS handshake with the broker failed." },
+        { nameof(BrokerCredentialsRefusedException), "credentials-refused", "The broker refused the user name or the password." },
     };
 
     private static Exception Cause(string name) => name switch
     {
         nameof(TimeoutException) => new TimeoutException($"timed out for {SentinelUser}"),
         nameof(AuthenticationException) => new AuthenticationException($"handshake failed for {SentinelUser}"),
+        nameof(BrokerCredentialsRefusedException) => new BrokerCredentialsRefusedException(new InvalidOperationException($"ACCESS_REFUSED for {SentinelUser}")),
         _ => new SocketException((int)Enum.Parse<SocketError>(name)),
     };
 
