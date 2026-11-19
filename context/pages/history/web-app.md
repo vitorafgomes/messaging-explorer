@@ -18,6 +18,8 @@ What changed when in the project [[pages/services/web-app|Web App]] describes, n
 
 ## 2026-11-19
 
+- **One note where a subscription resubmits.** The messages dialog and the automatic resubmit showed two notes at once that both said the resubmit goes to the topic: one named the other subscriptions, the other the filters of this one. One note now says both (`web-app/src/app/features/messages/view-messages-dialog.component.spec.ts#the dead-letter tab of a subscription says that the topic sends a resubmit to every subscription`, `web-app/src/app/features/messages/continuous-resubmit-dialog.component.spec.ts#on a subscription the dialog says that the topic sends every resubmitted message to all its subscriptions`); the note on the active tab for selected deferred messages is as it was. The automatic resubmit artboard draws the one note.
+
 - Logs: the screen keeps only its calls that got no answer; a failure the backend answered was shown and counted twice.
 
 - Settings: an available version shows the agreement box and Download waits for it; the agreement is for that version only (`web-app/src/app/features/settings/settings.component.ts#agreedToUpdate`).

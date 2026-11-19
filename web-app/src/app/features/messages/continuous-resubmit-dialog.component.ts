@@ -110,7 +110,7 @@ interface LeftRow extends LeftBehind {
       @if (data.topicName) {
         <p class="topic-resubmit-note" role="note">
           <mat-icon fontIcon="warning" aria-hidden="true" />
-          <span><strong>Resubmit publishes to the topic {{ data.topicName }}.</strong> Every subscription of {{ data.topicName }} receives these messages again, not only {{ data.entityName }}.</span>
+          <span><strong>Resubmit publishes to the topic {{ data.topicName }}.</strong> Every subscription of {{ data.topicName }} receives these messages again, not only {{ data.entityName }}, and a filter on {{ data.entityName }} may keep them from coming back to it.</span>
         </p>
       }
 
@@ -225,12 +225,6 @@ interface LeftRow extends LeftBehind {
         }
         @if (!positional) {
           <p class="intro">This will continuously resubmit dead letter messages in batches until the queue is empty or you stop the process.</p>
-        }
-        @if (data.entityType === 'subscription') {
-          <p class="note warn" role="note">
-            <mat-icon aria-hidden="true">warning</mat-icon>
-            <span>Messages will be sent to the topic and will pass through all subscription filters. If this subscription has filters configured, messages may not return to it.</span>
-          </p>
         }
         @if (positional) {
           <fieldset class="group scope">

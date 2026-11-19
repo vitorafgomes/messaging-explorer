@@ -572,11 +572,13 @@ describe('ViewMessagesDialogComponent: transfer dead-letter queue, message state
     it('the dead-letter tab of a subscription says that the topic sends a resubmit to every subscription, with or without a ticked row, since the detail pane resubmits one message at once; the active tab and a queue say nothing', () => {
       const { component, el, refresh } = render({ entityType: 'subscription', topicName: 'sales', entityName: 'eu', initialTab: 1 }, { deadLetter: messages(2) });
       expect(text(el.querySelector('.topic-resubmit-note[role="note"]')), 'nothing ticked: the detail pane can still resubmit')
-        .toBe('Resubmit publishes to the topic sales. Every subscription of sales receives these messages again, not only eu.');
+        .toBe('Resubmit publishes to the topic sales. Every subscription of sales receives these messages again, not only eu, and a filter on eu may keep them from coming back to it.');
 
       component.toggleAllDeadLetter(true);
       refresh();
       expect(el.querySelectorAll('.topic-resubmit-note').length, 'one note, not one per row').toBe(1);
+      expect(text(el).split('Resubmit publishes to the topic').length - 1, 'the topic is named once').toBe(1);
+      expect(text(el), 'no second note repeats that the resubmit goes to the topic').not.toContain('will be sent to the topic');
 
       TestBed.resetTestingModule();
       expect(render({ entityType: 'subscription', topicName: 'sales', entityName: 'eu', initialTab: 0 }, { active: messages(2) }).el.querySelector('.topic-resubmit-note'), 'the active tab resubmits nothing').toBeNull();
