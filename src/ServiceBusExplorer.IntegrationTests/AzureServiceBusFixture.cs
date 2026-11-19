@@ -103,8 +103,8 @@ public sealed class AzureServiceBusFixture : IAsyncLifetime
         var remaining = bodies.Length;
         while (remaining > 0)
         {
-            var batch = await receiver.ReceiveMessagesAsync(remaining, TimeSpan.FromSeconds(5));
-            Assert.NotEmpty(batch);
+            var batch = await receiver.ReceiveMessagesAsync(remaining, TimeSpan.FromSeconds(30));
+            Assert.True(batch.Count > 0, $"The emulator gave none of the {remaining} messages still to dead-letter, of {bodies.Length} sent, within 30 seconds.");
             foreach (var message in batch)
             {
                 await receiver.DeadLetterMessageAsync(message, "arranged", "dead-lettered by the test");
