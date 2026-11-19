@@ -1,3 +1,7 @@
+## [2026-11-19] integrate | ADR 0008 - An MCP server inside the local API
+
+Proposed: the endpoint inside the API, a token of its own, connections offered one by one, and the user asked in the app before a change. Listed in the decisions index and linked from the plan after 2.5.0.
+
 ## [2026-11-19] integrate | After 2.5.0: the order of work on one branch
 
 The plan of what is built after the 2.5.0 release, with the MCP server first as the owner asked, listed in the roadmap index.

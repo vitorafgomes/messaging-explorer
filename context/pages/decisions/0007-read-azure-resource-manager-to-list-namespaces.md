@@ -22,8 +22,8 @@ reliability: high
 
 ## Status
 
-- [x] Proposed
-- [ ] Accepted
+- [ ] Proposed
+- [x] Accepted
 - [ ] Deprecated / superseded
 
 Updated: 2026-11-19.
