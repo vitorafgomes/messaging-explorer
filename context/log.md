@@ -1,3 +1,6 @@
+## [2026-11-20] feature | The MCP server switches the active connection, after the user allows it in the app
+connect_to on an offered connection, always asked, checked again after the allow, connected as the connect route does; the app follows the switch. [[pages/services/api/mcp-asking-and-sending]]
+
 ## [2026-11-20] feature | The MCP server sends, after the user allows it in the app
 send_message and send_messages, the requests that wait for the user, production offered and asked about every read, a local test broker never asked. [[pages/services/api/mcp-asking-and-sending]]
 

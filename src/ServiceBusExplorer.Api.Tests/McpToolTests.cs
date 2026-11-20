@@ -74,9 +74,28 @@ public class McpToolTests
         public int Peeks { get; set; }
         public int TopicLists { get; set; }
         public int SubscriptionLists { get; set; }
+
+        /// <summary>What the factory throws on the next connects; null connects.</summary>
+        public Exception? ConnectFailure { get; set; }
+
+        /// <summary>The ids of the connections the factory was asked to connect, in order.</summary>
+        public List<string> Connects { get; } = [];
+
+        /// <summary>The ids of the connections whose provider was disposed, in order.</summary>
+        public List<string> Disposed { get; } = [];
     }
 
-    internal static IProviderFactory FactoryFor(Broker broker)
+    /// <summary>A factory that connects a new stub provider for each connect, or throws <see cref="Broker.ConnectFailure"/>.</summary>
+    internal static IProviderFactory FactoryFor(Broker broker) =>
+        ArgsProxy.For<IProviderFactory>((m, args) =>
+        {
+            if (m.Name != nameof(IProviderFactory.CreateConnectedProviderAsync)) throw new NotSupportedException(m.Name);
+            var id = ((ServiceBusConnection)args[0]!).Id;
+            broker.Connects.Add(id);
+            return broker.ConnectFailure is { } failure ? Task.FromException<IMessagingProvider>(failure) : Task.FromResult(ProviderFor(broker, id));
+        });
+
+    private static IMessagingProvider ProviderFor(Broker broker, string connectionId)
     {
         var capabilities = StubProxy.For<IProviderCapabilities>(m => m.Name switch
         {
@@ -94,14 +113,14 @@ public class McpToolTests
             _ when m.ReturnType == typeof(bool) => true,
             _ => throw new NotSupportedException(m.Name)
         });
-        var provider = ArgsProxy.For<IMessagingProvider>((m, args) => m.Name switch
+        return ArgsProxy.For<IMessagingProvider>((m, args) => m.Name switch
         {
             "get_ProviderType" => broker.ProviderType,
             "get_CurrentTarget" => broker.Target,
             "get_IsConnected" => true,
             "get_Capabilities" => capabilities,
             "DisconnectAsync" => Task.CompletedTask,
-            "DisposeAsync" => ValueTask.CompletedTask,
+            "DisposeAsync" => Counted(() => broker.Disposed.Add(connectionId), ValueTask.CompletedTask),
             nameof(IMessagingProvider.GetQueuesAsync) => Task.FromResult<IEnumerable<IQueueEntity>>(
                 [new QueueInfo { Name = "orders", Status = "Active", ActiveMessageCount = 3, DeadLetterMessageCount = 2 }]),
             nameof(IMessagingProvider.GetTopicsAsync) => Counted(() => broker.TopicLists++, Task.FromResult<IEnumerable<ITopicEntity>>(
@@ -119,9 +138,6 @@ public class McpToolTests
             nameof(IMessagingProvider.SendMessagesAsync) => SendMany(broker, ((IEnumerable<SendMessageRequest>)args[1]!).ToList()),
             _ => throw new NotSupportedException(m.Name)
         });
-        return StubProxy.For<IProviderFactory>(m => m.Name == nameof(IProviderFactory.CreateConnectedProviderAsync)
-            ? Task.FromResult(provider)
-            : throw new NotSupportedException(m.Name));
     }
 
     private static T Counted<T>(Action count, T answer)

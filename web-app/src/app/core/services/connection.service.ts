@@ -199,6 +199,11 @@ export class ConnectionService {
     this.readStatus().subscribe();
   }
 
+  /** Reads the status from the API without publishing it, for a caller that waits for it to change. */
+  peekStatus(): Observable<ConnectionStatus> {
+    return this.api.get<ConnectionStatus>('connections/status');
+  }
+
   /**
    * Reads the status from the API and publishes it, with the same rule as {@link refreshStatus};
    * when the API is connected and names the stored connection that is active, that id is taken.

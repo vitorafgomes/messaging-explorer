@@ -30,7 +30,7 @@ Updated: 2026-11-20.
 
 ## Context
 
-The owner asked on 2026-11-19 for an MCP server, the way an IDE offers its own tools to an assistant, and for the complete version: "a versao completa pois quero que voce tambem possa enviar msg". The screen was drawn first and settled with the owner the same day: a Settings group named "MCP server", and the MCP icon in the toolbar only while the server is active.
+The owner asked on 2026-11-19 for an MCP server, the way an IDE offers its own tools to an assistant, and for the complete version: "a versao completa pois quero que voce tambem possa enviar msg". The screen was settled with the owner the same day: a Settings group named "MCP server", and the MCP icon in the toolbar only while the server is active.
 
 Three rules of the project meet this request head on. Nobody but the local user reaches the API ([[pages/invariants/local-authenticated-api]]): an MCP client is a second caller. A secret never leaves the backend unmasked ([[pages/invariants/secrets-masked-at-the-api-boundary]]), and what a tool answers leaves the computer, to the company that runs the assistant. A bulk operation never loses a message silently ([[pages/invariants/bulk-operations-are-at-least-once]]), and the brokers are usually someone's production.
 
@@ -54,13 +54,13 @@ What was read on 2026-11-19, and what was not:
 
 **The user is asked in the app.** A tool that sends, moves, removes, purges or changes an entity waits while the app shows what is asked, where, how many messages and the reason the assistant gave; with no answer in two minutes the tool is told the request was denied. A delete or a purge asks for the entity name typed, as on the screen. A connection marked as production asks before every operation, a read included. The one exception: a connection the user marks as a local test broker is never asked. Elicitation is not relied on.
 
-**One active connection.** The API has one provider slot. A tool acts on the connection that is active in the app, when it is offered; changing the active connection through a tool is itself an operation the user is asked about.
+**One active connection.** The API has one provider slot. A tool acts on the connection active in the app, when offered; changing the active connection through a tool is itself an operation the user is asked about (`src/ServiceBusExplorer.Api.Tests/McpConnectToolTests.cs#Connect_to_asks_even_a_never_asked_broker_and_an_allow_makes_it_active`).
 
-**What a tool answers.** The same data the routes answer: masked secrets, the per-message report of a bulk operation with its possible duplicates, and fixed sentences for errors, never the text of a broker's exception. The Settings group says plainly that names, counts and message bodies read by an assistant leave the computer.
+**What a tool answers.** The same data the routes answer: masked secrets, the per-message report of a bulk operation with its possible duplicates, and fixed sentences for errors, never the text of a broker's exception. The Settings group says that names, counts and message bodies read by an assistant leave the computer.
 
-**The logs of the app.** Asked by the owner on 2026-11-19: an assistant can read the lines of the backend store the Logs screen shows (`src/ServiceBusExplorer.Api/Logs/RecentLogStore.cs#RecentLogStore`), filtered by level and text, which by rule carry no secret, no message body and no exception text. It is its own choice in the Settings group, off by default, because a line can name the target or an entity of a connection not offered. The lines of the shell and the screen reach the tool only once they are handed to the API, a later phase.
+**The logs of the app.** Asked by the owner on 2026-11-19: an assistant can read the lines of the backend store the Logs screen shows (`src/ServiceBusExplorer.Api/Logs/RecentLogStore.cs#RecentLogStore`), filtered by level and text, which by rule carry no secret, no message body and no exception text. It is its own choice in the Settings group, off by default, because a line can name the target or an entity of a connection not offered. Lines of the shell and the screen come in a later phase, once handed to the API.
 
-**The settings of the app.** Asked by the owner on 2026-11-19: an assistant can turn settings of the app on and off, as its own choice in the Settings group, off by default. A tool reads the settings and changes those on a fixed list: the theme, Developer mode, the update channel and the Monitoring history. Never on that list: the MCP server group itself (the switch, the token, the level of a connection, the choices for logs and settings), so an assistant cannot widen its own reach; clearing the data; and installing or downloading an update, which keeps the user's agreement to the exact version. These settings live in the screen and the shell, so the tool hands the change to the app through the channel that carries a confirmation request, and the change shows in the record.
+**The settings of the app.** Asked by the owner on 2026-11-19: an assistant can turn settings of the app on and off, as its own choice in the Settings group, off by default. A tool reads the settings and changes those on a fixed list: the theme, Developer mode, the update channel and the Monitoring history. Never on that list: the MCP server group itself (the switch, the token, the level of a connection, the choices for logs and settings), so an assistant cannot widen its own reach; clearing the data; and installing or downloading an update, which keeps the user's agreement to the exact version. These settings live in the screen and the shell: the tool hands the change to the app over the channel of the requests, and the record shows it.
 
 **A record.** What assistants asked for and what happened is kept in memory while the app is open, with no message body and no secret, and shown in Settings.
 
@@ -71,7 +71,7 @@ What was read on 2026-11-19, and what was not:
 - **Better:** an assistant can inspect a dead-letter queue, reproduce a failure by sending messages and clean up after a test, on brokers the user chose, with the user deciding each change.
 - **Worse:** the rule "nobody but the local user reaches the API" gains a second credential and a second exempt route. A message body read by an assistant leaves the computer, which no setting can undo.
 - **Worse:** every tool that changes something blocks on a person. An unattended run cannot send or remove, by design, except on a local test broker.
-- **Neutral but noteworthy:** the token is long-lived, so it is stored hashed and can only be replaced, never read back. The single provider slot means an assistant and the user share one active connection.
+- **Neutral but noteworthy:** the token is long-lived, so it is stored hashed and can only be replaced, never read back. An assistant and the user share the one active connection.
 
 ## Alternatives considered
 

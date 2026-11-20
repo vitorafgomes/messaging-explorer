@@ -27,6 +27,9 @@ describe('App', () => {
     saved$: connectionSaved,
     get isConnected() { return status.value.connected; },
     connect: () => of(null),
+    readStatus: vi.fn((): Observable<{ connected: boolean; connectionId?: string }> => of({ connected: false })),
+    peekStatus: vi.fn((): Observable<{ connected: boolean; connectionId?: string }> => of({ connected: false })),
+    refreshStatus: vi.fn(),
     currentConnectionId: null as string | null,
     get currentTarget() { return status.value.namespace; },
     getConnections: () => of([
@@ -98,6 +101,7 @@ describe('App', () => {
     vi.clearAllMocks();
     mockMcp.requests.mockImplementation(() => of([]));
     mockMcp.answer.mockImplementation(() => of(undefined));
+    mockConnectionService.readStatus.mockImplementation(() => of({ connected: false }));
     status.next({ connected: false });
     activeRuns.set([]);
     mcpState.set(null);
@@ -538,6 +542,69 @@ describe('App', () => {
         await tick(fixture, 4000);
         expect(dialogTitle(), 'the same request is not asked twice').toBeNull();
         expect(mockMcp.answer.mock.calls, 'one answer').toHaveLength(1);
+      });
+
+      describe('after the user allows an assistant to connect, the app follows the switch', () => {
+        const CONNECT: McpRequest = { ...OLD, id: 'r-connect', kind: 'connect', title: 'Claude Code asks to connect to contoso-prod', allowLabel: 'Connect to contoso-prod' };
+        const reads = () => mockConnectionService.peekStatus.mock.calls.length;
+        const published = () => mockConnectionService.refreshStatus.mock.calls.length;
+        const click = (label: string) => (Array.from(document.querySelectorAll<HTMLButtonElement>('mat-dialog-container button')).find(b => b.textContent?.trim() === label))!.click();
+        /** The API names c-dev as active for the first <code>sameFor</code> reads, then c-prod. */
+        const switchesAfter = (sameFor: number) => {
+          let n = 0;
+          mockConnectionService.peekStatus.mockImplementation(() => of({ connected: true, connectionId: ++n <= sameFor ? 'c-dev' : 'c-prod' }));
+        };
+
+        async function answer(request: McpRequest, label: string) {
+          mockConnectionService.currentConnectionId = 'c-dev';
+          let polls = 0;
+          mockMcp.requests.mockImplementation(() => of(polls++ === 0 ? [request] : []));
+          const fixture = await start();
+          click(label);
+          await tick(fixture, 0);
+          return fixture;
+        }
+
+        it('reads the status once a second until it names another connection than before the answer, then stops', async () => {
+          switchesAfter(3);
+          const fixture = await answer(CONNECT, 'Connect to contoso-prod');
+          expect(reads(), 'the status is read at once after the allow').toBe(1);
+          await tick(fixture, 2000);
+          expect(reads(), 'then once a second').toBe(3);
+          await tick(fixture, 1000);
+          expect(reads(), 'the fourth read names c-prod').toBe(4);
+          expect(published(), 'the status is published to the screens once, when it changed, never while it was the same').toBe(1);
+          await tick(fixture, 10_000);
+          expect(reads(), 'after an allowed connect the app reads the status until it names another connection, then stops').toBe(4);
+        });
+
+        it('stops after 15 seconds when the status never changes, and when the app is destroyed', async () => {
+          switchesAfter(Infinity);
+          const fixture = await answer(CONNECT, 'Connect to contoso-prod');
+          await tick(fixture, 20_000);
+          expect(reads(), 'after an allowed connect the app reads the status for at most 15 seconds').toBe(15);
+          expect(published(), 'a status that never changed is never published again, so no screen reloads').toBe(0);
+          fixture.destroy();
+
+          vi.clearAllMocks();
+          const second = await answer({ ...CONNECT, id: 'r-connect-2' }, 'Connect to contoso-prod');
+          second.destroy();
+          await vi.advanceTimersByTimeAsync(10_000);
+          expect(reads(), 'the reading stops when the app is destroyed').toBe(1);
+        });
+
+        it('a denied connect and an allowed request of another kind read no status', async () => {
+          switchesAfter(0);
+          const denied = await answer(CONNECT, 'Deny');
+          await tick(denied, 5000);
+          expect(reads(), 'a denied connect changes nothing, so the status is not read').toBe(0);
+          denied.destroy();
+
+          const sent = await answer({ ...OLD, id: 'r-send' }, 'Send 3 messages');
+          await tick(sent, 5000);
+          expect(mockMcp.answer.mock.calls, 'both requests were answered').toStrictEqual([['r-connect', false], ['r-send', true]]);
+          expect(reads(), 'only an allowed request of kind connect makes the app read the status').toBe(0);
+        });
       });
 
       it('an older API without the requests route (404) is polled once, shows no error and no dialog', async () => {

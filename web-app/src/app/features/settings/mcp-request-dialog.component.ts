@@ -4,11 +4,11 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { McpRequest, McpSettingsService } from './mcp-settings.service';
 
-/** How a request dialog ended: answered by the user, or no longer waiting. */
-export type McpRequestOutcome = 'answered' | 'gone';
+/** How a request dialog ended: allowed or denied by the user, or no longer waiting. */
+export type McpRequestOutcome = 'allowed' | 'denied' | 'gone';
 
 /** The kinds of request this version of the app can allow. */
-const KNOWN_KINDS = ['read', 'send'];
+const KNOWN_KINDS = ['read', 'send', 'connect'];
 
 /**
  * The window that asks the user about one request of an assistant, as Settings.dc.html draws `mcp.ask`.
@@ -39,7 +39,7 @@ export class McpRequestDialogComponent {
     this.sending.set(true);
     this.error.set('');
     this.mcp.answer(this.request.id, allow).subscribe({
-      next: () => this.ref.close('answered'),
+      next: () => this.ref.close(allow ? 'allowed' : 'denied'),
       error: (error: { status?: number; error?: { message?: unknown } }) => {
         if (error?.status === 404) { this.ref.close('gone'); return; }
         this.sending.set(false);

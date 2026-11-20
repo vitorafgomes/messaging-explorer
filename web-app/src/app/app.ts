@@ -1,6 +1,6 @@
 import { Component, computed, inject, OnInit, NgZone, HostListener, signal, DestroyRef } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
-import { EMPTY, catchError, exhaustMap, map, merge, of, switchMap, timer } from 'rxjs';
+import { EMPTY, catchError, exhaustMap, filter, map, merge, of, switchMap, take, takeUntil, timer } from 'rxjs';
 import { Router, RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { AsyncPipe } from '@angular/common';
 import { MatToolbarModule } from '@angular/material/toolbar';
@@ -90,6 +90,7 @@ export class App implements OnInit {
   readonly mcp = inject(McpSettingsService);
   private readonly bugReport = inject(BugReportService);
   private readonly dialog = inject(MatDialog);
+  private readonly destroyRef = inject(DestroyRef);
   /** Whether the API answered 404 to GET mcp/requests: it cannot ask the user, so nothing is polled again. */
   private readonly requestsAbsent = signal(false);
   /** The app asks the user while the server is enabled and the API can wait for an answer. */
@@ -127,7 +128,7 @@ export class App implements OnInit {
    * next tick and shows nothing. Polling stops when the server is turned off and when the app is destroyed.
    */
   constructor() {
-    inject(DestroyRef).onDestroy(() => this.openRequest?.ref.close());
+    this.destroyRef.onDestroy(() => this.openRequest?.ref.close());
     toObservable(this.asking).pipe(
       switchMap(on => {
         if (!on) { this.openRequest?.ref.close('gone'); return EMPTY; }
@@ -187,10 +188,27 @@ export class App implements OnInit {
     this.shown.add(next.id);
     const ref = this.dialog.open<McpRequestDialogComponent, McpRequest, McpRequestOutcome>(McpRequestDialogComponent, { ...McpRequestDialogComponent.config, data: next });
     this.openRequest = { id: next.id, ref };
+    const before = this.connectionService.currentConnectionId;
     ref.beforeClosed().subscribe(outcome => {
       if (this.openRequest?.ref === ref) this.openRequest = null;
       if (outcome === 'gone') this.snackBar.open('The request is no longer waiting.', 'Close', { duration: 5000 });
+      if (outcome === 'allowed' && next.kind === 'connect') this.followConnect(before);
     });
+  }
+
+  /**
+   * After the user allowed an assistant to connect, reads the connection status once a second, without publishing it,
+   * until it names another connection than <code>before</code> or 15 seconds pass; the changed status is then published
+   * once, so every screen follows the switch without a reload and none reloads while nothing changed.
+   */
+  private followConnect(before: string | null): void {
+    timer(0, 1000).pipe(
+      exhaustMap(() => this.connectionService.peekStatus().pipe(catchError(() => EMPTY))),
+      filter(status => (status.connected ? status.connectionId ?? null : null) !== before),
+      take(1),
+      takeUntil(timer(15_000)),
+      takeUntilDestroyed(this.destroyRef),
+    ).subscribe(() => this.connectionService.refreshStatus());
   }
 
   private setupElectronListeners() {

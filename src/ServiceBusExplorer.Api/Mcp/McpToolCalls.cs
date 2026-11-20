@@ -59,7 +59,7 @@ public sealed class McpToolCalls(
     public async Task<CallToolResult> RunAsync(McpServer server, string asked, ILogger logger, Func<ToolCall, Task<object?>> work)
     {
         var call = new ToolCall { Assistant = Clean(server.ClientInfo?.Name, 100) is { Length: > 0 } name ? name : "Assistant" };
-        void Record(string kind) => activity.Add(new McpActivity(DateTimeOffset.UtcNow, call.Assistant, asked, call.Where, call.Outcome, kind));
+        void Record(string kind) => activity.Add(new McpActivity(DateTimeOffset.UtcNow, call.Assistant, call.Asked ?? asked, call.Where, call.Outcome, kind));
 
         try
         {
@@ -127,6 +127,22 @@ public sealed class McpToolCalls(
     /// </summary>
     public async Task AskAsync(ToolCall call, McpActive active, string kind, string title, IReadOnlyList<McpFact> facts, string note, string allowLabel, bool sends, CancellationToken cancellationToken)
     {
+        await AskUserAsync(call, kind, title, facts, note, allowLabel, cancellationToken);
+        var (provider, connectionId) = ConnectionsController.GetCurrent();
+        var level = settings.LevelOf(connectionId);
+        if (!ReferenceEquals(provider, active.Provider) || connectionId != active.Connection.Id || level is null
+            || (sends && level != McpSettingsStore.ReadAndSendLevel))
+            call.Refuse(McpReadTools.NotOffered, "Refused: not offered");
+        call.Allowed = true;
+    }
+
+    /// <summary>
+    /// Shows a request to the user and waits; returns only when the user allowed it and the call was not cancelled.
+    /// Denied, unanswered or refused for too many waiting, the call is refused with its sentence. What must still hold
+    /// after the allow is the caller's to check.
+    /// </summary>
+    public async Task AskUserAsync(ToolCall call, string kind, string title, IReadOnlyList<McpFact> facts, string note, string allowLabel, CancellationToken cancellationToken)
+    {
         switch (await requests.AskAsync(call.Assistant, kind, title, facts, note, allowLabel, cancellationToken))
         {
             case McpAnswer.Denied:
@@ -141,12 +157,6 @@ public sealed class McpToolCalls(
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        var (provider, connectionId) = ConnectionsController.GetCurrent();
-        var level = settings.LevelOf(connectionId);
-        if (!ReferenceEquals(provider, active.Provider) || connectionId != active.Connection.Id || level is null
-            || (sends && level != McpSettingsStore.ReadAndSendLevel))
-            call.Refuse(McpReadTools.NotOffered, "Refused: not offered");
-        call.Allowed = true;
     }
 
     /// <summary>Where the connection is, as a request shows it: its name, then its client and environment when it has them.</summary>
@@ -225,6 +235,9 @@ public sealed class McpToolCalls(
     {
         /// <summary>The client's name, or "Assistant".</summary>
         public string Assistant { get; init; } = "Assistant";
+
+        /// <summary>What was asked, set by a tool that knows it only once it resolved its target; null keeps what the call started with.</summary>
+        public string? Asked { get; set; }
 
         /// <summary>The entity and the offered connection, or "This app".</summary>
         public string Where { get; set; } = "This app";

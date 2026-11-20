@@ -53,7 +53,22 @@ const READ: McpRequest = {
   allowLabel: 'Allow this read',
 };
 
-const FOOTER = 'The assistant waits for your answer. With no answer in 2 minutes it is told the request was denied.';
+/** A request to make an offered connection the active one, as the API writes it. */
+const CONNECT: McpRequest = {
+  ...SEND,
+  id: 'r-connect',
+  kind: 'connect',
+  title: 'Claude Code asks to connect to contoso-prod',
+  facts: [
+    { label: 'From', value: 'contoso-dev (Contoso, Development)' },
+    { label: 'To', value: 'contoso-prod (Contoso, Production)' },
+    { label: 'It said why', value: 'To compare the queues of both' },
+  ],
+  note: 'This is a production connection. The app disconnects from contoso-dev. Every screen then shows contoso-prod, and anything running on contoso-dev is interrupted.',
+  allowLabel: 'Connect to contoso-prod',
+};
+
+const FOOTER ='The assistant waits for your answer. With no answer in 2 minutes it is told the request was denied.';
 
 describe('McpRequestDialogComponent: the window that asks the user, as Settings.dc.html draws mcp.ask', () => {
   let answer: ReturnType<typeof vi.fn>;
@@ -87,7 +102,7 @@ describe('McpRequestDialogComponent: the window that asks the user, as Settings.
     TestBed.inject(OverlayContainer).ngOnDestroy();
   });
 
-  for (const [state, request] of [['askedToSend', SEND], ['askedToRead', READ]] as const) {
+  for (const [state, request] of [['askedToSend', SEND], ['askedToRead', READ], ['askedToConnect', CONNECT]] as const) {
     it(`${state}: the title with the MCP mark, the facts as a description list, the note in the warning container, Deny, the allow button with the API's label, and the footer`, async () => {
       await open(request);
       const title = dialog()?.querySelector('h2');
@@ -99,28 +114,28 @@ describe('McpRequestDialogComponent: the window that asks the user, as Settings.
       expect(Array.from(dialog()?.querySelectorAll('dl.facts > dd') ?? []).map(words), 'each fact value is a dd').toStrictEqual(request.facts.map(f => f.value));
       expect(words(dialog()?.querySelector('.note')), 'the note the API wrote').toBe(request.note);
       expect(dialog()?.querySelector('.note mat-icon')?.textContent?.trim(), 'the note carries the warning icon').toBe('warning');
-      expect(Array.from(dialog()?.querySelectorAll('mat-dialog-actions button') ?? []).map(words), 'Deny, then the allow button').toStrictEqual(['Deny', request.allowLabel]);
+      expect(Array.from(dialog()?.querySelectorAll('mat-dialog-actions button') ?? []).map(words), `the kind ${request.kind} can be allowed: Deny, then the allow button`).toStrictEqual(['Deny', request.allowLabel]);
       expect(words(dialog()?.querySelector('.footer')), 'the footer says what happens with no answer').toBe(FOOTER);
       expect(answer, 'opening the dialog answers nothing').not.toHaveBeenCalled();
     });
   }
 
-  it('Deny answers allow false, once, and closes the dialog as answered', async () => {
+  it('Deny answers allow false, once, and closes the dialog as denied', async () => {
     await open(SEND);
     button('Deny')!.click();
     await settle();
 
     expect(answer.mock.calls, 'Deny is POST answer with allow false').toStrictEqual([['r-send', false]]);
-    expect(closed, 'the dialog closes once the API took the answer').toStrictEqual(['answered']);
+    expect(closed, 'the dialog closes once the API took the answer').toStrictEqual(['denied']);
   });
 
-  it('the allow button answers allow true, once, and closes the dialog as answered', async () => {
+  it('the allow button answers allow true, once, and closes the dialog as allowed', async () => {
     await open(SEND);
     button('Send 3 messages')!.click();
     await settle();
 
     expect(answer.mock.calls, 'only a click on the allow button answers allow true').toStrictEqual([['r-send', true]]);
-    expect(closed).toStrictEqual(['answered']);
+    expect(closed).toStrictEqual(['allowed']);
   });
 
   it('focus starts on Deny; Escape, Enter on the focused Deny and a click on the backdrop never answer allow and never close the dialog', async () => {
@@ -176,7 +191,7 @@ describe('McpRequestDialogComponent: the window that asks the user, as Settings.
     button('Deny')!.click();
     await settle();
     expect(answer.mock.calls).toStrictEqual([['r-send', true], ['r-send', false]]);
-    expect(closed).toStrictEqual(['answered']);
+    expect(closed).toStrictEqual(['denied']);
   });
 
   it('a 404 on answering closes the dialog as no longer waiting', async () => {

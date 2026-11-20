@@ -1,9 +1,9 @@
 ---
 title: "Web App: The MCP server group of Settings"
-version: "1.1"
+version: "1.2"
 date: 2026-11-19
 updated: 2026-11-20
-changes: "v1.1: phase two, sending: the window that asks the user, the production offer, the local test broker choice, the activity refreshed. v1.0: phase one, reading: the group of Settings and the toolbar mark"
+changes: "v1.2: the kind connect. v1.1: phase two, sending: the window that asks the user, the production offer, the local test broker choice, the activity refreshed. v1.0: phase one, reading: the group of Settings and the toolbar mark"
 page_type: service
 status: active
 description: "Read when a change touches the MCP server group of Settings, McpSettingsService, the window that asks the user about a request of an assistant, the MCP token shown in the app, or the MCP mark on the toolbar."
@@ -52,7 +52,8 @@ Each call that fails says so in its own row, with the API's message or its statu
 - As the artboard draws `mcp.ask`: the title with the MCP mark, the facts as a description list, the note in the warning container, Deny and the allow button with the API's `allowLabel`, and "The assistant waits for your answer. With no answer in 2 minutes it is told the request was denied." Every text from the API is bound as text, never as markup.
 - Only Deny and the allow button answer, each through `POST mcp/requests/{id}/answer`; the dialog is opened with `disableClose` and focus on Deny (`web-app/src/app/features/settings/mcp-request-dialog.component.ts#config`), so Escape and a click outside do nothing. A request is answered once: a second click while the first answer is in flight sends nothing (`web-app/src/app/features/settings/mcp-request-dialog.component.ts#answer`). A failed answer is said in the dialog, which stays open.
 - When the request leaves the list, or the answer gets a 404, the dialog closes by itself with the snack bar "The request is no longer waiting." A request already shown is never opened again.
-- A kind other than read or send shows Deny only and "This version of the app cannot allow this kind of request."
+- A kind other than read, send or connect shows Deny only and "This version of the app cannot allow this kind of request."
+- After an allowed `connect` the app reads the status once a second without publishing it (`ConnectionService.peekStatus`) until it names another connection or 15 seconds pass, then publishes it once (`web-app/src/app/app.ts#followConnect`); tested by `web-app/src/app/app.spec.ts#a denied connect and an allowed request of another kind read no status`.
 
 **The token.** It lives in one signal of the component (`web-app/src/app/features/settings/settings-mcp.component.ts#token`), is shown once in a read-only box with Copy and "Copy it now. It is not shown again.", and is written to no storage and no console. A new visit shows `<your token>` again.
 

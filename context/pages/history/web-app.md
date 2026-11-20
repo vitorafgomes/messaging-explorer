@@ -18,6 +18,8 @@ What changed when in the project [[pages/services/web-app|Web App]] describes, n
 
 ## 2026-11-20
 
+- **An assistant asks to connect.** The window that asks the user allows the kind `connect`, with the API's words; the dialog now closes as allowed or denied. After an allowed connect the app reads the connection status once a second until it names another connection or 15 seconds pass, so the toolbar, the Connections screen and the tree follow without a reload (`web-app/src/app/app.spec.ts#reads the status once a second until it names another connection than before the answer, then stops`). [[pages/services/web-app/features-settings-mcp]]
+
 - **The MCP server, phase two (sending), in the app.** While the server is enabled and the API can wait for an answer, the app polls the requests of assistants every 2 seconds and opens, over any screen, the window `Settings.dc.html` draws to ask the user: what is asked, where and why, Deny and the allow button, answered only by a click on one of them, once. In Settings a production connection is offered after a confirmation, a local test broker can be marked as never asked, each row says what it asks from the API's fields, and what assistants did is read again every 5 seconds. An older API shows neither. [[pages/services/web-app/features-settings-mcp]] (`web-app/src/app/app.ts#showRequest`, `web-app/src/app/features/settings/mcp-request-dialog.component.ts#McpRequestDialogComponent`).
 
 ## 2026-11-19

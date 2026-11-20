@@ -266,37 +266,11 @@ public class ConnectionsController : ControllerBase
     {
         try
         {
-            // Connecting requires raw secrets (connection string / password).
-            var connection = await _connectionManager.GetConnectionWithSecretAsync(id);
-            if (connection == null)
+            var result = await ConnectStoredAsync(id, _connectionManager, _providerFactory, _logger);
+            if (!result.Found)
                 return NotFound();
-
-            _logger.LogInformation("Connecting to {Name} ({ProviderType})", connection.Name, connection.ProviderType);
-
-            IMessagingProvider provider;
-            try
-            {
-                provider = await _providerFactory.CreateConnectedProviderAsync(connection);
-            }
-            catch (Exception ex) when (ConnectFailureReason(ex) is { } reason)
-            {
-                _logger.LogError(ex, "Failed to connect to {ConnectionId} ({Reason})", id, reason.Code);
-                return StatusCode(500, new { message = reason.Message, code = reason.Code });
-            }
-
-            // Store the provider for use by other controllers
-            await SetCurrentProviderAsync(provider, id);
-
-            try
-            {
-                await _connectionManager.MarkUsedAsync(id);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Could not record the last use of connection {ConnectionId} ({ExceptionType})", id, ex.GetType().Name);
-            }
-
-            _logger.LogInformation("Connected successfully to {Target}", provider.CurrentTarget);
+            if (result.Provider is not { } provider)
+                return StatusCode(500, new { message = result.Failure!.Value.Message, code = result.Failure.Value.Code });
 
             return Ok(new
             {
@@ -313,6 +287,52 @@ public class ConnectionsController : ControllerBase
             _logger.LogError(ex, "Failed to connect to {ConnectionId}", id);
             return EntityAdministrationResults.Unhandled(ex);
         }
+    }
+
+    /// <summary>How a connect of a stored connection ended.</summary>
+    /// <param name="Found">False when no stored connection has the id; nothing was attempted.</param>
+    /// <param name="Provider">The connected provider, now the active one; null when not found or failed.</param>
+    /// <param name="Failure">The fixed code and sentence of a failure <see cref="ConnectFailureReason"/> knows.</param>
+    internal readonly record struct ConnectResult(bool Found, IMessagingProvider? Provider, (string Code, string Message)? Failure);
+
+    /// <summary>
+    /// Connects the stored connection <paramref name="id"/>, the one way the route and the connect_to tool do it: reads
+    /// it with its secret, creates the connected provider through the factory, makes it the active one with its id,
+    /// disposing the one before, and marks the connection used. A failure <see cref="ConnectFailureReason"/> knows is
+    /// answered as its fixed code and sentence and leaves the active provider as it was; any other failure throws.
+    /// </summary>
+    internal static async Task<ConnectResult> ConnectStoredAsync(string id, IConnectionManager connectionManager, IProviderFactory providerFactory, ILogger logger)
+    {
+        var connection = await connectionManager.GetConnectionWithSecretAsync(id);
+        if (connection == null)
+            return new ConnectResult(false, null, null);
+
+        logger.LogInformation("Connecting to {Name} ({ProviderType})", connection.Name, connection.ProviderType);
+
+        IMessagingProvider provider;
+        try
+        {
+            provider = await providerFactory.CreateConnectedProviderAsync(connection);
+        }
+        catch (Exception ex) when (ConnectFailureReason(ex) is { } reason)
+        {
+            logger.LogError(ex, "Failed to connect to {ConnectionId} ({Reason})", id, reason.Code);
+            return new ConnectResult(true, null, reason);
+        }
+
+        await SetCurrentProviderAsync(provider, id);
+
+        try
+        {
+            await connectionManager.MarkUsedAsync(id);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not record the last use of connection {ConnectionId} ({ExceptionType})", id, ex.GetType().Name);
+        }
+
+        logger.LogInformation("Connected successfully to {Target}", provider.CurrentTarget);
+        return new ConnectResult(true, provider, null);
     }
 
     /// <summary>
