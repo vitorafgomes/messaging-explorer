@@ -35,10 +35,18 @@ public class McpToolTests
     {
         public bool SupportsRules { get; init; } = true;
         public bool SupportsTransferDeadLetter { get; init; } = true;
+        public bool SupportsTopics { get; init; } = true;
+        public bool SupportsSubscriptions { get; init; } = true;
+        public bool SupportsDeadLetterQueue { get; init; } = true;
+        public bool SupportsPeekFromSequenceNumber { get; init; } = true;
+        public bool SupportsMessageCounts { get; init; } = true;
+        public ProviderType ProviderType { get; init; } = ProviderType.AzureServiceBus;
         public string Target { get; init; } = "offered-target";
         public List<IMessage> Messages { get; init; } = [];
         public Exception? PeekFailure { get; init; }
         public int Peeks { get; set; }
+        public int TopicLists { get; set; }
+        public int SubscriptionLists { get; set; }
     }
 
     private static IProviderFactory FactoryFor(Broker broker)
@@ -47,6 +55,11 @@ public class McpToolTests
         {
             "get_SupportsSubscriptionRules" => broker.SupportsRules,
             "get_SupportsTransferDeadLetter" => broker.SupportsTransferDeadLetter,
+            "get_SupportsTopics" => broker.SupportsTopics,
+            "get_SupportsSubscriptions" => broker.SupportsSubscriptions,
+            "get_SupportsDeadLetterQueue" => broker.SupportsDeadLetterQueue,
+            "get_SupportsPeekFromSequenceNumber" => broker.SupportsPeekFromSequenceNumber,
+            "get_SupportsMessageCounts" => broker.SupportsMessageCounts,
             "get_ProviderDisplayName" => "Stub",
             "get_ProviderVersion" => "1",
             _ when m.ReturnType == typeof(bool) => true,
@@ -54,7 +67,7 @@ public class McpToolTests
         });
         var provider = StubProxy.For<IMessagingProvider>(m => m.Name switch
         {
-            "get_ProviderType" => ProviderType.AzureServiceBus,
+            "get_ProviderType" => broker.ProviderType,
             "get_CurrentTarget" => broker.Target,
             "get_IsConnected" => true,
             "get_Capabilities" => capabilities,
@@ -62,10 +75,10 @@ public class McpToolTests
             "DisposeAsync" => ValueTask.CompletedTask,
             nameof(IMessagingProvider.GetQueuesAsync) => Task.FromResult<IEnumerable<IQueueEntity>>(
                 [new QueueInfo { Name = "orders", Status = "Active", ActiveMessageCount = 3, DeadLetterMessageCount = 2 }]),
-            nameof(IMessagingProvider.GetTopicsAsync) => Task.FromResult<IEnumerable<ITopicEntity>>(
-                [new TopicInfo { Name = "events", Status = "Active", SubscriptionCount = 1 }]),
-            nameof(IMessagingProvider.GetSubscriptionsAsync) => Task.FromResult<IEnumerable<SubscriptionInfo>>(
-                [new SubscriptionInfo { TopicName = "events", Name = "audit", ActiveMessageCount = 5 }]),
+            nameof(IMessagingProvider.GetTopicsAsync) => Counted(() => broker.TopicLists++, Task.FromResult<IEnumerable<ITopicEntity>>(
+                [new TopicInfo { Name = "events", Status = "Active", SubscriptionCount = 1 }])),
+            nameof(IMessagingProvider.GetSubscriptionsAsync) => Counted(() => broker.SubscriptionLists++, Task.FromResult<IEnumerable<SubscriptionInfo>>(
+                [new SubscriptionInfo { TopicName = "events", Name = "audit", ActiveMessageCount = 5 }])),
             nameof(IMessagingProvider.GetRulesAsync) => Task.FromResult<IReadOnlyList<SubscriptionRuleInfo>>(
                 [new SubscriptionRuleInfo { Name = "$Default", SqlExpression = "1=1" }]),
             nameof(IMessagingProvider.PeekMessagesAsync) => Peek(broker),
@@ -74,6 +87,12 @@ public class McpToolTests
         return StubProxy.For<IProviderFactory>(m => m.Name == nameof(IProviderFactory.CreateConnectedProviderAsync)
             ? Task.FromResult(provider)
             : throw new NotSupportedException(m.Name));
+    }
+
+    private static T Counted<T>(Action count, T answer)
+    {
+        count();
+        return answer;
     }
 
     private static Task<IEnumerable<IMessage>> Peek(Broker broker)
@@ -125,7 +144,7 @@ public class McpToolTests
             Assert.Equal(HttpStatusCode.OK, connected.StatusCode);
         }
 
-        /// <summary>Calls a tool; a refusal is answered without the prefix the SDK puts before the sentence of the tool.</summary>
+        /// <summary>Calls a tool; a refusal is answered as an error result that holds the sentence of the tool alone.</summary>
         public async Task<(bool IsError, string Text)> CallAsync(string tool, object? arguments = null)
         {
             var body = JsonSerializer.Serialize(new
@@ -142,9 +161,20 @@ public class McpToolTests
             var result = doc.RootElement.GetProperty("result");
             var text = string.Concat(result.GetProperty("content").EnumerateArray().Select(c => c.GetProperty("text").GetString()));
             var failed = result.TryGetProperty("isError", out var isError) && isError.GetBoolean();
-            var prefix = $"An error occurred invoking '{tool}': ";
-            Assert.True(!failed || text.StartsWith(prefix, StringComparison.Ordinal), $"the SDK answers a refusal after its own prefix; {tool} answered {text}");
-            return (failed, failed ? text[prefix.Length..] : text);
+            Assert.False(text.StartsWith("An error occurred invoking", StringComparison.Ordinal),
+                $"a refusal is answered as an error result of the tool, not as an exception the SDK puts its prefix before; {tool} answered {text}");
+            return (failed, text);
+        }
+
+        /// <summary>The tool named <paramref name="tool"/> as tools/list answers it.</summary>
+        public async Task<JsonElement> ListedToolAsync(string tool)
+        {
+            var body = JsonSerializer.Serialize(new { jsonrpc = "2.0", id = 8, method = "tools/list", @params = new { } });
+            using var response = await Anonymous.SendAsync(McpRequest(body, bearer: "Bearer " + Token));
+            var raw = await response.Content.ReadAsStringAsync();
+            Assert.True(response.StatusCode == HttpStatusCode.OK, $"tools/list answered {(int)response.StatusCode}: {raw}");
+            using var doc = JsonDocument.Parse(JsonRpcPayload(raw));
+            return doc.RootElement.GetProperty("result").GetProperty("tools").EnumerateArray().Single(t => t.GetProperty("name").GetString() == tool).Clone();
         }
 
         public async Task<JsonElement> ActivityAsync()
@@ -319,7 +349,7 @@ public class McpToolTests
         using (var doc = JsonDocument.Parse(rules.Text)) Assert.Equal("1=1", Assert.Single(doc.RootElement.EnumerateArray()).GetProperty("sqlExpression").GetString());
         using (var doc = JsonDocument.Parse(peeked.Text))
         {
-            var messages = doc.RootElement.EnumerateArray().ToList();
+            var messages = doc.RootElement.GetProperty("messages").EnumerateArray().ToList();
             Assert.Equal(2, messages.Count);
             Assert.True(messages[0].GetProperty("body").GetString() == longBody[..8000] && messages[0].GetProperty("bodyTruncated").GetBoolean(),
                 "a body longer than 8000 characters is answered cut at 8000 and marked bodyTruncated");
@@ -366,9 +396,14 @@ public class McpToolTests
         await host.SeedAsync(Offered());
         await host.OfferAsync("c-offered");
         await host.ConnectAsync("c-offered");
+        var store = host.Factory.Services.GetRequiredService<RecentLogStore>();
+        store.Clear();
 
         var (isError, text) = await host.CallAsync("peek_messages", new { entity = "orders" });
 
+        var logged = store.After(0);
+        Assert.True(logged.Any(l => l.Level == "Warning" && l.Category == nameof(McpReadTools) && l.Text.StartsWith("An MCP tool call failed", StringComparison.Ordinal)),
+            $"a broker failure still leaves its Warning line in the app's log; the log held {string.Join(" | ", logged.Select(l => $"{l.Level} {l.Category}: {l.Text}"))}");
         Assert.True(isError && text == "An internal error occurred.", $"a broker failure is answered with the fixed sentence, never the broker's text; it answered {text}");
         var line = Assert.Single((await host.ActivityAsync()).EnumerateArray());
         Assert.Equal(("Peek 10 messages", "orders (active) on offered-name", "Failed", "error"),
@@ -391,6 +426,8 @@ public class McpToolTests
         using (var allowed = await host.Keyed.PutAsJsonAsync("/api/mcp/logs", new { allowed = true })) Assert.Equal(HttpStatusCode.OK, allowed.StatusCode);
         var all = await host.CallAsync("read_logs", new { contains = "LINE" });
         var warnings = await host.CallAsync("read_logs", new { level = "Warning", contains = "line", limit = 1 });
+        var bogus = await host.CallAsync("read_logs", new { level = "bogus" });
+        var undefined = await host.CallAsync("read_logs", new { level = "99" });
 
         Assert.True(refused.IsError && refused.Text == McpReadTools.LogsRefused, $"the logs are read only when the user allowed it; read_logs answered {refused.Text}");
         Assert.False(all.IsError, all.Text);
@@ -398,7 +435,12 @@ public class McpToolTests
             Assert.Equal(["third line", "second line", "first line"], doc.RootElement.EnumerateArray().Select(l => l.GetProperty("text").GetString()));
         using (var doc = JsonDocument.Parse(warnings.Text))
             Assert.Equal(["third line"], doc.RootElement.EnumerateArray().Select(l => l.GetProperty("text").GetString()));
+        const string UnknownLevel = "level must be Trace, Debug, Information, Warning, Error or Critical.";
+        Assert.True(bogus == (true, UnknownLevel), $"read_logs refuses a level that is not the name of one; level bogus answered {bogus}");
+        Assert.True(undefined == (true, UnknownLevel), $"read_logs refuses a number that is no level; level 99 answered {undefined}");
         var activity = (await host.ActivityAsync()).EnumerateArray().ToList();
+        Assert.All(activity.Take(2), a => Assert.Equal(("Read 50 log lines", "This app", "Refused: unknown level", "error"),
+            (a.GetProperty("asked").GetString(), a.GetProperty("where").GetString(), a.GetProperty("outcome").GetString(), a.GetProperty("kind").GetString())));
         Assert.Equal(("Read 50 log lines", "This app", "Refused: logs not allowed", "error"),
             (activity[^1].GetProperty("asked").GetString(), activity[^1].GetProperty("where").GetString(), activity[^1].GetProperty("outcome").GetString(), activity[^1].GetProperty("kind").GetString()));
     }
@@ -452,5 +494,145 @@ public class McpToolTests
             Assert.True(doc.RootElement.EnumerateArray().Select(c => c.GetProperty("id").GetString()).SequenceEqual(["c-cleared"]),
                 $"a deleted connection is no longer offered, even when a connection with its id comes back; list_connections answered {listed}");
         Assert.True(afterClear.RootElement.GetProperty("connections").GetArrayLength() == 0, "clearing all data leaves nothing offered");
+    }
+
+    [Theory]
+    [InlineData("topics")]
+    [InlineData("subscriptions")]
+    [InlineData("subscription peek")]
+    [InlineData("dead-letter")]
+    [InlineData("position")]
+    public async Task A_capability_the_provider_does_not_declare_is_refused_with_its_sentence_recorded_and_the_provider_never_called(string missing)
+    {
+        var broker = new Broker
+        {
+            SupportsTopics = missing != "topics",
+            SupportsSubscriptions = missing is not ("subscriptions" or "subscription peek"),
+            SupportsDeadLetterQueue = missing != "dead-letter",
+            SupportsPeekFromSequenceNumber = missing != "position",
+        };
+        var (tool, arguments, sentence, outcome) = missing switch
+        {
+            "topics" => ("list_topics", (object)new { }, "This provider does not support topics.", "Refused: no topics"),
+            "subscriptions" => ("list_subscriptions", new { topic = "events" }, "This provider does not support subscriptions.", "Refused: no subscriptions"),
+            "subscription peek" => ("peek_messages", new { entity = "events", subscription = "audit" }, "This provider does not support subscriptions.", "Refused: no subscriptions"),
+            "dead-letter" => ("peek_messages", new { entity = "orders", subQueue = "deadLetter" }, "This provider does not support the dead-letter queue.", "Refused: no dead-letter queue"),
+            _ => ("peek_messages", new { entity = "orders", fromSequenceNumber = 5L }, "This provider cannot read the queue from a position.", "Refused: position"),
+        };
+        await using var host = new Host(broker);
+        await host.StartAsync();
+        await host.SeedAsync(Offered());
+        await host.OfferAsync("c-offered");
+        await host.ConnectAsync("c-offered");
+
+        var answer = await host.CallAsync(tool, arguments);
+
+        Assert.True(answer == (true, sentence), $"a capability the provider does not declare ({missing}) is refused with its fixed sentence; {tool} answered {answer}");
+        Assert.True(broker.TopicLists + broker.SubscriptionLists + broker.Peeks == 0,
+            $"a capability the provider does not declare ({missing}) is refused before the provider is called; it listed topics {broker.TopicLists}, subscriptions {broker.SubscriptionLists} and peeked {broker.Peeks} times");
+        var line = Assert.Single((await host.ActivityAsync()).EnumerateArray());
+        Assert.Equal((outcome, "error"), (line.GetProperty("outcome").GetString(), line.GetProperty("kind").GetString()));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Counts_are_answered_only_when_the_broker_gives_them(bool countsGiven)
+    {
+        await using var host = new Host(new Broker { SupportsMessageCounts = countsGiven });
+        await host.StartAsync();
+        await host.SeedAsync(Offered());
+        await host.OfferAsync("c-offered");
+        await host.ConnectAsync("c-offered");
+
+        var queues = await host.CallAsync("list_queues");
+        var subscriptions = await host.CallAsync("list_subscriptions", new { topic = "events" });
+
+        Assert.False(queues.IsError || subscriptions.IsError, $"{queues.Text} {subscriptions.Text}");
+        string[] countFields = ["activeMessageCount", "deadLetterMessageCount", "scheduledMessageCount", "transferMessageCount", "transferDeadLetterMessageCount"];
+        foreach (var (tool, text, active) in new[] { ("list_queues", queues.Text, 3L), ("list_subscriptions", subscriptions.Text, 5L) })
+        {
+            using var doc = JsonDocument.Parse(text);
+            var entity = Assert.Single(doc.RootElement.EnumerateArray());
+            Assert.True(entity.TryGetProperty("countsAvailable", out var available) && available.GetBoolean() == countsGiven,
+                $"{tool} says whether the broker gives counts; with counts given {countsGiven} it answered {text}");
+            var answered = countFields.Where(f => entity.TryGetProperty(f, out _)).ToList();
+            Assert.True(countsGiven ? answered.Count == countFields.Length : answered.Count == 0,
+                $"counts are not answered when the provider gives none: with counts given {countsGiven}, {tool} answered the fields {string.Join(", ", answered)}");
+            long? activeAnswered = entity.TryGetProperty("activeMessageCount", out var count) ? count.GetInt64() : null;
+            Assert.Equal(countsGiven ? active : null, activeAnswered);
+        }
+
+        var topics = await host.CallAsync("list_topics");
+        using var listed = JsonDocument.Parse(topics.Text);
+        var topic = listed.RootElement.EnumerateArray().First();
+        Assert.True(topic.TryGetProperty("countsAvailable", out var topicCounts) && topicCounts.GetBoolean() == countsGiven
+                && topic.TryGetProperty("scheduledMessageCount", out _) == countsGiven,
+            $"list_topics answers its scheduled count only when the broker gives counts; with counts given {countsGiven} it answered {topics.Text}");
+    }
+
+    [Theory]
+    [InlineData(ProviderType.RabbitMQ)]
+    [InlineData(ProviderType.AzureServiceBus)]
+    public async Task A_peek_on_RabbitMQ_says_what_it_costs_in_the_description_and_in_the_answer(ProviderType providerType)
+    {
+        var broker = new Broker { ProviderType = providerType, Messages = [new MessageInfo { MessageId = "m1", SequenceNumber = 1, Body = "b" }] };
+        await using var host = new Host(broker);
+        await host.StartAsync();
+        await host.SeedAsync(Offered());
+        await host.OfferAsync("c-offered");
+        await host.ConnectAsync("c-offered");
+
+        var listed = await host.ListedToolAsync("peek_messages");
+        var (isError, text) = await host.CallAsync("peek_messages", new { entity = "orders" });
+
+        var description = listed.GetProperty("description").GetString()!;
+        Assert.True(description.Contains(McpReadTools.RabbitMQPeekNote, StringComparison.Ordinal) && description.Contains("On Azure Service Bus a peek does not lock or remove them.", StringComparison.Ordinal),
+            $"the description of peek_messages says what a peek costs on RabbitMQ and that it costs nothing on Azure; it reads {description}");
+        var annotations = listed.GetProperty("annotations");
+        Assert.False(annotations.GetProperty("readOnlyHint").GetBoolean(), "peek_messages is not marked read-only: on RabbitMQ it puts the messages back marked as redelivered");
+        Assert.False(annotations.TryGetProperty("destructiveHint", out var destructive) && !destructive.GetBoolean(),
+            "peek_messages is not declared non-destructive: on a quorum queue a return of the held messages counts as a delivery");
+        Assert.False(isError, text);
+        using var doc = JsonDocument.Parse(text);
+        Assert.Equal("m1", Assert.Single(doc.RootElement.GetProperty("messages").EnumerateArray()).GetProperty("messageId").GetString());
+        var expectedNote = providerType == ProviderType.RabbitMQ ? McpReadTools.RabbitMQPeekNote : null;
+        var answeredNote = doc.RootElement.TryGetProperty("note", out var note) ? note.GetString() : null;
+        Assert.True(answeredNote == expectedNote,
+            $"a peek on RabbitMQ answers what it cost beside the messages, and one on Azure Service Bus carries no note; on {providerType} it answered {text}");
+    }
+
+    [Fact]
+    public async Task A_refusal_is_answered_as_an_error_result_and_leaves_no_Error_line_in_the_app_log()
+    {
+        await using var host = new Host(new Broker());
+        await host.StartAsync();
+        var store = host.Factory.Services.GetRequiredService<RecentLogStore>();
+        store.Clear();
+
+        var notOffered = await host.CallAsync("list_queues");
+        var logs = await host.CallAsync("read_logs");
+
+        Assert.Equal((true, McpReadTools.NotOffered), notOffered);
+        Assert.Equal((true, McpReadTools.LogsRefused), logs);
+        var errors = store.After(0).Where(l => l.Level is "Error" or "Critical").ToList();
+        Assert.True(errors.Count == 0,
+            $"a refusal is not an error of the app: the log of the app holds no Error line after two refused calls; it held {string.Join(" | ", errors.Select(l => $"{l.Category}: {l.Text} ({l.ErrorType})"))}");
+    }
+
+    [Fact]
+    public async Task The_entity_an_assistant_names_is_recorded_cut_at_100_characters()
+    {
+        await using var host = new Host(new Broker());
+        await host.StartAsync();
+        await host.SeedAsync(Offered());
+        await host.OfferAsync("c-offered");
+        await host.ConnectAsync("c-offered");
+
+        await host.CallAsync("peek_messages", new { entity = new string('e', 300), subQueue = new string('s', 300) });
+
+        var line = Assert.Single((await host.ActivityAsync()).EnumerateArray());
+        Assert.True(line.GetProperty("where").GetString() == new string('e', 100) + " on offered-name",
+            $"the entity an assistant names goes into the record cut at 100 characters; the record holds {line.GetProperty("where").GetString()!.Length} characters");
     }
 }

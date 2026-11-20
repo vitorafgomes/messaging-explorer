@@ -36,6 +36,7 @@ Each entry carries its date. This page is a tracker: `version` changes only when
 - **2026-11-12 - The packaged window has no CSP.** [[pages/services/electron-shell]]
 - **2026-11-12 - No code signing on any OS.** [[pages/services/electron-shell]]
 - **2026-11-12 - If the API secret cannot be read, requests go out without the header** and fail as 401 with no message to the user. [[pages/services/web-app]]
+- **2026-11-20 - A CORS preflight to `/mcp` is answered 204 before the MCP gate, even while the server is off.** It carries no MCP answer and allows only the front end's origins. [[pages/services/api/mcp-server]]
 
 ## P2 - correctness and lifecycle
 
@@ -45,6 +46,9 @@ Each entry carries its date. This page is a tracker: `version` changes only when
 - **2026-11-12 - An entity named exactly `.` or `..` cannot be addressed**: the browser resolves it as a dot segment even when encoded, so deleting a subscription `..` under a topic would reach the topic's own route. Read from the URL standard and the route table, not run; RabbitMQ allows such names, Azure does not. [[pages/services/web-app]]
 - **2026-11-12 - One static provider slot for the whole API process**, swapped and disposed while calls may be in flight; the monitoring service keeps a reference to a provider that may be disposed. [[pages/services/api]]
 - **2026-11-12 - `import-full` is not atomic.** [[pages/services/api]]
+- **2026-11-20 - An MCP tool call the SDK rejects before the tool runs is not recorded**, such as an argument of the wrong type, and the SDK logs it at Error. [[pages/services/api/mcp-server]]
+- **2026-11-20 - An MCP client that names itself only in `initialize` is recorded as "Assistant"**: the stateless server reads the name from the request's `_meta`. [[pages/services/api/mcp-server]]
+- **2026-11-20 - The toolbar reads the MCP state once at start**: if the API answers late or fails then, the MCP mark stays off until Settings is opened. [[pages/services/web-app/features-settings-mcp]]
 - **2026-11-12 - Changing only the auth type, tenant, namespace or client secret skips the connection test on save.** [[pages/services/api]]
 - **2026-11-12 - The SIGKILL fallback may not fire on a real quit** (Electron may exit before the timer; unverified), a tray click during the health wait opens the window early, and a crashed API is not restarted. The dialog wiring has no automated test. [[pages/services/electron-shell]]
 - **2026-11-12 - After a cancelled bulk operation the list and counters are not reloaded; progress is one final update.** [[pages/services/web-app]]

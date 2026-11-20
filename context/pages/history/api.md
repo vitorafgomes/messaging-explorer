@@ -2,7 +2,7 @@
 title: "Api history"
 version: "1.2"
 date: 2026-11-13
-updated: 2026-11-16
+updated: 2026-11-20
 changes: "v1.2: 2026-11-16, a peek the broker did not answer. v1.1: dated entries above the version notes"
 page_type: reference
 status: active
@@ -15,6 +15,10 @@ reliability: high
 # Api history
 
 What changed when in the project [[pages/services/api|Api]] describes, newest first.
+
+## 2026-11-20
+
+- The MCP server after its review: a refusal is answered as an error result, no longer logged at Error by the SDK, and a broker failure keeps only its own Warning line; `list_queues` and `list_subscriptions` answer `countsAvailable` and leave counts out where the broker gives none; `peek_messages` answers `{ messages }`, says what a peek costs on RabbitMQ in its description and in a `note`, and is no longer marked read-only nor declared non-destructive; the entity named by an assistant is recorded cut at 100 characters; every capability guard and the unknown level of `read_logs` are fired by a test (`src/ServiceBusExplorer.Api/Mcp/McpReadTools.cs#Call`, `src/ServiceBusExplorer.Api/Mcp/McpReadTools.cs#RabbitMQPeekNote`, [[pages/services/api/mcp-server]]).
 
 ## 2026-11-19
 

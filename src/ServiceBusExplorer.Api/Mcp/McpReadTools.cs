@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using ModelContextProtocol;
+using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using ServiceBusExplorer.Api.Controllers;
 using ServiceBusExplorer.Api.Logs;
@@ -14,7 +15,8 @@ using ServiceBusExplorer.Core.Services;
 namespace ServiceBusExplorer.Api.Mcp;
 
 /// <summary>
-/// The tools of the first phase: they read and change nothing. Each one but list_connections and read_logs acts on
+/// The tools of the first phase: they read, and send, move or remove nothing; a peek on RabbitMQ puts what it read
+/// back marked as redelivered. Each one but list_connections and read_logs acts on
 /// the connection active in the app, and only when the user offered it; otherwise it is refused with one sentence
 /// that names no connection. Every call, answered or refused, is recorded in <see cref="McpActivityLog"/>.
 /// </summary>
@@ -33,6 +35,9 @@ public sealed class McpReadTools(
     /// <summary>The answer of read_logs while the user has not allowed it.</summary>
     public const string LogsRefused = "The user has not allowed assistants to read the logs of this app. Ask the user to allow it in Settings, MCP server.";
 
+    /// <summary>What a peek costs on RabbitMQ, said in the description of peek_messages and beside its answer.</summary>
+    public const string RabbitMQPeekNote = "On RabbitMQ a peek takes the messages without acknowledging them and puts them back: they come back marked as redelivered, and consumers do not receive them while they are held.";
+
     /// <summary>How many characters of a message body a peek answers.</summary>
     public const int MaxBodyLength = 8000;
 
@@ -43,7 +48,7 @@ public sealed class McpReadTools(
     /// <summary>The connections the user offered to assistants, and which one is active in the app.</summary>
     [McpServerTool(Name = "list_connections", ReadOnly = true, Title = "List the offered connections")]
     [Description("Lists the connections the user offered to assistants: id, name, provider, target, and which one is active in the app. Connections that are not offered are not listed.")]
-    public Task<string> ListConnections(McpServer server) => Call(server, "List the offered connections", async call =>
+    public Task<CallToolResult> ListConnections(McpServer server) => Call(server, "List the offered connections", async call =>
     {
         var activeId = ConnectionsController.GetCurrent().ConnectionId;
         var offered = settings.Current.Connections;
@@ -63,67 +68,71 @@ public sealed class McpReadTools(
 
     /// <summary>The queues of the active offered connection with their counts.</summary>
     [McpServerTool(Name = "list_queues", ReadOnly = true, Title = "List queues")]
-    [Description("Lists the queues of the connection active in the app, with the message counts the broker gives.")]
-    public Task<string> ListQueues(McpServer server) => Call(server, "List queues", async call =>
+    [Description("Lists the queues of the connection active in the app, with the message counts the broker gives. countsAvailable false means the broker gives none and no count is answered.")]
+    public Task<CallToolResult> ListQueues(McpServer server) => Call(server, "List queues", async call =>
     {
         var provider = await ActiveAsync(call);
         var queues = (await provider.GetQueuesAsync()).ToList();
+        var counts = provider.Capabilities.SupportsMessageCounts;
         call.Outcome = $"{queues.Count} listed";
-        return queues.Select(q => new
-        {
-            name = q.Name,
-            status = q.Status,
-            activeMessageCount = q.ActiveMessageCount,
-            deadLetterMessageCount = q.DeadLetterMessageCount,
-            scheduledMessageCount = q.ScheduledMessageCount,
-            transferMessageCount = q.TransferMessageCount,
-            transferDeadLetterMessageCount = q.TransferDeadLetterMessageCount,
-        });
+        return queues.Select(q => counts
+            ? (object)new
+            {
+                name = q.Name,
+                status = q.Status,
+                countsAvailable = true,
+                activeMessageCount = q.ActiveMessageCount,
+                deadLetterMessageCount = q.DeadLetterMessageCount,
+                scheduledMessageCount = q.ScheduledMessageCount,
+                transferMessageCount = q.TransferMessageCount,
+                transferDeadLetterMessageCount = q.TransferDeadLetterMessageCount,
+            }
+            : new { name = q.Name, status = q.Status, countsAvailable = false });
     });
 
     /// <summary>The topics of the active offered connection.</summary>
     [McpServerTool(Name = "list_topics", ReadOnly = true, Title = "List topics")]
-    [Description("Lists the topics of the connection active in the app, with their subscription and scheduled message counts.")]
-    public Task<string> ListTopics(McpServer server) => Call(server, "List topics", async call =>
+    [Description("Lists the topics of the connection active in the app, with how many subscriptions each has and, when the broker gives counts, its scheduled messages. countsAvailable false means the broker gives none and no count is answered.")]
+    public Task<CallToolResult> ListTopics(McpServer server) => Call(server, "List topics", async call =>
     {
         var provider = await ActiveAsync(call);
         if (!provider.Capabilities.SupportsTopics) call.Refuse("This provider does not support topics.", "Refused: no topics");
         var topics = (await provider.GetTopicsAsync()).ToList();
         call.Outcome = $"{topics.Count} listed";
-        return topics.Select(t => new
-        {
-            name = t.Name,
-            status = t.Status,
-            subscriptionCount = t.SubscriptionCount,
-            scheduledMessageCount = t.ScheduledMessageCount,
-        });
+        return provider.Capabilities.SupportsMessageCounts
+            ? topics.Select(t => (object)new { name = t.Name, status = t.Status, subscriptionCount = t.SubscriptionCount, countsAvailable = true, scheduledMessageCount = t.ScheduledMessageCount })
+            : topics.Select(t => (object)new { name = t.Name, status = t.Status, subscriptionCount = t.SubscriptionCount, countsAvailable = false });
     });
 
     /// <summary>The subscriptions of a topic of the active offered connection with their counts.</summary>
     [McpServerTool(Name = "list_subscriptions", ReadOnly = true, Title = "List subscriptions")]
-    [Description("Lists the subscriptions of a topic of the connection active in the app, with the message counts the broker gives.")]
-    public Task<string> ListSubscriptions(McpServer server, [Description("The topic.")] string topic) => Call(server, "List subscriptions", async call =>
+    [Description("Lists the subscriptions of a topic of the connection active in the app, with the message counts the broker gives. countsAvailable false means the broker gives none and no count is answered.")]
+    public Task<CallToolResult> ListSubscriptions(McpServer server, [Description("The topic.")] string topic) => Call(server, "List subscriptions", async call =>
     {
         var provider = await ActiveAsync(call, topic);
         if (!provider.Capabilities.SupportsSubscriptions) call.Refuse("This provider does not support subscriptions.", "Refused: no subscriptions");
         var subscriptions = (await provider.GetSubscriptionsAsync(topic)).ToList();
+        var counts = provider.Capabilities.SupportsMessageCounts;
         call.Outcome = $"{subscriptions.Count} listed";
-        return subscriptions.Select(s => new
-        {
-            name = s.Name,
-            status = s.Status,
-            activeMessageCount = s.ActiveMessageCount,
-            deadLetterMessageCount = s.DeadLetterMessageCount,
-            scheduledMessageCount = s.ScheduledMessageCount,
-            transferMessageCount = s.TransferMessageCount,
-            transferDeadLetterMessageCount = s.TransferDeadLetterMessageCount,
-        });
+        return subscriptions.Select(s => counts
+            ? (object)new
+            {
+                name = s.Name,
+                status = s.Status,
+                countsAvailable = true,
+                activeMessageCount = s.ActiveMessageCount,
+                deadLetterMessageCount = s.DeadLetterMessageCount,
+                scheduledMessageCount = s.ScheduledMessageCount,
+                transferMessageCount = s.TransferMessageCount,
+                transferDeadLetterMessageCount = s.TransferDeadLetterMessageCount,
+            }
+            : new { name = s.Name, status = s.Status, countsAvailable = false });
     });
 
     /// <summary>The rules of a subscription of the active offered connection, when the provider has rules.</summary>
     [McpServerTool(Name = "list_rules", ReadOnly = true, Title = "List subscription rules")]
     [Description("Lists the filter rules of a subscription of the connection active in the app.")]
-    public Task<string> ListRules(McpServer server, [Description("The topic.")] string topic, [Description("The subscription.")] string subscription, CancellationToken cancellationToken) =>
+    public Task<CallToolResult> ListRules(McpServer server, [Description("The topic.")] string topic, [Description("The subscription.")] string subscription, CancellationToken cancellationToken) =>
         Call(server, "List rules", async call =>
         {
             var provider = await ActiveAsync(call, $"{topic}/{subscription}");
@@ -134,12 +143,13 @@ public sealed class McpReadTools(
         });
 
     /// <summary>
-    /// Reads messages of an entity of the active offered connection without locking or removing them; each body is
-    /// cut at <see cref="MaxBodyLength"/> characters.
+    /// Reads messages of an entity of the active offered connection; each body is cut at <see cref="MaxBodyLength"/>
+    /// characters. Not read-only: on RabbitMQ the messages come back marked as redelivered, said by
+    /// <see cref="RabbitMQPeekNote"/> beside the answer.
     /// </summary>
-    [McpServerTool(Name = "peek_messages", ReadOnly = true, Title = "Peek messages")]
-    [Description("Reads messages of a queue, or of a subscription of a topic, of the connection active in the app, without locking or removing them. A body longer than 8000 characters is cut and marked bodyTruncated.")]
-    public Task<string> PeekMessages(
+    [McpServerTool(Name = "peek_messages", ReadOnly = false, Title = "Peek messages")]
+    [Description("Reads messages of a queue, or of a subscription of a topic, of the connection active in the app. On Azure Service Bus a peek does not lock or remove them. " + RabbitMQPeekNote + " A body longer than 8000 characters is cut and marked bodyTruncated. Answers { messages }, with a note on RabbitMQ.")]
+    public Task<CallToolResult> PeekMessages(
         McpServer server,
         [Description("The queue, or the topic when a subscription is given.")] string entity,
         [Description("The subscription of the topic; omit it for a queue.")] string? subscription = null,
@@ -169,7 +179,7 @@ public sealed class McpReadTools(
 
             var messages = (await provider.PeekMessagesAsync(entity, count, queue, subscription, from, includeBody: true, cancellationToken)).ToList();
             call.Outcome = $"{messages.Count} read";
-            return messages.Select(m => new
+            var answered = messages.Select(m => new
             {
                 sequenceNumber = m.SequenceNumber,
                 messageId = m.MessageId,
@@ -188,13 +198,16 @@ public sealed class McpReadTools(
                 body = m.Body is { Length: > MaxBodyLength } cut ? cut[..MaxBodyLength] : m.Body,
                 bodyTruncated = m.Body is { Length: > MaxBodyLength },
             });
+            return provider.ProviderType == ProviderType.RabbitMQ
+                ? new { note = RabbitMQPeekNote, messages = answered }
+                : (object)new { messages = answered };
         });
     }
 
     /// <summary>The lines of the backend's log, newest first, when the user allowed it.</summary>
     [McpServerTool(Name = "read_logs", ReadOnly = true, Title = "Read the logs of the app")]
     [Description("Reads the lines the backend of the app logged, newest first. They carry no secret, no message body and no exception text. Needs the user's permission in Settings.")]
-    public Task<string> ReadLogs(
+    public Task<CallToolResult> ReadLogs(
         McpServer server,
         [Description("The lowest level to answer: Information, Warning, Error or Critical.")] string? level = null,
         [Description("Only lines whose text contains this, ignoring case.")] string? contains = null,
@@ -254,7 +267,7 @@ public sealed class McpReadTools(
         _ => MessageOf(EntityAdministrationResults.Unhandled(ex)),
     };
 
-    private async Task<string> Call(McpServer server, string asked, Func<ToolCall, Task<object?>> work)
+    private async Task<CallToolResult> Call(McpServer server, string asked, Func<ToolCall, Task<object?>> work)
     {
         var call = new ToolCall();
         var assistant = server.ClientInfo?.Name is { Length: > 0 } name ? (name.Length > 100 ? name[..100] : name) : "Assistant";
@@ -264,12 +277,12 @@ public sealed class McpReadTools(
         {
             var answer = await work(call);
             Record(call.Kind);
-            return JsonSerializer.Serialize(answer, JsonOptions);
+            return Answer(JsonSerializer.Serialize(answer, JsonOptions), isError: false);
         }
-        catch (McpException)
+        catch (McpException refused)
         {
             Record("error");
-            throw;
+            return Answer(refused.Message, isError: true);
         }
         catch (OperationCanceledException)
         {
@@ -282,12 +295,19 @@ public sealed class McpReadTools(
             logger.LogWarning(ex, "An MCP tool call failed: {Asked} ({ExceptionType})", asked, ex.GetType().Name);
             call.Outcome = "Failed";
             Record("error");
-            throw new McpException(FailureSentence(ex));
+            return Answer(FailureSentence(ex), isError: true);
         }
     }
 
+    /// <summary>
+    /// An answer the SDK hands on as it is: a refusal or a failure returned as an error result, never thrown, is not
+    /// logged by the SDK as an unhandled exception and carries no prefix before its sentence.
+    /// </summary>
+    private static CallToolResult Answer(string text, bool isError) => new() { IsError = isError, Content = [new TextContentBlock { Text = text }] };
+
     private async Task<IMessagingProvider> ActiveAsync(ToolCall call, string? entity = null)
     {
+        if (entity is { Length: > 100 }) entity = entity[..100];
         var (provider, connectionId) = ConnectionsController.GetCurrent();
         if (provider is null || settings.LevelOf(connectionId) != McpSettingsStore.ReadLevel)
             call.Refuse(NotOffered, "Refused: not offered");
