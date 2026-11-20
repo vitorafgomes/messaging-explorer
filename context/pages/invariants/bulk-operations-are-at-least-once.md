@@ -104,7 +104,7 @@ The client decides which sequence numbers each resubmit-batch call carries; the 
 
 - `:162` and `:313` - resubmit and move send before completing, in each cycle.
 - `:196` and `:347` - a failed complete records the duplicate warning and does not resend.
-- `:87` - a failed complete on delete records the real error; `:250` and `:406` a transient broker failure returns a partial result.
+- `:87` - a failed complete on delete records a fixed sentence; `:250` and `:406` a transient broker failure returns a partial result.
 - `:110`, `:378` and `:491` - a target beyond the scan window is reported not found and the scan terminates, for delete, move and resubmit.
 - `:467` - a token already cancelled throws before any work, for move; `:514` for resubmit, which sends nothing; `:542` for delete, which completes nothing; `:529` for the drain, which receives nothing.
 

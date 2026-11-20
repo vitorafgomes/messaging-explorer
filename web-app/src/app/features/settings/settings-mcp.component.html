@@ -225,7 +225,7 @@
                   <table mat-table [dataSource]="list" aria-label="What assistants did">
                     <ng-container matColumnDef="time">
                       <th mat-header-cell *matHeaderCellDef>Time</th>
-                      <td mat-cell *matCellDef="let a" class="mono">{{ a.time }}</td>
+                      <td mat-cell *matCellDef="let a" class="mono" [attr.title]="a.time | date: 'medium'">{{ a.time | date: 'HH:mm:ss' }}</td>
                     </ng-container>
                     <ng-container matColumnDef="assistant">
                       <th mat-header-cell *matHeaderCellDef>Assistant</th>

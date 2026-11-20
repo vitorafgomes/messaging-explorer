@@ -18,6 +18,8 @@ What changed when in the project [[pages/services/web-app|Web App]] describes, n
 
 ## 2026-11-20
 
+- Seen in a browser: the record "What assistants did" showed the time as the API sends it, a full UTC timestamp that broke over two lines. The cell shows the local clock time, as the artboard draws it, with the full date on hover (`web-app/src/app/features/settings/settings-mcp.component.html`).
+
 - From an outside review of the MCP server: `McpAppSettingsService.apply` reads the state before each request and changes and answers nothing while the server is off or the choice withdrawn; the ids it handled and the ids `App` showed are kept only while the API still lists them ([[pages/services/web-app/features-settings-mcp-app-settings]]).
 
 - From the review of the app settings: `web-app/src/app/features/settings/app-update.service.ts#setChannel` answers once the shell accepted the channel and no longer waits for the check and the versions, so a slow check cannot make an assistant's change of channel time out after it took effect.

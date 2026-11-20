@@ -45,8 +45,8 @@ const GROUPS = [
   { id: 'g-prod', name: 'Production', type: 'environment', parentId: 'g-contoso', isProduction: true },
 ];
 const ACTIVITY: McpActivity[] = [
-  { time: '10:42:31', assistant: 'Claude Code', asked: 'Peek 20 messages', where: 'orders, dead-letter. contoso-dev', outcome: '20 read', kind: 'plain' },
-  { time: '10:41:55', assistant: 'Claude Code', asked: 'List the connections', where: 'This app', outcome: '3 offered', kind: 'ok' },
+  { time: new Date(2026, 10, 20, 10, 42, 31).toISOString(), assistant: 'Claude Code', asked: 'Peek 20 messages', where: 'orders, dead-letter. contoso-dev', outcome: '20 read', kind: 'plain' },
+  { time: new Date(2026, 10, 20, 10, 41, 55).toISOString(), assistant: 'Claude Code', asked: 'List the connections', where: 'This app', outcome: '3 offered', kind: 'ok' },
 ];
 
 const fail = (status: number, message?: string) => throwError(() => new HttpErrorResponse({ status, error: message ? { message } : null }));
@@ -727,7 +727,7 @@ describe('SettingsMcpComponent: the MCP server group of Settings, as Settings.dc
   });
 
   describe('what assistants did, read again while shown', () => {
-    const NEWER: McpActivity = { time: '10:43:02', assistant: 'Claude Code', asked: 'Send 3 messages', where: 'orders. contoso-dev', outcome: '3 sent, allowed by you', kind: 'ok' };
+    const NEWER: McpActivity = { time: new Date(2026, 10, 20, 10, 43, 2).toISOString(), assistant: 'Claude Code', asked: 'Send 3 messages', where: 'orders. contoso-dev', outcome: '3 sent, allowed by you', kind: 'ok' };
     const rows = (el: HTMLElement) => Array.from(el.querySelectorAll('table[aria-label="What assistants did"] tbody tr'));
     const activityGets = () => api.get.mock.calls.filter(c => c[0] === 'mcp/activity').length;
 
