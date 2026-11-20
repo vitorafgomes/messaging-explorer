@@ -42,7 +42,7 @@ export async function open(page: Page, route: string): Promise<void> {
  * Switches the theme the way ThemeService applies and stores it, without a reload, so an open
  * dialog stays open for the screenshot.
  */
-async function setDark(page: Page, dark: boolean): Promise<void> {
+export async function setDark(page: Page, dark: boolean): Promise<void> {
   await page.evaluate((d) => {
     document.documentElement.classList.toggle('dark-theme', d);
     localStorage.setItem('app-theme', d ? 'dark' : 'light');

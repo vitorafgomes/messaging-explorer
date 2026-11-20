@@ -18,6 +18,8 @@ What changed when in the project [[pages/services/web-app|Web App]] describes, n
 
 ## 2026-11-20
 
+- In the light theme a toolbar link that needs a connection was close to unreadable while there was none: its text measured 1.5 to 1 against the bar. A disabled link takes its colour from the bar's own text colour (`web-app/src/app/app.scss`), measured in both themes by `web-app/e2e/settings.e2e.ts#a link that needs a connection can still be read while there is none, in the light and in the dark theme`.
+
 - Seen in a browser: the record "What assistants did" showed the time as the API sends it, a full UTC timestamp that broke over two lines. The cell shows the local clock time, as the artboard draws it, with the full date on hover (`web-app/src/app/features/settings/settings-mcp.component.html`).
 
 - From an outside review of the MCP server: `McpAppSettingsService.apply` reads the state before each request and changes and answers nothing while the server is off or the choice withdrawn; the ids it handled and the ids `App` showed are kept only while the API still lists them ([[pages/services/web-app/features-settings-mcp-app-settings]]).
