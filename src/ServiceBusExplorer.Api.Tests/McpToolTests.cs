@@ -62,6 +62,7 @@ public class McpToolTests
         public HashSet<string> Topics { get; init; } = ["events"];
         public Exception? SendFailure { get; init; }
         public Exception? LookupFailure { get; init; }
+        public bool FailTopicLookup { get; init; }
         public Func<List<SendMessageRequest>, SendMessagesResult>? BatchAnswer { get; init; }
         public List<SendMessageRequest> Sent { get; } = [];
         public int SendCalls { get; set; }
@@ -110,9 +111,9 @@ public class McpToolTests
             nameof(IMessagingProvider.GetRulesAsync) => Task.FromResult<IReadOnlyList<SubscriptionRuleInfo>>(
                 [new SubscriptionRuleInfo { Name = "$Default", SqlExpression = "1=1" }]),
             nameof(IMessagingProvider.PeekMessagesAsync) => Peek(broker),
-            nameof(IMessagingProvider.GetQueueAsync) => broker.LookupFailure is { } lookupFailed ? Task.FromException<IQueueEntity?>(lookupFailed) : Task.FromResult<IQueueEntity?>(
+            nameof(IMessagingProvider.GetQueueAsync) => broker.LookupFailure is { } lookupFailed && !broker.FailTopicLookup ? Task.FromException<IQueueEntity?>(lookupFailed) : Task.FromResult<IQueueEntity?>(
                 broker.Queues.Contains((string)args[0]!) ? new QueueInfo { Name = (string)args[0]!, Status = "Active" } : null),
-            nameof(IMessagingProvider.GetTopicAsync) => Counted(() => broker.TopicLookups++, Task.FromResult<ITopicEntity?>(
+            nameof(IMessagingProvider.GetTopicAsync) => broker.LookupFailure is { } topicLookupFailed && !broker.Queues.Contains((string)args[0]!) && broker.FailTopicLookup ? Task.FromException<ITopicEntity?>(topicLookupFailed) : Counted(() => broker.TopicLookups++, Task.FromResult<ITopicEntity?>(
                 broker.Topics.Contains((string)args[0]!) ? new TopicInfo { Name = (string)args[0]!, Status = "Active" } : null)),
             nameof(IMessagingProvider.SendMessageAsync) => SendOne(broker, (SendMessageRequest)args[1]!),
             nameof(IMessagingProvider.SendMessagesAsync) => SendMany(broker, ((IEnumerable<SendMessageRequest>)args[1]!).ToList()),

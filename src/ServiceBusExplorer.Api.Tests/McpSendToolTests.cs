@@ -240,7 +240,7 @@ public class McpSendToolTests
         var call = host.CallAsync("send_messages", new { entity = "orders", messages = new[] { new { body = "a" }, new { body = "b" }, new { body = "c" } }, reason = "test" });
         await host.AnswerOnlyRequestAsync(allow: true);
         var (isError, text) = await call;
-        var outOfBounds = await host.CallAsync("send_messages", new { entity = "orders", messages = Enumerable.Range(0, 101).Select(i => new { body = "m" }).ToArray(), reason = "test" });
+        var outOfBounds = await host.CallUnaskedAsync("send_messages", new { entity = "orders", messages = Enumerable.Range(0, 101).Select(i => new { body = "m" }).ToArray(), reason = "test" }, "send_messages takes 1 to 100 messages: 101 are refused before anybody is asked");
 
         Assert.False(isError, $"a batch that sent part of its messages answers its result, as the batch route does: {text}");
         using (var doc = JsonDocument.Parse(text))
@@ -288,25 +288,28 @@ public class McpSendToolTests
     }
 
     [Theory]
-    [InlineData("broker")]
-    [InlineData("timeout")]
-    public async Task A_send_whose_lookup_of_the_entity_fails_answers_the_fixed_sentence_asks_nobody_and_sends_nothing(string failure)
+    [InlineData("broker", "orders")]
+    [InlineData("timeout", "orders")]
+    [InlineData("broker", "events")]
+    [InlineData("timeout", "events")]
+    public async Task A_send_whose_lookup_of_the_entity_fails_answers_the_fixed_sentence_asks_nobody_and_sends_nothing(string failure, string entity)
     {
         var broker = new Broker
         {
+            FailTopicLookup = entity == "events",
             LookupFailure = failure == "timeout"
                 ? new TimeoutException(Sentinel)
                 : new Azure.Messaging.ServiceBus.ServiceBusException(Sentinel, Azure.Messaging.ServiceBus.ServiceBusFailureReason.ServiceCommunicationProblem),
         };
         await using var host = await StartAsync(broker, connection: LocalBroker());
 
-        var answered = await host.CallAsync("send_message", OneMessage());
+        var answered = await host.CallAsync("send_message", OneMessage(entity));
 
         Assert.True(answered == (true, "An internal error occurred."),
             $"a send whose lookup of the entity fails ({failure}) answers the fixed sentence, never the broker's text; it answered {answered}");
         Assert.True(broker.SendCalls == 0, $"nothing is sent when the entity could not be looked up; the provider was asked to send {broker.SendCalls} times");
         Assert.True((await host.RequestsAsync()).GetArrayLength() == 0, "the user is not asked about a send that already failed");
-        Assert.Equal([("Send 1 message", "orders on local-name", "Failed", "error")], (await host.ActivityAsync()).EnumerateArray().Select(Line).ToList());
+        Assert.Equal([("Send 1 message", $"{entity} on local-name", "Failed", "error")], (await host.ActivityAsync()).EnumerateArray().Select(Line).ToList());
     }
 
     [Theory]
