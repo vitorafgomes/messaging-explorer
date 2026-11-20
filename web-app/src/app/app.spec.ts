@@ -1,13 +1,16 @@
 import { TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { provideRouter, Router } from '@angular/router';
-import { BehaviorSubject, Subject, of } from 'rxjs';
+import { BehaviorSubject, Observable, Subject, of, throwError } from 'rxjs';
+import { HttpErrorResponse } from '@angular/common/http';
+import { MatDialog } from '@angular/material/dialog';
+import { OverlayContainer } from '@angular/cdk/overlay';
 import { Component, computed, signal } from '@angular/core';
 import { App } from './app';
 import { routes } from './app.routes';
 import { ConnectionService, ConnectionGroupService, ThemeService, EntitySelectionService, DevSettingsService, ResubmitRun, ResubmitRunService } from './core/services';
 import { DeadLetterNotificationService } from './core/services/dead-letter-notification.service';
-import { McpSettingsService, McpState } from './features/settings/mcp-settings.service';
+import { McpRequest, McpSettingsService, McpState } from './features/settings/mcp-settings.service';
 
 @Component({ template: '' })
 class StubScreen {}
@@ -64,7 +67,12 @@ describe('App', () => {
 
   /** The MCP server as the API answers it; off unless a spec turns it on. */
   const mcpState = signal<McpState | null>(null);
-  const mockMcp = { state: mcpState, load: vi.fn(() => of(mcpState())) };
+  const mockMcp = {
+    state: mcpState,
+    load: vi.fn(() => of(mcpState())),
+    requests: vi.fn((): Observable<McpRequest[]> => of([])),
+    answer: vi.fn((): Observable<void> => of(undefined)),
+  };
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -84,7 +92,12 @@ describe('App', () => {
   });
 
   afterEach(() => {
+    TestBed.inject(MatDialog).closeAll();
+    TestBed.inject(OverlayContainer).ngOnDestroy();
+    vi.useRealTimers();
     vi.clearAllMocks();
+    mockMcp.requests.mockImplementation(() => of([]));
+    mockMcp.answer.mockImplementation(() => of(undefined));
     status.next({ connected: false });
     activeRuns.set([]);
     mcpState.set(null);
@@ -411,6 +424,134 @@ describe('App', () => {
         mcpState.set(state(false));
         fixture.detectChanges();
         expect(mark(toolbarOf(fixture))).toBeNull();
+      });
+    });
+
+    describe('the window that asks the user, opened from the app root over any screen', () => {
+      const asking = (over: Partial<McpState> = {}): McpState => ({ enabled: true, url: 'http://localhost:5917/mcp', hasToken: true, tokenCreatedAt: null,
+        levels: ['read', 'readAndSend'], supports: { logs: true, appSettings: false, confirmation: true }, logsAllowed: false, connections: [], ...over });
+      const request = (id: string, time: string, title: string): McpRequest => ({ id, time, assistant: 'Claude Code', kind: 'send', title,
+        facts: [{ label: 'To', value: 'orders, a queue' }], note: 'A message sent cannot be taken back.', allowLabel: 'Send 3 messages', expiresAt: '2026-11-20T10:45:00Z' });
+      const OLD = request('r-old', '2026-11-20T10:43:00Z', 'Claude Code asks to send 3 messages');
+      const NEW = request('r-new', '2026-11-20T10:44:00Z', 'Claude Code asks to send 1 message');
+      const dialogTitle = () => document.querySelector('mat-dialog-container h2')?.textContent?.trim() ?? null;
+      const snack = () => document.querySelector('[matsnackbarlabel]')?.textContent?.trim() ?? null;
+      const gets = () => mockMcp.requests.mock.calls.length;
+
+      async function start(over: Partial<McpState> = {}) {
+        vi.useFakeTimers();
+        mcpState.set(asking(over));
+        const fixture = TestBed.createComponent(App);
+        fixture.detectChanges();
+        await vi.advanceTimersByTimeAsync(0);
+        fixture.detectChanges();
+        return fixture;
+      }
+      const tick = async (fixture: { detectChanges(): void }, ms: number) => { await vi.advanceTimersByTimeAsync(ms); fixture.detectChanges(); await vi.advanceTimersByTimeAsync(0); };
+
+      it('a waiting request opens the dialog on any screen, oldest first, with what the API says, and nothing is answered by opening it', async () => {
+        mockMcp.requests.mockImplementation(() => of([NEW, OLD]));
+        await TestBed.inject(Router).navigateByUrl('/monitoring');
+        await start();
+
+        expect(dialogTitle(), 'the oldest waiting request is shown first').toBe('Claude Code asks to send 3 messages');
+        expect(document.querySelectorAll('mat-dialog-container').length, 'one dialog at a time').toBe(1);
+        expect(mockMcp.answer, 'opening the dialog answers nothing').not.toHaveBeenCalled();
+      });
+
+      it('the polling starts only while the server is enabled and confirmation is supported, runs every 2 seconds, and stops on disable', async () => {
+        const fixture = await start({ enabled: false });
+        await tick(fixture, 6000);
+        expect(gets(), 'no GET mcp/requests while the server is off').toBe(0);
+
+        mcpState.set(asking({ supports: { logs: true, appSettings: false, confirmation: false } }));
+        fixture.detectChanges();
+        await tick(fixture, 6000);
+        expect(gets(), 'no GET mcp/requests while the API cannot wait for an answer').toBe(0);
+
+        mcpState.set(asking());
+        fixture.detectChanges();
+        await tick(fixture, 0);
+        expect(gets(), 'turned on: one GET at once').toBe(1);
+        await tick(fixture, 4000);
+        expect(gets(), 'then one every 2 seconds').toBe(3);
+        expect(mockMcp.requests.mock.calls.every(call => call.length === 0), 'through McpSettingsService, which calls ApiService').toBe(true);
+
+        mcpState.set(asking({ enabled: false }));
+        fixture.detectChanges();
+        await tick(fixture, 10_000);
+        expect(gets(), 'turned off: no further GET').toBe(3);
+      });
+
+      it('the polling stops when the app is destroyed', async () => {
+        const fixture = await start();
+        expect(gets()).toBe(1);
+        fixture.destroy();
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect(gets(), 'after destroy no further GET').toBe(1);
+      });
+
+      it('one GET in flight at a time, and a failed poll shows nothing and is tried again on the next tick', async () => {
+        const pending = new Subject<McpRequest[]>();
+        mockMcp.requests.mockImplementation(() => pending);
+        const fixture = await start();
+        await tick(fixture, 6000);
+        expect(gets(), 'a GET that has not answered is not doubled').toBe(1);
+
+        mockMcp.requests.mockImplementation(() => throwError(() => new HttpErrorResponse({ status: 500 })));
+        pending.next([]);
+        pending.complete();
+        await tick(fixture, 2000);
+        const afterFailure = gets();
+        expect(dialogTitle(), 'a failed poll opens nothing').toBeNull();
+        expect(snack(), 'a failed poll says nothing').toBeNull();
+
+        mockMcp.requests.mockImplementation(() => of([OLD]));
+        await tick(fixture, 2000);
+        expect(gets(), 'the next tick asks again').toBe(afterFailure + 1);
+        expect(dialogTitle(), 'and shows what is waiting').toBe('Claude Code asks to send 3 messages');
+      });
+
+      it('the dialog closes by itself with "The request is no longer waiting." when the request leaves the list, without answering, and the next one opens', async () => {
+        mockMcp.requests.mockImplementation(() => of([OLD, NEW]));
+        const fixture = await start();
+        expect(dialogTitle()).toBe('Claude Code asks to send 3 messages');
+
+        mockMcp.requests.mockImplementation(() => of([NEW]));
+        await tick(fixture, 2000);
+        await tick(fixture, 500);
+        expect(snack(), 'the user is told why the dialog closed').toBe('The request is no longer waiting.');
+        expect(mockMcp.answer, 'a dialog that closes by itself answers nothing').not.toHaveBeenCalled();
+
+        await tick(fixture, 2000);
+        expect(dialogTitle(), 'the next waiting request opens').toBe('Claude Code asks to send 1 message');
+      });
+
+      it('a request answered is not opened again while a later poll still lists it', async () => {
+        mockMcp.requests.mockImplementation(() => of([OLD]));
+        const fixture = await start();
+        (Array.from(document.querySelectorAll<HTMLButtonElement>('mat-dialog-container button')).find(b => b.textContent?.trim() === 'Deny'))!.click();
+        await tick(fixture, 500);
+        expect(mockMcp.answer.mock.calls).toStrictEqual([['r-old', false]]);
+        expect(dialogTitle(), 'closed after the answer').toBeNull();
+
+        await tick(fixture, 4000);
+        expect(dialogTitle(), 'the same request is not asked twice').toBeNull();
+        expect(mockMcp.answer.mock.calls, 'one answer').toHaveLength(1);
+      });
+
+      it('an older API without the requests route (404) is polled once, shows no error and no dialog', async () => {
+        mockMcp.requests.mockImplementation(() => throwError(() => new HttpErrorResponse({ status: 404 })));
+        const fixture = await start({ supports: undefined as unknown as McpState['supports'] });
+        await tick(fixture, 6000);
+        expect(gets(), 'an API that does not say it supports confirmation is not polled').toBe(0);
+
+        mcpState.set(asking());
+        fixture.detectChanges();
+        await tick(fixture, 6000);
+        expect(gets(), 'a 404 stops the polling').toBe(1);
+        expect(dialogTitle(), 'no dialog').toBeNull();
+        expect(snack(), 'no error').toBeNull();
       });
     });
 

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -25,13 +26,28 @@ namespace ServiceBusExplorer.Api.Tests;
 /// </summary>
 public class McpToolTests
 {
-    private const string Sentinel = "SENTINEL-SECRET-7f3a+/=";
-    private const string BodyMarker = "BODY-MARKER-4410";
+    internal const string Sentinel = "SENTINEL-SECRET-7f3a+/=";
+    internal const string BodyMarker = "BODY-MARKER-4410";
     private const string HiddenName = "hidden-connection-name";
     private const string HiddenTarget = "hidden-broker-target";
 
-    /// <summary>What the stub provider answers, and what it throws on a peek.</summary>
-    private sealed class Broker
+    /// <summary>A stub whose answer sees the arguments of the call.</summary>
+    public class ArgsProxy : DispatchProxy
+    {
+        private Func<MethodInfo, object?[], object?>? _handler;
+
+        public static T For<T>(Func<MethodInfo, object?[], object?> handler) where T : class
+        {
+            var proxy = Create<T, ArgsProxy>();
+            ((ArgsProxy)(object)proxy)._handler = handler;
+            return proxy;
+        }
+
+        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) => _handler!(targetMethod!, args ?? []);
+    }
+
+    /// <summary>What the stub provider answers, what it throws on a peek or a send, and what it was asked.</summary>
+    internal sealed class Broker
     {
         public bool SupportsRules { get; init; } = true;
         public bool SupportsTransferDeadLetter { get; init; } = true;
@@ -40,6 +56,16 @@ public class McpToolTests
         public bool SupportsDeadLetterQueue { get; init; } = true;
         public bool SupportsPeekFromSequenceNumber { get; init; } = true;
         public bool SupportsMessageCounts { get; init; } = true;
+        public bool SupportsScheduledMessages { get; init; } = true;
+        public bool SupportsSessions { get; init; } = true;
+        public HashSet<string> Queues { get; init; } = ["orders"];
+        public HashSet<string> Topics { get; init; } = ["events"];
+        public Exception? SendFailure { get; init; }
+        public Exception? LookupFailure { get; init; }
+        public Func<List<SendMessageRequest>, SendMessagesResult>? BatchAnswer { get; init; }
+        public List<SendMessageRequest> Sent { get; } = [];
+        public int SendCalls { get; set; }
+        public int TopicLookups { get; set; }
         public ProviderType ProviderType { get; init; } = ProviderType.AzureServiceBus;
         public string Target { get; init; } = "offered-target";
         public List<IMessage> Messages { get; init; } = [];
@@ -49,7 +75,7 @@ public class McpToolTests
         public int SubscriptionLists { get; set; }
     }
 
-    private static IProviderFactory FactoryFor(Broker broker)
+    internal static IProviderFactory FactoryFor(Broker broker)
     {
         var capabilities = StubProxy.For<IProviderCapabilities>(m => m.Name switch
         {
@@ -60,12 +86,14 @@ public class McpToolTests
             "get_SupportsDeadLetterQueue" => broker.SupportsDeadLetterQueue,
             "get_SupportsPeekFromSequenceNumber" => broker.SupportsPeekFromSequenceNumber,
             "get_SupportsMessageCounts" => broker.SupportsMessageCounts,
+            "get_SupportsScheduledMessages" => broker.SupportsScheduledMessages,
+            "get_SupportsSessions" => broker.SupportsSessions,
             "get_ProviderDisplayName" => "Stub",
             "get_ProviderVersion" => "1",
             _ when m.ReturnType == typeof(bool) => true,
             _ => throw new NotSupportedException(m.Name)
         });
-        var provider = StubProxy.For<IMessagingProvider>(m => m.Name switch
+        var provider = ArgsProxy.For<IMessagingProvider>((m, args) => m.Name switch
         {
             "get_ProviderType" => broker.ProviderType,
             "get_CurrentTarget" => broker.Target,
@@ -82,6 +110,12 @@ public class McpToolTests
             nameof(IMessagingProvider.GetRulesAsync) => Task.FromResult<IReadOnlyList<SubscriptionRuleInfo>>(
                 [new SubscriptionRuleInfo { Name = "$Default", SqlExpression = "1=1" }]),
             nameof(IMessagingProvider.PeekMessagesAsync) => Peek(broker),
+            nameof(IMessagingProvider.GetQueueAsync) => broker.LookupFailure is { } lookupFailed ? Task.FromException<IQueueEntity?>(lookupFailed) : Task.FromResult<IQueueEntity?>(
+                broker.Queues.Contains((string)args[0]!) ? new QueueInfo { Name = (string)args[0]!, Status = "Active" } : null),
+            nameof(IMessagingProvider.GetTopicAsync) => Counted(() => broker.TopicLookups++, Task.FromResult<ITopicEntity?>(
+                broker.Topics.Contains((string)args[0]!) ? new TopicInfo { Name = (string)args[0]!, Status = "Active" } : null)),
+            nameof(IMessagingProvider.SendMessageAsync) => SendOne(broker, (SendMessageRequest)args[1]!),
+            nameof(IMessagingProvider.SendMessagesAsync) => SendMany(broker, ((IEnumerable<SendMessageRequest>)args[1]!).ToList()),
             _ => throw new NotSupportedException(m.Name)
         });
         return StubProxy.For<IProviderFactory>(m => m.Name == nameof(IProviderFactory.CreateConnectedProviderAsync)
@@ -95,6 +129,22 @@ public class McpToolTests
         return answer;
     }
 
+    private static Task<long?> SendOne(Broker broker, SendMessageRequest message)
+    {
+        broker.SendCalls++;
+        if (broker.SendFailure is { } failure) return Task.FromException<long?>(failure);
+        broker.Sent.Add(message);
+        return Task.FromResult<long?>(message.ScheduledEnqueueTime is null ? null : 77L);
+    }
+
+    private static Task<SendMessagesResult> SendMany(Broker broker, List<SendMessageRequest> messages)
+    {
+        broker.SendCalls++;
+        if (broker.SendFailure is { } failure) return Task.FromException<SendMessagesResult>(failure);
+        broker.Sent.AddRange(messages);
+        return Task.FromResult(broker.BatchAnswer?.Invoke(messages) ?? new SendMessagesResult { SentCount = messages.Count });
+    }
+
     private static Task<IEnumerable<IMessage>> Peek(Broker broker)
     {
         broker.Peeks++;
@@ -103,14 +153,19 @@ public class McpToolTests
             : Task.FromResult<IEnumerable<IMessage>>(broker.Messages);
     }
 
-    private sealed class Host : IAsyncDisposable
+    /// <summary>The API on a test server with the stub provider; a wait given replaces the two minutes a request waits.</summary>
+    internal sealed class Host : IAsyncDisposable
     {
         private readonly ApiFactory _base;
 
-        public Host(Broker broker)
+        public Host(Broker broker, TimeSpan? wait = null)
         {
             _base = new ApiFactory();
-            Factory = _base.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddSingleton(FactoryFor(broker))));
+            Factory = _base.WithWebHostBuilder(b => b.ConfigureTestServices(s =>
+            {
+                s.AddSingleton(FactoryFor(broker));
+                if (wait is { } replaced) s.AddSingleton(new McpRequestOptions(replaced));
+            }));
             Keyed = Factory.CreateClient();
             Keyed.DefaultRequestHeaders.Add("X-Api-Key", ApiFactory.TestApiSecret);
             Anonymous = Factory.CreateClient();
@@ -132,10 +187,60 @@ public class McpToolTests
         public Task SeedAsync(ServiceBusConnection connection) =>
             Factory.Services.GetRequiredService<IConnectionManager>().SaveConnectionAsync(connection);
 
-        public async Task OfferAsync(string id)
+        public async Task OfferAsync(string id, string level = "read", bool? neverAsk = null)
         {
-            using var offered = await Keyed.PutAsJsonAsync($"/api/mcp/connections/{id}", new { level = "read" });
-            Assert.Equal(HttpStatusCode.OK, offered.StatusCode);
+            using var offered = await Keyed.PutAsJsonAsync($"/api/mcp/connections/{id}", new { level, neverAsk });
+            Assert.True(offered.StatusCode == HttpStatusCode.OK, $"offering {id} at {level} answered {(int)offered.StatusCode}: {await offered.Content.ReadAsStringAsync()}");
+        }
+
+        /// <summary>The requests waiting for the user, oldest first.</summary>
+        public async Task<JsonElement> RequestsAsync()
+        {
+            using var doc = JsonDocument.Parse(await Keyed.GetStringAsync("/api/mcp/requests"));
+            return doc.RootElement.Clone();
+        }
+
+        /// <summary>Waits, at most 5 seconds, until <paramref name="count"/> requests wait for the user, and answers them.</summary>
+        public async Task<JsonElement> WaitForRequestsAsync(int count = 1)
+        {
+            var until = DateTime.UtcNow.AddSeconds(5);
+            while (true)
+            {
+                var waiting = await RequestsAsync();
+                if (waiting.GetArrayLength() >= count || DateTime.UtcNow > until) return waiting;
+                await Task.Delay(20);
+            }
+        }
+
+        /// <summary>
+        /// Calls a tool that must answer without asking the user. When it asks instead, the request is denied so the
+        /// call ends, and the test fails with <paramref name="requirement"/>.
+        /// </summary>
+        public async Task<(bool IsError, string Text)> CallUnaskedAsync(string tool, object? arguments, string requirement)
+        {
+            var call = CallAsync(tool, arguments);
+            if (await Task.WhenAny(call, Task.Delay(TimeSpan.FromSeconds(5))) != call)
+            {
+                var waiting = await RequestsAsync();
+                foreach (var request in waiting.EnumerateArray())
+                {
+                    using (await Keyed.PostAsJsonAsync($"/api/mcp/requests/{request.GetProperty("id").GetString()}/answer", new { allow = false })) { }
+                }
+                await call;
+                Assert.Fail($"{requirement}: {tool} waited for the user instead; the requests were {waiting}");
+            }
+            return await call;
+        }
+
+        /// <summary>Waits for the one request of a tool call and answers it.</summary>
+        public async Task<JsonElement> AnswerOnlyRequestAsync(bool allow)
+        {
+            var waiting = await WaitForRequestsAsync();
+            Assert.True(waiting.GetArrayLength() == 1, $"the tool asks the user in the app before it goes on; the requests waiting were {waiting}");
+            var request = waiting[0];
+            using var answered = await Keyed.PostAsJsonAsync($"/api/mcp/requests/{request.GetProperty("id").GetString()}/answer", new { allow });
+            Assert.Equal(HttpStatusCode.NoContent, answered.StatusCode);
+            return request.Clone();
         }
 
         public async Task ConnectAsync(string id)
@@ -145,7 +250,7 @@ public class McpToolTests
         }
 
         /// <summary>Calls a tool; a refusal is answered as an error result that holds the sentence of the tool alone.</summary>
-        public async Task<(bool IsError, string Text)> CallAsync(string tool, object? arguments = null)
+        public async Task<(bool IsError, string Text)> CallAsync(string tool, object? arguments = null, CancellationToken cancellationToken = default)
         {
             var body = JsonSerializer.Serialize(new
             {
@@ -154,8 +259,8 @@ public class McpToolTests
                 method = "tools/call",
                 @params = new { name = tool, arguments = arguments ?? new { } }
             });
-            using var response = await Anonymous.SendAsync(McpRequest(body, bearer: "Bearer " + Token));
-            var raw = await response.Content.ReadAsStringAsync();
+            using var response = await Anonymous.SendAsync(McpRequest(body, bearer: "Bearer " + Token), cancellationToken);
+            var raw = await response.Content.ReadAsStringAsync(cancellationToken);
             Assert.True(response.StatusCode == HttpStatusCode.OK, $"tools/call {tool} answered {(int)response.StatusCode}: {raw}");
             using var doc = JsonDocument.Parse(JsonRpcPayload(raw));
             var result = doc.RootElement.GetProperty("result");
@@ -198,7 +303,7 @@ public class McpToolTests
         ? raw
         : raw.Split('\n').Where(l => l.StartsWith("data:", StringComparison.Ordinal)).Select(l => l["data:".Length..].Trim()).Last();
 
-    private static ServiceBusConnection Offered(string id = "c-offered") => new()
+    internal static ServiceBusConnection Offered(string id = "c-offered") => new()
     {
         Id = id,
         Name = "offered-name",
@@ -215,7 +320,7 @@ public class McpToolTests
         Password = Sentinel,
     };
 
-    private static void AssertNoSecret(string answer, string token, string what)
+    internal static void AssertNoSecret(string answer, string token, string what)
     {
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(token));
         foreach (var secret in new[] { Sentinel, ApiFactory.TestApiSecret, token, Convert.ToHexString(hash), Convert.ToBase64String(hash) })
@@ -289,25 +394,6 @@ public class McpToolTests
             (a.GetProperty("where").GetString(), a.GetProperty("outcome").GetString(), a.GetProperty("kind").GetString())));
         Assert.DoesNotContain(HiddenName, activity.GetRawText());
         Assert.DoesNotContain(HiddenTarget, activity.GetRawText());
-    }
-
-    [Fact]
-    public async Task An_offered_connection_whose_environment_became_production_is_refused()
-    {
-        await using var host = new Host(new Broker());
-        await host.StartAsync();
-        var groups = host.Factory.Services.GetRequiredService<IConnectionGroupManager>();
-        await groups.SaveGroupAsync(new ConnectionGroup { Id = "env-1", Name = "staging", Type = "environment" });
-        var connection = Offered();
-        connection.EnvironmentId = "env-1";
-        await host.SeedAsync(connection);
-        await host.OfferAsync("c-offered");
-        await host.ConnectAsync("c-offered");
-        await groups.SaveGroupAsync(new ConnectionGroup { Id = "env-1", Name = "staging", Type = "environment", IsProduction = true });
-
-        var (isError, text) = await host.CallAsync("list_queues");
-
-        Assert.True(isError && text == McpReadTools.NotOffered, $"this phase never reads a production connection; list_queues answered {text}");
     }
 
     [Fact]

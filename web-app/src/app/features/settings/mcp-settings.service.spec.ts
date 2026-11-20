@@ -50,6 +50,20 @@ describe('McpSettingsService: the MCP server group reads and changes its state t
     expect(api.delete.mock.calls, 'removing a connection and clearing the list').toStrictEqual([['mcp/connections/c%2F1%20%3F'], ['mcp/activity']]);
   });
 
+  it('reaches the routes of the confirmation window through ApiService: the requests waiting, an answer, and a level with neverAsk only when given', () => {
+    service.requests().subscribe();
+    service.answer('r/1 ?', false).subscribe();
+    service.setLevel('c-1', 'readAndSend', true).subscribe();
+    service.setLevel('c-1', 'readAndSend').subscribe();
+
+    expect(api.get.mock.calls, 'GET mcp/requests').toStrictEqual([['mcp/requests']]);
+    expect(api.post.mock.calls, 'an answer is POST, with the request id encoded as one path segment').toStrictEqual([['mcp/requests/r%2F1%20%3F/answer', { allow: false }]]);
+    expect(api.put.mock.calls, 'neverAsk is sent with the level when given, and left out when not').toStrictEqual([
+      ['mcp/connections/c-1', { level: 'readAndSend', neverAsk: true }],
+      ['mcp/connections/c-1', { level: 'readAndSend' }],
+    ]);
+  });
+
   it('keeps the state the API answered, and only that: a call that fails leaves the state as it was', () => {
     service.load().subscribe();
     expect(service.state(), 'the state GET mcp answered').toStrictEqual(STATE);

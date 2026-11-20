@@ -13,7 +13,25 @@ export interface McpState {
   levels: string[];
   supports: { logs: boolean; appSettings: boolean; confirmation: boolean };
   logsAllowed: boolean;
-  connections: { connectionId: string; level: string }[];
+  /**
+   * The connections offered. The last three fields come with the confirmation window; an older API leaves them out,
+   * and an absent field is read as false.
+   */
+  connections: { connectionId: string; level: string; production?: boolean; canNeverAsk?: boolean; neverAsk?: boolean }[];
+}
+
+/** One request an assistant made that waits for the user's answer. Every text in it is shown as text, never as markup. */
+export interface McpRequest {
+  id: string;
+  time: string;
+  assistant: string;
+  /** What is asked; a kind the app does not know can only be denied. */
+  kind: string;
+  title: string;
+  facts: { label: string; value: string }[];
+  note: string;
+  allowLabel: string;
+  expiresAt: string;
 }
 
 /** One thing an assistant asked for, as the API kept it: no message body and no secret. */
@@ -61,8 +79,10 @@ export class McpSettingsService {
       map(answer => answer.token));
   }
 
-  setLevel(connectionId: string, level: string): Observable<McpState> {
-    return this.keep(this.api.put<McpState>(apiPath`mcp/connections/${connectionId}`, { level }));
+  /** Offers a connection at a level; `neverAsk` is sent only when given, for a connection the API says can be a local test broker. */
+  setLevel(connectionId: string, level: string, neverAsk?: boolean): Observable<McpState> {
+    const body = neverAsk === undefined ? { level } : { level, neverAsk };
+    return this.keep(this.api.put<McpState>(apiPath`mcp/connections/${connectionId}`, body));
   }
 
   removeConnection(connectionId: string): Observable<McpState> {
@@ -80,6 +100,16 @@ export class McpSettingsService {
 
   clearActivity(): Observable<void> {
     return this.api.delete<void>('mcp/activity');
+  }
+
+  /** The requests that wait for the user's answer. An older API answers 404, which reaches the caller. */
+  requests(): Observable<McpRequest[]> {
+    return this.api.get<McpRequest[]>('mcp/requests');
+  }
+
+  /** Answers one waiting request; a 404 means it is no longer waiting. */
+  answer(id: string, allow: boolean): Observable<void> {
+    return this.api.post<void>(apiPath`mcp/requests/${id}/answer`, { allow });
   }
 
   private keep(call: Observable<McpState>): Observable<McpState> {

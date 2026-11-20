@@ -15,17 +15,17 @@ using ServiceBusExplorer.Core.Services;
 namespace ServiceBusExplorer.Api.Mcp;
 
 /// <summary>
-/// The tools of the first phase: they read, and send, move or remove nothing; a peek on RabbitMQ puts what it read
-/// back marked as redelivered. Each one but list_connections and read_logs acts on
-/// the connection active in the app, and only when the user offered it; otherwise it is refused with one sentence
-/// that names no connection. Every call, answered or refused, is recorded in <see cref="McpActivityLog"/>.
+/// The reading tools: they send, move or remove nothing; a peek on RabbitMQ puts what it read back marked as
+/// redelivered. Each one but list_connections and read_logs acts on the connection active in the app, and only when
+/// the user offered it; otherwise it is refused with one sentence that names no connection. On a production connection
+/// each of those asks the user in the app first. Every call, answered or refused, is recorded in
+/// <see cref="McpActivityLog"/>.
 /// </summary>
 [McpServerToolType]
 public sealed class McpReadTools(
     McpSettingsStore settings,
-    McpActivityLog activity,
+    McpToolCalls calls,
     IConnectionManager connections,
-    IConnectionGroupManager groups,
     RecentLogStore logs,
     ILogger<McpReadTools> logger)
 {
@@ -41,9 +41,7 @@ public sealed class McpReadTools(
     /// <summary>How many characters of a message body a peek answers.</summary>
     public const int MaxBodyLength = 8000;
 
-    private const string ThisApp = "This app";
-
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+    private const string ReasonDescription = "Why you want to read this; the user sees it when the connection is production and the app asks.";
 
     /// <summary>The connections the user offered to assistants, and which one is active in the app.</summary>
     [McpServerTool(Name = "list_connections", ReadOnly = true, Title = "List the offered connections")]
@@ -69,9 +67,12 @@ public sealed class McpReadTools(
     /// <summary>The queues of the active offered connection with their counts.</summary>
     [McpServerTool(Name = "list_queues", ReadOnly = true, Title = "List queues")]
     [Description("Lists the queues of the connection active in the app, with the message counts the broker gives. countsAvailable false means the broker gives none and no count is answered.")]
-    public Task<CallToolResult> ListQueues(McpServer server) => Call(server, "List queues", async call =>
+    public Task<CallToolResult> ListQueues(McpServer server, [Description(ReasonDescription)] string? reason = null, CancellationToken cancellationToken = default) =>
+        Call(server, "List queues", async call =>
     {
-        var provider = await ActiveAsync(call);
+        var active = await calls.ActiveAsync(call);
+        await calls.AskToReadAsync(call, active, "list the queues", null, reason, cancellationToken);
+        var provider = active.Provider;
         var queues = (await provider.GetQueuesAsync()).ToList();
         var counts = provider.Capabilities.SupportsMessageCounts;
         call.Outcome = $"{queues.Count} listed";
@@ -93,10 +94,13 @@ public sealed class McpReadTools(
     /// <summary>The topics of the active offered connection.</summary>
     [McpServerTool(Name = "list_topics", ReadOnly = true, Title = "List topics")]
     [Description("Lists the topics of the connection active in the app, with how many subscriptions each has and, when the broker gives counts, its scheduled messages. countsAvailable false means the broker gives none and no count is answered.")]
-    public Task<CallToolResult> ListTopics(McpServer server) => Call(server, "List topics", async call =>
+    public Task<CallToolResult> ListTopics(McpServer server, [Description(ReasonDescription)] string? reason = null, CancellationToken cancellationToken = default) =>
+        Call(server, "List topics", async call =>
     {
-        var provider = await ActiveAsync(call);
+        var active = await calls.ActiveAsync(call);
+        var provider = active.Provider;
         if (!provider.Capabilities.SupportsTopics) call.Refuse("This provider does not support topics.", "Refused: no topics");
+        await calls.AskToReadAsync(call, active, "list the topics", null, reason, cancellationToken);
         var topics = (await provider.GetTopicsAsync()).ToList();
         call.Outcome = $"{topics.Count} listed";
         return provider.Capabilities.SupportsMessageCounts
@@ -107,10 +111,17 @@ public sealed class McpReadTools(
     /// <summary>The subscriptions of a topic of the active offered connection with their counts.</summary>
     [McpServerTool(Name = "list_subscriptions", ReadOnly = true, Title = "List subscriptions")]
     [Description("Lists the subscriptions of a topic of the connection active in the app, with the message counts the broker gives. countsAvailable false means the broker gives none and no count is answered.")]
-    public Task<CallToolResult> ListSubscriptions(McpServer server, [Description("The topic.")] string topic) => Call(server, "List subscriptions", async call =>
+    public Task<CallToolResult> ListSubscriptions(
+        McpServer server,
+        [Description("The topic.")] string topic,
+        [Description(ReasonDescription)] string? reason = null,
+        CancellationToken cancellationToken = default) => Call(server, "List subscriptions", async call =>
     {
-        var provider = await ActiveAsync(call, topic);
+        var active = await calls.ActiveAsync(call, topic);
+        var provider = active.Provider;
         if (!provider.Capabilities.SupportsSubscriptions) call.Refuse("This provider does not support subscriptions.", "Refused: no subscriptions");
+        var shown = McpToolCalls.Clean(topic, 100);
+        await calls.AskToReadAsync(call, active, $"list the subscriptions of {shown}", new McpFact("Of", shown), reason, cancellationToken);
         var subscriptions = (await provider.GetSubscriptionsAsync(topic)).ToList();
         var counts = provider.Capabilities.SupportsMessageCounts;
         call.Outcome = $"{subscriptions.Count} listed";
@@ -132,11 +143,19 @@ public sealed class McpReadTools(
     /// <summary>The rules of a subscription of the active offered connection, when the provider has rules.</summary>
     [McpServerTool(Name = "list_rules", ReadOnly = true, Title = "List subscription rules")]
     [Description("Lists the filter rules of a subscription of the connection active in the app.")]
-    public Task<CallToolResult> ListRules(McpServer server, [Description("The topic.")] string topic, [Description("The subscription.")] string subscription, CancellationToken cancellationToken) =>
+    public Task<CallToolResult> ListRules(
+        McpServer server,
+        [Description("The topic.")] string topic,
+        [Description("The subscription.")] string subscription,
+        [Description(ReasonDescription)] string? reason = null,
+        CancellationToken cancellationToken = default) =>
         Call(server, "List rules", async call =>
         {
-            var provider = await ActiveAsync(call, $"{topic}/{subscription}");
-            if (!provider.Capabilities.SupportsSubscriptionRules) call.Refuse(MessageOf(EntityAdministrationResults.RulesNotSupported()), "Refused: no rules");
+            var active = await calls.ActiveAsync(call, $"{topic}/{subscription}");
+            var provider = active.Provider;
+            if (!provider.Capabilities.SupportsSubscriptionRules) call.Refuse(McpToolCalls.MessageOf(EntityAdministrationResults.RulesNotSupported()), "Refused: no rules");
+            await calls.AskToReadAsync(call, active, $"list the rules of {McpToolCalls.Clean(subscription, 100)}",
+                new McpFact("Of", McpToolCalls.Clean($"{topic}/{subscription}", 100)), reason, cancellationToken);
             var rules = await provider.GetRulesAsync(topic, subscription, cancellationToken);
             call.Outcome = $"{rules.Count} listed";
             return rules;
@@ -156,13 +175,15 @@ public sealed class McpReadTools(
         [Description("active, deadLetter or transferDeadLetter.")] string subQueue = "active",
         [Description("How many messages, 1 to 50.")] int count = 10,
         [Description("The first sequence number to read; omit it to read from the head.")] long? fromSequenceNumber = null,
+        [Description(ReasonDescription)] string? reason = null,
         CancellationToken cancellationToken = default)
     {
         count = Math.Clamp(count, 1, 50);
         return Call(server, $"Peek {count} messages", async call =>
         {
             var where = subscription is null ? entity : $"{entity}/{subscription}";
-            var provider = await ActiveAsync(call, $"{where} ({subQueue})");
+            var active = await calls.ActiveAsync(call, $"{where} ({subQueue})");
+            var provider = active.Provider;
             if (ParseSubQueue(subQueue) is not { } queue)
             {
                 call.Refuse("subQueue must be active, deadLetter or transferDeadLetter.", "Refused: unknown sub-queue");
@@ -173,9 +194,10 @@ public sealed class McpReadTools(
             if (queue == MessageSubQueue.DeadLetter && !provider.Capabilities.SupportsDeadLetterQueue)
                 call.Refuse("This provider does not support the dead-letter queue.", "Refused: no dead-letter queue");
             if (EntityAdministrationResults.SubQueueNotSupported(provider, queue) is { } noTransfer)
-                call.Refuse(MessageOf(noTransfer), "Refused: no transfer dead-letter queue");
+                call.Refuse(McpToolCalls.MessageOf(noTransfer), "Refused: no transfer dead-letter queue");
             if (EntityAdministrationResults.PeekPosition(provider, queue, fromSequenceNumber?.ToString(CultureInfo.InvariantCulture), out var from) is { } badPosition)
-                call.Refuse(MessageOf(badPosition), "Refused: position");
+                call.Refuse(McpToolCalls.MessageOf(badPosition), "Refused: position");
+            await calls.AskToReadAsync(call, active, $"read up to {count} messages", new McpFact("From", McpToolCalls.Clean($"{where} ({subQueue})", 100)), reason, cancellationToken);
 
             var messages = (await provider.PeekMessagesAsync(entity, count, queue, subscription, from, includeBody: true, cancellationToken)).ToList();
             call.Outcome = $"{messages.Count} read";
@@ -237,13 +259,6 @@ public sealed class McpReadTools(
         });
     }
 
-    /// <summary>
-    /// True when the environment <paramref name="connection"/> belongs to is marked as production. This phase never
-    /// offers such a connection and never reads one.
-    /// </summary>
-    internal static async Task<bool> IsProductionAsync(IConnectionGroupManager groups, ServiceBusConnection connection) =>
-        connection.EnvironmentId is { } environmentId && (await groups.GetGroupAsync(environmentId))?.IsProduction == true;
-
     private static string? TargetOf(ServiceBusConnection connection) => connection.ProviderType == ProviderType.RabbitMQ
         ? $"{connection.HostName ?? "localhost"}:{connection.Port ?? 5672}"
         : connection.Namespace ?? connection.FullyQualifiedNamespace;
@@ -256,82 +271,6 @@ public sealed class McpReadTools(
         _ => null,
     };
 
-    private static string MessageOf(ObjectResult result) =>
-        (string)result.Value!.GetType().GetProperty("message")!.GetValue(result.Value)!;
-
-    private static string FailureSentence(Exception ex) => ex switch
-    {
-        EntityDisabledException => MessageOf(EntityAdministrationResults.EntityDisabled()),
-        MessageReadFailedException => ex.Message,
-        EntityNotFoundException => MessageOf(EntityAdministrationResults.NotFound("entity")),
-        _ => MessageOf(EntityAdministrationResults.Unhandled(ex)),
-    };
-
-    private async Task<CallToolResult> Call(McpServer server, string asked, Func<ToolCall, Task<object?>> work)
-    {
-        var call = new ToolCall();
-        var assistant = server.ClientInfo?.Name is { Length: > 0 } name ? (name.Length > 100 ? name[..100] : name) : "Assistant";
-        void Record(string kind) => activity.Add(new McpActivity(DateTimeOffset.UtcNow, assistant, asked, call.Where, call.Outcome, kind));
-
-        try
-        {
-            var answer = await work(call);
-            Record(call.Kind);
-            return Answer(JsonSerializer.Serialize(answer, JsonOptions), isError: false);
-        }
-        catch (McpException refused)
-        {
-            Record("error");
-            return Answer(refused.Message, isError: true);
-        }
-        catch (OperationCanceledException)
-        {
-            call.Outcome = "Cancelled";
-            Record("error");
-            throw;
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "An MCP tool call failed: {Asked} ({ExceptionType})", asked, ex.GetType().Name);
-            call.Outcome = "Failed";
-            Record("error");
-            return Answer(FailureSentence(ex), isError: true);
-        }
-    }
-
-    /// <summary>
-    /// An answer the SDK hands on as it is: a refusal or a failure returned as an error result, never thrown, is not
-    /// logged by the SDK as an unhandled exception and carries no prefix before its sentence.
-    /// </summary>
-    private static CallToolResult Answer(string text, bool isError) => new() { IsError = isError, Content = [new TextContentBlock { Text = text }] };
-
-    private async Task<IMessagingProvider> ActiveAsync(ToolCall call, string? entity = null)
-    {
-        if (entity is { Length: > 100 }) entity = entity[..100];
-        var (provider, connectionId) = ConnectionsController.GetCurrent();
-        if (provider is null || settings.LevelOf(connectionId) != McpSettingsStore.ReadLevel)
-            call.Refuse(NotOffered, "Refused: not offered");
-        var connection = await connections.GetConnectionAsync(connectionId!);
-        if (connection is null || await IsProductionAsync(groups, connection))
-            call.Refuse(NotOffered, "Refused: not offered");
-        call.Where = entity is null ? connection.Name : $"{entity} on {connection.Name}";
-        return provider;
-    }
-
-    /// <summary>Where a call acts and how it ended, filled in as the call goes.</summary>
-    private sealed class ToolCall
-    {
-        public string Where { get; set; } = ThisApp;
-
-        public string Outcome { get; set; } = "Refused";
-
-        public string Kind { get; set; } = "ok";
-
-        [System.Diagnostics.CodeAnalysis.DoesNotReturn]
-        public void Refuse(string sentence, string outcome)
-        {
-            Outcome = outcome;
-            throw new McpException(sentence);
-        }
-    }
+    private Task<CallToolResult> Call(McpServer server, string asked, Func<McpToolCalls.ToolCall, Task<object?>> work) =>
+        calls.RunAsync(server, asked, logger, work);
 }

@@ -127,15 +127,19 @@ builder.Services.AddSingleton(recentLogs);
 builder.Logging.AddProvider(recentLogs);
 builder.Services.AddSingleton<MonitoringStore>();
 
-// The MCP server: off until the user turns it on, behind a token of its own, reading only.
+// The MCP server: off until the user turns it on, behind a token of its own, asking the user before a send.
 builder.Services.AddSingleton(sp => new McpSettingsStore(
     dataPath,
     $"http://127.0.0.1:{apiPort}{McpGate.Path}",
     sp.GetService<ILogger<McpSettingsStore>>()));
 builder.Services.AddSingleton<McpActivityLog>();
+builder.Services.AddSingleton(McpRequestOptions.Default);
+builder.Services.AddSingleton<McpRequests>();
+builder.Services.AddSingleton<McpToolCalls>();
 builder.Services.AddMcpServer()
     .WithHttpTransport(o => o.Stateless = true)
-    .WithTools<McpReadTools>();
+    .WithTools<McpReadTools>()
+    .WithTools<McpSendTools>();
 builder.Services.AddHostedService<MonitoringBackgroundService>();
 
 // ─────────────────────────────────────────────────────────────

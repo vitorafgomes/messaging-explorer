@@ -1,17 +1,20 @@
 import { Component, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { DatePipe } from '@angular/common';
-import { forkJoin } from 'rxjs';
+import { EMPTY, catchError, exhaustMap, filter, forkJoin, switchMap, timer } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatCheckboxChange, MatCheckboxModule } from '@angular/material/checkbox';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
+import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { ConnectionGroupService, ConnectionService } from '../../core/services';
 import { ConnectionGroup } from '../../core/models/connection-group.model';
 import { ServiceBusConnection, getConnectionDisplayTarget } from '../../core/models/connection.model';
+import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-dialog.component';
 import { McpActivity, McpSettingsService } from './mcp-settings.service';
 
 const LEVEL_LABELS: Record<string, string> = { read: 'Read', readAndSend: 'Read and send', all: 'Read, send and remove' };
@@ -56,6 +59,7 @@ export class SettingsMcpComponent {
   private readonly connectionService = inject(ConnectionService);
   private readonly groupService = inject(ConnectionGroupService);
   private readonly snackBar = inject(MatSnackBar);
+  private readonly dialog = inject(MatDialog);
 
   readonly state = this.mcp.state;
   readonly absent = this.mcp.absent;
@@ -83,18 +87,25 @@ export class SettingsMcpComponent {
     return 'An assistant such as Claude Code reads the brokers through this app.';
   });
 
+  /** Whether the app can ask the user before an operation; an older API does not say, which is read as no. */
+  readonly canAsk = computed(() => !!this.state()?.supports?.confirmation);
+
   readonly offered = computed(() => {
     const known = this.known();
-    const canAsk = !!this.state()?.supports.confirmation;
+    const canAsk = this.canAsk();
     return (this.state()?.connections ?? []).map(c => {
       const found = known?.get(c.connectionId);
       return {
         id: c.connectionId,
         level: c.level,
         found,
+        production: !!c.production,
+        canNeverAsk: !!c.canNeverAsk,
+        neverAsk: !!c.neverAsk,
         name: found?.name ?? (known ? 'A connection that no longer exists' : c.connectionId),
         asks: !canAsk ? 'Reads without asking you.'
-          : found?.production ? 'Asks you before every operation, a read included.'
+          : c.production ? 'Asks you before every operation, a read included.'
+          : c.canNeverAsk && c.neverAsk ? 'A local test broker: never asks you.'
           : c.level === 'read' ? 'Reads without asking you.'
           : c.level === 'readAndSend' ? 'Reads without asking; asks you before each send.'
           : 'Reads without asking; asks you before each send, move or removal.',
@@ -113,8 +124,17 @@ export class SettingsMcpComponent {
     mcpServers: { 'messaging-explorer': { type: 'http', url: this.state()?.url ?? '', headers: { Authorization: `Bearer ${this.token() || '<your token>'}` } } },
   }, null, 2));
 
+  /** Reads the group, then reads what assistants did again every 5 seconds while the server is enabled. */
   constructor() {
     this.load();
+    toObservable(computed(() => !!this.state()?.enabled)).pipe(
+      switchMap(enabled => enabled ? timer(5000, 5000) : EMPTY),
+      filter(() => this.activity() !== null),
+      exhaustMap(() => this.mcp.activity().pipe(catchError(() => EMPTY))),
+      takeUntilDestroyed(),
+    ).subscribe(list => {
+      if (JSON.stringify(list) !== JSON.stringify(this.activity())) this.activity.set(list);
+    });
   }
 
   load(): void {
@@ -168,7 +188,33 @@ export class SettingsMcpComponent {
     });
   }
 
+  /** Offers a connection at "Read"; a production one only after the user confirms it in the shared dialog. */
   offer(candidate: Known): void {
+    if (!candidate.production) { this.send(candidate); return; }
+    const data: ConfirmDialogData = {
+      title: 'Offer a production connection?',
+      message: `${candidate.name} is in a production environment. An assistant will be able to read it, and each operation will ask you first, a read included.`,
+      confirmText: 'Offer',
+      cancelText: 'Cancel',
+      confirmColor: 'primary',
+    };
+    this.dialog.open(ConfirmDialogComponent, { width: '560px', data }).afterClosed().subscribe(confirmed => {
+      if (confirmed === true) this.send(candidate);
+    });
+  }
+
+  /** Changes whether an offered local test broker asks before a send, at the level the row has. */
+  setNeverAsk(id: string, name: string, level: string, change: MatCheckboxChange): void {
+    this.fail('connections', '');
+    this.mcp.setLevel(id, level, change.checked).subscribe({
+      error: error => {
+        change.source.checked = !change.checked;
+        this.fail('connections', `The choice for ${name} was not saved: ${reason(error)}`);
+      },
+    });
+  }
+
+  private send(candidate: Known): void {
     this.fail('connections', '');
     this.mcp.setLevel(candidate.id, 'read').subscribe({
       error: error => this.fail('connections', `${candidate.name} was not offered: ${reason(error)}`),

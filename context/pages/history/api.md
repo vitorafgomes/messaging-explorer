@@ -18,6 +18,10 @@ What changed when in the project [[pages/services/api|Api]] describes, newest fi
 
 ## 2026-11-20
 
+- From the review of the sending phase of the MCP server: a send whose lookup of the entity fails answers the fixed sentence, asks nobody and sends nothing (`src/ServiceBusExplorer.Api.Tests/McpSendToolTests.cs#A_send_whose_lookup_of_the_entity_fails_answers_the_fixed_sentence_asks_nobody_and_sends_nothing`); the per-message report of `send_messages`, its bound of 100 and the fixed sentence of a failed send were each proven by a mutation; the note of a send to a topic says the subscriptions the messages match, which is true on RabbitMQ too.
+
+- The MCP server sends, asking the user first (ADR 0008, second phase): `send_message` and `send_messages` on a connection offered at `readAndSend`; each send, and each read of a production connection, waits up to two minutes for the user's answer in the app through `GET api/mcp/requests` and `POST api/mcp/requests/{id}/answer`, behind the key; denied, unanswered or cancelled sends nothing; at most 20 wait. A production connection can be offered, and a local test broker marked as never asked. [[pages/services/api/mcp-asking-and-sending]]
+
 - The MCP server after its review: a refusal is answered as an error result, no longer logged at Error by the SDK, and a broker failure keeps only its own Warning line; `list_queues` and `list_subscriptions` answer `countsAvailable` and leave counts out where the broker gives none; `peek_messages` answers `{ messages }`, says what a peek costs on RabbitMQ in its description and in a `note`, and is no longer marked read-only nor declared non-destructive; the entity named by an assistant is recorded cut at 100 characters; every capability guard and the unknown level of `read_logs` are fired by a test (`src/ServiceBusExplorer.Api/Mcp/McpReadTools.cs#Call`, `src/ServiceBusExplorer.Api/Mcp/McpReadTools.cs#RabbitMQPeekNote`, [[pages/services/api/mcp-server]]).
 
 ## 2026-11-19

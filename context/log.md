@@ -1,3 +1,6 @@
+## [2026-11-20] feature | The MCP server sends, after the user allows it in the app
+send_message and send_messages, the requests that wait for the user, production offered and asked about every read, a local test broker never asked. [[pages/services/api/mcp-asking-and-sending]]
+
 ## [2026-11-19] feature | The MCP server reads: /mcp behind its own token, offered connections only
 Off by default, a foreign Origin refused, seven read-only tools on the active offered connection, the logs when allowed, every call recorded. [[pages/services/api/mcp-server]]
 

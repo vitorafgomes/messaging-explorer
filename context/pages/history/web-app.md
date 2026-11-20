@@ -16,6 +16,10 @@ reliability: high
 
 What changed when in the project [[pages/services/web-app|Web App]] describes, newest first.
 
+## 2026-11-20
+
+- **The MCP server, phase two (sending), in the app.** While the server is enabled and the API can wait for an answer, the app polls the requests of assistants every 2 seconds and opens, over any screen, the window `Settings.dc.html` draws to ask the user: what is asked, where and why, Deny and the allow button, answered only by a click on one of them, once. In Settings a production connection is offered after a confirmation, a local test broker can be marked as never asked, each row says what it asks from the API's fields, and what assistants did is read again every 5 seconds. An older API shows neither. [[pages/services/web-app/features-settings-mcp]] (`web-app/src/app/app.ts#showRequest`, `web-app/src/app/features/settings/mcp-request-dialog.component.ts#McpRequestDialogComponent`).
+
 ## 2026-11-19
 
 - **The MCP server group of Settings and the toolbar mark, phase one (reading).** Settings gains the group drawn on `context/prototypes/web-app/Settings.dc.html`, between Data and Developer: the switch, the token shown once with the configuration to paste, the connections offered at the levels the API lists, the logs choice, what each level allows and what assistants did; a connection of a production environment cannot be offered yet and says why. The toolbar shows the MCP mark while the server is enabled. An API without the routes hides both. [[pages/services/web-app/features-settings-mcp]] (`web-app/src/app/features/settings/settings-mcp.component.ts#SettingsMcpComponent`, `web-app/src/app/features/settings/mcp-settings.service.ts#McpSettingsService`).

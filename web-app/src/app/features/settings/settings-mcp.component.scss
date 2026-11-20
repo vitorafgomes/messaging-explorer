@@ -296,6 +296,10 @@ ul {
   color: var(--mat-sys-error);
 }
 
+.never-ask {
+  flex: 1 0 100%;
+}
+
 .choices {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));

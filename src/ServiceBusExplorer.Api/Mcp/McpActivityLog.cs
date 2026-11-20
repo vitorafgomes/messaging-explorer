@@ -10,7 +10,7 @@ namespace ServiceBusExplorer.Api.Mcp;
 /// <param name="Where">The entity and the offered connection, or "This app".</param>
 /// <param name="Outcome">What happened, in words.</param>
 /// <param name="Kind">"ok" for a broker read that succeeded, "plain" for an answer that read no broker, "error" for a refusal or a failure.</param>
-public sealed record McpActivity(DateTimeOffset Time, string Assistant, string Asked, string Where, string Outcome, string Kind);
+public sealed record McpActivity([property: System.Text.Json.Serialization.JsonConverter(typeof(McpUtcTimeConverter))] DateTimeOffset Time, string Assistant, string Asked, string Where, string Outcome, string Kind);
 
 /// <summary>The tool calls of assistants since the API started, in memory only, the last <see cref="Capacity"/> kept.</summary>
 public sealed class McpActivityLog

@@ -14,8 +14,9 @@ namespace ServiceBusExplorer.Api.Tests;
 
 /// <summary>
 /// The routes of the MCP server group of Settings: off with nothing offered by default, a token answered once and
-/// stored only as its hash, a connection offered at the level read only and never one of a production environment,
-/// and a settings file that cannot be read or written handled without a crash or a leak.
+/// stored only as its hash, a connection offered at read or readAndSend, a production one included, marked as never
+/// asked only when it is a broker on this computer, and a settings file that cannot be read or written handled without
+/// a crash or a leak.
 /// </summary>
 public class McpSettingsRouteTests
 {
@@ -45,9 +46,9 @@ public class McpSettingsRouteTests
             (state.GetProperty("enabled").GetBoolean(), state.GetProperty("hasToken").GetBoolean(), state.GetProperty("tokenCreatedAt").ValueKind,
              state.GetProperty("logsAllowed").GetBoolean(), state.GetProperty("connections").GetArrayLength()));
         Assert.Matches(@"^http://127\.0\.0\.1:\d+/mcp$", state.GetProperty("url").GetString());
-        Assert.Equal(["read"], state.GetProperty("levels").EnumerateArray().Select(l => l.GetString()));
+        Assert.Equal(["read", "readAndSend"], state.GetProperty("levels").EnumerateArray().Select(l => l.GetString()));
         var supports = state.GetProperty("supports");
-        Assert.Equal((true, false, false), (supports.GetProperty("logs").GetBoolean(), supports.GetProperty("appSettings").GetBoolean(), supports.GetProperty("confirmation").GetBoolean()));
+        Assert.Equal((true, false, true), (supports.GetProperty("logs").GetBoolean(), supports.GetProperty("appSettings").GetBoolean(), supports.GetProperty("confirmation").GetBoolean()));
     }
 
     [Fact]
@@ -85,7 +86,7 @@ public class McpSettingsRouteTests
     }
 
     [Fact]
-    public async Task A_connection_is_offered_at_the_level_read_only_never_from_a_production_environment_and_withdrawn_idempotently()
+    public async Task A_connection_is_offered_at_read_or_readAndSend_a_production_one_included_and_withdrawn_idempotently()
     {
         using var factory = new ApiFactory();
         using var client = KeyedClient(factory);
@@ -97,21 +98,83 @@ public class McpSettingsRouteTests
         using var unknown = await client.PutAsJsonAsync("/api/mcp/connections/no-such-id", new { level = "read" });
         using var send = await client.PutAsJsonAsync("/api/mcp/connections/c1", new { level = "send" });
         using var production = await client.PutAsJsonAsync("/api/mcp/connections/c-prod", new { level = "read" });
-        using var offered = await client.PutAsJsonAsync("/api/mcp/connections/c1", new { level = "read" });
+        using var offered = await client.PutAsJsonAsync("/api/mcp/connections/c1", new { level = "readAndSend" });
         var afterOffer = await StateAsync(client);
         using var withdrawn = await client.DeleteAsync("/api/mcp/connections/c1");
         using var again = await client.DeleteAsync("/api/mcp/connections/c1");
 
         Assert.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, send.StatusCode);
-        Assert.True(production.StatusCode == HttpStatusCode.Conflict, $"a production connection cannot be offered in this phase: it answered {(int)production.StatusCode}");
-        using (var body = JsonDocument.Parse(await production.Content.ReadAsStringAsync()))
-            Assert.Equal(McpController.ProductionRefused, body.RootElement.GetProperty("message").GetString());
+        using (var body = JsonDocument.Parse(await send.Content.ReadAsStringAsync()))
+            Assert.Equal("level must be read or readAndSend.", body.RootElement.GetProperty("message").GetString());
+        Assert.True(production.StatusCode == HttpStatusCode.OK, $"a production connection can be offered now that the app asks before each operation: it answered {(int)production.StatusCode}");
         Assert.Equal(HttpStatusCode.OK, offered.StatusCode);
-        var only = Assert.Single(afterOffer.GetProperty("connections").EnumerateArray());
-        Assert.Equal(("c1", "read"), (only.GetProperty("connectionId").GetString(), only.GetProperty("level").GetString()));
+        var listed = afterOffer.GetProperty("connections").EnumerateArray()
+            .ToDictionary(c => c.GetProperty("connectionId").GetString()!, c => (c.GetProperty("level").GetString(), c.GetProperty("production").GetBoolean(), c.GetProperty("canNeverAsk").GetBoolean(), c.GetProperty("neverAsk").GetBoolean()));
+        Assert.Equal(("readAndSend", false, false, false), listed["c1"]);
+        Assert.Equal(("read", true, false, false), listed["c-prod"]);
         Assert.Equal((HttpStatusCode.OK, HttpStatusCode.OK), (withdrawn.StatusCode, again.StatusCode));
-        Assert.Equal(0, (await StateAsync(client)).GetProperty("connections").GetArrayLength());
+        Assert.Equal(["c-prod"], (await StateAsync(client)).GetProperty("connections").EnumerateArray().Select(c => c.GetProperty("connectionId").GetString()));
+    }
+
+    [Fact]
+    public async Task Never_asked_is_accepted_only_for_a_broker_on_this_computer_that_is_not_production_and_stops_counting_when_that_changes()
+    {
+        using var factory = new ApiFactory();
+        using var client = KeyedClient(factory);
+        var groups = factory.Services.GetRequiredService<IConnectionGroupManager>();
+        await groups.SaveGroupAsync(new ConnectionGroup { Id = "env-prod", Name = "prod", Type = "environment", IsProduction = true });
+        await groups.SaveGroupAsync(new ConnectionGroup { Id = "env-local", Name = "local", Type = "environment" });
+        await SeedAsync(factory, new ServiceBusConnection { Id = "c-emulator", Name = "emulator", ConnectionString = "Endpoint=sb://localhost;SharedAccessKeyName=k;SharedAccessKey=v;UseDevelopmentEmulator=true", EnvironmentId = "env-local" });
+        await SeedAsync(factory, new ServiceBusConnection { Id = "c-rabbit", Name = "rabbit", ProviderType = ServiceBusExplorer.Core.Providers.ProviderType.RabbitMQ, HostName = "127.0.0.1" });
+        await SeedAsync(factory, new ServiceBusConnection { Id = "c-remote", Name = "remote", ConnectionString = "Endpoint=sb://localhost.evil.example/;SharedAccessKeyName=k;SharedAccessKey=v" });
+        await SeedAsync(factory, new ServiceBusConnection { Id = "c-prod", Name = "prod", ProviderType = ServiceBusExplorer.Core.Providers.ProviderType.RabbitMQ, HostName = "localhost", EnvironmentId = "env-prod" });
+
+        using var emulator = await client.PutAsJsonAsync("/api/mcp/connections/c-emulator", new { level = "readAndSend", neverAsk = true });
+        using var rabbit = await client.PutAsJsonAsync("/api/mcp/connections/c-rabbit", new { level = "readAndSend", neverAsk = true });
+        using var remote = await client.PutAsJsonAsync("/api/mcp/connections/c-remote", new { level = "readAndSend", neverAsk = true });
+        using var production = await client.PutAsJsonAsync("/api/mcp/connections/c-prod", new { level = "readAndSend", neverAsk = true });
+        using var levelOnly = await client.PutAsJsonAsync("/api/mcp/connections/c-rabbit", new { level = "read" });
+        var marked = await StateAsync(client);
+        using (var unmark = await client.PutAsJsonAsync("/api/mcp/connections/c-emulator", new { level = "readAndSend", neverAsk = false })) Assert.Equal(HttpStatusCode.OK, unmark.StatusCode);
+        var unmarked = await StateAsync(client);
+        using (var mark = await client.PutAsJsonAsync("/api/mcp/connections/c-emulator", new { level = "readAndSend", neverAsk = true })) Assert.Equal(HttpStatusCode.OK, mark.StatusCode);
+        await groups.SaveGroupAsync(new ConnectionGroup { Id = "env-local", Name = "local", Type = "environment", IsProduction = true });
+        await SeedAsync(factory, new ServiceBusConnection { Id = "c-rabbit", Name = "rabbit", ProviderType = ServiceBusExplorer.Core.Providers.ProviderType.RabbitMQ, HostName = "10.0.0.5" });
+        var changed = await StateAsync(client);
+
+        Assert.Equal((HttpStatusCode.OK, HttpStatusCode.OK), (emulator.StatusCode, rabbit.StatusCode));
+        foreach (var (what, refused) in new[] { ("a host that is not this computer", remote), ("a production connection", production) })
+        {
+            Assert.True(refused.StatusCode == HttpStatusCode.BadRequest, $"only a broker on this computer can be marked as never asked: {what} answered {(int)refused.StatusCode}");
+            using var body = JsonDocument.Parse(await refused.Content.ReadAsStringAsync());
+            Assert.Equal(McpController.NeverAskRefused, body.RootElement.GetProperty("message").GetString());
+        }
+        Assert.Equal(HttpStatusCode.OK, levelOnly.StatusCode);
+        static Dictionary<string, (bool CanNeverAsk, bool NeverAsk)> Marks(JsonElement state) => state.GetProperty("connections").EnumerateArray()
+            .ToDictionary(c => c.GetProperty("connectionId").GetString()!, c => (c.GetProperty("canNeverAsk").GetBoolean(), c.GetProperty("neverAsk").GetBoolean()));
+        Assert.True(Marks(marked)["c-rabbit"] == (true, true), "a body with only the level keeps the never-asked mark the connection had");
+        Assert.True(Marks(unmarked)["c-emulator"] == (true, false), "an explicit neverAsk false removes the mark");
+        Assert.Equal(new Dictionary<string, (bool, bool)> { ["c-emulator"] = (true, true), ["c-rabbit"] = (true, true) }, Marks(marked));
+        Assert.Equal(new Dictionary<string, (bool, bool)> { ["c-emulator"] = (false, false), ["c-rabbit"] = (false, false) }, Marks(changed));
+    }
+
+    [Theory]
+    [InlineData("localhost", true)]
+    [InlineData("LOCALHOST", true)]
+    [InlineData("127.0.0.1", true)]
+    [InlineData("127.1.2.3", true)]
+    [InlineData("[::1]", true)]
+    [InlineData("::1", true)]
+    [InlineData("localhost.evil.example", false)]
+    [InlineData("127.0.0.1.evil.example", false)]
+    [InlineData("10.0.0.5", false)]
+    [InlineData("broker.example.com", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void A_host_is_this_computer_only_when_it_is_localhost_or_a_loopback_address(string? host, bool loopback)
+    {
+        Assert.True(McpToolCalls.IsLoopbackHost(host) == loopback, $"only a broker on this computer can be marked as never asked: {host ?? "no host"} must be loopback {loopback}");
     }
 
     [Fact]

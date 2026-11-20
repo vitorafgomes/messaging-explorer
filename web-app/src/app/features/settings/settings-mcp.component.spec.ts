@@ -2,6 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { Observable, of, throwError } from 'rxjs';
+import { MatDialog } from '@angular/material/dialog';
+import { OverlayContainer } from '@angular/cdk/overlay';
 import { ApiService, ConnectionGroupService, ConnectionService } from '../../core/services';
 import { ProviderType } from '../../core/models/provider.model';
 import { SettingsMcpComponent } from './settings-mcp.component';
@@ -61,7 +63,9 @@ function fakeApi(start: Partial<McpState> = {}, activity: McpActivity[] = ACTIVI
       if (path === 'mcp/enabled') return keep({ ...state, enabled: body.enabled });
       if (path === 'mcp/logs') return keep({ ...state, logsAllowed: body.allowed });
       const id = decodeURIComponent(path.split('/')[2]);
-      return keep({ ...state, connections: [...state.connections.filter(c => c.connectionId !== id), { connectionId: id, level: body.level }] });
+      const was = state.connections.find(c => c.connectionId === id);
+      const next = { ...was, connectionId: id, level: body.level, ...(body.neverAsk === undefined ? {} : { neverAsk: body.neverAsk }) };
+      return keep({ ...state, connections: [...state.connections.filter(c => c.connectionId !== id), next] });
     }),
     delete: vi.fn((path: string): Observable<unknown> => {
       if (path === 'mcp/activity') { list = []; return of(undefined); }
@@ -109,6 +113,9 @@ describe('SettingsMcpComponent: the MCP server group of Settings, as Settings.dc
   });
 
   afterEach(() => {
+    TestBed.inject(MatDialog).closeAll();
+    TestBed.inject(OverlayContainer).ngOnDestroy();
+    vi.useRealTimers();
     vi.clearAllMocks();
     connectionService.getConnections.mockImplementation(() => of(CONNECTIONS));
     groupService.getGroups.mockImplementation(() => of(GROUPS));
@@ -413,6 +420,11 @@ describe('SettingsMcpComponent: the MCP server group of Settings, as Settings.dc
       { call: 'PUT mcp/connections/{id} to offer, answered 409', arrange: a => a.put.mockReturnValueOnce(fail(409, 'A production connection cannot be offered yet.')),
         act: async v => { await v.click('Offer a connection'); (v.el.querySelector('[data-testid="mcp-offer"] li button') as HTMLElement).click(); await v.refresh(); },
         where: 'Connections', text: 'contoso-dev was not offered: A production connection cannot be offered yet.' },
+      { call: 'PUT mcp/connections/{id} for "do not ask me before a send"', start: { levels: ['read', 'readAndSend'], supports: { logs: true, appSettings: false, confirmation: true },
+          connections: [{ connectionId: 'c-rabbit', level: 'readAndSend', canNeverAsk: true, neverAsk: false }] },
+        arrange: a => a.put.mockReturnValueOnce(fail(500)),
+        act: async v => { (v.el.querySelector('.never-ask input[type="checkbox"]') as HTMLInputElement).click(); await v.refresh(); },
+        where: 'Connections', text: 'The choice for Local RabbitMQ was not saved: the API answered 500.' },
       { call: 'PUT mcp/logs', arrange: a => a.put.mockReturnValueOnce(fail(500)),
         act: async v => { (v.row('Logs of the app')?.querySelector('input[type="checkbox"]') as HTMLInputElement).click(); await v.refresh(); },
         where: 'Logs of the app', text: 'The choice for the logs was not saved: the API answered 500.' },
@@ -471,6 +483,172 @@ describe('SettingsMcpComponent: the MCP server group of Settings, as Settings.dc
       expect(api.delete.mock.calls[0], 'the remove went through').toStrictEqual(['mcp/connections/c-dev']);
       expect(words(row('Connections')?.querySelector('[role="alert"]')), 'the names are still unread, and the screen still says so')
         .toBe('The names of the connections could not be read: the API of this app did not answer. Retry');
+    });
+  });
+
+  describe('phase two: the app can ask you before an operation (supports.confirmation)', () => {
+    const ASKS: Partial<McpState> = { levels: ['read', 'readAndSend'], supports: { logs: true, appSettings: false, confirmation: true } };
+    const items = (el: HTMLElement) => Array.from(el.querySelectorAll('ul[aria-label="Connections an assistant may use"] li'));
+    const item = (el: HTMLElement, name: string) => items(el).find(li => words(li.querySelector('.name')).startsWith(name))!;
+
+    it('the intro of the connections says a production connection always asks you first', async () => {
+      const { row } = await render(ASKS);
+      expect(words(row('Connections')?.querySelector('.note')), 'the sentence the artboard draws once the app can ask')
+        .toBe('Only the connections listed here exist for an assistant. A production connection always asks you first.');
+    });
+
+    const sentences: { name: string; connection: McpState['connections'][number]; asks: string; production: boolean }[] = [
+      { name: 'contoso-prod', connection: { connectionId: 'c-prod', level: 'read', production: true }, asks: 'Asks you before every operation, a read included.', production: true },
+      { name: 'contoso-dev', connection: { connectionId: 'c-dev', level: 'readAndSend', production: true }, asks: 'Asks you before every operation, a read included.', production: true },
+      { name: 'Local RabbitMQ', connection: { connectionId: 'c-rabbit', level: 'readAndSend', canNeverAsk: true, neverAsk: true }, asks: 'A local test broker: never asks you.', production: false },
+      { name: 'contoso-dev', connection: { connectionId: 'c-dev', level: 'read' }, asks: 'Reads without asking you.', production: false },
+      { name: 'Local RabbitMQ', connection: { connectionId: 'c-rabbit', level: 'readAndSend', canNeverAsk: true, neverAsk: false }, asks: 'Reads without asking; asks you before each send.', production: false },
+    ];
+    for (const c of sentences) {
+      it(`a row offered as ${JSON.stringify(c.connection)} says "${c.asks}"${c.production ? ' with the Production chip' : ' and no Production chip'}`, async () => {
+        const { el } = await render({ ...ASKS, connections: [c.connection] });
+        const li = item(el, c.name);
+        expect(words(li.querySelector('.asks')), 'the sentence follows the fields the API answered').toBe(c.asks);
+        expect(words(li.querySelector('.prod-chip')), 'the Production chip follows the production field').toBe(c.production ? 'Production' : '');
+      });
+    }
+
+    it('an older API that omits the new fields draws no Production chip and no never-asked checkbox in a row', async () => {
+      const { el } = await render({ ...ASKS, connections: [{ connectionId: 'c-prod', level: 'read' }] });
+      expect(item(el, 'contoso-prod').querySelector('.prod-chip'), 'production absent is false').toBeNull();
+      expect(item(el, 'contoso-prod').querySelector('.never-ask'), 'canNeverAsk absent is false').toBeNull();
+      expect(el.querySelector('[role="alert"]'), 'no error').toBeNull();
+    });
+
+    it('the never-asked checkbox shows only where the API says canNeverAsk, checked from neverAsk, and changing it is PUT with the row\'s level', async () => {
+      const { el, refresh } = await render({ ...ASKS, connections: [
+        { connectionId: 'c-rabbit', level: 'readAndSend', canNeverAsk: true, neverAsk: true },
+        { connectionId: 'c-dev', level: 'readAndSend', canNeverAsk: false },
+      ] });
+      const box = item(el, 'Local RabbitMQ').querySelector('.never-ask');
+
+      expect(words(box), 'the words of the artboard').toBe('A local test broker: do not ask me before a send');
+      expect((box?.querySelector('input[type="checkbox"]') as HTMLInputElement).checked, 'checked from neverAsk').toBe(true);
+      expect(item(el, 'contoso-dev').querySelector('.never-ask'), 'not shown where the API says it cannot be').toBeNull();
+
+      (box?.querySelector('input[type="checkbox"]') as HTMLInputElement).click();
+      await refresh();
+      expect(api.put.mock.calls, 'PUT with the level the row has and the new choice').toStrictEqual([['mcp/connections/c-rabbit', { level: 'readAndSend', neverAsk: false }]]);
+      expect(words(item(el, 'Local RabbitMQ').querySelector('.asks')), 'the row says what it asks now').toBe('Reads without asking; asks you before each send.');
+    });
+
+    it('with the levels "read" and "readAndSend", picking "Read and send" is PUT with readAndSend, and the Send block and the bulk sentence show', async () => {
+      const { el, row, refresh } = await render({ ...ASKS, connections: [{ connectionId: 'c-dev', level: 'read' }] });
+      const levels = item(el, 'contoso-dev').querySelector('[role="group"]');
+      expect(Array.from(levels?.querySelectorAll('button') ?? []).map(words), 'the two levels the API lists, with the artboard labels').toStrictEqual(['Read', 'Read and send']);
+
+      (levels?.querySelectorAll('button')[1] as HTMLElement).click();
+      await refresh();
+      expect(api.put.mock.calls, 'picking "Read and send" is PUT with level readAndSend').toStrictEqual([['mcp/connections/c-dev', { level: 'readAndSend' }]]);
+      expect(Array.from(row('What each choice allows')?.querySelectorAll('.choice') ?? []).map(words)[1], 'the Send block, in the artboard\'s words')
+        .toBe('Send From "Read and send" up Send one message or many to a queue or a topic, now or scheduled. Asks you before each send, except on a local test broker.');
+      expect(words(row('What each choice allows')), 'the bulk sentence shows beyond reading').toContain('A bulk operation an assistant starts answers what happened to each message, and a message sent and not removed is reported as a possible duplicate, exactly as on the screen.');
+      expect(words(item(el, 'contoso-dev').querySelector('.asks')), 'the row says what it asks at its new level').toBe('Reads without asking; asks you before each send.');
+    });
+
+    describe('offering a production connection', () => {
+      async function openProd() {
+        const view = await render(ASKS);
+        await view.click('Offer a connection');
+        const prod = () => Array.from(view.el.querySelectorAll('[data-testid="mcp-offer"] li')).find(li => li.textContent?.includes('contoso-prod'))!;
+        return { ...view, prod };
+      }
+      const confirm = () => document.querySelector('app-confirm-dialog');
+      const confirmButton = (label: string) => Array.from(confirm()?.querySelectorAll<HTMLButtonElement>('button') ?? []).find(b => words(b) === label)!;
+      const settle = async (refresh: () => Promise<void>) => { await refresh(); await new Promise(r => setTimeout(r, 50)); await refresh(); };
+
+      it('its button reads "Offer, after you confirm", is enabled, and the panel says offering it asks you to confirm', async () => {
+        const { prod, el } = await openProd();
+        const button = prod().querySelector('button') as HTMLButtonElement;
+        expect(words(button), 'the artboard label of a production offer').toBe('Offer, after you confirm');
+        expect(button.disabled, 'a production connection can be offered once the app can ask').toBe(false);
+        expect(prod().querySelector('.why'), 'no phase-one sentence').toBeNull();
+        expect(words(el.querySelector('[data-testid="mcp-offer"] .footnote')), 'the panel says a production offer is confirmed').toBe('A connection comes in at "Read". Offering a production connection asks you to confirm it.');
+      });
+
+      it('it opens the shared confirmation, and Cancel sends nothing', async () => {
+        const { prod, refresh } = await openProd();
+        (prod().querySelector('button') as HTMLElement).click();
+        await settle(refresh);
+
+        expect(words(confirm()?.querySelector('h2')), 'the title of the confirmation').toBe('Offer a production connection?');
+        expect(words(confirm()?.querySelector('mat-dialog-content p')), 'the message names the connection and what will ask').toBe('contoso-prod is in a production environment. An assistant will be able to read it, and each operation will ask you first, a read included.');
+        expect(Array.from(confirm()?.querySelectorAll('mat-dialog-actions button') ?? []).map(words), 'Cancel and Offer').toStrictEqual(['Cancel', 'Offer']);
+        expect(api.put, 'nothing is sent before the user confirms').not.toHaveBeenCalled();
+
+        confirmButton('Cancel').click();
+        await settle(refresh);
+        expect(api.put, 'Cancel offers nothing').not.toHaveBeenCalled();
+      });
+
+      it('a production connection is offered only after Offer in the confirmation, at "Read"', async () => {
+        const { prod, el, refresh } = await openProd();
+        (prod().querySelector('button') as HTMLElement).click();
+        await settle(refresh);
+        expect(api.put, 'the click on the row sends nothing').not.toHaveBeenCalled();
+        confirmButton('Offer').click();
+        await settle(refresh);
+
+        expect(api.put.mock.calls, 'offered at "Read" after the confirmation').toStrictEqual([['mcp/connections/c-prod', { level: 'read' }]]);
+        expect(Array.from(el.querySelectorAll('ul[aria-label="Connections an assistant may use"] li .name')).map(words)).toStrictEqual(['contoso-prod']);
+      });
+    });
+  });
+
+  describe('what assistants did, read again while shown', () => {
+    const NEWER: McpActivity = { time: '10:43:02', assistant: 'Claude Code', asked: 'Send 3 messages', where: 'orders. contoso-dev', outcome: '3 sent, allowed by you', kind: 'ok' };
+    const rows = (el: HTMLElement) => Array.from(el.querySelectorAll('table[aria-label="What assistants did"] tbody tr'));
+    const activityGets = () => api.get.mock.calls.filter(c => c[0] === 'mcp/activity').length;
+
+    it('while the server is enabled the list is read every 5 seconds; an unchanged list keeps its rows, and the focus stays', async () => {
+      vi.useFakeTimers();
+      const { el, button, refresh } = await render();
+      const before = rows(el);
+      button('Clear the list')!.focus();
+      expect(activityGets(), 'read once when the group opened').toBe(1);
+
+      await vi.advanceTimersByTimeAsync(5000);
+      await refresh();
+      expect(activityGets(), 'read again after 5 seconds').toBe(2);
+      expect(rows(el), 'the same rows, not redrawn').toStrictEqual(before);
+      expect(document.activeElement, 'the focus stays where the user left it').toBe(button('Clear the list'));
+
+      api.get.mockImplementation((path: string) => path === 'mcp' ? of(STATE) : of([NEWER, ...ACTIVITY]));
+      await vi.advanceTimersByTimeAsync(5000);
+      await refresh();
+      expect(rows(el).map(words)[0], 'a new entry shows').toBe('10:43:02 Claude Code Send 3 messages orders. contoso-dev 3 sent, allowed by you');
+      expect(document.activeElement, 'the focus stays after a change').toBe(button('Clear the list'));
+    });
+
+    it('a failed refresh keeps the last list and shows nothing', async () => {
+      vi.useFakeTimers();
+      const { el, row, refresh } = await render();
+      api.get.mockImplementation((path: string) => path === 'mcp' ? of(STATE) : fail(500));
+      await vi.advanceTimersByTimeAsync(5000);
+      await refresh();
+
+      expect(activityGets(), 'the refresh was tried').toBe(2);
+      expect(rows(el).length, 'the last list stays').toBe(2);
+      expect(row('What assistants did')?.querySelector('[role="alert"]'), 'a failed refresh is not shown').toBeNull();
+    });
+
+    it('while the server is off, and after the group is destroyed, the list is not read again', async () => {
+      vi.useFakeTimers();
+      const off = await render({ enabled: false });
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(activityGets(), 'read once when the group opened, never polled while off').toBe(1);
+
+      await off.click('Inactive');
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(activityGets(), 'turned on: read again every 5 seconds').toBe(2);
+      off.fixture.destroy();
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(activityGets(), 'destroyed: no further GET').toBe(2);
     });
   });
 

@@ -47,6 +47,7 @@ Read the page your change touches, not all of them.
 | [[pages/services/api/routes-sessions-and-definitions\|Session and definition routes]] | the session routes of a queue or a subscription and their status codes, or the namespace export and import of entity definitions |
 | [[pages/services/api/connections-and-secrets\|Connections and secrets]] | the connections routes: masking, save with the *** placeholder, an unreadable workspace.json, export, export-full, import, clear-all |
 | [[pages/services/api/mcp-server\|MCP server]] | `/mcp` and its gate, the MCP token, the `api/mcp` routes of Settings, `mcp-settings.json`, the reading tools, the record of what assistants asked |
+| [[pages/services/api/mcp-asking-and-sending\|MCP server: asking and sending]] | the requests that wait for the user and `api/mcp/requests`, the levels `read` and `readAndSend`, the never-asked mark of a local broker, the production ask on reads, `send_message` and `send_messages` |
 | [[pages/services/api/monitoring\|Monitoring]] | MonitoringBackgroundService, its poll period and failures, MonitoringStore, or the monitoring routes |
 | [[pages/services/api/tests\|Tests]] | a test of the Api project, ApiFactory, or what has no test yet |
 | [[pages/services/api/known-gaps\|Hot spots and known gaps]] | a hot spot of the Api project or a gap recorded as it was found |

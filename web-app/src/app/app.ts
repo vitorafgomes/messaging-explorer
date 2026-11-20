@@ -1,6 +1,6 @@
-import { Component, computed, inject, OnInit, NgZone, HostListener } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
-import { map, merge, of, switchMap } from 'rxjs';
+import { Component, computed, inject, OnInit, NgZone, HostListener, signal, DestroyRef } from '@angular/core';
+import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
+import { EMPTY, catchError, exhaustMap, map, merge, of, switchMap, timer } from 'rxjs';
 import { Router, RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { AsyncPipe } from '@angular/common';
 import { MatToolbarModule } from '@angular/material/toolbar';
@@ -13,14 +13,15 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDividerModule } from '@angular/material/divider';
-import { MatDialogModule } from '@angular/material/dialog';
+import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { ConnectionService, ConnectionGroupService, ThemeService, EntitySelectionService, DevSettingsService, ResubmitRunService } from './core/services';
 import { AppLogService } from './core/services/app-log.service';
 import { DeadLetterNotificationService, DeadLetterAlert } from './core/services/dead-letter-notification.service';
 import { BugReportService } from './shared/bug-report.service';
 import { AppUpdateService } from './features/settings/app-update.service';
-import { McpSettingsService } from './features/settings/mcp-settings.service';
+import { McpRequest, McpSettingsService } from './features/settings/mcp-settings.service';
+import { McpRequestDialogComponent, McpRequestOutcome } from './features/settings/mcp-request-dialog.component';
 import { ResubmitRunIndicatorComponent, runPercent, runSummary } from './features/messages/resubmit-run-indicator.component';
 import { EnvironmentChipComponent } from './shared/environment-chip.component';
 import { readConnectionContext } from './features/entities/connection-context';
@@ -88,6 +89,18 @@ export class App implements OnInit {
   /** The MCP server: its mark is on the toolbar only while it is enabled; a failed read leaves the mark off, and Settings says why. */
   readonly mcp = inject(McpSettingsService);
   private readonly bugReport = inject(BugReportService);
+  private readonly dialog = inject(MatDialog);
+  /** Whether the API answered 404 to GET mcp/requests: it cannot ask the user, so nothing is polled again. */
+  private readonly requestsAbsent = signal(false);
+  /** The app asks the user while the server is enabled and the API can wait for an answer. */
+  private readonly asking = computed(() => {
+    const state = this.mcp.state();
+    return !!state?.enabled && !!state.supports?.confirmation && !this.requestsAbsent();
+  });
+  /** The request whose dialog is open; one at a time. */
+  private openRequest: { id: string; ref: MatDialogRef<McpRequestDialogComponent, McpRequestOutcome> } | null = null;
+  /** The requests already shown, which a later poll never opens again. */
+  private readonly shown = new Set<string>();
 
   /** The Logs screen and its item on the toolbar exist only while Developer mode is on. */
   readonly devMode = this.devSettingsService.devMode;
@@ -108,6 +121,24 @@ export class App implements OnInit {
     if (count === 0) return 'Notifications';
     return `Notifications: ${count} subscription${count === 1 ? '' : 's'} with dead-letter messages`;
   });
+
+  /**
+   * Polls the waiting requests every 2 seconds while asking, one GET in flight at a time; a failed poll waits for the
+   * next tick and shows nothing. Polling stops when the server is turned off and when the app is destroyed.
+   */
+  constructor() {
+    inject(DestroyRef).onDestroy(() => this.openRequest?.ref.close());
+    toObservable(this.asking).pipe(
+      switchMap(on => {
+        if (!on) { this.openRequest?.ref.close('gone'); return EMPTY; }
+        return timer(0, 2000).pipe(exhaustMap(() => this.mcp.requests().pipe(catchError((error: { status?: number }) => {
+          if (error?.status === 404) this.requestsAbsent.set(true);
+          return EMPTY;
+        }))));
+      }),
+      takeUntilDestroyed(),
+    ).subscribe(list => this.showRequest(list));
+  }
 
   ngOnInit() {
     this.themeService.initialize();
@@ -142,6 +173,24 @@ export class App implements OnInit {
 
   openBugReport(type: 'bug' | 'feature') {
     this.bugReport.open(type);
+  }
+
+  /** Closes the open dialog when its request left the list; otherwise opens the oldest request not shown yet. */
+  private showRequest(list: McpRequest[]): void {
+    const open = this.openRequest;
+    if (open) {
+      if (!list.some(r => r.id === open.id)) open.ref.close('gone');
+      return;
+    }
+    const next = list.filter(r => !this.shown.has(r.id)).sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0))[0];
+    if (!next) return;
+    this.shown.add(next.id);
+    const ref = this.dialog.open<McpRequestDialogComponent, McpRequest, McpRequestOutcome>(McpRequestDialogComponent, { ...McpRequestDialogComponent.config, data: next });
+    this.openRequest = { id: next.id, ref };
+    ref.beforeClosed().subscribe(outcome => {
+      if (this.openRequest?.ref === ref) this.openRequest = null;
+      if (outcome === 'gone') this.snackBar.open('The request is no longer waiting.', 'Close', { duration: 5000 });
+    });
   }
 
   private setupElectronListeners() {

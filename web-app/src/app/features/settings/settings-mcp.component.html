@@ -80,13 +80,13 @@
         <div class="setting-row top">
           <span class="row-label">Connections</span>
           <div class="row-body">
-            <span class="note">Only the connections listed here exist for an assistant.@if (s.supports.confirmation) { A production connection always asks you first.}</span>
+            <span class="note">Only the connections listed here exist for an assistant.@if (canAsk()) { A production connection always asks you first.}</span>
             <ul class="offered" [class.dimmed]="!s.enabled" aria-label="Connections an assistant may use">
               @for (row of offered(); track row.id) {
                 <li>
                   <div class="who">
                     <span class="name" [class.mono]="!row.found && !known()">{{ row.name }}
-                      @if (row.found?.production) {
+                      @if (row.production) {
                         <span class="prod-chip">Production</span>
                       }
                     </span>
@@ -106,6 +106,9 @@
                     }
                     <button mat-button type="button" class="remove" [attr.aria-label]="'Remove ' + row.name" (click)="remove(row.id, row.name)">Remove</button>
                   </div>
+                  @if (row.canNeverAsk) {
+                    <mat-checkbox class="never-ask" [checked]="row.neverAsk" (change)="setNeverAsk(row.id, row.name, row.level, $event)">A local test broker: do not ask me before a send</mat-checkbox>
+                  }
                 </li>
               }
             </ul>
@@ -142,18 +145,18 @@
                           }
                         </span>
                         <span class="where">{{ c.where }}</span>
-                        @if (c.production) {
+                        @if (c.production && !canAsk()) {
                           <span class="why">A production connection can be offered once the app can ask you before each operation.</span>
                         }
                       </div>
-                      <button mat-stroked-button type="button" [disabled]="c.production" (click)="offer(c)">Offer</button>
+                      <button mat-stroked-button type="button" [disabled]="c.production && !canAsk()" (click)="offer(c)">{{ c.production && canAsk() ? 'Offer, after you confirm' : 'Offer' }}</button>
                     </li>
                   }
                 </ul>
                 @if (known() && candidates().length === 0) {
                   <span class="muted" data-testid="mcp-no-match">No other connection matches.</span>
                 }
-                <span class="note footnote">A connection comes in at "Read".</span>
+                <span class="note footnote">A connection comes in at "Read".@if (canAsk()) { Offering a production connection asks you to confirm it.}</span>
               </div>
             }
           </div>

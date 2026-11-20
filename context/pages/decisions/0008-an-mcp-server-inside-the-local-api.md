@@ -2,7 +2,7 @@
 title: "ADR 0008 - An MCP server inside the local API"
 version: "1.0"
 date: 2026-11-19
-changes: "2026-11-20: Enforcement names the gate, the token check and their tests. 2026-11-19: accepted by the owner, with the screen as drawn; logs and settings of the app as separate choices, never the MCP group itself; the SDK proven by a throwaway project, which leaves the Origin check to the application. Initial ADR draft"
+changes: "2026-11-20: Enforcement names the gate and the sending phase. 2026-11-19: accepted by the owner with the screen as drawn. Initial ADR draft"
 page_type: adr
 status: accepted
 description: "The local API serves an MCP endpoint, off by default, for the connections the user chose, behind its own token, asking the user in the app before anything is sent, moved or removed."
@@ -84,12 +84,14 @@ What was read on 2026-11-19, and what was not:
 
 ## Enforcement
 
-Every test of the reading phase is on [[pages/services/api/mcp-server]].
+Tests: [[pages/services/api/mcp-server]], [[pages/services/api/mcp-asking-and-sending]].
 
-- **The gate:** `src/ServiceBusExplorer.Api/Mcp/McpGate.cs#AdmitAsync` and `src/ServiceBusExplorer.Api/Mcp/McpSettingsStore.cs#TokenMatches` (SHA-256, fixed time). Pinned by `src/ServiceBusExplorer.Api.Tests/McpGateTests.cs#The_mcp_endpoint_answers_404_while_the_user_has_not_turned_it_on_even_with_a_token_and_the_api_key`, `src/ServiceBusExplorer.Api.Tests/McpGateTests.cs#A_foreign_origin_is_refused_403_even_with_the_right_bearer`, `src/ServiceBusExplorer.Api.Tests/McpGateTests.cs#A_request_without_the_right_bearer_is_refused_401_with_one_body_whatever_was_wrong`, `src/ServiceBusExplorer.Api.Tests/McpGateTests.cs#The_api_key_alone_does_not_open_the_mcp_endpoint_in_any_letter_case`, `src/ServiceBusExplorer.Api.Tests/McpGateTests.cs#The_mcp_token_alone_opens_no_api_route`, `src/ServiceBusExplorer.Api.Tests/McpSettingsRouteTests.cs#The_token_is_answered_once_and_stored_only_as_its_hash`.
-- **Only the connections offered:** `src/ServiceBusExplorer.Api/Mcp/McpReadTools.cs#ActiveAsync`. Pinned by `src/ServiceBusExplorer.Api.Tests/McpSettingsRouteTests.cs#A_connection_is_offered_at_the_level_read_only_never_from_a_production_environment_and_withdrawn_idempotently`, `src/ServiceBusExplorer.Api.Tests/McpToolTests.cs#A_tool_on_an_active_connection_that_is_not_offered_is_refused_and_names_nothing`, `src/ServiceBusExplorer.Api.Tests/McpToolTests.cs#An_offered_connection_whose_environment_became_production_is_refused`.
-- **No secret in an answer or the record:** `src/ServiceBusExplorer.Api.Tests/McpToolTests.cs#List_connections_answers_only_the_offered_connections_with_no_secret`, `src/ServiceBusExplorer.Api.Tests/McpToolTests.cs#Every_tool_call_is_recorded_newest_first_without_a_body_or_a_secret`.
-- **Owed by later phases:** the levels above read and their refusals; the confirmation window, with a changing tool that does nothing without the user's answer and is denied after the wait.
+- **The gate:** `src/ServiceBusExplorer.Api/Mcp/McpGate.cs#AdmitAsync`, `src/ServiceBusExplorer.Api/Mcp/McpSettingsStore.cs#TokenMatches`. Pinned by `src/ServiceBusExplorer.Api.Tests/McpGateTests.cs#The_mcp_endpoint_answers_404_while_the_user_has_not_turned_it_on_even_with_a_token_and_the_api_key`, `src/ServiceBusExplorer.Api.Tests/McpGateTests.cs#The_mcp_token_alone_opens_no_api_route`.
+- **Only the connections offered, at their level:** `src/ServiceBusExplorer.Api/Mcp/McpToolCalls.cs#ActiveAsync`. Pinned by `src/ServiceBusExplorer.Api.Tests/McpToolTests.cs#A_tool_on_an_active_connection_that_is_not_offered_is_refused_and_names_nothing`, `src/ServiceBusExplorer.Api.Tests/McpSendToolTests.cs#A_connection_offered_for_reading_refuses_a_send_without_asking`.
+- **The user is asked in the app:** `src/ServiceBusExplorer.Api/Mcp/McpRequests.cs#AskAsync`; nothing is sent before an allow, at most 20 wait, the MCP token answers none. Pinned by `src/ServiceBusExplorer.Api.Tests/McpSendToolTests.cs#A_send_waits_for_the_user_and_is_sent_once_only_after_the_user_allows_it`, `src/ServiceBusExplorer.Api.Tests/McpRequestTests.cs#At_most_20_requests_wait_and_a_21st_is_refused_at_once`, `src/ServiceBusExplorer.Api.Tests/McpRequestTests.cs#The_mcp_token_cannot_answer_a_request_and_the_key_answers_it_once`.
+- **Production asks before every read; a local test broker is never asked:** `src/ServiceBusExplorer.Api/Mcp/McpToolCalls.cs#ProtectionAsync`. Pinned by `src/ServiceBusExplorer.Api.Tests/McpRequestTests.cs#A_production_connection_asks_before_every_read_and_list_connections_and_read_logs_never_ask`, `src/ServiceBusExplorer.Api.Tests/McpSettingsRouteTests.cs#Never_asked_is_accepted_only_for_a_broker_on_this_computer_that_is_not_production_and_stops_counting_when_that_changes`.
+- **No secret or body leaves:** `src/ServiceBusExplorer.Api.Tests/McpToolTests.cs#Every_tool_call_is_recorded_newest_first_without_a_body_or_a_secret`, `src/ServiceBusExplorer.Api.Tests/McpSendToolTests.cs#The_request_says_what_where_how_many_and_why_in_fixed_words_with_no_body_and_no_secret`.
+- **Owed:** moving, removing, administering; a typed name before a delete or purge.
 - **Invariant page and lenses:** [[pages/invariants/local-authenticated-api]] carries the second exemption; `api-surface`, `secrets` and `message-safety` review every phase.
 
 ## Related
@@ -101,4 +103,4 @@ Every test of the reading phase is on [[pages/services/api/mcp-server]].
 
 - The connections part of the Settings group lists only the connections offered, with "Offer a connection" to add one and "Remove" on each: the owner asked not to list every connection.
 - A connection marked as a local test broker is never asked, as drawn; a read on a production connection asks every time, as written. The owner asked for the implementation with both as they stood.
-- The first phase is reading. It has no confirmation window yet, so it offers the level "Read" only and refuses to offer a connection of a production environment; both open with the phase that brings the window.
+- The first phase is reading, at the level "Read" only and never on production; both opened with the sending phase on 2026-11-20.

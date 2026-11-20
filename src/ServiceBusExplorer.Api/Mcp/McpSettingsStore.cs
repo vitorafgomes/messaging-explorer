@@ -6,8 +6,8 @@ namespace ServiceBusExplorer.Api.Mcp;
 
 /// <summary>
 /// What the user chose for the MCP server, as <c>mcp-settings.json</c> in the data folder holds it: whether it is on,
-/// the SHA-256 of the token and when it was made, whether an assistant may read the logs, and the level each offered
-/// connection is offered at. The plain token is never stored.
+/// the SHA-256 of the token and when it was made, whether an assistant may read the logs, the level each offered
+/// connection is offered at, and which of them the user marked as never asked. The plain token is never stored.
 /// </summary>
 public sealed class McpSettings
 {
@@ -26,6 +26,12 @@ public sealed class McpSettings
     /// <summary>The offered connections, by stored connection id, with the level each is offered at.</summary>
     public Dictionary<string, string> Connections { get; set; } = new();
 
+    /// <summary>
+    /// The offered connections the user marked as a local test broker, never asked before a send. The mark counts only
+    /// while the connection is on this computer and not of a production environment.
+    /// </summary>
+    public HashSet<string> NeverAsk { get; set; } = new();
+
     /// <summary>A copy that shares nothing with this one.</summary>
     public McpSettings Copy() => new()
     {
@@ -34,6 +40,7 @@ public sealed class McpSettings
         TokenCreatedAt = TokenCreatedAt,
         LogsAllowed = LogsAllowed,
         Connections = new Dictionary<string, string>(Connections),
+        NeverAsk = new HashSet<string>(NeverAsk),
     };
 }
 
@@ -44,8 +51,14 @@ public sealed class McpSettings
 /// </summary>
 public sealed class McpSettingsStore
 {
-    /// <summary>The one level this version offers a connection at.</summary>
+    /// <summary>The level at which a connection is offered for reading only.</summary>
     public const string ReadLevel = "read";
+
+    /// <summary>The level at which a connection is offered for reading and sending.</summary>
+    public const string ReadAndSendLevel = "readAndSend";
+
+    /// <summary>The levels this version offers a connection at.</summary>
+    public static readonly IReadOnlyList<string> Levels = [ReadLevel, ReadAndSendLevel];
 
     /// <summary>The name of the file in the data folder.</summary>
     public const string FileName = "mcp-settings.json";
@@ -100,8 +113,23 @@ public sealed class McpSettingsStore
     /// <summary>Allows or refuses the read_logs tool.</summary>
     public void SetLogsAllowed(bool allowed) => Change(s => s.LogsAllowed = allowed);
 
-    /// <summary>Offers <paramref name="connectionId"/> at <paramref name="level"/>.</summary>
-    public void Offer(string connectionId, string level) => Change(s => s.Connections[connectionId] = level);
+    /// <summary>True when the user marked <paramref name="connectionId"/> as never asked.</summary>
+    public bool IsNeverAsk(string? connectionId)
+    {
+        if (connectionId is null) return false;
+        lock (_lock) { return _settings.NeverAsk.Contains(connectionId); }
+    }
+
+    /// <summary>
+    /// Offers <paramref name="connectionId"/> at <paramref name="level"/>, marked as never asked or not; a null
+    /// <paramref name="neverAsk"/> keeps the mark it had, none for a connection offered anew.
+    /// </summary>
+    public void Offer(string connectionId, string level, bool? neverAsk = null) => Change(s =>
+    {
+        s.Connections[connectionId] = level;
+        if (neverAsk == true) s.NeverAsk.Add(connectionId);
+        else if (neverAsk == false) s.NeverAsk.Remove(connectionId);
+    });
 
     /// <summary>Stops offering each of <paramref name="connectionIds"/>; an id that is not offered changes nothing.</summary>
     public void Withdraw(IEnumerable<string> connectionIds)
@@ -111,7 +139,11 @@ public sealed class McpSettingsStore
         {
             if (!ids.Any(_settings.Connections.ContainsKey)) return;
         }
-        Change(s => ids.ForEach(id => s.Connections.Remove(id)));
+        Change(s => ids.ForEach(id =>
+        {
+            s.Connections.Remove(id);
+            s.NeverAsk.Remove(id);
+        }));
     }
 
     /// <summary>
@@ -165,6 +197,7 @@ public sealed class McpSettingsStore
         {
             var settings = JsonSerializer.Deserialize<McpSettings>(File.ReadAllText(filePath), JsonOptions) ?? new McpSettings();
             settings.Connections ??= new Dictionary<string, string>();
+            settings.NeverAsk ??= new HashSet<string>();
             return settings;
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or NotSupportedException)
