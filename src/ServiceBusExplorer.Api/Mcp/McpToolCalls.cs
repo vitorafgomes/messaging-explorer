@@ -60,10 +60,12 @@ public sealed class McpToolCalls(
 
     private const string AllowedSuffix = ", allowed by you";
 
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, Converters = { new JsonStringEnumConverter() } };
+    /// <summary>How every answer is written: camelCase, an enum by its name.</summary>
+    internal static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, Converters = { new JsonStringEnumConverter() } };
 
     /// <summary>
-    /// Runs one tool call and records it. A refusal and a broker failure are answered as an error result with a fixed
+    /// Runs one tool call and records it. A success is one text block of JSON and, when that JSON is an object, the same
+    /// object as the structured content. A refusal and a broker failure are answered as an error result with a fixed
     /// sentence, never thrown and never the broker's text; a failure keeps its own Warning line in <paramref name="logger"/>.
     /// </summary>
     public async Task<CallToolResult> RunAsync(McpServer server, string asked, ILogger logger, Func<ToolCall, Task<object?>> work)
@@ -76,7 +78,11 @@ public sealed class McpToolCalls(
             var answer = await work(call);
             if (call.Allowed) call.Outcome += AllowedSuffix;
             Record(call.Kind);
-            return Answer(JsonSerializer.Serialize(answer, JsonOptions), isError: false);
+            var text = JsonSerializer.Serialize(answer, JsonOptions);
+            var result = Answer(text, isError: false);
+            using var parsed = JsonDocument.Parse(text);
+            if (parsed.RootElement.ValueKind == JsonValueKind.Object) result.StructuredContent = parsed.RootElement.Clone();
+            return result;
         }
         catch (McpException refused)
         {

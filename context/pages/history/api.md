@@ -18,6 +18,12 @@ What changed when in the project [[pages/services/api|Api]] describes, newest fi
 
 ## 2026-11-20
 
+- From the review of read_message: the 8,000 character cut never falls inside a character of two code units, so the pieces of a body still join to the original (`src/ServiceBusExplorer.Api.Tests/McpReadMessageTests.cs#A_character_of_two_code_units_at_the_cut_is_never_split_and_the_pieces_still_join_to_the_original`).
+
+- The MCP server reads in pages and in full ([[pages/services/api/mcp-reading]]). `list_queues`, `list_topics`, `list_subscriptions` and `list_rules` take `limit` (1 to 500, 200 by default) and `after`, and their answer changed shape: a bare array became `{ items, next }`, ordered by name, ordinal, with `next` only when more exist; the web app does not read these tools. A new tool, `read_message`, read-only, reads one message by its sequence number with its body in pieces of at most 8000 characters, under the protection of a peek; a provider that names a message by its position is refused. Every success whose JSON is an object is also given as structured content; the text block is unchanged.
+
+- Traced, no change: four places that build an exception's message (the purge of the RabbitMQ management client, the Azure Monitor metrics service, the connect failure, `MessageReadFailedException`) do not reach a route's body, a tool's answer or a request with the text of a broker, of the management API or of Azure.
+
 - From an outside review of the MCP server: turning it off or creating a token ends every request waiting for the user or the app at once, and withdrawing the choice of the settings of the app ends those for the app; the tool is refused with "The MCP server was turned off.", "The MCP token was replaced." or the not-allowed sentence and does nothing, and the app's answer while the choice is off is 404 ([[pages/services/api/mcp-app-settings]]).
 
 - From the same review: a failed removal in a delete, resubmit or move reaches a route and an MCP answer as a fixed sentence for its kind of failure, never the broker's text ([[pages/services/core/azure-bulk-operations]]).

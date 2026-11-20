@@ -240,7 +240,7 @@ describe('SettingsMcpComponent: the MCP server group of Settings, as Settings.dc
     it('"What each choice allows" lists only the Read block while the API lists "read" alone, and no bulk sentence', async () => {
       const { row } = await render();
       const blocks = Array.from(row('What each choice allows')?.querySelectorAll('.choice') ?? []).map(words);
-      expect(blocks).toStrictEqual(['Read Every connection listed List the connections offered, queues, topics, subscriptions and rules; read the counts; peek the active, dead-letter, scheduled and deferred messages. Never asks you.']);
+      expect(blocks).toStrictEqual(['Read Every connection listed List the connections offered, queues, topics, subscriptions and rules; read the counts; read the active, dead-letter, scheduled and deferred messages, their bodies included. Never asks you.']);
       expect(words(row('What each choice allows'))).not.toContain('possible duplicate');
     });
   });
@@ -634,7 +634,7 @@ describe('SettingsMcpComponent: the MCP server group of Settings, as Settings.dc
     const settle = async (refresh: () => Promise<void>) => { await refresh(); await new Promise(r => setTimeout(r, 50)); await refresh(); };
     const blocks = (row: Element | undefined) => Array.from(row?.querySelectorAll('.choice') ?? []).map(words);
 
-    const READ_BLOCK = 'Read Every connection listed List the connections offered, queues, topics, subscriptions and rules; read the counts; peek the active, dead-letter, scheduled and deferred messages. Never asks you.';
+    const READ_BLOCK = 'Read Every connection listed List the connections offered, queues, topics, subscriptions and rules; read the counts; read the active, dead-letter, scheduled and deferred messages, their bodies included. Never asks you.';
     const SEND_BLOCK = 'Send From "Read and send" up Send one message or many to a queue or a topic, now or scheduled. Asks you before each send, except on a local test broker.';
     const MOVE_BLOCK = 'Move and remove "Read, send and remove" only Dead-letter, resubmit, move, delete, purge and cancel scheduled messages. Asks you every time, a local test broker included; a delete or a purge asks for the name typed.';
     const ENTITIES_BLOCK = 'Entities "Read, send and remove" only Create, change and delete a queue, a topic, a subscription or a rule. Asks you every time; a delete asks for the name typed.';

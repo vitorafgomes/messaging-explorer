@@ -843,7 +843,7 @@ const MCP_ROWS = [
   { id: 'fab-rabbit', name: 'fabrikam-orders', where: 'Fabrikam, Staging. rabbit.fabrikam.example:5672', level: 0 }
 ];
 const MCP_GROUPS = [
-  { title: 'Read', level: 'Every connection listed', what: 'List the connections offered, queues, topics, subscriptions and rules; read the counts; peek the active, dead-letter, scheduled and deferred messages.', asks: 'Never asks you.' },
+  { title: 'Read', level: 'Every connection listed', what: 'List the connections offered, queues, topics, subscriptions and rules; read the counts; read the active, dead-letter, scheduled and deferred messages, their bodies included.', asks: 'Never asks you.' },
   { title: 'Send', level: 'From "Read and send" up', what: 'Send one message or many to a queue or a topic, now or scheduled.', asks: 'Asks you before each send, except on a local test broker.' },
   { title: 'Move and remove', level: '"Read, send and remove" only', what: 'Dead-letter, resubmit, move, delete, purge and cancel scheduled messages.', asks: 'Asks you every time, a local test broker included; a delete or a purge asks for the name typed.' },
   { title: 'Entities', level: '"Read, send and remove" only', what: 'Create, change and delete a queue, a topic, a subscription or a rule.', asks: 'Asks you every time; a delete asks for the name typed.' }

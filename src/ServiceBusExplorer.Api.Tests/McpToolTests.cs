@@ -80,6 +80,9 @@ public class McpToolTests
         public List<BatchCall> BatchCalls { get; } = [];
         public HashSet<string> Queues { get; init; } = ["orders", "orders-retry"];
 
+        /// <summary>The queues list_queues is answered, in this order; null answers the one queue orders.</summary>
+        public List<string>? QueueNames { get; init; }
+
         /// <summary>The queues whose lookup answers RequiresSession true.</summary>
         public HashSet<string> SessionQueues { get; init; } = [];
 
@@ -103,6 +106,8 @@ public class McpToolTests
         public Exception? PeekFailure { get; init; }
         public int Peeks { get; set; }
         public int TopicLists { get; set; }
+        public int QueueLists { get; set; }
+        public int RuleLists { get; set; }
         public int SubscriptionLists { get; set; }
 
         /// <summary>What the factory throws on the next connects; null connects.</summary>
@@ -155,14 +160,14 @@ public class McpToolTests
             "get_Capabilities" => capabilities,
             "DisconnectAsync" => Task.CompletedTask,
             "DisposeAsync" => Counted(() => broker.Disposed.Add(connectionId), ValueTask.CompletedTask),
-            nameof(IMessagingProvider.GetQueuesAsync) => Task.FromResult<IEnumerable<IQueueEntity>>(
-                [new QueueInfo { Name = "orders", Status = broker.ListedStatus, ActiveMessageCount = 3, DeadLetterMessageCount = 2 }]),
+            nameof(IMessagingProvider.GetQueuesAsync) => Counted(() => broker.QueueLists++, Task.FromResult<IEnumerable<IQueueEntity>>(
+                (broker.QueueNames ?? ["orders"]).Select(name => new QueueInfo { Name = name, Status = broker.ListedStatus, ActiveMessageCount = 3, DeadLetterMessageCount = 2 }).ToList())),
             nameof(IMessagingProvider.GetTopicsAsync) => Counted(() => broker.TopicLists++, Task.FromResult<IEnumerable<ITopicEntity>>(
                 [new TopicInfo { Name = "events", Status = broker.ListedStatus, SubscriptionCount = 1 }])),
             nameof(IMessagingProvider.GetSubscriptionsAsync) => Counted(() => broker.SubscriptionLists++, Task.FromResult<IEnumerable<SubscriptionInfo>>(
                 [new SubscriptionInfo { TopicName = "events", Name = "audit", Status = broker.ListedStatus, ActiveMessageCount = 5 }])),
-            nameof(IMessagingProvider.GetRulesAsync) => Task.FromResult<IReadOnlyList<SubscriptionRuleInfo>>(broker.Rules),
-            nameof(IMessagingProvider.PeekMessagesAsync) => Peek(broker),
+            nameof(IMessagingProvider.GetRulesAsync) => Counted(() => broker.RuleLists++, Task.FromResult<IReadOnlyList<SubscriptionRuleInfo>>(broker.Rules)),
+            nameof(IMessagingProvider.PeekMessagesAsync) => Peek(broker, (int)args[1]!, (long?)args[4]),
             nameof(IMessagingProvider.GetQueueAsync) => broker.LookupFailure is { } lookupFailed && !broker.FailTopicLookup ? Task.FromException<IQueueEntity?>(lookupFailed) : Task.FromResult<IQueueEntity?>(
                 broker.Queues.Contains((string)args[0]!) ? new QueueInfo { Name = (string)args[0]!, Status = "Active", ActiveMessageCount = 3, DeadLetterMessageCount = 2, RequiresSession = broker.SessionQueues.Contains((string)args[0]!) } : null),
             nameof(IMessagingProvider.GetSubscriptionAsync) => broker.SubscriptionLookupFailure is { } subscriptionLookupFailed ? Task.FromException<SubscriptionInfo?>(subscriptionLookupFailed) : Task.FromResult<SubscriptionInfo?>(broker.Subscriptions.Contains($"{args[0]}/{args[1]}")
@@ -243,12 +248,13 @@ public class McpToolTests
         return Task.FromResult(broker.BatchAnswer?.Invoke(messages) ?? new SendMessagesResult { SentCount = messages.Count });
     }
 
-    private static Task<IEnumerable<IMessage>> Peek(Broker broker)
+    /// <summary>Answers at most <paramref name="count"/> messages, from <paramref name="from"/> when it is given, as a broker does.</summary>
+    private static Task<IEnumerable<IMessage>> Peek(Broker broker, int count, long? from)
     {
         broker.Peeks++;
         return broker.PeekFailure is { } failure
             ? Task.FromException<IEnumerable<IMessage>>(failure)
-            : Task.FromResult<IEnumerable<IMessage>>(broker.Messages);
+            : Task.FromResult<IEnumerable<IMessage>>(broker.Messages.Where(m => from is null || m.SequenceNumber >= from).Take(count).ToList());
     }
 
     /// <summary>
@@ -370,7 +376,23 @@ public class McpToolTests
             var failed = result.TryGetProperty("isError", out var isError) && isError.GetBoolean();
             Assert.False(text.StartsWith("An error occurred invoking", StringComparison.Ordinal),
                 $"a refusal is answered as an error result of the tool, not as an exception the SDK puts its prefix before; {tool} answered {text}");
+            AssertStructuredContent(tool, result, failed, text);
             return (failed, text);
+        }
+
+        /// <summary>
+        /// Every answer of every tool: a success whose text is a JSON object carries the same object as its structured
+        /// content, and a refusal, a failure or an answer that is not an object carries none.
+        /// </summary>
+        private static void AssertStructuredContent(string tool, JsonElement result, bool failed, string text)
+        {
+            var structured = result.TryGetProperty("structuredContent", out var given) && given.ValueKind != JsonValueKind.Null ? given : (JsonElement?)null;
+            using var parsed = failed ? null : JsonDocument.Parse(text);
+            if (parsed?.RootElement.ValueKind == JsonValueKind.Object)
+                Assert.True(structured is { } content && JsonElement.DeepEquals(content, parsed.RootElement),
+                    $"a tool's answer is also given as structured content equal to its text; {tool} answered {text} with structured content {structured?.GetRawText() ?? "none"}");
+            else
+                Assert.True(structured is null, $"a refusal, a failure or an answer that is not an object carries no structured content; {tool} carried {structured?.GetRawText()} beside {text}");
         }
 
         /// <summary>The tool named <paramref name="tool"/> as tools/list answers it.</summary>
@@ -525,16 +547,16 @@ public class McpToolTests
         Assert.False(queues.IsError || topics.IsError || subscriptions.IsError || rules.IsError || peeked.IsError, $"{queues.Text} {topics.Text} {subscriptions.Text} {rules.Text} {peeked.Text}");
         using (var doc = JsonDocument.Parse(queues.Text))
         {
-            var queue = Assert.Single(doc.RootElement.EnumerateArray());
+            var queue = Assert.Single(doc.RootElement.GetProperty("items").EnumerateArray());
             Assert.Equal(("orders", 3L, 2L), (queue.GetProperty("name").GetString(), queue.GetProperty("activeMessageCount").GetInt64(), queue.GetProperty("deadLetterMessageCount").GetInt64()));
         }
-        using (var doc = JsonDocument.Parse(topics.Text)) Assert.Equal("events", Assert.Single(doc.RootElement.EnumerateArray()).GetProperty("name").GetString());
+        using (var doc = JsonDocument.Parse(topics.Text)) Assert.Equal("events", Assert.Single(doc.RootElement.GetProperty("items").EnumerateArray()).GetProperty("name").GetString());
         using (var doc = JsonDocument.Parse(subscriptions.Text))
         {
-            var subscription = Assert.Single(doc.RootElement.EnumerateArray());
+            var subscription = Assert.Single(doc.RootElement.GetProperty("items").EnumerateArray());
             Assert.Equal(("audit", 5L), (subscription.GetProperty("name").GetString(), subscription.GetProperty("activeMessageCount").GetInt64()));
         }
-        using (var doc = JsonDocument.Parse(rules.Text)) Assert.Equal("1=1", Assert.Single(doc.RootElement.EnumerateArray()).GetProperty("sqlExpression").GetString());
+        using (var doc = JsonDocument.Parse(rules.Text)) Assert.Equal("1=1", Assert.Single(doc.RootElement.GetProperty("items").EnumerateArray()).GetProperty("sqlExpression").GetString());
         using (var doc = JsonDocument.Parse(peeked.Text))
         {
             var messages = doc.RootElement.GetProperty("messages").EnumerateArray().ToList();
@@ -741,7 +763,7 @@ public class McpToolTests
         foreach (var (tool, text, active) in new[] { ("list_queues", queues.Text, 3L), ("list_subscriptions", subscriptions.Text, 5L) })
         {
             using var doc = JsonDocument.Parse(text);
-            var entity = Assert.Single(doc.RootElement.EnumerateArray());
+            var entity = Assert.Single(doc.RootElement.GetProperty("items").EnumerateArray());
             Assert.True(entity.TryGetProperty("countsAvailable", out var available) && available.GetBoolean() == countsGiven,
                 $"{tool} says whether the broker gives counts; with counts given {countsGiven} it answered {text}");
             var answered = countFields.Where(f => entity.TryGetProperty(f, out _)).ToList();
@@ -753,7 +775,7 @@ public class McpToolTests
 
         var topics = await host.CallAsync("list_topics");
         using var listed = JsonDocument.Parse(topics.Text);
-        var topic = listed.RootElement.EnumerateArray().First();
+        var topic = listed.RootElement.GetProperty("items").EnumerateArray().First();
         Assert.True(topic.TryGetProperty("countsAvailable", out var topicCounts) && topicCounts.GetBoolean() == countsGiven
                 && topic.TryGetProperty("scheduledMessageCount", out _) == countsGiven,
             $"list_topics answers its scheduled count only when the broker gives counts; with counts given {countsGiven} it answered {topics.Text}");
@@ -834,11 +856,11 @@ public class McpToolTests
 
         Assert.False(isError, text);
         using var doc = JsonDocument.Parse(text);
-        var rules = doc.RootElement.EnumerateArray().ToList();
+        var rules = doc.RootElement.GetProperty("items").EnumerateArray().ToList();
         Assert.True(rules.Select(r => r.GetProperty("filterType")).All(f => f.ValueKind == JsonValueKind.String)
-                && rules.Select(r => r.GetProperty("filterType").GetString()).SequenceEqual(["Sql", "Correlation"]),
+                && rules.Select(r => r.GetProperty("filterType").GetString()).SequenceEqual(["Correlation", "Sql"]),
             $"list_rules answers filterType as the name of the kind of filter, not a number; it answered {text}");
-        var property = rules[1].GetProperty("correlation").GetProperty("applicationProperties")[0].GetProperty("type");
+        var property = rules[0].GetProperty("correlation").GetProperty("applicationProperties")[0].GetProperty("type");
         Assert.True(property.ValueKind == JsonValueKind.String && property.GetString() == "Int64",
             $"list_rules answers the type of a correlation property by its name, not a number; it answered {text}");
     }
@@ -861,12 +883,137 @@ public class McpToolTests
             var (isError, text) = await host.CallAsync(tool, arguments);
             Assert.False(isError, text);
             using var doc = JsonDocument.Parse(text);
-            var entity = Assert.Single(doc.RootElement.EnumerateArray());
+            var entity = Assert.Single(doc.RootElement.GetProperty("items").EnumerateArray());
             string? answered = entity.TryGetProperty("status", out var given) ? given.GetString() : null;
             Assert.True(answered == (status.Length == 0 ? null : status),
                 $"{tool} leaves status out when the provider gives none and answers it when it does; with status '{status}' it answered {text}");
             Assert.Equal(name, entity.GetProperty("name").GetString());
         }
+    }
+
+    [Fact]
+    public async Task A_list_answers_at_most_200_by_name_with_next_and_after_continues_it()
+    {
+        var broker = new Broker { QueueNames = Enumerable.Range(0, 450).Reverse().Select(i => $"q-{i:D3}").ToList() };
+        await using var host = new Host(broker);
+        await host.StartAsync();
+        await host.SeedAsync(Offered());
+        await host.OfferAsync("c-offered");
+        await host.ConnectAsync("c-offered");
+
+        var first = await host.CallAsync("list_queues");
+        var second = await host.CallAsync("list_queues", new { after = "q-199" });
+        var third = await host.CallAsync("list_queues", new { after = "q-399" });
+
+        var pages = new List<(List<string> Names, string? Next)>();
+        foreach (var (isError, text) in new[] { first, second, third })
+        {
+            Assert.False(isError, text);
+            using var doc = JsonDocument.Parse(text);
+            pages.Add((doc.RootElement.GetProperty("items").EnumerateArray().Select(q => q.GetProperty("name").GetString()!).ToList(),
+                doc.RootElement.TryGetProperty("next", out var next) ? next.GetString() : null));
+        }
+        string[] Names(int from, int count) => Enumerable.Range(from, count).Select(i => $"q-{i:D3}").ToArray();
+        Assert.True(pages[0].Names.SequenceEqual(Names(0, 200)) && pages[0].Next == "q-199",
+            $"a list answers at most 200 entities by name and next names the last one when more exist; the first page answered {pages[0].Names.Count} from {pages[0].Names.FirstOrDefault()} with next {pages[0].Next}");
+        Assert.True(pages[1].Names.SequenceEqual(Names(200, 200)) && pages[1].Next == "q-399",
+            $"after = next answers the next 200; the second page answered {pages[1].Names.Count} from {pages[1].Names.FirstOrDefault()} with next {pages[1].Next}");
+        Assert.True(pages[2].Names.SequenceEqual(Names(400, 50)) && pages[2].Next is null,
+            $"the last page answers what remains and no next; it answered {pages[2].Names.Count} with next {pages[2].Next}");
+        using (var doc = JsonDocument.Parse(first.Text))
+        {
+            var item = doc.RootElement.GetProperty("items")[0];
+            using var expected = JsonDocument.Parse("""{"name":"q-000","status":"Active","countsAvailable":true,"activeMessageCount":3,"deadLetterMessageCount":2,"scheduledMessageCount":0,"transferMessageCount":0,"transferDeadLetterMessageCount":0}""");
+            Assert.True(JsonElement.DeepEquals(expected.RootElement, item), $"an item of a page is exactly what list_queues answered for that queue before paging; it answered {item}");
+        }
+        var outcomes = (await host.ActivityAsync()).EnumerateArray().Select(l => l.GetProperty("outcome").GetString()).ToList();
+        Assert.Equal(["50 listed", "200 listed, more exist", "200 listed, more exist"], outcomes);
+    }
+
+    [Fact]
+    public async Task An_object_answer_is_also_given_as_structured_content_and_an_array_or_a_refusal_is_text_only()
+    {
+        await using var host = new Host(new Broker());
+        await host.StartAsync();
+        await host.SeedAsync(Offered());
+        await host.OfferAsync("c-offered");
+        await host.ConnectAsync("c-offered");
+
+        var body = JsonSerializer.Serialize(new { jsonrpc = "2.0", id = 9, method = "tools/call", @params = new { name = "list_queues", arguments = new { } } });
+        using var response = await host.Anonymous.SendAsync(McpRequest(body, bearer: "Bearer " + host.Token));
+        using var doc = JsonDocument.Parse(JsonRpcPayload(await response.Content.ReadAsStringAsync()));
+        var result = doc.RootElement.GetProperty("result");
+        var text = Assert.Single(result.GetProperty("content").EnumerateArray()).GetProperty("text").GetString()!;
+        using var parsed = JsonDocument.Parse(text);
+        Assert.True(result.TryGetProperty("structuredContent", out var structured) && JsonElement.DeepEquals(structured, parsed.RootElement),
+            $"a tool's answer is also given as structured content equal to its one text block; list_queues answered {result}");
+        Assert.True(parsed.RootElement.TryGetProperty("items", out _), $"the text block stays the JSON it was; it read {text}");
+        Assert.False((await host.ListedToolAsync("list_queues")).TryGetProperty("outputSchema", out _), "no output schema is declared");
+        var array = await host.CallAsync("list_connections");
+        var refusal = await host.CallAsync("read_logs");
+        Assert.True(!array.IsError && array.Text.StartsWith('['), $"list_connections answers an array, which CallAsync checks carries no structured content; it answered {array.Text}");
+        Assert.True(refusal == (true, McpReadTools.LogsRefused), $"a refusal, which CallAsync checks carries no structured content; read_logs answered {refusal.Text}");
+    }
+
+    [Fact]
+    public async Task Rules_are_paged_by_name_with_limit_and_after_and_each_item_is_the_rule_as_answered_before()
+    {
+        var broker = new Broker
+        {
+            Rules =
+            [
+                new SubscriptionRuleInfo { Name = "r-c", FilterType = RuleFilterType.Sql, SqlExpression = "c=1" },
+                new SubscriptionRuleInfo { Name = "r-a", FilterType = RuleFilterType.Sql, SqlExpression = "a=1" },
+                new SubscriptionRuleInfo { Name = "r-b", FilterType = RuleFilterType.Correlation, Correlation = new CorrelationFilterInfo { CorrelationId = "b" } },
+            ],
+        };
+        await using var host = new Host(broker);
+        await host.StartAsync();
+        await host.SeedAsync(Offered());
+        await host.OfferAsync("c-offered");
+        await host.ConnectAsync("c-offered");
+
+        var first = await host.CallAsync("list_rules", new { topic = "events", subscription = "audit", limit = 2 });
+        var rest = await host.CallAsync("list_rules", new { topic = "events", subscription = "audit", limit = 2, after = "r-b" });
+        var unlisted = await host.CallAsync("list_rules", new { topic = "events", subscription = "audit", after = "r-aa" });
+
+        Assert.False(first.IsError || rest.IsError || unlisted.IsError, $"{first.Text} {rest.Text} {unlisted.Text}");
+        var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() } };
+        var before = broker.Rules.ToDictionary(r => r.Name!, r => JsonDocument.Parse(JsonSerializer.Serialize(r, options)).RootElement);
+        (string[] Names, string? Next) Page(string text)
+        {
+            using var doc = JsonDocument.Parse(text);
+            var items = doc.RootElement.GetProperty("items").EnumerateArray().ToList();
+            foreach (var item in items)
+                Assert.True(JsonElement.DeepEquals(before[item.GetProperty("name").GetString()!], item), $"an item of a page is exactly the rule list_rules answered before paging; it answered {item}");
+            return (items.Select(i => i.GetProperty("name").GetString()!).ToArray(), doc.RootElement.TryGetProperty("next", out var next) ? next.GetString() : null);
+        }
+        var pages = new[] { Page(first.Text), Page(rest.Text), Page(unlisted.Text) };
+        Assert.True(pages[0].Names.SequenceEqual(["r-a", "r-b"]) && pages[0].Next == "r-b", $"list_rules answers at most limit rules by name and next when more exist; it answered {first.Text}");
+        Assert.True(pages[1].Names.SequenceEqual(["r-c"]) && pages[1].Next is null, $"after = next answers the rest and no next; it answered {rest.Text}");
+        Assert.True(pages[2].Names.SequenceEqual(["r-b", "r-c"]) && pages[2].Next is null, $"an after that names nothing listed starts where it would sort; it answered {unlisted.Text}");
+    }
+
+    [Theory]
+    [InlineData("list_queues", 0)]
+    [InlineData("list_queues", 501)]
+    [InlineData("list_topics", 0)]
+    [InlineData("list_subscriptions", 501)]
+    [InlineData("list_rules", 0)]
+    public async Task A_limit_outside_1_to_500_is_refused_and_the_broker_is_not_asked(string tool, int limit)
+    {
+        var broker = new Broker();
+        await using var host = new Host(broker);
+        await host.StartAsync();
+        await host.SeedAsync(Offered());
+        await host.OfferAsync("c-offered");
+        await host.ConnectAsync("c-offered");
+
+        var answer = await host.CallAsync(tool, new { topic = "events", subscription = "audit", limit });
+
+        Assert.True(answer == (true, "limit is 1 to 500."), $"a limit outside 1 to 500 is refused with its sentence; {tool} with limit {limit} answered {answer.Text}");
+        Assert.True(broker.QueueLists + broker.TopicLists + broker.SubscriptionLists + broker.RuleLists == 0, $"a limit outside 1 to 500 is refused before the broker is asked; {tool} listed queues {broker.QueueLists}, topics {broker.TopicLists}, subscriptions {broker.SubscriptionLists}, rules {broker.RuleLists}");
+        Assert.Equal("Refused: limit", Assert.Single((await host.ActivityAsync()).EnumerateArray()).GetProperty("outcome").GetString());
     }
 
     public static readonly TheoryData<string, string?> ToolsThatNeedAReason = new()

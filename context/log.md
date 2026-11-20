@@ -1,3 +1,6 @@
+## [2026-11-20] feature | The MCP server lists in pages, reads one message in full and gives structured content
+The four lists answer { items, next } with limit and after, read_message reads a body in pieces of 8000 characters under the protection of a peek, an object answer is also structured content, and the level Read says bodies are read. [[pages/services/api/mcp-reading]]
+
 ## [2026-11-20] feature | The MCP server reads and changes the theme, Developer mode and the update channel, when the user allowed it
 Two tools that hand the request to the app over its own list of requests, a fixed list of settings and values, no ask per change: the choice in Settings is the consent and the record shows it. [[pages/services/api/mcp-app-settings]]
 
