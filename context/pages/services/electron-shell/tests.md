@@ -1,9 +1,9 @@
 ---
 title: "Electron Shell: Tests"
-version: "1.1"
+version: "1.2"
 date: 2026-11-13
-updated: 2026-11-13
-changes: "2026-11-13: an update downloads on its own where the package can replace itself. v1.0: split out of the Electron Shell service page"
+updated: 2026-11-20
+changes: "2026-11-20: the quit question and the whole bridge. 2026-11-13: an update downloads on its own where the package can replace itself. v1.0: split out of the Electron Shell service page"
 page_type: service
 status: active
 description: "Read when a change touches shell-helpers.js and its tests, the preload and release-workflow tests, or what no test reaches."
@@ -34,4 +34,5 @@ One topic of [[pages/services/electron-shell|Electron Shell]]; the map lists the
 - `web-app/electron/release-workflow.test.js` reads `.github/workflows/release.yml` as text and matches the upload globs of each OS against the files a stable and a beta build leave behind: the exact uploaded set, `beta*.yml` on a beta, the block maps, and never the builder's debug files (`web-app/electron/release-workflow.test.js#a stable release uploads latest*.yml and the packages for every OS`, `web-app/electron/release-workflow.test.js#a beta release uploads beta*.yml for every OS`, `web-app/electron/release-workflow.test.js#a release uploads the .blockmap files of the Windows installer and the macOS packages`, `web-app/electron/release-workflow.test.js#builder debug files are never uploaded`).
 - Run with `npm run test:electron` in `web-app/` (`web-app/package.json`); CI runs it in the `web` job after the Angular tests (`.github/workflows/ci.yml#working-directory: web-app`).
 - `web-app/electron/preload.test.js` loads the preload with a fake `electron` module (no Electron) and pins what it exposes; see the IPC surface. Since 2026-11-13 the fake records the channel of each `invoke`, and `getSelfUpdateBlocker` is pinned to `get-self-update-blocker` (`web-app/electron/preload.test.js#getSelfUpdateBlocker reads the get-self-update-blocker channel and sends nothing with it`).
-- No test starts Electron. The wiring in main.js (the dialogs, the window opening after the wait, `before-quit`, the IPC handlers) is untested.
+- Since 2026-11-20 the question before a quit is decided by `quitDecision` and the count it reads by `acceptActiveRuns` (`web-app/electron/shell-helpers.js`): no run quits without asking, Keep running cancels, Quit and stop quits, several runs read in the plural, the quit of an update and a quit already agreed to never ask, and a count that is not a whole number from 0 to 1000, or from another sender, keeps the last one (`web-app/electron/shell-helpers.test.js#the quit that installs an update is never asked about, so quitAndInstall is not blocked`, `web-app/electron/shell-helpers.test.js#the count of active runs is taken only as a whole number from 0 to 1000 from the main window, else the last valid one stays`). A text match pins that `before-quit` decides before it stops the API and that the update's event is read on Electron's own `autoUpdater`. `web-app/electron/preload.test.js#the preload exposes exactly these members, setActiveRuns included` pins the whole bridge.
+- No test starts Electron. The wiring in main.js (the dialogs, the native box itself, the window opening after the wait, the IPC handlers) is untested.

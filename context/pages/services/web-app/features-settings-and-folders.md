@@ -2,8 +2,8 @@
 title: "Web App: Settings and the feature folders"
 version: "1.2"
 date: 2026-11-13
-updated: 2026-11-16
-changes: "2026-11-16: the versions of the channel. v1.1: Appearance, last check, release notes, status tokens and the About links of Settings; the two dialogs. 2026-11-13: an update downloads on its own where the package can replace itself"
+updated: 2026-11-20
+changes: "2026-11-20: what the panel of a picked version says. 2026-11-16: the versions of the channel. v1.1: Appearance, release notes and the About links of Settings; the two dialogs"
 page_type: service
 status: active
 description: "Read when a change touches the Settings screen (updates, data, developer, about), AppUpdateService, or the connections, entities, messages, queues, topics and monitoring folders."
@@ -37,11 +37,11 @@ One topic of [[pages/services/web-app|Web App]]; the map lists the others.
 - Not built from the artboard: the reasons of every platform as a list, where the screen names this platform's only; the environment chip of the clear dialog (lane L5); nothing else of the two dialogs. The caption under the preview says "No connection, no namespace, no message body.", which holds because every caught error is kept with its addresses and host names taken out (`web-app/src/app/shared/bug-report.service.ts#redact`).
 
 - `connections/` - the connection list, the add and edit dialog, clients and environments, export and import: [[pages/services/web-app/features-connections]].
-- `entities/` - the main workspace: tree plus details (`web-app/src/app/features/entities/entities-container.component.ts`), transfer monitor. The metrics dashboard that drew mock data was removed on 2026-11-12.
+- `entities/` - the main workspace: tree plus details (`web-app/src/app/features/entities/entities-container.component.ts`), transfer monitor. The mock metrics dashboard went on 2026-11-12.
 - `messages/` - view, send, import, export, move, diff and continuous-resubmit dialogs.
 - `queues/`, `topics/` - list pages with per-row actions. Since 2026-11-13 both are Material and theme tokens: the queues are a `mat-table`, the topics a list of disclosure buttons that load the subscriptions of a topic on open (`web-app/src/app/features/topics/topics.component.ts#toggleTopic`). A count opens the messages of its sub-queue; View and Send are named icon buttons; the two purges are in a menu named "More actions for {name}", in the error colour, each disabled at a count of 0, and ask the same confirmation as before. Loading, empty and a failed load are three states; a failed load of the list says it could not be read and offers Retry, where it used to end on "No queues found" or "No topics found" behind a snackbar (`web-app/src/app/features/queues/queues.component.ts#loadError`, `web-app/src/app/features/topics/topics.component.ts#loadError`). Pinned by `web-app/src/app/features/queues/queues.component.spec.ts` and `web-app/src/app/features/topics/topics.component.spec.ts#a topic list the API fails to return is an error with Retry, never "No topics found"; Retry asks again and shows the topics`.
 - `monitoring/` - snapshot and history trend (`web-app/src/app/features/monitoring/monitoring.component.ts#MonitoringComponent`) and, since 2026-11-13, the counts of every entity ([[pages/services/web-app/features-monitoring]]).
 
-**Install of the picked version (2026-11-16).** Under the notes of a version other than the installed one, Settings says what will be installed, warns when it goes back to an older version, and enables Install only after the agreement box is ticked; picking another version unticks it (`web-app/src/app/features/settings/settings.component.ts#agreedToInstall`). A release with no package for the system, or a package that cannot replace itself, shows the page of that version and no Install.
+**Install of the picked version (2026-11-16).** Under the notes of a version other than the installed one, Settings says what will be installed, warns when it goes back to an older version, and enables Install only after the agreement box is ticked; picking another version unticks it (`web-app/src/app/features/settings/settings.component.ts#agreedToInstall`). A release with no package for the system, or a package that cannot replace itself, shows the page of that version and no Install. Since 2026-11-20 it places the version against the installed one, offers Open the release page and says nothing downloads before Install.
 
-**The notes expand and hide (2026-11-19).** The notes of the picked version sit under a header that names how many lines they hold; notes longer than four lines show the first four and the rest on demand (`web-app/src/app/features/settings/settings.component.ts#notesShown`). Hiding the notes does not change the agreement or Install, at the owner's word on 2026-11-19.
+**The notes expand and hide (2026-11-19).** The notes of the picked version sit under a header that names how many lines they hold; longer notes show four lines and the rest on demand (`web-app/src/app/features/settings/settings.component.ts#notesShown`). Hiding them changes neither the agreement nor Install, at the owner's word on 2026-11-19.

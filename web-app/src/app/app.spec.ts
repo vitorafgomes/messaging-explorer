@@ -258,6 +258,27 @@ describe('App', () => {
       expect(downloadUpdate).not.toHaveBeenCalled();
     });
 
+    it('tells the shell how many resubmits run when one starts and when it ends, so quitting can ask first', () => {
+      const setActiveRuns = vi.fn();
+      Object.assign((window as any).electronAPI, { setActiveRuns });
+      const run = {
+        target: { entityType: 'queue', entityName: 'orders', subQueue: 'deadletter' },
+        progress: signal({ status: 'running', read: 1, total: 10, failed: 0, possibleDuplicates: 0, remainingMs: 1000 }),
+        pause: vi.fn(), resume: vi.fn(), stop: vi.fn()
+      } as unknown as ResubmitRun;
+      const fixture = TestBed.createComponent(App);
+      fixture.detectChanges();
+      expect(setActiveRuns.mock.calls, 'the shell hears 0 when the page starts').toEqual([[0]]);
+
+      activeRuns.set([run]);
+      fixture.detectChanges();
+      expect(setActiveRuns.mock.calls.at(-1), 'the shell hears 1 when a run starts').toEqual([1]);
+
+      activeRuns.set([]);
+      fixture.detectChanges();
+      expect(setActiveRuns.mock.calls, 'the shell hears 0 when the run ends, and once per change').toEqual([[0], [1], [0]]);
+    });
+
     it('the toolbar marks the active route', async () => {
       const fixture = TestBed.createComponent(App);
       fixture.detectChanges();
@@ -282,6 +303,16 @@ describe('App', () => {
     status.next({ connected: true, namespace: 'sample.servicebus.windows.net' });
     fixture.detectChanges();
     expect(['Connections', 'Entities', 'Monitoring'].map(l => link(l).getAttribute('aria-disabled') === 'true')).toStrictEqual([false, false, false]);
+  });
+
+  it('in the browser, where the shell is not there, a run starting and ending sends nothing and throws nothing', () => {
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    activeRuns.set([{ progress: signal({ status: 'running' }), target: { entityName: 'orders' } } as unknown as ResubmitRun]);
+    expect(() => fixture.detectChanges(), 'a run starting without the shell must not throw').not.toThrow();
+    activeRuns.set([]);
+    expect(() => fixture.detectChanges(), 'a run ending without the shell must not throw').not.toThrow();
+    expect((window as any).electronAPI, 'nothing is created where the shell is not there').toBeUndefined();
   });
 
   it('in the browser the toolbar has the same links, Settings included', () => {

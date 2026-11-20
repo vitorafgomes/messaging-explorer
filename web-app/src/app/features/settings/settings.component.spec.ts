@@ -280,6 +280,42 @@ describe('SettingsComponent', () => {
         expect(installUpdateVersion.mock.calls).toStrictEqual([['2.4.4', true]]);
       });
 
+      it('under the heading, the picked version is placed against the installed one, in the words of the artboard', async () => {
+        const { el, refresh } = await open();
+        const relation = () => el.querySelector('[data-testid="version-relation"]') as HTMLElement | null;
+
+        expect(words(relation()), 'a newer version').toBe('Newer than 2.4.2, the version you have.');
+        expect(relation()!.previousElementSibling?.tagName, 'the line comes right after the heading, as drawn').toBe('H3');
+        await pick(el, refresh, 1);
+        expect(words(relation()), 'the installed version').toBe('The version installed on this computer.');
+        await pick(el, refresh, 2);
+        expect(words(relation()), 'an older version').toBe('Older than 2.4.2, the version you have.');
+      });
+
+      it('beside Install, Open the release page opens the page of the picked version through the same safe link as the blocked branches', async () => {
+        const { el } = await open();
+        const actions = block(el)!.querySelector('.install-actions') as HTMLElement;
+        const page = Array.from(actions.querySelectorAll('a')).find(a => words(a) === 'Open the release page');
+
+        expect(page, 'Open the release page sits beside Install').toBeDefined();
+        expect(page!.previousElementSibling, 'after the Install button, as drawn').toBe(installButton(el));
+        expect(page!.getAttribute('href'), 'the release page of the version picked').toBe('https://github.com/vitorafgomes/messaging-explorer/releases/tag/v2.4.4');
+        expect(page!.getAttribute('target'), 'opened by the shell, outside the app').toBe('_blank');
+        expect(page!.getAttribute('rel')).toBe('noopener noreferrer');
+      });
+
+      it('under the agreement, the app says nothing downloads before Install, and stops saying it while a version downloads', async () => {
+        const { el, refresh } = await open({ installUpdateVersion: vi.fn(() => new Promise(() => {})) });
+        const hint = () => Array.from(block(el)!.querySelectorAll('p, span')).find(e => words(e) === 'Nothing downloads until you tick the box and press Install. The app restarts to finish.');
+
+        expect(hint(), 'shown while nothing downloads').toBeDefined();
+        agree(el);
+        await refresh();
+        installButton(el)!.click();
+        await refresh();
+        expect(hint(), 'not shown while the version downloads').toBeUndefined();
+      });
+
       it('the installed version shows its notes and nothing to install, and picking another version withdraws the agreement', async () => {
         const { el, refresh } = await open();
         agree(el);

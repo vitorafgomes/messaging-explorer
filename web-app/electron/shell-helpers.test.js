@@ -801,3 +801,83 @@ test('main.js captures its console into the shell log and answers the two log ch
   assert.match(main, /ipcMain\.handle\('get-shell-logs', \(event, after\) => shellLog\.after\(after\)\)/);
   assert.match(main, /ipcMain\.handle\('clear-shell-logs', \(\) => shellLog\.clear\(\)\)/);
 });
+
+test('quitting with no resubmit running quits without asking', () => {
+  const { quitDecision } = require('./shell-helpers');
+  let asked = 0;
+  const decision = quitDecision({ activeRuns: 0, forUpdate: false, alreadyQuitting: false, ask: () => { asked++; return 0; } });
+  assert.equal(decision, 'quit', 'with no run active the app must quit');
+  assert.equal(asked, 0, 'with no run active the app must not ask');
+});
+
+test('quitting while one resubmit runs asks, and Keep running cancels the quit', () => {
+  const { quitDecision } = require('./shell-helpers');
+  const questions = [];
+  const decision = quitDecision({ activeRuns: 1, forUpdate: false, alreadyQuitting: false, ask: (question) => { questions.push(question); return 0; } });
+  assert.equal(decision, 'cancel', 'Keep running must cancel the quit');
+  assert.deepEqual(questions, [{
+    type: 'warning',
+    title: 'Messaging Explorer',
+    message: 'A resubmit is still running.',
+    detail: 'Quitting stops it. Messages already resubmitted stay where they are; the rest stay in the dead-letter queue.',
+    buttons: ['Keep running', 'Quit and stop'],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true
+  }], 'one question, with Keep running as the default and as what Escape chooses');
+});
+
+test('quitting while one resubmit runs and Quit and stop is chosen quits', () => {
+  const { quitDecision } = require('./shell-helpers');
+  assert.equal(quitDecision({ activeRuns: 1, forUpdate: false, alreadyQuitting: false, ask: () => 1 }), 'quit', 'Quit and stop must quit');
+});
+
+test('quitting while several resubmits run asks with the plural sentence', () => {
+  const { quitDecision } = require('./shell-helpers');
+  const messages = [];
+  quitDecision({ activeRuns: 2, forUpdate: false, alreadyQuitting: false, ask: (question) => { messages.push(question.message); return 0; } });
+  assert.deepEqual(messages, ['2 resubmits are still running.'], 'two runs must be named in the plural');
+});
+
+test('the quit that installs an update is never asked about, so quitAndInstall is not blocked', () => {
+  const { quitDecision } = require('./shell-helpers');
+  let asked = 0;
+  const decision = quitDecision({ activeRuns: 3, forUpdate: true, alreadyQuitting: false, ask: () => { asked++; return 0; } });
+  assert.equal(decision, 'quit', 'a quit for an update must go on while a run is active');
+  assert.equal(asked, 0, 'a quit for an update must not ask');
+});
+
+test('a quit already agreed to is not asked about a second time', () => {
+  const { quitDecision } = require('./shell-helpers');
+  let asked = 0;
+  const decision = quitDecision({ activeRuns: 1, forUpdate: false, alreadyQuitting: true, ask: () => { asked++; return 0; } });
+  assert.equal(decision, 'quit', 'a quit already under way must go on');
+  assert.equal(asked, 0, 'one quit must ask at most once');
+});
+
+test('the count of active runs is taken only as a whole number from 0 to 1000 from the main window, else the last valid one stays', () => {
+  const { acceptActiveRuns } = require('./shell-helpers');
+  const { win, webContents } = fakeWindow();
+  assert.equal(acceptActiveRuns(webContents, win, 0, 4), 0, '0 is a valid count');
+  assert.equal(acceptActiveRuns(webContents, win, 2, 0), 2, '2 is a valid count');
+  assert.equal(acceptActiveRuns(webContents, win, 1000, 0), 1000, '1000 is a valid count');
+  for (const invalid of ['2', 1.5, -1, 1001, NaN, Infinity, null, undefined, { name: 'orders' }]) {
+    assert.equal(acceptActiveRuns(webContents, win, invalid, 3), 3, `a count of ${String(invalid)} must be ignored and the last valid one kept`);
+  }
+  assert.equal(acceptActiveRuns({ other: true }, win, 2, 3), 3, 'a count from another sender must be ignored');
+  assert.equal(acceptActiveRuns(webContents, fakeWindow({ destroyed: true }).win, 2, 3), 3, 'a count after the window is destroyed must be ignored, without a throw');
+  assert.equal(acceptActiveRuns(webContents, null, 2, 3), 3, 'a count with no window must be ignored');
+});
+
+test('main.js asks from before-quit before it stops the API, and lets the update quit through electron\'s own autoUpdater event', () => {
+  const main = require('node:fs').readFileSync(path.join(__dirname, 'main.js'), 'utf8');
+  assert.match(main, /require\('electron'\)\.autoUpdater\.on\('before-quit-for-update'/, 'the update quit is signalled on electron\'s autoUpdater, not on electron-updater\'s');
+  assert.match(main, /ipcMain\.on\('set-active-runs', \(event, count\) => \{\s*activeRuns = acceptActiveRuns\(event\.sender, mainWindow, count, activeRuns\);/, 'the count is accepted through the helper, with its sender');
+  assert.match(main, /app\.on\('before-quit', \(event\) => \{\s*if \(quitDecision\(/, 'the decision is the first thing before-quit does, before the API is stopped');
+});
+
+test('when the page of the main window is gone, the shell forgets the runs it was told about, so a quit does not ask about a run that died with it', () => {
+  const main = require('node:fs').readFileSync(path.join(__dirname, 'main.js'), 'utf8');
+  assert.match(main, /app\.on\('render-process-gone', \(event, webContents\) => \{\s*if \(mainWindow && webContents === mainWindow\.webContents\) activeRuns = 0;/,
+    'a page that crashed runs nothing any more: the count goes back to 0');
+});

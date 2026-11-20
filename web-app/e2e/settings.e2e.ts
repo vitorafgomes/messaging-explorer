@@ -80,7 +80,9 @@ test.describe('The toolbar', () => {
   }, name);
 
   test('a link that needs a connection can still be read while there is none, in the light and in the dark theme', async ({ page }) => {
+    await page.request.post(`http://localhost:${process.env['E2E_API_PORT']}/api/connections/disconnect`, { headers: { 'X-Api-Key': process.env['E2E_API_SECRET'] ?? '' } });
     await open(page, 'connections');
+    await expect(page.locator('mat-toolbar .broker-name')).toHaveText('Disconnected');
     for (const theme of ['light', 'dark'] as const) {
       await setDark(page, theme === 'dark');
       for (const name of ['Entities', 'Monitoring']) {

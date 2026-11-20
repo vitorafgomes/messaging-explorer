@@ -52,6 +52,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Opens the developer tools of this window; takes no argument, so the page cannot choose another
   openDevTools: () => ipcRenderer.invoke('open-dev-tools'),
 
+  // How many automatic resubmits run, so quitting can ask first; sends a number only, never a name or a body
+  setActiveRuns: (count) => ipcRenderer.send('set-active-runs', typeof count === 'number' ? count : NaN),
+
   // Platform detection
   platform: process.platform,
 

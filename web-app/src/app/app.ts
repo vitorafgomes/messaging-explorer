@@ -1,4 +1,4 @@
-import { Component, computed, inject, OnInit, NgZone, HostListener, signal, DestroyRef } from '@angular/core';
+import { Component, computed, effect, inject, OnInit, NgZone, HostListener, signal, DestroyRef, untracked } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { EMPTY, catchError, exhaustMap, filter, map, merge, of, switchMap, take, takeUntil, timer } from 'rxjs';
 import { Router, RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
@@ -72,6 +72,8 @@ export class App implements OnInit {
   readonly dlqService = inject(DeadLetterNotificationService);
   readonly runs = inject(ResubmitRunService);
   readonly runPercent = runPercent;
+  /** How many resubmits run; the desktop shell is told each change, so quitting asks first while one runs. */
+  private readonly activeRunCount = computed(() => this.runs.activeRuns().length);
 
   connectionStatus$ = this.connectionService.connectionStatus$;
   /** Whether a connection is active, for the links that need one. */
@@ -139,6 +141,10 @@ export class App implements OnInit {
    * until the list it read is applied.
    */
   constructor() {
+    effect(() => {
+      const count = this.activeRunCount();
+      untracked(() => (window as any).electronAPI?.setActiveRuns?.(count));
+    });
     this.destroyRef.onDestroy(() => this.openRequest?.ref.close());
     toObservable(this.asking).pipe(
       switchMap(on => {

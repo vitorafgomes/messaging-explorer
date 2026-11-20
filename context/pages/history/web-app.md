@@ -2,7 +2,7 @@
 title: "Web App history"
 version: "1.2"
 date: 2026-11-13
-updated: 2026-11-16
+updated: 2026-11-20
 changes: "v1.2: 2026-11-16, a resubmit by position after a cancel or a failed call. v1.1: dated entries above the version notes"
 page_type: reference
 status: active
@@ -19,6 +19,10 @@ What changed when in the project [[pages/services/web-app|Web App]] describes, n
 ## 2026-11-20
 
 - In the light theme a toolbar link that needs a connection was close to unreadable while there was none: its text measured 1.5 to 1 against the bar. A disabled link takes its colour from the bar's own text colour (`web-app/src/app/app.scss`), measured in both themes by `web-app/e2e/settings.e2e.ts#a link that needs a connection can still be read while there is none, in the light and in the dark theme`.
+- The app root tells the desktop shell how many automatic resubmits run whenever that number changes, so quitting the app asks first while one runs (`web-app/src/app/app.ts#activeRunCount`).
+
+- The panel of a picked version says what the Settings artboard draws: a line that places it against the installed version, Open the release page beside Install, and "Nothing downloads until you tick the box and press Install. The app restarts to finish." while nothing downloads (`web-app/src/app/features/settings/settings.component.html`).
+- The level Read of the MCP server says that message bodies are read: "read the active, dead-letter, scheduled and deferred messages, their bodies included." (`web-app/src/app/features/settings/settings-mcp.component.ts`), now that `read_message` reads a whole body ([[pages/services/api/mcp-reading]]).
 
 - Seen in a browser: the record "What assistants did" showed the time as the API sends it, a full UTC timestamp that broke over two lines. The cell shows the local clock time, as the artboard draws it, with the full date on hover (`web-app/src/app/features/settings/settings-mcp.component.html`).
 

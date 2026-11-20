@@ -85,6 +85,7 @@
           @if (pickedVersion(); as picked) {
             <section class="panel version-notes" aria-live="polite" data-testid="version-notes">
               <h3>What version {{ picked.version }} has</h3>
+              <p class="muted" data-testid="version-relation">{{ picked.installed ? 'The version installed on this computer.' : (picked.older ? 'Older' : 'Newer') + ' than ' + updates.version() + ', the version you have.' }}</p>
               @if (picked.notes.trim()) {
                 <div class="notes-box">
                   <button type="button" class="notes-toggle" [attr.aria-expanded]="notesOpen()" (click)="notesOpen.set(!notesOpen())">
@@ -132,10 +133,14 @@
                       <button mat-flat-button type="button" [disabled]="!agreedToInstall() || updates.installingVersion() !== ''" (click)="installPicked(picked.version)">
                         <mat-icon aria-hidden="true">download</mat-icon>Install {{ picked.version }}
                       </button>
+                      <a mat-stroked-button [href]="releaseOf(picked.version)" target="_blank" rel="noopener noreferrer">Open the release page</a>
                       @if (updates.installingVersion()) {
                         <span class="muted" role="status">Downloading {{ updates.installingVersion() }}. It installs when the app restarts.</span>
                       }
                     </div>
+                    @if (!updates.installingVersion()) {
+                      <p class="muted">Nothing downloads until you tick the box and press Install. The app restarts to finish.</p>
+                    }
                     @if (updates.installError()) {
                       <p class="inline-error" role="alert" data-testid="install-error">{{ updates.installError() }}</p>
                     }

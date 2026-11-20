@@ -33,6 +33,39 @@ function openDevTools(sender, win) {
   win.webContents.openDevTools();
 }
 
+/**
+ * The number of automatic resubmits running in the page, as the main window's own page told it:
+ * a whole number from 0 to 1000; anything else, or a count from any other sender, keeps the last one.
+ */
+function acceptActiveRuns(sender, win, count, last) {
+  if (!win || win.isDestroyed() || sender !== win.webContents) return last;
+  return Number.isInteger(count) && count >= 0 && count <= 1000 ? count : last;
+}
+
+/** The question asked before a quit that would stop the given number of running resubmits. */
+function quitQuestion(activeRuns) {
+  return {
+    type: 'warning',
+    title: 'Messaging Explorer',
+    message: activeRuns === 1 ? 'A resubmit is still running.' : `${activeRuns} resubmits are still running.`,
+    detail: 'Quitting stops it. Messages already resubmitted stay where they are; the rest stay in the dead-letter queue.',
+    buttons: ['Keep running', 'Quit and stop'],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true
+  };
+}
+
+/**
+ * Whether a quit goes on: 'quit' with no resubmit running, for the quit that installs an update,
+ * and for a quit already agreed to; otherwise asks once through <code>ask</code>, which answers the
+ * index of the button chosen, and only 'Quit and stop' quits; anything else is 'cancel'.
+ */
+function quitDecision({ activeRuns, forUpdate, alreadyQuitting, ask }) {
+  if (forUpdate || alreadyQuitting || !(activeRuns > 0)) return 'quit';
+  return ask(quitQuestion(activeRuns)) === 1 ? 'quit' : 'cancel';
+}
+
 /** True only for a parseable http: or https: URL. */
 function isSafeExternalUrl(url) {
   try {
@@ -426,6 +459,8 @@ module.exports = {
   dataFilePath,
   showDataFile,
   openDevTools,
+  acceptActiveRuns,
+  quitDecision,
   configureAutoUpdate,
   isSafeExternalUrl,
   normalizeUpdateChannel,
