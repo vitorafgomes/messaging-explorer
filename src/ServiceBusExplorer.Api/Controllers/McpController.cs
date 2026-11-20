@@ -30,6 +30,7 @@ public class McpController(
     public async Task<ActionResult<McpState>> SetEnabled([FromBody] McpEnabledRequest request)
     {
         settings.SetEnabled(request.Enabled);
+        if (!request.Enabled) EndAllWaiting();
         return Ok(await StateAsync());
     }
 
@@ -38,6 +39,7 @@ public class McpController(
     public async Task<ActionResult<McpTokenCreated>> CreateToken()
     {
         var token = settings.CreateToken();
+        EndAllWaiting();
         return Ok(new McpTokenCreated(token, await StateAsync()));
     }
 
@@ -81,6 +83,7 @@ public class McpController(
     {
         if (request.Allowed is not { } allowed) return BadRequest(new { message = "allowed must be true or false." });
         settings.SetAppSettingsAllowed(allowed);
+        if (!allowed) appRequests.EndAll();
         return Ok(await StateAsync());
     }
 
@@ -92,14 +95,24 @@ public class McpController(
     public const string InvalidAppAnswer = "The answer is not valid.";
 
     /// <summary>
-    /// The app's answer to a waiting request; 400 when the body is not valid, and the request keeps waiting; 404 when it
-    /// is not waiting any more.
+    /// The app's answer to a waiting request; 404 when it is not waiting any more or the user does not allow these tools;
+    /// 400 when the body is not valid, and the request keeps waiting.
     /// </summary>
     [HttpPost("app-requests/{id}/answer")]
     public IActionResult AnswerAppRequest(string id, [FromBody] McpAppAnswer answer)
     {
+        if (!settings.Current.AppSettingsAllowed) return NotFound(new { message = NotWaitingAnswer });
         if (!McpAppRequests.IsValid(answer)) return BadRequest(new { message = InvalidAppAnswer });
-        return appRequests.Answer(id, answer) ? NoContent() : NotFound(new { message = "This request is no longer waiting." });
+        return appRequests.Answer(id, answer) ? NoContent() : NotFound(new { message = NotWaitingAnswer });
+    }
+
+    private const string NotWaitingAnswer = "This request is no longer waiting.";
+
+    /// <summary>Ends every request waiting for the user or for the app; each tool that waited is refused and does nothing.</summary>
+    private void EndAllWaiting()
+    {
+        requests.EndAll();
+        appRequests.EndAll();
     }
 
     /// <summary>The requests of assistants waiting for the user's answer, oldest first.</summary>

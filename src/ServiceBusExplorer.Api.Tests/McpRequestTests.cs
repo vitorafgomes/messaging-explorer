@@ -107,6 +107,34 @@ public class McpRequestTests
             $"the requests are answered oldest first and their times as text are in that order: {string.Join(", ", times)}");
     }
 
+    [Theory]
+    [InlineData("turned off", "The MCP server was turned off.", "Refused: server turned off")]
+    [InlineData("new token", "The MCP token was replaced.", "Refused: token replaced")]
+    public async Task A_send_waiting_for_the_user_when_the_server_is_turned_off_or_its_token_replaced_is_refused_at_once_and_sends_nothing(string how, string sentence, string outcome)
+    {
+        var broker = new Broker();
+        await using var host = new Host(broker, wait: TimeSpan.FromSeconds(60));
+        await host.StartAsync();
+        await host.SeedAsync(Offered());
+        await host.OfferAsync("c-offered", "readAndSend");
+        await host.ConnectAsync("c-offered");
+
+        var call = host.CallAsync("send_message", new { entity = "orders", body = "a", reason = "r" });
+        var id = (await host.WaitForRequestsAsync())[0].GetProperty("id").GetString();
+        using (var ended = how == "turned off" ? await host.Keyed.PutAsJsonAsync("/api/mcp/enabled", new { enabled = false }) : await host.Keyed.PostAsync("/api/mcp/token", null))
+            Assert.Equal(HttpStatusCode.OK, ended.StatusCode);
+        var left = (await host.RequestsAsync()).GetArrayLength();
+        var endedInTime = await Task.WhenAny(call, Task.Delay(TimeSpan.FromSeconds(10))) == call;
+        using var lateAllow = await host.Keyed.PostAsJsonAsync($"/api/mcp/requests/{id}/answer", new { allow = true });
+
+        Assert.True(endedInTime && left == 0, $"a request waiting for the user ends at once when the server is {how}; ended in time: {endedInTime}, still listed: {left}");
+        var answer = await call;
+        Assert.True(answer == (true, sentence), $"a tool waiting when the server is {how} is refused with exactly \"{sentence}\"; it answered {answer}");
+        Assert.True(broker.SendCalls == 0 && lateAllow.StatusCode == HttpStatusCode.NotFound,
+            $"nothing is sent, and a late allow finds nothing waiting; sends: {broker.SendCalls}, late allow: {(int)lateAllow.StatusCode}");
+        Assert.Equal(outcome, (await host.ActivityAsync())[0].GetProperty("outcome").GetString());
+    }
+
     [Fact]
     public async Task A_second_answer_is_refused_at_once_and_never_changes_the_first()
     {

@@ -221,12 +221,27 @@ public class RabbitMQBulkDeleteAndMoveFailureTests
         var result = await provider.MoveMessagesAsync("orders", "archive", [2]);
 
         Assert.Equal(0, result.SuccessCount);
-        Assert.StartsWith("Not moved: the broker refused the message (", Assert.Single(result.Failures).Error, StringComparison.Ordinal);
-        Assert.EndsWith("). It is still in the queue.", result.Failures[0].Error, StringComparison.Ordinal);
+        Assert.True(Assert.Single(result.Failures).Error == "Not moved: the broker refused the message. It is still in the queue.",
+            $"A refused publish is reported in a fixed sentence, never the broker's reply text; got {result.Failures[0].Error}");
         publisher.Verify(c => c.BasicPublish("", "archive", true, It.IsAny<IBasicProperties>(), It.IsAny<ReadOnlyMemory<byte>>()), Times.Once);
         holder.Verify(c => c.BasicPublish(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<IBasicProperties>(), It.IsAny<ReadOnlyMemory<byte>>()), Times.Never);
         holder.Verify(c => c.BasicAck(It.IsAny<ulong>(), It.IsAny<bool>()), Times.Never);
         holder.Verify(c => c.BasicNack(8, true, true), Times.Once);
+    }
+
+    [Fact]
+    public async Task A_publish_that_fails_on_a_closed_channel_is_reported_in_a_fixed_sentence_never_the_broker_text_and_removes_nothing()
+    {
+        var (provider, channel, _) = Provider();
+        channel.Setup(c => c.BasicPublish(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<IBasicProperties>(), It.IsAny<ReadOnlyMemory<byte>>()))
+            .Throws(Closed());
+
+        var result = await provider.MoveMessagesAsync("orders", "archive", [1]);
+
+        Assert.True(Outcome(result) == (0, 1, "Not moved: the connection to the broker failed. The message is still in the queue."),
+            $"A publish that fails is reported in a fixed sentence, never the broker's reply text; got {Outcome(result)}");
+        Assert.False(result.Failures[0].PossibleDuplicate, "A publish that threw sent nothing, so the message is not a possible duplicate.");
+        channel.Verify(c => c.BasicAck(It.IsAny<ulong>(), It.IsAny<bool>()), Times.Never);
     }
 
     [Theory]
@@ -243,11 +258,8 @@ public class RabbitMQBulkDeleteAndMoveFailureTests
 
         Assert.Equal(0, result.SuccessCount);
         Assert.Equal([1L, 2L], result.Failures.Select(f => f.SequenceNumber));
-        Assert.All(result.Failures, f =>
-        {
-            Assert.StartsWith($"{not}: the queue could not be read (", f.Error, StringComparison.Ordinal);
-            Assert.EndsWith("). Nothing was sent or removed.", f.Error, StringComparison.Ordinal);
-        });
+        Assert.All(result.Failures, f => Assert.True(f.Error == $"{not}: the queue could not be read. Nothing was sent or removed.",
+            $"A read that fails is reported in a fixed sentence, never the broker's reply text; got {f.Error}"));
         Assert.Equal(["nack 7 multiple=True requeue=True"], calls);
     }
 

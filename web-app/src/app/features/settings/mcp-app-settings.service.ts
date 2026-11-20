@@ -29,12 +29,19 @@ export class McpAppSettingsService {
   private readonly dev = inject(DevSettingsService);
   private readonly updates = inject(AppUpdateService);
   private readonly snackBar = inject(MatSnackBar);
-  /** The requests already applied, which a later list never applies again. */
+  /** The requests already applied and still listed by the API, which a later list never applies again. */
   private readonly handled = new Set<string>();
 
-  /** Applies and answers each request not handled yet; an answer the API refuses, a 404 included, is let go. */
+  /**
+   * Applies and answers each request not handled yet; an answer the API refuses, a 404 included, is let go. Before each
+   * request it reads the state of the MCP server: while the server is off or the user does not allow these changes,
+   * nothing is changed and nothing is answered.
+   */
   async apply(list: McpAppRequest[]): Promise<void> {
+    for (const id of this.handled) if (!list.some(r => r.id === id)) this.handled.delete(id);
     for (const request of list) {
+      const state = this.mcp.state();
+      if (!state?.enabled || !state.appSettingsAllowed) return;
       if (this.handled.has(request.id)) continue;
       this.handled.add(request.id);
       const outcome = await this.change(request);

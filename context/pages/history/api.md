@@ -18,6 +18,10 @@ What changed when in the project [[pages/services/api|Api]] describes, newest fi
 
 ## 2026-11-20
 
+- From an outside review of the MCP server: turning it off or creating a token ends every request waiting for the user or the app at once, and withdrawing the choice of the settings of the app ends those for the app; the tool is refused with "The MCP server was turned off.", "The MCP token was replaced." or the not-allowed sentence and does nothing, and the app's answer while the choice is off is 404 ([[pages/services/api/mcp-app-settings]]).
+
+- From the same review: a failed removal in a delete, resubmit or move reaches a route and an MCP answer as a fixed sentence for its kind of failure, never the broker's text ([[pages/services/core/azure-bulk-operations]]).
+
 - From the review of the app settings tools: the test that no record line or request holds the token or the key now reads the request while it waits and checks both secrets, and it and the reason test were each shown red by a mutation (`src/ServiceBusExplorer.Api.Tests/McpAppSettingsTests.cs#No_record_line_holds_the_token_or_the_key_whatever_an_assistant_passes`).
 
 - An assistant reads and changes the theme, Developer mode and the update channel of the app, when the user allowed it in Settings (ADR 0008, the settings of the app): `read_app_settings` and `change_app_setting`, refused while `appSettingsAllowed` is false, off by default; only those three settings and their fixed values are handed to the app, through `GET api/mcp/app-requests` and `POST api/mcp/app-requests/{id}/answer`, at most 20 waiting for at most ten seconds; `PUT api/mcp/app-settings` turns the choice on and off. `supports.appSettings` is true. [[pages/services/api/mcp-app-settings]]

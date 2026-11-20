@@ -549,6 +549,21 @@ describe('App', () => {
         expect(mockMcp.answer.mock.calls, 'one answer').toHaveLength(1);
       });
 
+      it('the ids of requests shown are kept only while the API still lists them, and one still listed is not opened twice', async () => {
+        const lists: McpRequest[][] = [[OLD], [OLD], []];
+        mockMcp.requests.mockImplementation(() => of(lists.length > 1 ? lists.shift()! : lists[0]));
+        const fixture = await start();
+        const shown = (fixture.componentInstance as unknown as { shown: Set<string> }).shown;
+        (Array.from(document.querySelectorAll<HTMLButtonElement>('mat-dialog-container button')).find(b => b.textContent?.trim() === 'Deny'))!.click();
+        await tick(fixture, 500);
+        await tick(fixture, 2000);
+        expect(dialogTitle(), 'a request still listed after its answer is not opened again').toBeNull();
+        expect(mockMcp.answer.mock.calls, 'one answer').toHaveLength(1);
+
+        await tick(fixture, 2000);
+        expect([...shown], 'an id the API no longer lists is forgotten, so the set does not grow for the life of the app').toStrictEqual([]);
+      });
+
       describe('after the user allows an assistant to connect, the app follows the switch', () => {
         const CONNECT: McpRequest = { ...OLD, id: 'r-connect', kind: 'connect', title: 'Claude Code asks to connect to contoso-prod', allowLabel: 'Connect to contoso-prod' };
         const reads = () => mockConnectionService.peekStatus.mock.calls.length;

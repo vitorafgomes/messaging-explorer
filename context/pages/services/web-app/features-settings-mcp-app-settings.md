@@ -34,7 +34,7 @@ All through `ApiService`, by `web-app/src/app/features/settings/mcp-settings.ser
 
 **The polling.** While the server is enabled, `supports.appSettings` is true and `appSettingsAllowed` is true, `App` reads `GET mcp/app-requests` every 2 seconds on its own tick, beside the one of `mcp/requests`, one call in flight, and each tick waits until the list it read is applied (`web-app/src/app/app.ts#applying`). A 404 stops it for good; any other failure is tried again on the next tick and shows nothing.
 
-**Applying.** `web-app/src/app/features/settings/mcp-app-settings.service.ts#apply` takes the requests in the order the API lists them, each id once, and answers each:
+**Applying.** `web-app/src/app/features/settings/mcp-app-settings.service.ts#apply` takes the requests in the order the API lists them, each id once, and answers each. Before each it reads `McpSettingsService.state`: while the server is off or `appSettingsAllowed` is false it changes nothing and answers nothing, so a list fetched just before the user unticked the box is not applied. The ids handled, like the ids of requests `App` has shown, are kept only while the API still lists them.
 
 - `setting` null changes nothing and answers applied.
 - A setting or a value not on the fixed list `web-app/src/app/features/settings/mcp-app-settings.service.ts#ALLOWED` (theme: system, light, dark; developerMode: on, off; updateChannel: latest, beta) is answered `failed` and changes nothing. This list is the only gate on this side: the MCP server group, clearing the data and an update are not on it.
@@ -53,5 +53,7 @@ All through `ApiService`, by `web-app/src/app/features/settings/mcp-settings.ser
 - `web-app/src/app/features/settings/mcp-app-settings.service.spec.ts#nothing in this path reaches the MCP group, clearing the data or an update: any other setting, or a value off the list, is answered failed and changes nothing`, with the real `ApiService` and `HttpTestingController.verify()`.
 - `web-app/src/app/features/settings/mcp-app-settings.service.spec.ts#the update channel without the desktop shell is answered desktopOnly, with no channel in the settings, and nothing is changed`.
 - `web-app/src/app/features/settings/mcp-app-settings.service.spec.ts#the assistant name is shown in the snack bar as text, never as markup`.
+- `web-app/src/app/features/settings/mcp-app-settings.service.spec.ts#a choice withdrawn while a list is applied stops before the next request: it is not changed and not answered`, and the two lists handed over after the server was turned off or the choice withdrawn.
+- `web-app/src/app/features/settings/mcp-app-settings.service.spec.ts#the ids handled are kept only while the API still lists them: a list without an id forgets it, and one still listed is not applied twice`; `web-app/src/app/app.spec.ts#the ids of requests shown are kept only while the API still lists them, and one still listed is not opened twice`.
 - `web-app/src/app/app.spec.ts#a 404 on GET mcp/app-requests stops polling it for good, and the requests that ask the user are still polled`.
 - `web-app/src/app/features/settings/settings-mcp.component.spec.ts#"Settings of the app" follows "Logs of the app" when the API supports it, off as the API answers it, and ticking it is PUT mcp/app-settings`.

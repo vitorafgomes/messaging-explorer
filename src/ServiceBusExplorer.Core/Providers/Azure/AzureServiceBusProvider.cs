@@ -1532,7 +1532,7 @@ public class AzureServiceBusProvider : IMessagingProvider
         }
         catch (Exception ex) when (ex is ServiceBusException or UnauthorizedAccessException or TimeoutException)
         {
-            throw new InvalidEntityConfigurationException([string.Format(ResubmitDuplicateError, $"the broker did not remove it ({CauseOf(ex)}).")]);
+            throw new InvalidEntityConfigurationException([string.Format(ResubmitDuplicateError, RemovalFailure(ex))]);
         }
 
         throw new InvalidEntityConfigurationException([string.Format(ResubmitDuplicateError, "it was not found among the messages read to remove it.")]);
@@ -1646,6 +1646,18 @@ public class AzureServiceBusProvider : IMessagingProvider
     private const string MoveDuplicateError = "Message was moved to the target but could not be removed from the source and may be duplicated: {0}";
     private const string ResubmitDuplicateError = "Message was resubmitted but could not be removed from the dead-letter queue and may be duplicated on retry: {0}";
     private const string SendOutcomeUnknown = "the send failed and the broker may have accepted it.";
+
+    /// <summary>
+    /// The fixed sentence for a message the broker did not remove, chosen by the kind of failure; the text of the
+    /// broker's exception never reaches a report.
+    /// </summary>
+    private static string RemovalFailure(Exception ex) => ex switch
+    {
+        TimeoutException or ServiceBusException { Reason: ServiceBusFailureReason.ServiceTimeout } => "the broker did not answer in time.",
+        UnauthorizedAccessException => "the broker refused it as not authorised.",
+        ServiceBusException { Reason: ServiceBusFailureReason.MessageLockLost or ServiceBusFailureReason.SessionLockLost } => "the lock on the message was lost.",
+        _ => "the broker did not confirm the removal."
+    };
     private const string DuplicateDetectionRefusal = "The target detects duplicates; a copy with the same message id would be dropped. Nothing was sent or removed.";
     private const string DeliveryLimitNotReached = "Not reached: going on would have sent unselected messages past their max delivery count into the dead-letter queue. Nothing was sent or removed.";
     private const string SettingsUnreadable = "The settings of the entity could not be read; the connection needs the Manage right for this. Nothing was sent or removed.";
@@ -2034,8 +2046,8 @@ public class AzureServiceBusProvider : IMessagingProvider
     }
 
     /// <summary>
-    /// Completes the supplied messages in parallel chunks, recording the real per-message
-    /// error (for example <c>MessageLockLost</c>) on failure. Every attempted message is
+    /// Completes the supplied messages in parallel chunks, recording per message a fixed
+    /// sentence for the kind of failure (for example a lost lock). Every attempted message is
     /// marked located so it is never re-completed on redelivery nor reported as not found.
     /// </summary>
     private static async Task CompleteInChunksAsync(
@@ -2058,7 +2070,7 @@ public class AzureServiceBusProvider : IMessagingProvider
                 }
                 catch (Exception ex)
                 {
-                    return (message.SequenceNumber, Success: false, Error: failureText ?? ex.Message);
+                    return (message.SequenceNumber, Success: false, Error: failureText ?? $"Not removed: {RemovalFailure(ex)}");
                 }
             });
 
@@ -2394,7 +2406,7 @@ public class AzureServiceBusProvider : IMessagingProvider
                 }
                 catch (Exception ex)
                 {
-                    return (message.SequenceNumber, Success: false, Error: ex.Message);
+                    return (message.SequenceNumber, Success: false, Error: RemovalFailure(ex));
                 }
             });
 
@@ -2599,7 +2611,7 @@ public class AzureServiceBusProvider : IMessagingProvider
                 }
                 catch (Exception ex)
                 {
-                    return (message.SequenceNumber, Success: false, Error: ex.Message);
+                    return (message.SequenceNumber, Success: false, Error: RemovalFailure(ex));
                 }
             });
 

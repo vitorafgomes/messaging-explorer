@@ -914,7 +914,7 @@ public class RabbitMQProvider : IMessagingProvider
             }
             catch (Exception ex) when (ex is AlreadyClosedException or OperationInterruptedException or IOException)
             {
-                return FailAll($"{not}: {source} could not be read ({ex.Message}). Nothing was sent or removed.");
+                return FailAll($"{not}: {source} could not be read. Nothing was sent or removed.");
             }
 
             foreach (var position in positions)
@@ -945,7 +945,7 @@ public class RabbitMQProvider : IMessagingProvider
                     }
                     catch (Exception ex) when (ex is AlreadyClosedException or OperationInterruptedException or IOException)
                     {
-                        Fail(position, $"{not}: {ex.Message}. The message is still in {source}.");
+                        Fail(position, $"{not}: the connection to the broker failed. The message is still in {source}.");
                         stopped = stoppedAfterAFailure;
                         continue;
                     }
@@ -958,7 +958,7 @@ public class RabbitMQProvider : IMessagingProvider
                     catch (Exception ex) when (ex is AlreadyClosedException or OperationInterruptedException or IOException)
                     {
                         if (IsBrokerRefusal(ex))
-                            Fail(position, $"{not}: the broker refused the message ({ex.Message}). It is still in {source}.");
+                            Fail(position, $"{not}: the broker refused the message. It is still in {source}.");
                         else
                             Fail(position, $"The connection failed before the broker confirmed: the message may have been sent and is still in {source}. It may be duplicated.", possibleDuplicate: true);
                         stopped = stoppedAfterAFailure;

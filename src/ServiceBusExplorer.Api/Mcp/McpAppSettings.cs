@@ -49,7 +49,7 @@ public sealed class McpAppRequests(TimeSpan wait)
     };
 
     private readonly Lock _lock = new();
-    private readonly List<(McpAppRequest Request, TaskCompletionSource<McpAppAnswer> Answer)> _waiting = [];
+    private readonly List<(McpAppRequest Request, TaskCompletionSource<McpAppAnswer?> Answer)> _waiting = [];
 
     /// <summary>The requests waiting, oldest first.</summary>
     public IReadOnlyList<McpAppRequest> Waiting()
@@ -66,10 +66,22 @@ public sealed class McpAppRequests(TimeSpan wait)
         && Changeable["theme"].Contains(theme)
         && (settings.UpdateChannel is null || Changeable["updateChannel"].Contains(settings.UpdateChannel));
 
+    /// <summary>Ends every waiting request at once without an answer, and the list is empty after; the tool that waited says why.</summary>
+    public void EndAll()
+    {
+        List<TaskCompletionSource<McpAppAnswer?>> ended;
+        lock (_lock)
+        {
+            ended = _waiting.Select(w => w.Answer).ToList();
+            _waiting.Clear();
+        }
+        foreach (var answer in ended) answer.TrySetResult(null);
+    }
+
     /// <summary>Answers a waiting request; false when no request with <paramref name="id"/> is waiting.</summary>
     public bool Answer(string id, McpAppAnswer answer)
     {
-        TaskCompletionSource<McpAppAnswer> waiting;
+        TaskCompletionSource<McpAppAnswer?> waiting;
         lock (_lock)
         {
             var index = _waiting.FindIndex(w => w.Request.Id == id);
@@ -88,7 +100,7 @@ public sealed class McpAppRequests(TimeSpan wait)
     /// </summary>
     public async Task<(bool Waited, McpAppAnswer? Answer)> AskAsync(string assistant, string? setting, string? value, CancellationToken cancellationToken)
     {
-        var answer = new TaskCompletionSource<McpAppAnswer>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var answer = new TaskCompletionSource<McpAppAnswer?>(TaskCreationOptions.RunContinuationsAsynchronously);
         McpAppRequest request;
         lock (_lock)
         {
@@ -179,9 +191,15 @@ public sealed class McpAppSettingsTools(
 
     private async Task<McpAppSettingsValues> HandAsync(McpToolCalls.ToolCall call, string? setting, string? value, CancellationToken cancellationToken)
     {
+        var token = settings.Current.TokenHash;
         var (waited, answer) = await requests.AskAsync(call.Assistant, setting, value, cancellationToken);
         if (!waited) call.Refuse(McpToolCalls.TooManySentence, "Refused: too many waiting");
-        if (answer is null) call.Refuse(NoAnswer, "Failed: the app did not answer");
+        if (answer is null)
+        {
+            calls.RefuseIfEnded(call, token);
+            if (!settings.Current.AppSettingsAllowed) call.Refuse(NotAllowed, "Refused: not allowed");
+            call.Refuse(NoAnswer, "Failed: the app did not answer");
+        }
         if (answer.Applied != true)
         {
             if (answer.Code == "desktopOnly") call.Refuse(DesktopOnly, "Failed: desktop only");

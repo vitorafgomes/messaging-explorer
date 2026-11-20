@@ -109,7 +109,7 @@ export class App implements OnInit {
   });
   /** The request whose dialog is open; one at a time. */
   private openRequest: { id: string; ref: MatDialogRef<McpRequestDialogComponent, McpRequestOutcome> } | null = null;
-  /** The requests already shown, which a later poll never opens again. */
+  /** The requests already shown and still listed by the API, which a later poll never opens again. */
   private readonly shown = new Set<string>();
 
   /** The Logs screen and its item on the toolbar exist only while Developer mode is on. */
@@ -199,6 +199,7 @@ export class App implements OnInit {
 
   /** Closes the open dialog when its request left the list; otherwise opens the oldest request not shown yet. */
   private showRequest(list: McpRequest[]): void {
+    for (const id of this.shown) if (!list.some(r => r.id === id)) this.shown.delete(id);
     const open = this.openRequest;
     if (open) {
       if (!list.some(r => r.id === open.id)) open.ref.close('gone');

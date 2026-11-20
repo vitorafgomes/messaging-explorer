@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 using ServiceBusExplorer.Api.Controllers;
 using ServiceBusExplorer.Api.Mcp;
 using static ServiceBusExplorer.Api.Tests.McpGateTests;
@@ -236,6 +237,52 @@ public class McpAppSettingsTests
         Assert.True(answer == (true, McpAppSettingsTools.NoAnswer), $"a change the app does not answer fails with the fixed sentence; it answered {answer}");
         Assert.Equal(0, (await AppRequestsAsync(host)).GetArrayLength());
         Assert.Equal(("Set theme to dark", "This app", "Failed: the app did not answer", "error"), Line(Assert.Single((await host.ActivityAsync()).EnumerateArray())));
+    }
+
+    [Theory]
+    [InlineData("turned off", "The MCP server was turned off.", "Refused: server turned off")]
+    [InlineData("choice withdrawn", McpAppSettingsTools.NotAllowed, "Refused: not allowed")]
+    [InlineData("new token", "The MCP token was replaced.", "Refused: token replaced")]
+    public async Task A_change_waiting_for_the_app_when_the_server_is_turned_off_or_the_choice_withdrawn_is_refused_at_once_and_nothing_is_changed(string how, string sentence, string outcome)
+    {
+        await using var host = await AllowedHostAsync(TimeSpan.FromSeconds(60));
+
+        var call = host.CallAsync("change_app_setting", new { setting = "theme", value = "dark", reason = "r" });
+        var id = (await WaitForAppAsync(host))[0].GetProperty("id").GetString();
+        using (var ended = how switch
+        {
+            "turned off" => await host.Keyed.PutAsJsonAsync("/api/mcp/enabled", new { enabled = false }),
+            "choice withdrawn" => await host.Keyed.PutAsJsonAsync("/api/mcp/app-settings", new { allowed = false }),
+            _ => await host.Keyed.PostAsync("/api/mcp/token", null),
+        })
+            Assert.Equal(HttpStatusCode.OK, ended.StatusCode);
+        var left = (await AppRequestsAsync(host)).GetArrayLength();
+        var endedInTime = await Task.WhenAny(call, Task.Delay(TimeSpan.FromSeconds(5))) == call;
+        using var lateAnswer = await host.Keyed.PostAsJsonAsync($"/api/mcp/app-requests/{id}/answer", Reported);
+
+        Assert.True(endedInTime && left == 0, $"a request waiting for the app ends at once when {how}; ended in time: {endedInTime}, still listed: {left}");
+        var answer = await call;
+        Assert.True(answer == (true, sentence), $"a tool waiting for the app when {how} is refused with exactly \"{sentence}\"; it answered {answer}");
+        Assert.True(lateAnswer.StatusCode == HttpStatusCode.NotFound, $"an answer of the app after {how} finds nothing waiting; it answered {(int)lateAnswer.StatusCode}");
+        Assert.Equal(("Set theme to dark", "This app", outcome, "error"), Line(Assert.Single((await host.ActivityAsync()).EnumerateArray())));
+    }
+
+    [Fact]
+    public async Task An_answer_of_the_app_while_the_choice_is_off_is_404_even_for_a_request_still_waiting()
+    {
+        await using var host = new Host(new Broker(), appWait: TimeSpan.FromSeconds(30));
+        await host.StartAsync();
+        var requests = host.Factory.Services.GetRequiredService<McpAppRequests>();
+        using var stop = new CancellationTokenSource();
+        var asked = requests.AskAsync("Assistant", "theme", "dark", stop.Token);
+        var id = Assert.Single(requests.Waiting()).Id;
+
+        using var answered = await host.Keyed.PostAsJsonAsync($"/api/mcp/app-requests/{id}/answer", Reported);
+        stop.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => asked);
+
+        Assert.True(answered.StatusCode == HttpStatusCode.NotFound,
+            $"while the choice is off, an answer of the app is 404 as for a request not waiting; it answered {(int)answered.StatusCode}");
     }
 
     [Theory]

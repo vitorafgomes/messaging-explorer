@@ -18,6 +18,8 @@ What changed when in the project [[pages/services/web-app|Web App]] describes, n
 
 ## 2026-11-20
 
+- From an outside review of the MCP server: `McpAppSettingsService.apply` reads the state before each request and changes and answers nothing while the server is off or the choice withdrawn; the ids it handled and the ids `App` showed are kept only while the API still lists them ([[pages/services/web-app/features-settings-mcp-app-settings]]).
+
 - From the review of the app settings: `web-app/src/app/features/settings/app-update.service.ts#setChannel` answers once the shell accepted the channel and no longer waits for the check and the versions, so a slow check cannot make an assistant's change of channel time out after it took effect.
 
 - **An assistant may change settings of this app.** When the API supports it, the MCP server group of Settings draws the row "Settings of the app" after the logs row, a checkbox off until the user ticks it, which is `PUT mcp/app-settings`. While it is ticked and the server is enabled, the app reads `GET mcp/app-requests` every 2 seconds and applies the theme, Developer mode and the update channel from a fixed list in the app, each once, answers each with the settings after it, and shows each change in a snack bar; any other setting is answered failed. The update channel is changed only in the desktop app. [[pages/services/web-app/features-settings-mcp-app-settings]] (`web-app/src/app/features/settings/mcp-app-settings.service.ts#ALLOWED`, `web-app/src/app/app.ts#applying`).

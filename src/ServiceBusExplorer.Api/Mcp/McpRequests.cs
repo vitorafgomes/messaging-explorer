@@ -113,6 +113,20 @@ public sealed class McpRequests(McpRequestOptions options)
     }
 
     /// <summary>
+    /// Ends every waiting request at once as not allowed, and the list is empty after; the tool that waited says why.
+    /// </summary>
+    public void EndAll()
+    {
+        List<TaskCompletionSource<bool>> ended;
+        lock (_lock)
+        {
+            ended = _waiting.Select(w => w.Answer).ToList();
+            _waiting.Clear();
+        }
+        foreach (var answer in ended) answer.TrySetResult(false);
+    }
+
+    /// <summary>
     /// Answers a waiting request. An allow of a request with a typed word is taken only when <paramref name="typed"/> is
     /// that word exactly, letter case included; otherwise the request keeps waiting. A deny needs no word.
     /// </summary>

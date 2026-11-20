@@ -9,7 +9,7 @@ import { DevSettingsService, ThemeService } from '../../core/services';
 import { environment } from '../../../environments/environment';
 import { AppUpdateService, UpdateChannel, UpdateStatus } from './app-update.service';
 import { McpAppSettingsService } from './mcp-app-settings.service';
-import { McpAppAnswer, McpAppRequest } from './mcp-settings.service';
+import { McpAppAnswer, McpAppRequest, McpSettingsService, McpState } from './mcp-settings.service';
 import type { ThemeMode } from '../../core/services/theme.service';
 
 const BASE = environment.apiUrl;
@@ -51,6 +51,12 @@ describe('McpAppSettingsService: the app applies a change of its settings an ass
     });
     service = TestBed.inject(McpAppSettingsService);
     http = TestBed.inject(HttpTestingController);
+    allow(true, true);
+  }
+
+  /** Sets the state of the MCP server as the app last read it: whether it is on and the user allows these changes. */
+  function allow(enabled: boolean, appSettingsAllowed: boolean) {
+    TestBed.inject(McpSettingsService).state.set({ enabled, appSettingsAllowed } as McpState);
   }
 
   /** Applies the list, answering each POST with 204, and returns the bodies the app answered, by request id. */
@@ -164,6 +170,41 @@ describe('McpAppSettingsService: the app applies a change of its settings an ass
 
     http.verify();
     expect(theme.setMode.mock.calls, 'the request with the same id is not applied again').toStrictEqual([['dark']]);
+  });
+
+  it('the ids handled are kept only while the API still lists them: a list without an id forgets it, and one still listed is not applied twice', async () => {
+    setUp();
+    const handled = (service as unknown as { handled: Set<string> }).handled;
+    await apply([request('t', 'theme', 'dark'), request('d', 'developerMode', 'on')]);
+    await service.apply([request('d', 'developerMode', 'off')]);
+
+    http.verify();
+    expect([...handled], 'an id the API no longer lists is forgotten; one still listed is kept').toStrictEqual(['d']);
+    expect(dev.toggle, 'the request still listed is not applied twice').toHaveBeenCalledTimes(1);
+  });
+
+  for (const [what, enabled, appSettingsAllowed] of [['the server was turned off', false, true], ['the user withdrew the choice', true, false]] as const) {
+    it(`a list handed over after ${what} changes nothing and answers nothing`, async () => {
+      setUp();
+      allow(enabled, appSettingsAllowed);
+      await service.apply([request('t', 'theme', 'dark'), request('d', 'developerMode', 'on'), request('r', null, null)]);
+
+      http.verify();
+      expect(theme.setMode, 'no theme is changed').not.toHaveBeenCalled();
+      expect(dev.toggle, 'no Developer mode is changed').not.toHaveBeenCalled();
+      expect(snackBar.open, 'nothing is shown as changed').not.toHaveBeenCalled();
+    });
+  }
+
+  it('a choice withdrawn while a list is applied stops before the next request: it is not changed and not answered', async () => {
+    setUp();
+    theme.setMode.mockImplementation((mode: ThemeMode) => { theme.mode.set(mode); allow(true, false); });
+    const done = service.apply([request('t', 'theme', 'dark'), request('d', 'developerMode', 'on')]);
+    await vi.waitFor(() => http.expectOne(`${BASE}/mcp/app-requests/t/answer`).flush(null, { status: 204, statusText: 'No Content' }));
+    await done;
+
+    http.verify();
+    expect(dev.toggle, 'the request after the withdrawal is not applied').not.toHaveBeenCalled();
   });
 
   it('an answer the API refuses (404, it no longer waits) is ignored, and the next request is still applied', async () => {

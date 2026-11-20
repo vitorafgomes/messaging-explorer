@@ -43,6 +43,12 @@ public sealed class McpToolCalls(
     /// <summary>The answer when <see cref="McpRequests.Capacity"/> requests already wait.</summary>
     public const string TooManySentence = "Too many requests are waiting for the user. Try again after they answer.";
 
+    /// <summary>The answer of a tool that waited while the user turned the MCP server off.</summary>
+    public const string TurnedOffSentence = "The MCP server was turned off.";
+
+    /// <summary>The answer of a tool that waited while the user created a new token, which replaced the one it came with.</summary>
+    public const string TokenReplacedSentence = "The MCP token was replaced.";
+
     /// <summary>What a request to read a production connection tells the user.</summary>
     public const string ProductionReadNote = "This is a production connection. What is read is sent to the assistant and to the company that runs it.";
 
@@ -147,7 +153,10 @@ public sealed class McpToolCalls(
     /// </summary>
     public async Task AskUserAsync(ToolCall call, string kind, string title, IReadOnlyList<McpFact> facts, string note, string allowLabel, CancellationToken cancellationToken, bool danger = false, McpTyped? typed = null)
     {
-        switch (await requests.AskAsync(call.Assistant, kind, title, facts, note, allowLabel, cancellationToken, danger, typed))
+        var token = settings.Current.TokenHash;
+        var answer = await requests.AskAsync(call.Assistant, kind, title, facts, note, allowLabel, cancellationToken, danger, typed);
+        RefuseIfEnded(call, token);
+        switch (answer)
         {
             case McpAnswer.Denied:
                 call.Refuse(DeniedSentence, "Denied by you");
@@ -161,6 +170,16 @@ public sealed class McpToolCalls(
         }
 
         cancellationToken.ThrowIfCancellationRequested();
+    }
+
+    /// <summary>
+    /// Refuses a call that waited while the user turned the MCP server off, or created a token that replaced
+    /// <paramref name="token"/>, the hash there was when the call began to wait.
+    /// </summary>
+    public void RefuseIfEnded(ToolCall call, string? token)
+    {
+        if (!settings.Current.Enabled) call.Refuse(TurnedOffSentence, "Refused: server turned off");
+        if (settings.Current.TokenHash != token) call.Refuse(TokenReplacedSentence, "Refused: token replaced");
     }
 
     /// <summary>Where the connection is, as a request shows it: its name, then its client and environment when it has them.</summary>

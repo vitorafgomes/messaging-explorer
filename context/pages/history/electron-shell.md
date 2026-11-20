@@ -16,6 +16,11 @@ reliability: high
 
 What changed when in the project [[pages/services/electron-shell|Electron Shell]] describes, newest first.
 
+
+## 2026-11-20
+
+- The AppImage is published as `Messaging-Explorer-x86_64.AppImage`, with no version in its name, because the updater renamed a file whose name held one and a launcher pointing at it stopped working (`web-app/package.json#appImage`). The public texts said an update downloads on its own and that the deb updates itself; neither has been true since 2026-11-19 and both are corrected in `README.md` and `docs/index.html`.
+
 ## 2026-11-19
 
 - A download refused because no update is on offer, while a check runs or after one found none, says so, apart from the refusal of a version that differs from the one agreed to (`web-app/electron/shell-helpers.js#downloadAgreedUpdate`).
