@@ -140,7 +140,8 @@ builder.Services.AddMcpServer()
     .WithHttpTransport(o => o.Stateless = true)
     .WithTools<McpReadTools>()
     .WithTools<McpSendTools>()
-    .WithTools<McpConnectTools>();
+    .WithTools<McpConnectTools>()
+    .WithTools<McpRemoveTools>();
 builder.Services.AddHostedService<MonitoringBackgroundService>();
 
 // ─────────────────────────────────────────────────────────────

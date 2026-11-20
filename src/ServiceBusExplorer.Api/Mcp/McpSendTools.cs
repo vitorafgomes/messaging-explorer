@@ -122,7 +122,7 @@ public sealed class McpSendTools(McpToolCalls calls, ILogger<McpSendTools> logge
     {
         var active = await calls.ActiveAsync(call, entity);
         var provider = active.Provider;
-        if (active.Level != McpSettingsStore.ReadAndSendLevel)
+        if (!McpSettingsStore.Covers(active.Level, McpSettingsStore.ReadAndSendLevel))
             call.Refuse(ReadOnlyRefused, "Refused: read only");
         if (messages.Count is < 1 or > MaxMessages)
             call.Refuse($"send_messages takes 1 to {MaxMessages} messages.", "Refused: count");
@@ -162,7 +162,7 @@ public sealed class McpSendTools(McpToolCalls calls, ILogger<McpSendTools> logge
                     ? "Every consumer of this queue receives these messages. A message sent cannot be taken back."
                     : "Every subscription of this topic that these messages match receives them. A message sent cannot be taken back.",
                 n == 1 ? "Send 1 message" : $"Send {n} messages",
-                sends: true,
+                McpSettingsStore.ReadAndSendLevel,
                 cancellationToken);
         }
 

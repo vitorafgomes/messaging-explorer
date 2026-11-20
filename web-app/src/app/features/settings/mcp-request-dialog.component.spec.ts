@@ -205,9 +205,187 @@ describe('McpRequestDialogComponent: the window that asks the user, as Settings.
   });
 
   it('a kind this version does not know shows only Deny and says it cannot allow it', async () => {
-    await open({ ...SEND, kind: 'delete', allowLabel: 'Delete 12 messages' });
+    await open({ ...SEND, kind: 'createQueue', allowLabel: 'Create the queue', typed: { label: 'Type the queue name to allow it', word: 'orders' } });
 
-    expect(Array.from(dialog()?.querySelectorAll('mat-dialog-actions button') ?? []).map(words), 'only Deny').toStrictEqual(['Deny']);
+    expect(Array.from(dialog()?.querySelectorAll('mat-dialog-actions button') ?? []).map(words), 'an unknown kind can only be denied').toStrictEqual(['Deny']);
     expect(words(dialog()?.querySelector('.unknown'))).toBe('This version of the app cannot allow this kind of request.');
+    expect(dialog()?.querySelector('input') ?? null, 'no typed field for a kind that cannot be allowed').toBeNull();
+  });
+
+  describe('phase three: requests that move or remove messages', () => {
+    /** The request the artboard draws in its state askedToDelete. */
+    const DELETE: McpRequest = {
+      ...SEND,
+      id: 'r-delete',
+      kind: 'delete',
+      title: 'Claude Code asks to delete 12 messages',
+      facts: [
+        { label: 'From', value: 'orders, dead-letter queue' },
+        { label: 'On', value: 'contoso-dev (Contoso, Development)' },
+        { label: 'Messages', value: '12, sequence numbers 4401 to 4412' },
+        { label: 'It said why', value: 'They are copies of orders already processed' },
+      ],
+      note: 'A deleted message cannot be brought back. The 12 messages are the ones the assistant named by their sequence numbers; nothing else in the queue is touched.',
+      allowLabel: 'Delete 12 messages',
+      danger: true,
+      typed: { label: 'Type the queue name to allow it', word: 'orders' },
+    };
+    const field = () => dialog()?.querySelector<HTMLInputElement>('input') ?? null;
+    const allow = () => button('Delete 12 messages')!;
+    async function type(value: string) {
+      field()!.value = value;
+      field()!.dispatchEvent(new Event('input', { bubbles: true }));
+      await settle();
+    }
+    const enter = (target: Element) => target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+
+    for (const kind of ['deadLetter', 'resubmit', 'move', 'delete', 'purge', 'cancelScheduled']) {
+      it(`the kind ${kind} can be allowed: Deny, then the allow button with the API's label`, async () => {
+        await open({ ...SEND, kind, allowLabel: `Allow the ${kind}` });
+
+        expect(Array.from(dialog()?.querySelectorAll('mat-dialog-actions button') ?? []).map(words), `the kind ${kind} is one this version allows`).toStrictEqual(['Deny', `Allow the ${kind}`]);
+        expect(dialog()?.querySelector('.unknown') ?? null, 'no sentence saying it cannot be allowed').toBeNull();
+      });
+    }
+
+    it('askedToDelete: the typed field with the API\'s label, empty, and the allow button disabled and aria-disabled until the word is typed exactly', async () => {
+      await open(DELETE);
+
+      expect(words(dialog()?.querySelector('mat-form-field mat-label')), 'the label the API wrote').toBe('Type the queue name to allow it');
+      expect(field()?.value, 'the field starts empty, never filled for the user').toBe('');
+      expect(field()?.getAttribute('autocomplete'), 'no autofill').toBe('off');
+      expect([allow().disabled, allow().getAttribute('aria-disabled')], 'the allow button cannot be used before the word is typed').toStrictEqual([true, 'true']);
+
+      for (const wrong of ['Orders', 'ORDERS', ' orders', 'orders ', 'order']) {
+        await type(wrong);
+        expect([allow().disabled, allow().getAttribute('aria-disabled')], `"${wrong}" is not the word typed exactly: case counts and no space is trimmed`).toStrictEqual([true, 'true']);
+      }
+
+      await type('orders');
+      expect([allow().disabled, allow().getAttribute('aria-disabled')], 'the word typed exactly enables the allow button').toStrictEqual([false, 'false']);
+    });
+
+    it('focus starts on Deny; a click on the disabled allow button, Enter in the field, Enter on Deny, Escape and the backdrop never answer allow', async () => {
+      await open(DELETE);
+      expect(document.activeElement, 'the focus starts on Deny, not on the field or the allow button').toBe(button('Deny'));
+
+      await type('order');
+      allow().click();
+      enter(allow());
+      field()!.focus();
+      enter(field()!);
+      enter(button('Deny')!);
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
+      (document.querySelector('.cdk-overlay-backdrop') as HTMLElement | null)?.click();
+      await type('orders');
+      enter(field()!);
+      await settle();
+
+      expect(answer.mock.calls, 'no path but a click on the enabled allow button answers: nothing was answered here').toStrictEqual([]);
+      expect(closed, 'the dialog stays open').toStrictEqual([]);
+    });
+
+    it('the word typed exactly, then a click on the allow button, answers allow true with the typed value, once', async () => {
+      answer.mockImplementation(() => new Observable<void>());
+      await open(DELETE);
+      await type('orders');
+      allow().click();
+      allow().click();
+      button('Deny')!.click();
+      await settle();
+
+      expect(answer.mock.calls, 'POST answer with allow true and the word as typed, once: a request is answered once').toStrictEqual([['r-delete', true, 'orders']]);
+    });
+
+    it('pasting the word works like typing it', async () => {
+      await open(DELETE);
+      field()!.dispatchEvent(new Event('paste', { bubbles: true }));
+      await type('orders');
+      allow().click();
+      await settle();
+
+      expect(answer.mock.calls, 'a pasted word is sent like a typed one').toStrictEqual([['r-delete', true, 'orders']]);
+      expect(closed).toStrictEqual(['allowed']);
+    });
+
+    it('Deny answers allow false without the typed value, whatever the field holds', async () => {
+      await open(DELETE);
+      await type('orders');
+      button('Deny')!.click();
+      await settle();
+
+      expect(answer.mock.calls, 'a deny is POST answer with allow false alone').toStrictEqual([['r-delete', false]]);
+      expect(closed).toStrictEqual(['denied']);
+    });
+
+    it('a wrong word answered 400 shows the API\'s message inline and keeps the dialog open, with the field as it is', async () => {
+      answer.mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 400, error: { message: 'Type the name exactly as shown to allow this.' } })));
+      await open(DELETE);
+      await type('orders');
+      allow().click();
+      await settle();
+
+      expect(words(dialog()?.querySelector('[role="alert"]')), 'the API\'s message, in the dialog').toBe('Type the name exactly as shown to allow this.');
+      expect(closed, 'the dialog stays open').toStrictEqual([]);
+      expect(field()?.value, 'the field keeps what the user typed').toBe('orders');
+      expect([button('Deny')!.disabled, allow().disabled], 'the user can answer again').toStrictEqual([false, false]);
+    });
+
+    it('danger draws the note in the error container and the allow button in the error colour', async () => {
+      await open(DELETE);
+
+      expect(dialog()?.querySelector('.note')?.classList.contains('danger'), 'the note of a destructive request is drawn as an error').toBe(true);
+      expect(allow().classList.contains('danger'), 'the allow button of a destructive request is drawn in the error colour').toBe(true);
+      expect(words(dialog()?.querySelector('h2')), 'askedToDelete: the title the API wrote').toBe(DELETE.title);
+      expect(Array.from(dialog()?.querySelectorAll('dl.facts > dt') ?? []).map(words), 'each fact label is a dt').toStrictEqual(DELETE.facts.map(f => f.label));
+      expect(Array.from(dialog()?.querySelectorAll('dl.facts > dd') ?? []).map(words), 'each fact value is a dd').toStrictEqual(DELETE.facts.map(f => f.value));
+      expect(words(dialog()?.querySelector('.note')), 'the note the API wrote').toBe(DELETE.note);
+      expect(dialog()?.querySelector('.note mat-icon')?.textContent?.trim(), 'the note keeps the warning icon').toBe('warning');
+      expect(Array.from(dialog()?.querySelectorAll('mat-dialog-actions button') ?? []).map(words), 'Deny, then the allow button with the API\'s label').toStrictEqual(['Deny', 'Delete 12 messages']);
+      expect(words(dialog()?.querySelector('.footer')), 'the footer says what happens with no answer').toBe(FOOTER);
+    });
+
+    it('without danger the note and the allow button are drawn as before', async () => {
+      await open({ ...DELETE, danger: false });
+
+      expect(dialog()?.querySelector('.note')?.classList.contains('danger'), 'a request without danger keeps the warning container').toBe(false);
+      expect(allow().classList.contains('danger'), 'and the allow button its usual colour').toBe(false);
+    });
+
+    it('an older API without danger and typed: no field, the allow button enabled, the warning note, and allow answered with no typed value', async () => {
+      const { danger: _danger, typed: _typed, ...older } = DELETE;
+      await open(older);
+
+      expect(dialog()?.querySelector('input') ?? null, 'no typed field').toBeNull();
+      expect(dialog()?.querySelector('.note')?.classList.contains('danger'), 'the note in the warning container').toBe(false);
+      expect(allow().disabled, 'the allow button is enabled').toBe(false);
+      allow().click();
+      await settle();
+      expect(answer.mock.calls, 'POST answer with allow true alone').toStrictEqual([['r-delete', true]]);
+    });
+
+    it('typed set to null behaves like no typed word', async () => {
+      await open({ ...DELETE, typed: null });
+
+      expect(dialog()?.querySelector('input') ?? null, 'no typed field').toBeNull();
+      expect(allow().disabled, 'the allow button is enabled').toBe(false);
+    });
+
+    it('the typed label and word from the API are text: markup is never rendered, and the word is shown nowhere in the dialog', async () => {
+      const word = '<b id="bait">orders-dlq</b>';
+      await open({ ...DELETE, typed: { label: 'Type <i id="label-markup">the name</i>', word } });
+
+      expect(dialog()?.querySelector('#label-markup') ?? null, 'no element made from the label').toBeNull();
+      expect(words(dialog()?.querySelector('mat-form-field mat-label')), 'the label shows the markup literally').toBe('Type <i id="label-markup">the name</i>');
+      expect(dialog()?.querySelector('#bait') ?? null, 'no element made from the word').toBeNull();
+      expect(dialog()?.textContent ?? '', 'the word is not shown as text to copy').not.toContain('orders-dlq');
+      expect(field()?.value, 'the field is not filled with it').toBe('');
+      expect(field()?.getAttribute('placeholder') ?? '', 'nor offered as a placeholder').toBe('');
+
+      await type(word);
+      allow().click();
+      await settle();
+      expect(answer.mock.calls, 'the word with markup, typed exactly, is sent as typed').toStrictEqual([['r-delete', true, word]]);
+    });
   });
 });

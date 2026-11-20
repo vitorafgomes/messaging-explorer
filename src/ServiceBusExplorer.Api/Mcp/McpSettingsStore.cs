@@ -57,8 +57,15 @@ public sealed class McpSettingsStore
     /// <summary>The level at which a connection is offered for reading and sending.</summary>
     public const string ReadAndSendLevel = "readAndSend";
 
-    /// <summary>The levels this version offers a connection at.</summary>
-    public static readonly IReadOnlyList<string> Levels = [ReadLevel, ReadAndSendLevel];
+    /// <summary>The level at which a connection is offered for reading, sending, moving and removing messages.</summary>
+    public const string AllLevel = "all";
+
+    /// <summary>The levels this version offers a connection at, each covering the ones before it.</summary>
+    public static readonly IReadOnlyList<string> Levels = [ReadLevel, ReadAndSendLevel, AllLevel];
+
+    /// <summary>True when a connection offered at <paramref name="offered"/> may do what <paramref name="needed"/> allows.</summary>
+    public static bool Covers(string? offered, string needed) =>
+        offered is not null && Levels.Contains(offered) && Levels.ToList().IndexOf(offered) >= Levels.ToList().IndexOf(needed);
 
     /// <summary>The name of the file in the data folder.</summary>
     public const string FileName = "mcp-settings.json";

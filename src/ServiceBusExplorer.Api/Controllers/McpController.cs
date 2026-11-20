@@ -50,7 +50,7 @@ public class McpController(
         if (await connections.GetConnectionAsync(id) is not { } connection)
             return NotFound(new { message = "No stored connection has this id." });
         if (request.Level is null || !McpSettingsStore.Levels.Contains(request.Level))
-            return BadRequest(new { message = "level must be read or readAndSend." });
+            return BadRequest(new { message = "level must be read, readAndSend or all." });
         if (request.NeverAsk == true && !(await McpToolCalls.ProtectionAsync(groups, connection)).CanNeverAsk)
             return BadRequest(new { message = NeverAskRefused });
 
@@ -78,10 +78,20 @@ public class McpController(
     [HttpGet("requests")]
     public ActionResult<IReadOnlyList<McpPendingRequest>> GetRequests() => Ok(requests.Waiting());
 
-    /// <summary>Allows or denies a waiting request; 404 when it is not waiting any more.</summary>
+    /// <summary>The answer when an allow does not carry the word the request asks for, typed exactly.</summary>
+    public const string WrongWord = "Type the name exactly as shown to allow this.";
+
+    /// <summary>
+    /// Allows or denies a waiting request; 404 when it is not waiting any more, 400 when an allow does not carry the word
+    /// the request asks for, typed exactly, and the request keeps waiting.
+    /// </summary>
     [HttpPost("requests/{id}/answer")]
-    public IActionResult AnswerRequest(string id, [FromBody] McpAnswerRequest answer) =>
-        requests.Answer(id, answer.Allow) ? NoContent() : NotFound(new { message = "No request with this id is waiting." });
+    public IActionResult AnswerRequest(string id, [FromBody] McpAnswerRequest answer) => requests.Answer(id, answer.Allow, answer.Typed) switch
+    {
+        McpAnswerResult.Answered => NoContent(),
+        McpAnswerResult.WrongWord => BadRequest(new { message = WrongWord }),
+        _ => NotFound(new { message = "No request with this id is waiting." }),
+    };
 
     /// <summary>The tool calls of assistants since the API started, newest first.</summary>
     [HttpGet("activity")]
@@ -128,8 +138,8 @@ public sealed record McpLogsRequest(bool Allowed);
 /// <summary>The body of PUT api/mcp/connections/{id}; a null <paramref name="NeverAsk"/> keeps the mark the connection had.</summary>
 public sealed record McpOfferRequest(string? Level, bool? NeverAsk = null);
 
-/// <summary>The body of POST api/mcp/requests/{id}/answer.</summary>
-public sealed record McpAnswerRequest(bool Allow);
+/// <summary>The body of POST api/mcp/requests/{id}/answer; <paramref name="Typed"/> is the word an allow carries when the request asks for one.</summary>
+public sealed record McpAnswerRequest(bool Allow, string? Typed = null);
 
 /// <summary>The answer of POST api/mcp/token: the plain token, this one time, and the state.</summary>
 public sealed record McpTokenCreated(string Token, McpState State);

@@ -1,12 +1,12 @@
 ---
 title: "Web App: The MCP server group of Settings"
-version: "1.2"
+version: "1.3"
 date: 2026-11-19
 updated: 2026-11-20
-changes: "v1.2: the kind connect. v1.1: phase two, sending: the window that asks the user, the production offer, the local test broker choice, the activity refreshed. v1.0: phase one, reading: the group of Settings and the toolbar mark"
+changes: "v1.3: phase three, the level all with its confirmation and blocks; the window that asks the user moved to its own page. v1.2: the kind connect. v1.1: phase two, sending: the window that asks the user, the production offer, the local test broker choice, the activity refreshed. v1.0: phase one, reading: the group of Settings and the toolbar mark"
 page_type: service
 status: active
-description: "Read when a change touches the MCP server group of Settings, McpSettingsService, the window that asks the user about a request of an assistant, the MCP token shown in the app, or the MCP mark on the toolbar."
+description: "Read when a change touches the MCP server group of Settings, McpSettingsService, the level that moves and removes messages, the MCP token shown in the app, or the MCP mark on the toolbar."
 source:
   - web-app/src/app/features/settings/mcp-settings.service.ts
   - web-app/src/app/features/settings/settings-mcp.component.ts
@@ -24,7 +24,7 @@ One topic of [[pages/services/web-app|Web App]]; the map lists the others. Why t
 
 ## Contract
 
-`McpSettingsService` (`web-app/src/app/features/settings/mcp-settings.service.ts#McpSettingsService`), a root service, calls the routes of the API through `ApiService` only, a connection id through `apiPath`: `GET mcp`, `PUT mcp/enabled`, `POST mcp/token`, `PUT` and `DELETE mcp/connections/{id}`, `PUT mcp/logs`, `GET` and `DELETE mcp/activity`, `GET mcp/requests` and `POST mcp/requests/{id}/answer` with `{ allow }`. A level is `PUT` with `neverAsk` only when the caller gives it (`web-app/src/app/features/settings/mcp-settings.service.ts#setLevel`). The fields `production`, `canNeverAsk` and `neverAsk` of an offered connection and `supports.confirmation` may be absent on an older API, and an absent field is read as false. It keeps the state the API answered last and nothing else; a call that fails leaves it as it was and reaches the caller. A 404 to `GET mcp` marks the feature absent (`web-app/src/app/features/settings/mcp-settings.service.ts#load`), so the app runs against an API without it. The token is answered to the caller and never kept by the service (`web-app/src/app/features/settings/mcp-settings.service.ts#createToken`).
+`McpSettingsService` (`web-app/src/app/features/settings/mcp-settings.service.ts#McpSettingsService`), a root service, calls the routes of the API through `ApiService` only, a connection id through `apiPath`: `GET mcp`, `PUT mcp/enabled`, `POST mcp/token`, `PUT` and `DELETE mcp/connections/{id}`, `PUT mcp/logs`, `GET` and `DELETE mcp/activity`, `GET mcp/requests` and `POST mcp/requests/{id}/answer` (their fields: [[pages/services/web-app/features-settings-mcp-requests]]). A level is `PUT` with `neverAsk` only when the caller gives it (`web-app/src/app/features/settings/mcp-settings.service.ts#setLevel`). The fields `production`, `canNeverAsk` and `neverAsk` of an offered connection, `supports.confirmation` and `supports.entities` may be absent on an older API, and an absent field is read as false. It keeps the state the API answered last and nothing else; a call that fails leaves it as it was and reaches the caller. A 404 to `GET mcp` marks the feature absent (`web-app/src/app/features/settings/mcp-settings.service.ts#load`), so the app runs against an API without it. The token is answered to the caller and never kept by the service (`web-app/src/app/features/settings/mcp-settings.service.ts#createToken`).
 
 ## How it works
 
@@ -47,13 +47,13 @@ Each call that fails says so in its own row, with the API's message or its statu
 - A production connection in the offer panel reads "Offer, after you confirm" and opens the shared `ConfirmDialogComponent`, "Offer a production connection?"; only Offer sends the `PUT` (`web-app/src/app/features/settings/settings-mcp.component.ts#offer`). The panel adds "Offering a production connection asks you to confirm it." Without `supports.confirmation` it stays disabled with the phase-one sentence.
 - What assistants did is read again every 5 seconds while the server is enabled and the group is on screen; a list that did not change is not set again, so its rows and the focus stay, and a failed refresh keeps the last list and says nothing. A first read that failed keeps its error and Retry.
 
-**The window that asks the user.** `App` polls `GET mcp/requests` every 2 seconds while the server is enabled and `supports.confirmation` is true, one call in flight at a time, and stops when the server is turned off and when the app is destroyed (`web-app/src/app/app.ts#asking`). A failed poll is tried again on the next tick and shows nothing; a 404 means the API cannot ask, and the polling stops for good. The oldest waiting request opens `McpRequestDialogComponent` over whatever screen is shown, one at a time (`web-app/src/app/app.ts#showRequest`):
+**Phase three (2026-11-20, moving and removing).** When the API lists `all`:
 
-- As the artboard draws `mcp.ask`: the title with the MCP mark, the facts as a description list, the note in the warning container, Deny and the allow button with the API's `allowLabel`, and "The assistant waits for your answer. With no answer in 2 minutes it is told the request was denied." Every text from the API is bound as text, never as markup.
-- Only Deny and the allow button answer, each through `POST mcp/requests/{id}/answer`; the dialog is opened with `disableClose` and focus on Deny (`web-app/src/app/features/settings/mcp-request-dialog.component.ts#config`), so Escape and a click outside do nothing. A request is answered once: a second click while the first answer is in flight sends nothing (`web-app/src/app/features/settings/mcp-request-dialog.component.ts#answer`). A failed answer is said in the dialog, which stays open.
-- When the request leaves the list, or the answer gets a 404, the dialog closes by itself with the snack bar "The request is no longer waiting." A request already shown is never opened again.
-- A kind other than read, send or connect shows Deny only and "This version of the app cannot allow this kind of request."
-- After an allowed `connect` the app reads the status once a second without publishing it (`ConnectionService.peekStatus`) until it names another connection or 15 seconds pass, then publishes it once (`web-app/src/app/app.ts#followConnect`); tested by `web-app/src/app/app.spec.ts#a denied connect and an allowed request of another kind read no status`.
+- A row draws "Read, send and remove". Raising a row to it opens the shared `ConfirmDialogComponent` first, "Let an assistant move and remove messages?", with Cancel and "Allow it"; only "Allow it" sends the `PUT` with level `all`. Lowering a level sends at once (`web-app/src/app/features/settings/settings-mcp.component.ts#setLevel`).
+- At `all` a row says "Reads without asking; asks you before each send, move or removal."; a never-asked local test broker, "A local test broker: sends without asking; asks you before each move or removal.", since the mark covers sends only.
+- "What each choice allows" adds "Move and remove". "Entities" shows only when `supports.entities` is true, absent read as false (`web-app/src/app/features/settings/settings-mcp.component.ts#choices`).
+
+**The window that asks the user** about a request, its polling and the word typed before a removal: [[pages/services/web-app/features-settings-mcp-requests]].
 
 **The token.** It lives in one signal of the component (`web-app/src/app/features/settings/settings-mcp.component.ts#token`), is shown once in a read-only box with Copy and "Copy it now. It is not shown again.", and is written to no storage and no console. A new visit shows `<your token>` again.
 
@@ -62,9 +62,8 @@ Each call that fails says so in its own row, with the API's message or its statu
 ## Sharp edges
 
 - The toolbar reads `GET mcp` once at start. If the API answers after the window, or fails then, the mark stays off until Settings is opened.
-- The window that asks the user is only in the app: with the app minimised, nothing outside it says a request waits.
-- Not built, on the artboard: the request to delete with the name typed, "Settings of the app", the count of assistants connected, the MCP mark on the Connections cards, grouping the offer panel by client and environment.
-- Not verified in a running app against the API of phase two: the specs mock the contract above.
+- Not built, on the artboard: "Settings of the app", the count of assistants connected, the MCP mark on the Connections cards, grouping the offer panel by client and environment.
+- Not verified in a running app against the API of phase two or three: the specs mock the contract above.
 
 ## Tests
 
@@ -72,5 +71,6 @@ Each call that fails says so in its own row, with the API's message or its statu
 - `web-app/src/app/features/settings/settings-mcp.component.spec.ts#an API without the MCP server (404 on GET mcp) shows no group at all, and no error panel`, `web-app/src/app/features/settings/settings-mcp.component.spec.ts#only the levels the API lists are drawn, with the labels of the artboard, and picking one is PUT with that level`, `web-app/src/app/features/settings/settings-mcp.component.spec.ts#a production connection is listed with the Production chip and a disabled Offer, and says why`.
 - The token: `web-app/src/app/features/settings/settings-mcp.component.spec.ts#creating a token shows it once with Copy and the sentence, puts it in the configuration, and writes it to no storage and no console` and `web-app/src/app/features/settings/settings-mcp.component.spec.ts#after the component is destroyed and created again, the token is gone and the configuration says <your token>`.
 - One spec per call that fails, under `web-app/src/app/features/settings/settings-mcp.component.spec.ts#each failed call says so where it happened`.
-- Phase two: `web-app/src/app/features/settings/settings-mcp.component.spec.ts#a production connection is offered only after Offer in the confirmation, at "Read"`; the window, `web-app/src/app/features/settings/mcp-request-dialog.component.spec.ts#a double click on the allow button sends one answer: a request is answered once` and `web-app/src/app/features/settings/mcp-request-dialog.component.spec.ts#text from the API is shown as text: markup in the title, a fact or the note is never rendered`; the polling, `web-app/src/app/app.spec.ts#the polling stops when the app is destroyed`.
+- Phase two: `web-app/src/app/features/settings/settings-mcp.component.spec.ts#a production connection is offered only after Offer in the confirmation, at "Read"`.
+- Phase three: `web-app/src/app/features/settings/settings-mcp.component.spec.ts#the level "all" is PUT only after "Allow it" in the confirmation` and `web-app/src/app/features/settings/settings-mcp.component.spec.ts#"Entities" shows only when the API supports entities`.
 - The mark: `web-app/src/app/app.spec.ts#while the server is enabled, the toolbar shows the MCP mark and its dot, as a named link to Settings before Notifications`; the place of the group: `web-app/src/app/features/settings/settings.component.spec.ts#the MCP server group sits between Data and Developer, as Settings.dc.html draws it, and is absent against an API without it`.

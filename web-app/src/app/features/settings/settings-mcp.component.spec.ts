@@ -600,6 +600,91 @@ describe('SettingsMcpComponent: the MCP server group of Settings, as Settings.dc
     });
   });
 
+  describe('phase three: the level "Read, send and remove" (all)', () => {
+    const ALL: Partial<McpState> = { levels: ['read', 'readAndSend', 'all'], supports: { logs: true, appSettings: false, confirmation: true } };
+    const item = (el: HTMLElement, name: string) => Array.from(el.querySelectorAll('ul[aria-label="Connections an assistant may use"] li')).find(li => words(li.querySelector('.name')).startsWith(name))!;
+    const levelButton = (el: HTMLElement, name: string, label: string) =>
+      Array.from(item(el, name).querySelectorAll<HTMLElement>('[role="group"] button')).find(b => words(b) === label)!;
+    const confirm = () => document.querySelector('app-confirm-dialog');
+    const confirmButton = (label: string) => Array.from(confirm()?.querySelectorAll<HTMLButtonElement>('button') ?? []).find(b => words(b) === label)!;
+    const settle = async (refresh: () => Promise<void>) => { await refresh(); await new Promise(r => setTimeout(r, 50)); await refresh(); };
+    const blocks = (row: Element | undefined) => Array.from(row?.querySelectorAll('.choice') ?? []).map(words);
+
+    const READ_BLOCK = 'Read Every connection listed List the connections offered, queues, topics, subscriptions and rules; read the counts; peek the active, dead-letter, scheduled and deferred messages. Never asks you.';
+    const SEND_BLOCK = 'Send From "Read and send" up Send one message or many to a queue or a topic, now or scheduled. Asks you before each send, except on a local test broker.';
+    const MOVE_BLOCK = 'Move and remove "Read, send and remove" only Resubmit, move, delete, purge and cancel scheduled messages. Asks you every time; a delete or a purge asks for the name typed.';
+    const ENTITIES_BLOCK = 'Entities "Read, send and remove" only Create, change and delete a queue, a topic, a subscription or a rule. Asks you every time.';
+
+    it('without "all" listed, neither "Read, send and remove" nor "Move and remove" is drawn', async () => {
+      const { el, row } = await render({ ...ALL, levels: ['read', 'readAndSend'], connections: [{ connectionId: 'c-dev', level: 'read' }] });
+      expect(Array.from(item(el, 'contoso-dev').querySelectorAll('[role="group"] button')).map(words), 'a level the API does not list is not drawn').toStrictEqual(['Read', 'Read and send']);
+      expect(blocks(row('What each choice allows')), 'no block of the level all').toStrictEqual([READ_BLOCK, SEND_BLOCK]);
+    });
+
+    it('picking "Read, send and remove" opens the confirmation first, and Cancel sends nothing', async () => {
+      const { el, refresh } = await render({ ...ALL, connections: [{ connectionId: 'c-dev', level: 'readAndSend' }] });
+      levelButton(el, 'contoso-dev', 'Read, send and remove').click();
+      await settle(refresh);
+
+      expect(words(confirm()?.querySelector('h2')), 'the title of the confirmation').toBe('Let an assistant move and remove messages?');
+      expect(words(confirm()?.querySelector('mat-dialog-content p')), 'the message names the connection and what it allows')
+        .toBe('contoso-dev: an assistant will be able to dead-letter, resubmit, move, delete, purge and cancel messages there. Each time it asks you first, and a delete or a purge asks for the name typed.');
+      expect(Array.from(confirm()?.querySelectorAll('mat-dialog-actions button') ?? []).map(words), 'Cancel and Allow it').toStrictEqual(['Cancel', 'Allow it']);
+      expect(api.put, 'the level "all" is not sent before the user confirms').not.toHaveBeenCalled();
+
+      confirmButton('Cancel').click();
+      await settle(refresh);
+      expect(api.put, 'Cancel changes nothing').not.toHaveBeenCalled();
+      expect(levelButton(el, 'contoso-dev', 'Read and send').getAttribute('aria-pressed'), 'the row keeps its level').toBe('true');
+    });
+
+    it('the level "all" is PUT only after "Allow it" in the confirmation', async () => {
+      const { el, refresh } = await render({ ...ALL, connections: [{ connectionId: 'c-dev', level: 'read' }] });
+      levelButton(el, 'contoso-dev', 'Read, send and remove').click();
+      await settle(refresh);
+      expect(api.put, 'the click on the level sends nothing').not.toHaveBeenCalled();
+
+      confirmButton('Allow it').click();
+      await settle(refresh);
+      expect(api.put.mock.calls, 'PUT with level all after the confirmation').toStrictEqual([['mcp/connections/c-dev', { level: 'all' }]]);
+      expect(levelButton(el, 'contoso-dev', 'Read, send and remove').getAttribute('aria-pressed'), 'the row shows its new level').toBe('true');
+      expect(words(item(el, 'contoso-dev').querySelector('.asks')), 'the row sentence of the level all')
+        .toBe('Reads without asking; asks you before each send, move or removal.');
+    });
+
+    it('lowering a level from "all" needs no confirmation', async () => {
+      const { el, refresh } = await render({ ...ALL, connections: [{ connectionId: 'c-dev', level: 'all' }] });
+      levelButton(el, 'contoso-dev', 'Read').click();
+      await settle(refresh);
+
+      expect(confirm(), 'no confirmation to lower a level').toBeNull();
+      expect(api.put.mock.calls, 'PUT with the lower level at once').toStrictEqual([['mcp/connections/c-dev', { level: 'read' }]]);
+    });
+
+    const sentences: { connection: McpState['connections'][number]; name: string; asks: string }[] = [
+      { name: 'contoso-dev', connection: { connectionId: 'c-dev', level: 'all' }, asks: 'Reads without asking; asks you before each send, move or removal.' },
+      { name: 'Local RabbitMQ', connection: { connectionId: 'c-rabbit', level: 'all', canNeverAsk: true, neverAsk: true }, asks: 'A local test broker: sends without asking; asks you before each move or removal.' },
+      { name: 'Local RabbitMQ', connection: { connectionId: 'c-rabbit', level: 'all', canNeverAsk: true, neverAsk: false }, asks: 'Reads without asking; asks you before each send, move or removal.' },
+      { name: 'contoso-prod', connection: { connectionId: 'c-prod', level: 'all', production: true }, asks: 'Asks you before every operation, a read included.' },
+    ];
+    for (const c of sentences) {
+      it(`a row offered at "all" as ${JSON.stringify(c.connection)} says "${c.asks}"`, async () => {
+        const { el } = await render({ ...ALL, connections: [c.connection] });
+        expect(words(item(el, c.name).querySelector('.asks')), 'the row sentence for the level all').toBe(c.asks);
+      });
+    }
+
+    it('"What each choice allows" adds "Move and remove" with "all", and no "Entities" while the API does not support entities', async () => {
+      const { row } = await render(ALL);
+      expect(blocks(row('What each choice allows')), 'Read, Send and Move and remove, in the artboard\'s words').toStrictEqual([READ_BLOCK, SEND_BLOCK, MOVE_BLOCK]);
+    });
+
+    it('"Entities" shows only when the API supports entities', async () => {
+      const { row } = await render({ ...ALL, supports: { logs: true, appSettings: false, confirmation: true, entities: true } });
+      expect(blocks(row('What each choice allows')), 'the four blocks of the artboard').toStrictEqual([READ_BLOCK, SEND_BLOCK, MOVE_BLOCK, ENTITIES_BLOCK]);
+    });
+  });
+
   describe('what assistants did, read again while shown', () => {
     const NEWER: McpActivity = { time: '10:43:02', assistant: 'Claude Code', asked: 'Send 3 messages', where: 'orders. contoso-dev', outcome: '3 sent, allowed by you', kind: 'ok' };
     const rows = (el: HTMLElement) => Array.from(el.querySelectorAll('table[aria-label="What assistants did"] tbody tr'));

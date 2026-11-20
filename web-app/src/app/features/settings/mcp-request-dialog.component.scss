@@ -45,6 +45,20 @@
   mat-icon {
     flex: none;
   }
+
+  &.danger {
+    background: var(--mat-sys-error-container);
+    color: var(--mat-sys-on-error-container);
+  }
+}
+
+.typed {
+  width: 100%;
+}
+
+.allow.danger {
+  --mat-button-filled-container-color: var(--mat-sys-error);
+  --mat-button-filled-label-text-color: var(--mat-sys-on-error);
 }
 
 .unknown,

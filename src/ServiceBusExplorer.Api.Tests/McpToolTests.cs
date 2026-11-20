@@ -58,6 +58,19 @@ public class McpToolTests
         public bool SupportsMessageCounts { get; init; } = true;
         public bool SupportsScheduledMessages { get; init; } = true;
         public bool SupportsSessions { get; init; } = true;
+        public bool SupportsSequenceNumbers { get; init; } = true;
+        public bool SupportsManualDeadLetter { get; init; } = true;
+        public bool SupportsBulkMessageOperations { get; init; } = true;
+        public HashSet<string> Subscriptions { get; init; } = ["events/audit"];
+
+        /// <summary>What a batch call answers for its sequence numbers; null answers each one done.</summary>
+        public Func<long[], BatchOperationResult>? BatchResult { get; init; }
+
+        /// <summary>What every move, remove, purge and cancel call throws; null answers.</summary>
+        public Exception? BatchFailure { get; init; }
+
+        /// <summary>The move, remove, purge and cancel calls the provider was asked, in order.</summary>
+        public List<BatchCall> BatchCalls { get; } = [];
         public HashSet<string> Queues { get; init; } = ["orders"];
         public HashSet<string> Topics { get; init; } = ["events"];
         public Exception? SendFailure { get; init; }
@@ -108,6 +121,9 @@ public class McpToolTests
             "get_SupportsMessageCounts" => broker.SupportsMessageCounts,
             "get_SupportsScheduledMessages" => broker.SupportsScheduledMessages,
             "get_SupportsSessions" => broker.SupportsSessions,
+            "get_SupportsSequenceNumbers" => broker.SupportsSequenceNumbers,
+            "get_SupportsManualDeadLetter" => broker.SupportsManualDeadLetter,
+            "get_SupportsBulkMessageOperations" => broker.SupportsBulkMessageOperations,
             "get_ProviderDisplayName" => "Stub",
             "get_ProviderVersion" => "1",
             _ when m.ReturnType == typeof(bool) => true,
@@ -131,13 +147,34 @@ public class McpToolTests
                 [new SubscriptionRuleInfo { Name = "$Default", SqlExpression = "1=1" }]),
             nameof(IMessagingProvider.PeekMessagesAsync) => Peek(broker),
             nameof(IMessagingProvider.GetQueueAsync) => broker.LookupFailure is { } lookupFailed && !broker.FailTopicLookup ? Task.FromException<IQueueEntity?>(lookupFailed) : Task.FromResult<IQueueEntity?>(
-                broker.Queues.Contains((string)args[0]!) ? new QueueInfo { Name = (string)args[0]!, Status = "Active" } : null),
+                broker.Queues.Contains((string)args[0]!) ? new QueueInfo { Name = (string)args[0]!, Status = "Active", ActiveMessageCount = 3, DeadLetterMessageCount = 2 } : null),
+            nameof(IMessagingProvider.GetSubscriptionAsync) => Task.FromResult<SubscriptionInfo?>(broker.Subscriptions.Contains($"{args[0]}/{args[1]}")
+                ? new SubscriptionInfo { TopicName = (string)args[0]!, Name = (string)args[1]!, ActiveMessageCount = 5, DeadLetterMessageCount = 4 } : null),
+            nameof(IMessagingProvider.PurgeMessagesAsync) => Batch(broker, new BatchCall(m.Name, (string)args[0]!, (string?)args[2], (MessageSubQueue)args[1]!, [], null, (CancellationToken)args[3]!)),
+            nameof(IMessagingProvider.DeleteMessagesAsync) => Batch(broker, new BatchCall(m.Name, (string)args[0]!, (string?)args[3], (MessageSubQueue)args[2]!, (long[])args[1]!, null, (CancellationToken)args[5]!)),
+            nameof(IMessagingProvider.ResubmitDeadLetterMessagesAsync) => Batch(broker, new BatchCall(m.Name, (string)args[0]!, (string?)args[3], (MessageSubQueue)args[2]!, (long[])args[1]!, null, (CancellationToken)args[5]!, (bool)args[4]!)),
+            nameof(IMessagingProvider.MoveMessagesAsync) => Batch(broker, new BatchCall(m.Name, (string)args[0]!, (string?)args[4], (MessageSubQueue)args[3]!, (long[])args[2]!, (string)args[1]!, (CancellationToken)args[6]!)),
+            nameof(IMessagingProvider.CancelScheduledMessagesAsync) => Batch(broker, new BatchCall(m.Name, (string)args[0]!, null, null, (long[])args[1]!, null, (CancellationToken)args[2]!)),
+            nameof(IMessagingProvider.DeadLetterMessagesAsync) => Batch(broker, new BatchCall(m.Name, (string)args[0]!, (string?)args[2], MessageSubQueue.Active, (long[])args[1]!, $"{args[3]}|{args[4]}", (CancellationToken)args[5]!)),
             nameof(IMessagingProvider.GetTopicAsync) => broker.LookupFailure is { } topicLookupFailed && !broker.Queues.Contains((string)args[0]!) && broker.FailTopicLookup ? Task.FromException<ITopicEntity?>(topicLookupFailed) : Counted(() => broker.TopicLookups++, Task.FromResult<ITopicEntity?>(
                 broker.Topics.Contains((string)args[0]!) ? new TopicInfo { Name = (string)args[0]!, Status = "Active" } : null)),
             nameof(IMessagingProvider.SendMessageAsync) => SendOne(broker, (SendMessageRequest)args[1]!),
             nameof(IMessagingProvider.SendMessagesAsync) => SendMany(broker, ((IEnumerable<SendMessageRequest>)args[1]!).ToList()),
             _ => throw new NotSupportedException(m.Name)
         });
+    }
+
+    /// <summary>One move, remove, purge or cancel call: the provider member, where, which numbers, the target, the token.</summary>
+    internal sealed record BatchCall(string Method, string Entity, string? Subscription, MessageSubQueue? SubQueue, long[] Numbers, string? Target, CancellationToken Token, bool NewMessageIds = false);
+
+    /// <summary>Records the call, then throws <see cref="Broker.BatchFailure"/> or answers; a purge answers no result.</summary>
+    private static object Batch(Broker broker, BatchCall call)
+    {
+        broker.BatchCalls.Add(call);
+        if (call.Method == nameof(IMessagingProvider.PurgeMessagesAsync))
+            return broker.BatchFailure is { } purgeFailed ? Task.FromException(purgeFailed) : Task.CompletedTask;
+        if (broker.BatchFailure is { } failure) return Task.FromException<BatchOperationResult>(failure);
+        return Task.FromResult(broker.BatchResult?.Invoke(call.Numbers) ?? new BatchOperationResult { SuccessCount = call.Numbers.Length });
     }
 
     private static T Counted<T>(Action count, T answer)

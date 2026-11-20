@@ -118,7 +118,7 @@ public class McpRequestTests
         var second = requests.Answer(id, allow: true);
         var outcome = await asked;
 
-        Assert.True(first && !second, $"a request already answered is not waiting any more, so a retried answer is refused; the answers returned {first} and {second}");
+        Assert.True(first == McpAnswerResult.Answered && second == McpAnswerResult.NotWaiting, $"a request already answered is not waiting any more, so a retried answer is refused; the answers returned {first} and {second}");
         Assert.True(outcome == McpAnswer.Denied, $"a second answer never changes the outcome of the first; the request ended {outcome}");
         Assert.Empty(requests.Waiting());
     }
@@ -150,5 +150,49 @@ public class McpRequestTests
         Assert.Equal((HttpStatusCode.NoContent, HttpStatusCode.NotFound), (byKey.StatusCode, again.StatusCode));
         Assert.Equal((true, McpToolCalls.DeniedSentence), answer);
         Assert.Equal(0, broker.SendCalls);
+    }
+
+    [Fact]
+    public async Task An_allow_of_a_request_with_a_typed_word_is_taken_only_with_the_word_typed_exactly_and_a_deny_needs_none()
+    {
+        var requests = new McpRequests(new McpRequestOptions(TimeSpan.FromSeconds(30)));
+        var typed = new McpTyped("Type the queue name to allow it", "Orders");
+        var allowed = requests.AskAsync("Assistant", "delete", "t", [], "n", "Delete 1 message", CancellationToken.None, danger: true, typed);
+        var id = Assert.Single(requests.Waiting()).Id;
+
+        var none = requests.Answer(id, allow: true);
+        var wrongCase = requests.Answer(id, allow: true, "orders");
+        var stillWaiting = requests.Waiting().Count;
+        var exact = requests.Answer(id, allow: true, "Orders");
+
+        Assert.True((none, wrongCase, stillWaiting) == (McpAnswerResult.WrongWord, McpAnswerResult.WrongWord, 1),
+            $"an allow without the word typed exactly, letter case included, is refused and the request keeps waiting; it answered {none} and {wrongCase} with {stillWaiting} waiting");
+        Assert.True(exact == McpAnswerResult.Answered && await allowed == McpAnswer.Allowed, $"the word typed exactly allows the request; it answered {exact}");
+
+        var denied = requests.AskAsync("Assistant", "purge", "t", [], "n", "Purge the queue", CancellationToken.None, danger: true, typed);
+        var deny = requests.Answer(Assert.Single(requests.Waiting()).Id, allow: false);
+        Assert.True(deny == McpAnswerResult.Answered && await denied == McpAnswer.Denied, $"a deny needs no typed word; it answered {deny}");
+    }
+
+    [Fact]
+    public async Task Every_request_carries_danger_and_typed_and_a_send_is_not_dangerous_and_asks_for_no_word()
+    {
+        var broker = new Broker();
+        await using var host = new Host(broker);
+        await host.StartAsync();
+        await host.SeedAsync(Offered());
+        await host.OfferAsync("c-offered", "all");
+        await host.ConnectAsync("c-offered");
+
+        var call = host.CallAsync("send_message", new { entity = "orders", body = "a", reason = "r" });
+        var request = await host.AnswerOnlyRequestAsync(allow: true);
+        var answer = await call;
+
+        Assert.True(request.TryGetProperty("danger", out var danger) && danger.ValueKind == JsonValueKind.False,
+            $"every request carries danger, false for a send: {request}");
+        Assert.True(request.TryGetProperty("typed", out var typed) && typed.ValueKind == JsonValueKind.Null,
+            $"every request carries typed, null when no word is asked for: {request}");
+        Assert.False(answer.IsError, $"a connection offered at all still sends: it answered {answer}");
+        Assert.Equal(1, broker.SendCalls);
     }
 }

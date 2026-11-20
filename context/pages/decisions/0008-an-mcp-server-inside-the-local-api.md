@@ -2,7 +2,7 @@
 title: "ADR 0008 - An MCP server inside the local API"
 version: "1.0"
 date: 2026-11-19
-changes: "2026-11-20: Enforcement names the gate and the sending phase. 2026-11-19: accepted by the owner with the screen as drawn. Initial ADR draft"
+changes: "2026-11-20: Enforcement names each phase. 2026-11-19: accepted by the owner with the screen as drawn. Initial ADR draft"
 page_type: adr
 status: accepted
 description: "The local API serves an MCP endpoint, off by default, for the connections the user chose, behind its own token, asking the user in the app before anything is sent, moved or removed."
@@ -26,8 +26,6 @@ reliability: medium
 - [x] Accepted
 - [ ] Deprecated / superseded
 
-Updated: 2026-11-20.
-
 ## Context
 
 The owner asked on 2026-11-19 for an MCP server, the way an IDE offers its own tools to an assistant, and for the complete version: "a versao completa pois quero que voce tambem possa enviar msg". The screen was settled with the owner the same day: a Settings group named "MCP server", and the MCP icon in the toolbar only while the server is active.
@@ -38,7 +36,7 @@ What was read on 2026-11-19, and what was not:
 
 - The specification, revision 2026-07-28: over Streamable HTTP a server must answer 403 to an invalid `Origin`, should bind to localhost and should authenticate every connection; its optional OAuth flow says nothing for or against a static bearer token.
 - A human should always be able to deny a tool call; the specification puts that on the host. Elicitation asks the user through the client, which need not support it.
-- The C# SDK, `ModelContextProtocol.AspNetCore` 2.4.0, was proven by a throwaway project on 2026-11-19: a stateless `MapMcp("/mcp")` answers `initialize`, `tools/list` and `tools/call`; a tool takes services and a `CancellationToken` that stay out of its schema; `ReadOnly` and `Destructive` reach the client as hints. **The SDK does not validate `Origin`** (a foreign one was answered 200), so that check is this application's. **Not verified:** a connection from Claude Code itself.
+- The C# SDK, `ModelContextProtocol.AspNetCore` 2.4.0, was proven by a throwaway project on 2026-11-19: a stateless `MapMcp("/mcp")` answers `initialize`, `tools/list` and `tools/call`; a tool takes services and a `CancellationToken` that stay out of its schema; `ReadOnly` and `Destructive` reach the client as hints. **The SDK does not validate `Origin`** (a foreign one was answered 200), so that check is this application's.
 - Claude Code takes an HTTP server as `{ "type": "http", "url": ..., "headers": { "Authorization": "Bearer ..." } }`.
 - The MCP logo is in the specification's repository, which is MIT licensed. No usage terms for the logo or the name were found.
 
@@ -52,7 +50,7 @@ What was read on 2026-11-19, and what was not:
 
 **Only the connections the user offers.** Each stored connection has a level for assistants: not offered (the default), read, read and send, or read, send and remove. A connection that is not offered does not exist for a tool, not even by name. A connection marked as production is not offered until the user chooses it on purpose.
 
-**The user is asked in the app.** A tool that sends, moves, removes, purges or changes an entity waits while the app shows what is asked, where, how many messages and the reason the assistant gave; with no answer in two minutes the tool is told the request was denied. A delete or a purge asks for the entity name typed, as on the screen. A connection marked as production asks before every operation, a read included. The one exception: a connection the user marks as a local test broker is never asked. Elicitation is not relied on.
+**The user is asked in the app.** A tool that sends, moves, removes, purges or changes an entity waits while the app shows what is asked, where, how many messages and the reason the assistant gave; with no answer in two minutes the tool is told the request was denied. A delete or a purge asks for the entity name typed, as on the screen. A connection marked as production asks before every operation, a read included. The one exception: a connection the user marks as a local test broker is never asked.
 
 **One active connection.** The API has one provider slot. A tool acts on the connection active in the app, when offered; changing the active connection through a tool is itself an operation the user is asked about (`src/ServiceBusExplorer.Api.Tests/McpConnectToolTests.cs#Connect_to_asks_even_a_never_asked_broker_and_an_allow_makes_it_active`).
 
@@ -70,8 +68,8 @@ What was read on 2026-11-19, and what was not:
 
 - **Better:** an assistant can inspect a dead-letter queue, reproduce a failure by sending messages and clean up after a test, on brokers the user chose, with the user deciding each change.
 - **Worse:** the rule "nobody but the local user reaches the API" gains a second credential and a second exempt route. A message body read by an assistant leaves the computer, which no setting can undo.
-- **Worse:** every tool that changes something blocks on a person. An unattended run cannot send or remove, by design, except on a local test broker.
-- **Neutral but noteworthy:** the token is long-lived, so it is stored hashed and can only be replaced, never read back. An assistant and the user share the one active connection.
+- **Worse:** every tool that changes something blocks on a person. An unattended run cannot send or remove, by design, except a send on a local test broker.
+- **Neutral but noteworthy:** the token is long-lived, so it is stored hashed and can only be replaced, never read back.
 
 ## Alternatives considered
 
@@ -84,14 +82,15 @@ What was read on 2026-11-19, and what was not:
 
 ## Enforcement
 
-Tests: [[pages/services/api/mcp-server]], [[pages/services/api/mcp-asking-and-sending]].
+Tests: [[pages/services/api/mcp-server]], [[pages/services/api/mcp-asking-and-sending]], [[pages/services/api/mcp-moving-and-removing]].
 
 - **The gate:** `src/ServiceBusExplorer.Api/Mcp/McpGate.cs#AdmitAsync`, `src/ServiceBusExplorer.Api/Mcp/McpSettingsStore.cs#TokenMatches`. Pinned by `src/ServiceBusExplorer.Api.Tests/McpGateTests.cs#The_mcp_endpoint_answers_404_while_the_user_has_not_turned_it_on_even_with_a_token_and_the_api_key`, `src/ServiceBusExplorer.Api.Tests/McpGateTests.cs#The_mcp_token_alone_opens_no_api_route`.
 - **Only the connections offered, at their level:** `src/ServiceBusExplorer.Api/Mcp/McpToolCalls.cs#ActiveAsync`. Pinned by `src/ServiceBusExplorer.Api.Tests/McpToolTests.cs#A_tool_on_an_active_connection_that_is_not_offered_is_refused_and_names_nothing`, `src/ServiceBusExplorer.Api.Tests/McpSendToolTests.cs#A_connection_offered_for_reading_refuses_a_send_without_asking`.
 - **The user is asked in the app:** `src/ServiceBusExplorer.Api/Mcp/McpRequests.cs#AskAsync`; nothing is sent before an allow, at most 20 wait, the MCP token answers none. Pinned by `src/ServiceBusExplorer.Api.Tests/McpSendToolTests.cs#A_send_waits_for_the_user_and_is_sent_once_only_after_the_user_allows_it`, `src/ServiceBusExplorer.Api.Tests/McpRequestTests.cs#At_most_20_requests_wait_and_a_21st_is_refused_at_once`, `src/ServiceBusExplorer.Api.Tests/McpRequestTests.cs#The_mcp_token_cannot_answer_a_request_and_the_key_answers_it_once`.
 - **Production asks before every read; a local test broker is never asked:** `src/ServiceBusExplorer.Api/Mcp/McpToolCalls.cs#ProtectionAsync`. Pinned by `src/ServiceBusExplorer.Api.Tests/McpRequestTests.cs#A_production_connection_asks_before_every_read_and_list_connections_and_read_logs_never_ask`, `src/ServiceBusExplorer.Api.Tests/McpSettingsRouteTests.cs#Never_asked_is_accepted_only_for_a_broker_on_this_computer_that_is_not_production_and_stops_counting_when_that_changes`.
 - **No secret or body leaves:** `src/ServiceBusExplorer.Api.Tests/McpToolTests.cs#Every_tool_call_is_recorded_newest_first_without_a_body_or_a_secret`, `src/ServiceBusExplorer.Api.Tests/McpSendToolTests.cs#The_request_says_what_where_how_many_and_why_in_fixed_words_with_no_body_and_no_secret`.
-- **Owed:** moving, removing, administering; a typed name before a delete or purge.
+- **Moving and removing; a typed name:** `src/ServiceBusExplorer.Api/Mcp/McpRemoveTools.cs#PrepareAsync`, `src/ServiceBusExplorer.Api/Mcp/McpRequests.cs#Answer`.
+- **Owed:** administering entities.
 - **Invariant page and lenses:** [[pages/invariants/local-authenticated-api]] carries the second exemption; `api-surface`, `secrets` and `message-safety` review every phase.
 
 ## Related

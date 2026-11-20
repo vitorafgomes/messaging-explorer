@@ -117,21 +117,21 @@ public sealed class McpToolCalls(
         List<McpFact> facts = entity is null ? [] : [entity];
         facts.Add(new McpFact("On", await OnAsync(active.Connection)));
         facts.Add(new McpFact("It said why", Reason(reason)));
-        await AskAsync(call, active, "read", $"{call.Assistant} asks to {what}", facts, ProductionReadNote, "Allow this read", sends: false, cancellationToken);
+        await AskAsync(call, active, "read", $"{call.Assistant} asks to {what}", facts, ProductionReadNote, "Allow this read", McpSettingsStore.ReadLevel, cancellationToken);
     }
 
     /// <summary>
     /// Shows a request to the user and waits. Denied, unanswered or refused for too many waiting, the call is refused
     /// with its sentence. Allowed, the call goes on only while the same provider and connection are active and still
-    /// offered at a level that covers it.
+    /// offered at a level that covers <paramref name="needed"/>. A <paramref name="typed"/> word must be typed by the
+    /// user before the app takes the allow.
     /// </summary>
-    public async Task AskAsync(ToolCall call, McpActive active, string kind, string title, IReadOnlyList<McpFact> facts, string note, string allowLabel, bool sends, CancellationToken cancellationToken)
+    public async Task AskAsync(ToolCall call, McpActive active, string kind, string title, IReadOnlyList<McpFact> facts, string note, string allowLabel, string needed, CancellationToken cancellationToken, bool danger = false, McpTyped? typed = null)
     {
-        await AskUserAsync(call, kind, title, facts, note, allowLabel, cancellationToken);
+        await AskUserAsync(call, kind, title, facts, note, allowLabel, cancellationToken, danger, typed);
         var (provider, connectionId) = ConnectionsController.GetCurrent();
-        var level = settings.LevelOf(connectionId);
-        if (!ReferenceEquals(provider, active.Provider) || connectionId != active.Connection.Id || level is null
-            || (sends && level != McpSettingsStore.ReadAndSendLevel))
+        if (!ReferenceEquals(provider, active.Provider) || connectionId != active.Connection.Id
+            || !McpSettingsStore.Covers(settings.LevelOf(connectionId), needed))
             call.Refuse(McpReadTools.NotOffered, "Refused: not offered");
         call.Allowed = true;
     }
@@ -141,9 +141,9 @@ public sealed class McpToolCalls(
     /// Denied, unanswered or refused for too many waiting, the call is refused with its sentence. What must still hold
     /// after the allow is the caller's to check.
     /// </summary>
-    public async Task AskUserAsync(ToolCall call, string kind, string title, IReadOnlyList<McpFact> facts, string note, string allowLabel, CancellationToken cancellationToken)
+    public async Task AskUserAsync(ToolCall call, string kind, string title, IReadOnlyList<McpFact> facts, string note, string allowLabel, CancellationToken cancellationToken, bool danger = false, McpTyped? typed = null)
     {
-        switch (await requests.AskAsync(call.Assistant, kind, title, facts, note, allowLabel, cancellationToken))
+        switch (await requests.AskAsync(call.Assistant, kind, title, facts, note, allowLabel, cancellationToken, danger, typed))
         {
             case McpAnswer.Denied:
                 call.Refuse(DeniedSentence, "Denied by you");

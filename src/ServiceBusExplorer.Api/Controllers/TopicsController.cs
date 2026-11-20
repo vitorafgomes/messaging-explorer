@@ -150,7 +150,7 @@ public class TopicsController : ControllerBase
     /// </summary>
     [HttpPost("{name}/messages/cancel-scheduled")]
     public Task<ActionResult> CancelScheduledMessages(string name, [FromBody] CancelScheduledRequest request) =>
-        QueuesController.CancelScheduled(this, _logger, name, request, HttpContext.RequestAborted);
+        QueuesController.CancelScheduled(GetProvider(), _logger, name, request, HttpContext.RequestAborted);
 
     // Subscriptions
     [HttpGet("{topicName}/subscriptions")]
@@ -429,13 +429,11 @@ public class TopicsController : ControllerBase
 
     [HttpPost("{topicName}/subscriptions/{subscriptionName}/messages/deadletter-batch")]
     public Task<ActionResult> DeadLetterMessages(string topicName, string subscriptionName, [FromBody] DeferredBatchRequest request) =>
-        QueuesController.ActiveBatch(this, _logger, $"{topicName}/{subscriptionName}", request,
-            c => c.SupportsManualDeadLetter ? null : EntityAdministrationResults.ManualDeadLetterNotSupported(),
-            p => p.DeadLetterMessagesAsync(topicName, request.SequenceNumbers, subscriptionName, request.Reason, request.Description, HttpContext.RequestAborted));
+        QueuesController.DeadLetterBatch(GetProvider(), _logger, topicName, subscriptionName, request, HttpContext.RequestAborted);
 
     [HttpPost("{topicName}/subscriptions/{subscriptionName}/messages/defer-batch")]
     public Task<ActionResult> DeferMessages(string topicName, string subscriptionName, [FromBody] DeferredBatchRequest request) =>
-        QueuesController.ActiveBatch(this, _logger, $"{topicName}/{subscriptionName}", request,
+        QueuesController.ActiveBatch(GetProvider(), _logger, $"{topicName}/{subscriptionName}", request,
             c => c.SupportsDeferral ? null : EntityAdministrationResults.DeferralNotSupported(),
             p => p.DeferMessagesAsync(topicName, request.SequenceNumbers, subscriptionName, HttpContext.RequestAborted));
 
@@ -484,137 +482,37 @@ public class TopicsController : ControllerBase
 
     [HttpPost("{topicName}/subscriptions/{subscriptionName}/deadletter/resubmit-batch")]
     public Task<ActionResult> ResubmitDeadLetterMessages(string topicName, string subscriptionName, [FromBody] ResubmitBatchRequest request) =>
-        ResubmitBatch(topicName, subscriptionName, request, MessageSubQueue.DeadLetter);
+        QueuesController.ResubmitBatch(GetProvider(), _logger, topicName, subscriptionName, request, MessageSubQueue.DeadLetter, HttpContext.RequestAborted);
 
     [HttpPost("{topicName}/subscriptions/{subscriptionName}/transferdeadletter/resubmit-batch")]
     public Task<ActionResult> ResubmitTransferDeadLetterMessages(string topicName, string subscriptionName, [FromBody] ResubmitBatchRequest request) =>
-        ResubmitBatch(topicName, subscriptionName, request, MessageSubQueue.TransferDeadLetter);
-
-    private async Task<ActionResult> ResubmitBatch(string topicName, string subscriptionName, ResubmitBatchRequest request, MessageSubQueue subQueue)
-    {
-        var provider = GetProvider();
-        if (provider == null)
-            return NoProviderConnected();
-        if (EntityAdministrationResults.SubQueueNotSupported(provider, subQueue) is { } notSupported) return notSupported;
-
-        try
-        {
-            var result = await provider.ResubmitDeadLetterMessagesAsync(topicName, request.SequenceNumbers, subQueue, subscriptionName, request.NewMessageIdOnDuplicateDetection, cancellationToken: HttpContext.RequestAborted);
-            return Ok(result);
-        }
-        catch (EntityDisabledException)
-        {
-            return EntityAdministrationResults.EntityDisabled();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Resubmit {SubQueue} batch failed for {TopicName}/{SubscriptionName}", subQueue, topicName, subscriptionName);
-            return EntityAdministrationResults.Unhandled(ex);
-        }
-    }
+        QueuesController.ResubmitBatch(GetProvider(), _logger, topicName, subscriptionName, request, MessageSubQueue.TransferDeadLetter, HttpContext.RequestAborted);
 
     [HttpDelete("{topicName}/subscriptions/{subscriptionName}/messages")]
     public Task<ActionResult> PurgeMessages(string topicName, string subscriptionName) =>
-        Purge(topicName, subscriptionName, MessageSubQueue.Active);
+        QueuesController.Purge(GetProvider(), _logger, topicName, subscriptionName, MessageSubQueue.Active, HttpContext.RequestAborted);
 
     [HttpDelete("{topicName}/subscriptions/{subscriptionName}/deadletter")]
     public Task<ActionResult> PurgeDeadLetterMessages(string topicName, string subscriptionName) =>
-        Purge(topicName, subscriptionName, MessageSubQueue.DeadLetter);
-
-    private async Task<ActionResult> Purge(string topicName, string subscriptionName, MessageSubQueue subQueue)
-    {
-        var provider = GetProvider();
-        if (provider == null)
-            return NoProviderConnected();
-
-        try
-        {
-            await provider.PurgeMessagesAsync(topicName, subQueue, subscriptionName, cancellationToken: HttpContext.RequestAborted);
-            return Ok(new { success = true });
-        }
-        catch (EntityDisabledException)
-        {
-            return EntityAdministrationResults.EntityDisabled();
-        }
-        catch (InvalidEntityConfigurationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Purge {SubQueue} messages failed for {TopicName}/{SubscriptionName}", subQueue, topicName, subscriptionName);
-            return EntityAdministrationResults.Unhandled(ex);
-        }
-    }
+        QueuesController.Purge(GetProvider(), _logger, topicName, subscriptionName, MessageSubQueue.DeadLetter, HttpContext.RequestAborted);
 
     [HttpPost("{topicName}/subscriptions/{subscriptionName}/messages/delete-batch")]
     public Task<ActionResult> DeleteMessages(string topicName, string subscriptionName, [FromBody] DeleteBatchRequest request) =>
-        DeleteBatch(topicName, subscriptionName, request, MessageSubQueue.Active);
+        QueuesController.DeleteBatch(GetProvider(), _logger, topicName, subscriptionName, request, MessageSubQueue.Active, HttpContext.RequestAborted);
 
     [HttpPost("{topicName}/subscriptions/{subscriptionName}/deadletter/delete-batch")]
     public Task<ActionResult> DeleteDeadLetterMessages(string topicName, string subscriptionName, [FromBody] DeleteBatchRequest request) =>
-        DeleteBatch(topicName, subscriptionName, request, MessageSubQueue.DeadLetter);
+        QueuesController.DeleteBatch(GetProvider(), _logger, topicName, subscriptionName, request, MessageSubQueue.DeadLetter, HttpContext.RequestAborted);
 
     [HttpPost("{topicName}/subscriptions/{subscriptionName}/transferdeadletter/delete-batch")]
     public Task<ActionResult> DeleteTransferDeadLetterMessages(string topicName, string subscriptionName, [FromBody] DeleteBatchRequest request) =>
-        DeleteBatch(topicName, subscriptionName, request, MessageSubQueue.TransferDeadLetter);
-
-    private async Task<ActionResult> DeleteBatch(string topicName, string subscriptionName, DeleteBatchRequest request, MessageSubQueue subQueue)
-    {
-        var provider = GetProvider();
-        if (provider == null)
-            return NoProviderConnected();
-        if (EntityAdministrationResults.SubQueueNotSupported(provider, subQueue) is { } notSupported) return notSupported;
-        if (request.All && subQueue == MessageSubQueue.TransferDeadLetter)
-            return EntityAdministrationResults.DeleteAllOfTransferDeadLetter();
-
-        try
-        {
-            var result = await provider.DeleteMessagesAsync(topicName, request.SequenceNumbers, subQueue, subscriptionName, all: request.All, cancellationToken: HttpContext.RequestAborted);
-            return Ok(result);
-        }
-        catch (EntityDisabledException)
-        {
-            return EntityAdministrationResults.EntityDisabled();
-        }
-        catch (InvalidEntityConfigurationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Delete {SubQueue} messages batch failed for {TopicName}/{SubscriptionName}", subQueue, topicName, subscriptionName);
-            return EntityAdministrationResults.Unhandled(ex);
-        }
-    }
+        QueuesController.DeleteBatch(GetProvider(), _logger, topicName, subscriptionName, request, MessageSubQueue.TransferDeadLetter, HttpContext.RequestAborted);
 
     [HttpPost("{topicName}/subscriptions/{subscriptionName}/messages/move-batch")]
     public Task<ActionResult> MoveMessages(string topicName, string subscriptionName, [FromBody] MoveBatchRequest request) =>
-        MoveBatch(topicName, subscriptionName, request, MessageSubQueue.Active);
+        QueuesController.MoveBatch(GetProvider(), _logger, topicName, subscriptionName, request, MessageSubQueue.Active, HttpContext.RequestAborted);
 
     [HttpPost("{topicName}/subscriptions/{subscriptionName}/deadletter/move-batch")]
     public Task<ActionResult> MoveDeadLetterMessages(string topicName, string subscriptionName, [FromBody] MoveBatchRequest request) =>
-        MoveBatch(topicName, subscriptionName, request, MessageSubQueue.DeadLetter);
-
-    private async Task<ActionResult> MoveBatch(string topicName, string subscriptionName, MoveBatchRequest request, MessageSubQueue subQueue)
-    {
-        var provider = GetProvider();
-        if (provider == null)
-            return NoProviderConnected();
-
-        try
-        {
-            var result = await provider.MoveMessagesAsync(topicName, request.TargetQueueName, request.SequenceNumbers, subQueue, subscriptionName, request.NewMessageIdOnDuplicateDetection, cancellationToken: HttpContext.RequestAborted);
-            return Ok(result);
-        }
-        catch (EntityDisabledException)
-        {
-            return EntityAdministrationResults.EntityDisabled();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Move {SubQueue} messages failed from {TopicName}/{SubscriptionName} to {TargetQueueName}", subQueue, topicName, subscriptionName, request.TargetQueueName);
-            return EntityAdministrationResults.Unhandled(ex);
-        }
-    }
+        QueuesController.MoveBatch(GetProvider(), _logger, topicName, subscriptionName, request, MessageSubQueue.DeadLetter, HttpContext.RequestAborted);
 }

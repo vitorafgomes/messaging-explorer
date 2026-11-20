@@ -11,7 +11,8 @@ export interface McpState {
   tokenCreatedAt: string | null;
   /** The levels a connection can be offered at, as the API lists them: "read", "readAndSend", "all". */
   levels: string[];
-  supports: { logs: boolean; appSettings: boolean; confirmation: boolean };
+  /** What this API can do; `entities` comes with a later phase, and an absent field is read as false. */
+  supports: { logs: boolean; appSettings: boolean; confirmation: boolean; entities?: boolean };
   logsAllowed: boolean;
   /**
    * The connections offered. The last three fields come with the confirmation window; an older API leaves them out,
@@ -32,6 +33,10 @@ export interface McpRequest {
   note: string;
   allowLabel: string;
   expiresAt: string;
+  /** Whether allowing it removes or moves messages; an older API leaves it out, which is read as false. */
+  danger?: boolean;
+  /** The word the user types, exactly, before the request can be allowed; absent or null when none is asked. */
+  typed?: { label: string; word: string } | null;
 }
 
 /** One thing an assistant asked for, as the API kept it: no message body and no secret. */
@@ -107,9 +112,12 @@ export class McpSettingsService {
     return this.api.get<McpRequest[]>('mcp/requests');
   }
 
-  /** Answers one waiting request; a 404 means it is no longer waiting. */
-  answer(id: string, allow: boolean): Observable<void> {
-    return this.api.post<void>(apiPath`mcp/requests/${id}/answer`, { allow });
+  /**
+   * Answers one waiting request, with the word the user typed when the request asks for one. A 400 means the word
+   * was wrong and the request still waits; a 404 means it is no longer waiting.
+   */
+  answer(id: string, allow: boolean, typed?: string): Observable<void> {
+    return this.api.post<void>(apiPath`mcp/requests/${id}/answer`, typed === undefined ? { allow } : { allow, typed });
   }
 
   private keep(call: Observable<McpState>): Observable<McpState> {

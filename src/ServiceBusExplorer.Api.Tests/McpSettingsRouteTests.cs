@@ -46,7 +46,7 @@ public class McpSettingsRouteTests
             (state.GetProperty("enabled").GetBoolean(), state.GetProperty("hasToken").GetBoolean(), state.GetProperty("tokenCreatedAt").ValueKind,
              state.GetProperty("logsAllowed").GetBoolean(), state.GetProperty("connections").GetArrayLength()));
         Assert.Matches(@"^http://127\.0\.0\.1:\d+/mcp$", state.GetProperty("url").GetString());
-        Assert.Equal(["read", "readAndSend"], state.GetProperty("levels").EnumerateArray().Select(l => l.GetString()));
+        Assert.Equal(["read", "readAndSend", "all"], state.GetProperty("levels").EnumerateArray().Select(l => l.GetString()));
         var supports = state.GetProperty("supports");
         Assert.Equal((true, false, true), (supports.GetProperty("logs").GetBoolean(), supports.GetProperty("appSettings").GetBoolean(), supports.GetProperty("confirmation").GetBoolean()));
     }
@@ -106,7 +106,7 @@ public class McpSettingsRouteTests
         Assert.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, send.StatusCode);
         using (var body = JsonDocument.Parse(await send.Content.ReadAsStringAsync()))
-            Assert.Equal("level must be read or readAndSend.", body.RootElement.GetProperty("message").GetString());
+            Assert.Equal("level must be read, readAndSend or all.", body.RootElement.GetProperty("message").GetString());
         Assert.True(production.StatusCode == HttpStatusCode.OK, $"a production connection can be offered now that the app asks before each operation: it answered {(int)production.StatusCode}");
         Assert.Equal(HttpStatusCode.OK, offered.StatusCode);
         var listed = afterOffer.GetProperty("connections").EnumerateArray()

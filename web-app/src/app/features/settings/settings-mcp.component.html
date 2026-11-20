@@ -100,7 +100,7 @@
                       <div class="levels" role="group" [attr.aria-label]="'What an assistant may do on ' + row.name">
                         @for (l of levels(); track l.level) {
                           <button mat-button type="button" [class.on]="l.level === row.level" [attr.aria-pressed]="l.level === row.level"
-                                  (click)="setLevel(row.id, row.name, l.level)">{{ l.label }}</button>
+                                  (click)="setLevel(row.id, row.name, l.level, row.level)">{{ l.label }}</button>
                         }
                       </div>
                     }

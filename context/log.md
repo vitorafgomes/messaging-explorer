@@ -1,3 +1,6 @@
+## [2026-11-20] feature | The MCP server moves and removes messages, after the user allows it in the app
+The level all, six tools through the routes' own bodies, always asked, a typed name before a delete or a purge. [[pages/services/api/mcp-moving-and-removing]]
+
 ## [2026-11-20] feature | The MCP server switches the active connection, after the user allows it in the app
 connect_to on an offered connection, always asked, checked again after the allow, connected as the connect route does; the app follows the switch. [[pages/services/api/mcp-asking-and-sending]]
 

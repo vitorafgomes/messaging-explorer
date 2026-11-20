@@ -77,7 +77,9 @@ export class SettingsMcpComponent {
   readonly columns = ['time', 'assistant', 'asked', 'where', 'outcome'];
 
   readonly levels = computed(() => (this.state()?.levels ?? []).filter(level => level in LEVEL_LABELS).map(level => ({ level, label: LEVEL_LABELS[level] })));
-  readonly choices = computed(() => CHOICES.filter(choice => this.state()?.levels.includes(choice.level)));
+  /** The blocks of the levels listed; "Entities" only once the API says it supports entities. */
+  readonly choices = computed(() => CHOICES.filter(choice => this.state()?.levels.includes(choice.level)
+    && (choice.title !== 'Entities' || !!this.state()?.supports?.entities)));
   /** Bulk operations come with sending; reading alone has none. */
   readonly beyondRead = computed(() => this.levels().some(l => l.level !== 'read'));
   readonly summary = computed(() => {
@@ -105,6 +107,7 @@ export class SettingsMcpComponent {
         name: found?.name ?? (known ? 'A connection that no longer exists' : c.connectionId),
         asks: !canAsk ? 'Reads without asking you.'
           : c.production ? 'Asks you before every operation, a read included.'
+          : c.canNeverAsk && c.neverAsk && c.level === 'all' ? 'A local test broker: sends without asking; asks you before each move or removal.'
           : c.canNeverAsk && c.neverAsk ? 'A local test broker: never asks you.'
           : c.level === 'read' ? 'Reads without asking you.'
           : c.level === 'readAndSend' ? 'Reads without asking; asks you before each send.'
@@ -181,7 +184,25 @@ export class SettingsMcpComponent {
     });
   }
 
-  setLevel(id: string, name: string, level: string): void {
+  /** Changes the level of an offered connection; raising it to "all" is sent only after the user confirms it. */
+  setLevel(id: string, name: string, level: string, current?: string): void {
+    if (level === 'all' && current !== 'all') {
+      const data: ConfirmDialogData = {
+        title: 'Let an assistant move and remove messages?',
+        message: `${name}: an assistant will be able to dead-letter, resubmit, move, delete, purge and cancel messages there. Each time it asks you first, and a delete or a purge asks for the name typed.`,
+        confirmText: 'Allow it',
+        cancelText: 'Cancel',
+        confirmColor: 'primary',
+      };
+      this.dialog.open(ConfirmDialogComponent, { width: '560px', data }).afterClosed().subscribe(confirmed => {
+        if (confirmed === true) this.putLevel(id, name, level);
+      });
+      return;
+    }
+    this.putLevel(id, name, level);
+  }
+
+  private putLevel(id: string, name: string, level: string): void {
     this.fail('connections', '');
     this.mcp.setLevel(id, level).subscribe({
       error: error => this.fail('connections', `The level of ${name} was not changed: ${reason(error)}`),

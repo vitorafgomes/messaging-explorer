@@ -11,10 +11,15 @@
     }
   </dl>
   @if (request.note) {
-    <p class="note" role="note"><mat-icon aria-hidden="true">warning</mat-icon><span>{{ request.note }}</span></p>
+    <p class="note" role="note" [class.danger]="danger"><mat-icon aria-hidden="true">warning</mat-icon><span>{{ request.note }}</span></p>
   }
   @if (!canAllow) {
     <p class="unknown">This version of the app cannot allow this kind of request.</p>
+  } @else if (typed) {
+    <mat-form-field appearance="outline" class="typed" subscriptSizing="dynamic">
+      <mat-label>{{ typed.label }}</mat-label>
+      <input matInput type="text" autocomplete="off" spellcheck="false" (input)="value.set($any($event.target).value)">
+    </mat-form-field>
   }
   @if (error()) {
     <p class="inline-error" role="alert">{{ error() }}</p>
@@ -24,7 +29,8 @@
 <mat-dialog-actions align="end">
   <button mat-stroked-button type="button" class="deny" [disabled]="sending()" (click)="answer(false)">Deny</button>
   @if (canAllow) {
-    <button mat-flat-button type="button" class="allow" [disabled]="sending()" (click)="answer(true)">{{ request.allowLabel }}</button>
+    <button mat-flat-button type="button" class="allow" [class.danger]="danger" [disabled]="sending() || !matches()" [aria-disabled]="sending() || !matches()"
+            (click)="answer(true)">{{ request.allowLabel }}</button>
   }
 </mat-dialog-actions>
 <p class="footer">The assistant waits for your answer. With no answer in 2 minutes it is told the request was denied.</p>
