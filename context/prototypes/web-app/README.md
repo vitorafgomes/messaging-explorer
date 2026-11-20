@@ -23,6 +23,7 @@ The prototype is being redrawn as a design canvas: one `.dc.html` artboard per s
 | `EntityAdmin.dc.html` | Azure Service Bus | create, edit and status of a queue, a topic and a subscription |
 | `Rules.dc.html` | Azure Service Bus | the subscription rules table and editor |
 | `Monitoring.dc.html` | Azure Service Bus | monitoring today, the proposed processed totals and the table of what the app did, and the proposed counts, sessions and definitions screens |
+| `Logs.dc.html` | The app today | the Logs screen of Developer mode: the three sources, the levels, the search and an opened line |
 | `Components.dc.html` | Window and components | the colours, type and components every artboard uses |
 | `Window.dc.html` | Window and components | the window on each system, without a menu bar, and macOS as it is today |
 

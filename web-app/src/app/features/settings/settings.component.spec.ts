@@ -2,13 +2,15 @@ import { TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { provideRouter } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
+import { signal } from '@angular/core';
 import { of } from 'rxjs';
 import { SettingsComponent } from './settings.component';
+import { McpSettingsService, McpState } from './mcp-settings.service';
 import { AppUpdateService, RELEASES_URL, REPOSITORY_URL } from './app-update.service';
 import { ClearAllDataDialogComponent } from './clear-all-data-dialog.component';
 import { BugReportDialogComponent } from '../../shared/bug-report-dialog.component';
 import { BugReportService } from '../../shared/bug-report.service';
-import { ConnectionService, DevSettingsService, ThemeService } from '../../core/services';
+import { ConnectionGroupService, ConnectionService, DevSettingsService, ThemeService } from '../../core/services';
 
 /** The text of an element as a reader hears it: every text node, separated by one space. */
 function words(node: Element | null | undefined): string {
@@ -43,7 +45,10 @@ function fakeShell(overrides: Record<string, unknown> = {}) {
 
 describe('SettingsComponent', () => {
   const dialog = { open: vi.fn((..._args: unknown[]) => ({ afterClosed: () => of(undefined as unknown) })) };
-  const connectionService = { refreshStatus: vi.fn() };
+  const connectionService = { refreshStatus: vi.fn(), getConnections: () => of([]) };
+  /** An API without the MCP server unless a spec says otherwise, so no spec here reaches the network. */
+  const mcpState = signal<McpState | null>(null);
+  const mcp = { state: mcpState, absent: signal(true), load: () => of(mcpState()), activity: () => of([]) };
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -53,12 +58,16 @@ describe('SettingsComponent', () => {
         provideRouter([]),
         { provide: MatDialog, useValue: dialog },
         { provide: ConnectionService, useValue: connectionService },
+        { provide: ConnectionGroupService, useValue: { getGroups: () => of([]) } },
+        { provide: McpSettingsService, useValue: mcp },
       ],
     }).compileComponents();
   });
 
   afterEach(() => {
     vi.clearAllMocks();
+    mcpState.set(null);
+    mcp.absent.set(true);
     delete (window as any).electronAPI;
     localStorage.removeItem('dev-mode');
     localStorage.removeItem('app-theme');
@@ -271,6 +280,42 @@ describe('SettingsComponent', () => {
         expect(installUpdateVersion.mock.calls).toStrictEqual([['2.4.4', true]]);
       });
 
+      it('under the heading, the picked version is placed against the installed one, in the words of the artboard', async () => {
+        const { el, refresh } = await open();
+        const relation = () => el.querySelector('[data-testid="version-relation"]') as HTMLElement | null;
+
+        expect(words(relation()), 'a newer version').toBe('Newer than 2.4.2, the version you have.');
+        expect(relation()!.previousElementSibling?.tagName, 'the line comes right after the heading, as drawn').toBe('H3');
+        await pick(el, refresh, 1);
+        expect(words(relation()), 'the installed version').toBe('The version installed on this computer.');
+        await pick(el, refresh, 2);
+        expect(words(relation()), 'an older version').toBe('Older than 2.4.2, the version you have.');
+      });
+
+      it('beside Install, Open the release page opens the page of the picked version through the same safe link as the blocked branches', async () => {
+        const { el } = await open();
+        const actions = block(el)!.querySelector('.install-actions') as HTMLElement;
+        const page = Array.from(actions.querySelectorAll('a')).find(a => words(a) === 'Open the release page');
+
+        expect(page, 'Open the release page sits beside Install').toBeDefined();
+        expect(page!.previousElementSibling, 'after the Install button, as drawn').toBe(installButton(el));
+        expect(page!.getAttribute('href'), 'the release page of the version picked').toBe('https://github.com/vitorafgomes/messaging-explorer/releases/tag/v2.4.4');
+        expect(page!.getAttribute('target'), 'opened by the shell, outside the app').toBe('_blank');
+        expect(page!.getAttribute('rel')).toBe('noopener noreferrer');
+      });
+
+      it('under the agreement, the app says nothing downloads before Install, and stops saying it while a version downloads', async () => {
+        const { el, refresh } = await open({ installUpdateVersion: vi.fn(() => new Promise(() => {})) });
+        const hint = () => Array.from(block(el)!.querySelectorAll('p, span')).find(e => words(e) === 'Nothing downloads until you tick the box and press Install. The app restarts to finish.');
+
+        expect(hint(), 'shown while nothing downloads').toBeDefined();
+        agree(el);
+        await refresh();
+        installButton(el)!.click();
+        await refresh();
+        expect(hint(), 'not shown while the version downloads').toBeUndefined();
+      });
+
       it('the installed version shows its notes and nothing to install, and picking another version withdraws the agreement', async () => {
         const { el, refresh } = await open();
         agree(el);
@@ -439,8 +484,10 @@ describe('SettingsComponent', () => {
     expect(link).toEqual([`${RELEASES_URL}/tag/v2.5.0`]);
     expect(words(el.querySelector('[data-testid="update-state"] a'))).toBe('Open the release page of 2.5.0 open_in_new');
 
+    const checks = shell.checkForUpdates.mock.calls.length;
     button('refresh Retry')!.click();
-    expect(shell.downloadUpdate).toHaveBeenCalledTimes(2);
+    expect(shell.checkForUpdates.mock.calls.length, 'Retry checks again: after a failed download the shell holds no version an agreement can be given for').toBe(checks + 1);
+    expect(shell.downloadUpdate, 'Retry starts no download by itself').toHaveBeenCalledTimes(1);
   });
 
   it('Retry after a failed download that has no agreement checks again, so the agreement can be given, and downloads nothing', async () => {
@@ -514,7 +561,7 @@ describe('SettingsComponent', () => {
     const { el, refresh } = await render();
     const devSettings = TestBed.inject(DevSettingsService);
     const toggle = el.querySelector('mat-checkbox input[type="checkbox"]') as HTMLElement;
-    expect(el.querySelector('mat-checkbox')!.textContent).toContain('Show the Debug button on the Connections screen');
+    expect(el.querySelector('mat-checkbox')!.textContent).toContain('Show the Logs screen in the toolbar and the Debug button on the Connections screen');
 
     toggle.click();
     await refresh();
@@ -575,6 +622,18 @@ describe('SettingsComponent', () => {
     expect(TestBed.inject(ThemeService).mode()).toBe('dark');
     expect(document.documentElement.classList.contains('dark-theme')).toBe(true);
     expect(localStorage.getItem('app-theme')).toBe('dark');
+  });
+
+  it('the MCP server group sits between Data and Developer, as Settings.dc.html draws it, and is absent against an API without it', async () => {
+    const headings = (el: HTMLElement) => Array.from(el.querySelectorAll('main > section h2, main > app-settings-mcp section h2')).map(h => words(h));
+    const without = await render();
+    expect(headings(without.el), 'an API without the MCP server: no group').toStrictEqual(['Appearance', 'Updates', 'Data', 'Developer', 'About']);
+
+    mcpState.set({ enabled: false, url: 'http://localhost:5917/mcp', hasToken: false, tokenCreatedAt: null, levels: ['read'],
+      supports: { logs: false, appSettings: false, confirmation: false }, logsAllowed: false, connections: [] });
+    mcp.absent.set(false);
+    const withIt = await render();
+    expect(headings(withIt.el), 'the group between Data and Developer').toStrictEqual(['Appearance', 'Updates', 'Data', 'MCP server', 'Developer', 'About']);
   });
 
   it('the intro says what the screen gathers, as the artboard words it', async () => {

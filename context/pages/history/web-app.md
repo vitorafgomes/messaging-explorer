@@ -2,7 +2,7 @@
 title: "Web App history"
 version: "1.2"
 date: 2026-11-13
-updated: 2026-11-16
+updated: 2026-11-20
 changes: "v1.2: 2026-11-16, a resubmit by position after a cancel or a failed call. v1.1: dated entries above the version notes"
 page_type: reference
 status: active
@@ -16,7 +16,39 @@ reliability: high
 
 What changed when in the project [[pages/services/web-app|Web App]] describes, newest first.
 
+## 2026-11-20
+
+- In the light theme a toolbar link that needs a connection was close to unreadable while there was none: its text measured 1.5 to 1 against the bar. A disabled link takes its colour from the bar's own text colour (`web-app/src/app/app.scss`), measured in both themes by `web-app/e2e/settings.e2e.ts#a link that needs a connection can still be read while there is none, in the light and in the dark theme`.
+- The app root tells the desktop shell how many automatic resubmits run whenever that number changes, so quitting the app asks first while one runs (`web-app/src/app/app.ts#activeRunCount`).
+
+- The panel of a picked version says what the Settings artboard draws: a line that places it against the installed version, Open the release page beside Install, and "Nothing downloads until you tick the box and press Install. The app restarts to finish." while nothing downloads (`web-app/src/app/features/settings/settings.component.html`).
+- The level Read of the MCP server says that message bodies are read: "read the active, dead-letter, scheduled and deferred messages, their bodies included." (`web-app/src/app/features/settings/settings-mcp.component.ts`), now that `read_message` reads a whole body ([[pages/services/api/mcp-reading]]).
+
+- Seen in a browser: the record "What assistants did" showed the time as the API sends it, a full UTC timestamp that broke over two lines. The cell shows the local clock time, as the artboard draws it, with the full date on hover (`web-app/src/app/features/settings/settings-mcp.component.html`).
+
+- From an outside review of the MCP server: `McpAppSettingsService.apply` reads the state before each request and changes and answers nothing while the server is off or the choice withdrawn; the ids it handled and the ids `App` showed are kept only while the API still lists them ([[pages/services/web-app/features-settings-mcp-app-settings]]).
+
+- From the review of the app settings: `web-app/src/app/features/settings/app-update.service.ts#setChannel` answers once the shell accepted the channel and no longer waits for the check and the versions, so a slow check cannot make an assistant's change of channel time out after it took effect.
+
+- **An assistant may change settings of this app.** When the API supports it, the MCP server group of Settings draws the row "Settings of the app" after the logs row, a checkbox off until the user ticks it, which is `PUT mcp/app-settings`. While it is ticked and the server is enabled, the app reads `GET mcp/app-requests` every 2 seconds and applies the theme, Developer mode and the update channel from a fixed list in the app, each once, answers each with the settings after it, and shows each change in a snack bar; any other setting is answered failed. The update channel is changed only in the desktop app. [[pages/services/web-app/features-settings-mcp-app-settings]] (`web-app/src/app/features/settings/mcp-app-settings.service.ts#ALLOWED`, `web-app/src/app/app.ts#applying`).
+
+- **The MCP server, phase 3b (entities), in the app.** The window that asks the user allows the kinds createEntity, updateEntity and deleteEntity; a deleteEntity request comes with `danger` and the name to type, which the dialog already handles. When the API supports entities, the "Entities" block of "What each choice allows" says a delete asks for the name typed, and the confirmation of "Read, send and remove" is titled "Let an assistant move, remove and administer?" and names the queues, topics, subscriptions and rules an assistant may create, change and delete; without it the confirmation is unchanged. [[pages/services/web-app/features-settings-mcp]] (`web-app/src/app/features/settings/mcp-request-dialog.component.ts#KNOWN_KINDS`, `web-app/src/app/features/settings/settings-mcp.component.ts#setLevel`).
+
+- **The MCP server, phase three (moving and removing), in the app.** The window that asks the user allows the kinds deadLetter, resubmit, move, delete, purge and cancelScheduled. A request the API marks `danger` draws its note in the error container and its allow button in the error colour; one that carries `typed` keeps its allow button disabled until the user types the word exactly, sends the word with the answer, and shows the API's message when it answers 400. In Settings the level "Read, send and remove" is offered after a confirmation, its rows say what they ask, and "What each choice allows" adds "Move and remove". An older API without `danger` and `typed` behaves as before. [[pages/services/web-app/features-settings-mcp-requests]] (`web-app/src/app/features/settings/mcp-request-dialog.component.ts#matches`, `web-app/src/app/features/settings/settings-mcp.component.ts#setLevel`).
+
+- **An assistant asks to connect.** The window that asks the user allows the kind `connect`, with the API's words; the dialog now closes as allowed or denied. After an allowed connect the app reads the connection status once a second until it names another connection or 15 seconds pass, so the toolbar, the Connections screen and the tree follow without a reload (`web-app/src/app/app.spec.ts#reads the status once a second until it names another connection than before the answer, then stops`). [[pages/services/web-app/features-settings-mcp]]
+
+- **The MCP server, phase two (sending), in the app.** While the server is enabled and the API can wait for an answer, the app polls the requests of assistants every 2 seconds and opens, over any screen, the window `Settings.dc.html` draws to ask the user: what is asked, where and why, Deny and the allow button, answered only by a click on one of them, once. In Settings a production connection is offered after a confirmation, a local test broker can be marked as never asked, each row says what it asks from the API's fields, and what assistants did is read again every 5 seconds. An older API shows neither. [[pages/services/web-app/features-settings-mcp]] (`web-app/src/app/app.ts#showRequest`, `web-app/src/app/features/settings/mcp-request-dialog.component.ts#McpRequestDialogComponent`).
+
 ## 2026-11-19
+
+- **The MCP server group of Settings and the toolbar mark, phase one (reading).** Settings gains the group drawn on `context/prototypes/web-app/Settings.dc.html`, between Data and Developer: the switch, the token shown once with the configuration to paste, the connections offered at the levels the API lists, the logs choice, what each level allows and what assistants did; a connection of a production environment cannot be offered yet and says why. The toolbar shows the MCP mark while the server is enabled. An API without the routes hides both. [[pages/services/web-app/features-settings-mcp]] (`web-app/src/app/features/settings/settings-mcp.component.ts#SettingsMcpComponent`, `web-app/src/app/features/settings/mcp-settings.service.ts#McpSettingsService`).
+
+- The Developer mode checkbox says what it shows: the Logs screen in the toolbar and the Debug button on the Connections screen; it named only the Debug button (`web-app/src/app/features/settings/settings.component.spec.ts#the developer mode checkbox turns developer mode on and off`). Its artboard draws the Logs link while Developer mode is on.
+
+- Retry after a failed download checks again and starts no download by itself: after a failure the shell holds no version an agreement can be given for, so a repeated download was always refused (`web-app/src/app/features/settings/settings.component.ts#retry`, `web-app/src/app/features/settings/settings.component.spec.ts#a failed download says why, that nothing was installed, retries the download and links the release`). The note for deferred messages selected on a subscription is the same single note as on the dead-letter tabs (`web-app/src/app/features/messages/view-messages-dialog.component.spec.ts#deferred messages selected on a subscription: one note says the resubmit goes to the topic, to every subscription, and that a filter may keep them from coming back`).
+
+- **One note where a subscription resubmits.** The messages dialog and the automatic resubmit showed two notes at once that both said the resubmit goes to the topic: one named the other subscriptions, the other the filters of this one. One note now says both (`web-app/src/app/features/messages/view-messages-dialog.component.spec.ts#the dead-letter tab of a subscription says that the topic sends a resubmit to every subscription`, `web-app/src/app/features/messages/continuous-resubmit-dialog.component.spec.ts#on a subscription the dialog says that the topic sends every resubmitted message to all its subscriptions`); the note on the active tab for selected deferred messages is as it was. The automatic resubmit artboard draws the one note.
 
 - Logs: the screen keeps only its calls that got no answer; a failure the backend answered was shown and counted twice.
 
@@ -29,6 +61,8 @@ What changed when in the project [[pages/services/web-app|Web App]] describes, n
 - **Connections is a tree of client, environment and connection,** with environments that hide and show and are remembered. [[pages/services/web-app/features-connections]]
 
 - **Add Connection signs in first, then picks.** Three steps as the artboard draws them; Service Principal and Default credential leave the Add screen and still edit. [[pages/services/web-app/features-connections]]
+
+- **Connections keeps the Connected mark when its list is loaded again,** after a navigation back or a reload, where the mark set at connect was lost. The service takes the active id from the status (`web-app/src/app/core/services/connection.service.ts#readStatus`); the screen marks the list each time the list or the status arrives, in either order, and an id the service knows wins over the target, so of two connections to one target only the named one is marked (`web-app/src/app/features/connections/connections.component.ts#markActive`, `web-app/src/app/features/connections/connections.component.spec.ts#the card of the connection the API names as active shows Connected after the list is loaded again`). The end-to-end test that pinned the loss as an expected failure now runs as a plain test (`web-app/e2e/rabbitmq.e2e.ts#the Connections screen marks the active connection after navigating back to it`).
 
 ## 2026-11-16
 

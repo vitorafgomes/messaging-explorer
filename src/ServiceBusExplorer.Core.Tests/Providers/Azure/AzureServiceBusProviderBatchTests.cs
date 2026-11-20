@@ -226,6 +226,82 @@ public class AzureServiceBusProviderBatchTests
         sender.Verify(s => s.SendMessageAsync(It.IsAny<ServiceBusMessage>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    private const string Sentinel = "BROKER-DETAIL-SENTINEL";
+
+    /// <summary>An exception of the named kind whose own text is the sentinel a report must never carry.</summary>
+    private static Exception CompleteFailure(string kind) => kind switch
+    {
+        "lock lost" => new ServiceBusException(Sentinel, ServiceBusFailureReason.MessageLockLost),
+        "broker timeout" => new ServiceBusException(Sentinel, ServiceBusFailureReason.ServiceTimeout),
+        "timeout" => new TimeoutException(Sentinel),
+        "not authorised" => new UnauthorizedAccessException(Sentinel),
+        _ => new ServiceBusException(Sentinel, ServiceBusFailureReason.ServiceBusy)
+    };
+
+    private static Mock<ServiceBusSender> AcceptingSender()
+    {
+        var sender = new Mock<ServiceBusSender>();
+        sender.Setup(s => s.CreateMessageBatchAsync(It.IsAny<CancellationToken>())).Returns(() => new ValueTask<ServiceBusMessageBatch>(NewTestBatch()));
+        sender.Setup(s => s.SendMessagesAsync(It.IsAny<ServiceBusMessageBatch>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+        return sender;
+    }
+
+    private static void AssertOneFixedFailure(BatchOperationResult result, string expected, bool possibleDuplicate, string because)
+    {
+        var failure = Assert.Single(result.Failures);
+        Assert.True((failure.SequenceNumber, failure.Error, failure.PossibleDuplicate) == (2L, expected, possibleDuplicate) && !failure.Error.Contains(Sentinel),
+            $"{because} Expected (2, {expected}, {possibleDuplicate}); got ({failure.SequenceNumber}, {failure.Error}, {failure.PossibleDuplicate}).");
+        Assert.Equal((1, 1), (result.SuccessCount, result.FailureCount));
+    }
+
+    [Theory]
+    [InlineData("lock lost", "the lock on the message was lost.")]
+    [InlineData("broker timeout", "the broker did not answer in time.")]
+    [InlineData("timeout", "the broker did not answer in time.")]
+    [InlineData("not authorised", "the broker refused it as not authorised.")]
+    [InlineData("other", "the broker did not confirm the removal.")]
+    public async Task A_delete_whose_complete_fails_reports_a_fixed_sentence_for_the_kind_of_failure_never_the_broker_text(string kind, string why)
+    {
+        var receiver = BuildReceiver([new[] { Msg(1), Msg(2) }], completeBehaviour: seq => seq == 2 ? CompleteFailure(kind) : null);
+
+        var result = await AzureServiceBusProvider.DeleteMessagesCoreAsync(receiver.Object, [1, 2], CancellationToken.None);
+
+        AssertOneFixedFailure(result, $"Not removed: {why}", false,
+            "A delete whose complete fails answers a fixed sentence chosen by the kind of failure, never the text of the broker's exception.");
+    }
+
+    [Theory]
+    [InlineData("lock lost", "the lock on the message was lost.")]
+    [InlineData("broker timeout", "the broker did not answer in time.")]
+    [InlineData("timeout", "the broker did not answer in time.")]
+    [InlineData("not authorised", "the broker refused it as not authorised.")]
+    [InlineData("other", "the broker did not confirm the removal.")]
+    public async Task A_resubmit_whose_complete_fails_reports_a_possible_duplicate_with_a_fixed_sentence_never_the_broker_text(string kind, string why)
+    {
+        var receiver = BuildReceiver([new[] { Msg(1), Msg(2) }], completeBehaviour: seq => seq == 2 ? CompleteFailure(kind) : null);
+
+        var result = await AzureServiceBusProvider.ResubmitCoreAsync(receiver.Object, AcceptingSender().Object, [1, 2], CancellationToken.None);
+
+        AssertOneFixedFailure(result, $"Message was resubmitted but could not be removed from the dead-letter queue and may be duplicated on retry: {why}", true,
+            "A resubmit whose complete fails reports a possible duplicate in a fixed sentence chosen by the kind of failure, never the text of the broker's exception.");
+    }
+
+    [Theory]
+    [InlineData("lock lost", "the lock on the message was lost.")]
+    [InlineData("broker timeout", "the broker did not answer in time.")]
+    [InlineData("timeout", "the broker did not answer in time.")]
+    [InlineData("not authorised", "the broker refused it as not authorised.")]
+    [InlineData("other", "the broker did not confirm the removal.")]
+    public async Task A_move_whose_complete_fails_reports_a_possible_duplicate_with_a_fixed_sentence_never_the_broker_text(string kind, string why)
+    {
+        var receiver = BuildReceiver([new[] { Msg(1), Msg(2) }], completeBehaviour: seq => seq == 2 ? CompleteFailure(kind) : null);
+
+        var result = await AzureServiceBusProvider.MoveCoreAsync(receiver.Object, AcceptingSender().Object, [1, 2], CancellationToken.None);
+
+        AssertOneFixedFailure(result, $"Message was moved to the target but could not be removed from the source and may be duplicated: {why}", true,
+            "A move whose complete fails reports a possible duplicate in a fixed sentence chosen by the kind of failure, never the text of the broker's exception.");
+    }
+
     // Test 6: empty sequence numbers return an empty result without throwing (public contract).
     [Fact]
     public async Task DeleteMessages_and_Resubmit_with_empty_input_return_empty_without_throw()

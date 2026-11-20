@@ -474,9 +474,9 @@ public class AzureServiceBusProviderSubQueueTests
 
     [Theory]
     [InlineData("not found", "it was not found among the messages read to remove it.")]
-    [InlineData("complete fails", "the broker did not remove it (MessageLockLost).")]
-    [InlineData("complete refused", "the broker did not remove it (UnauthorizedAccessException).")]
-    [InlineData("complete times out", "the broker did not remove it (TimeoutException).")]
+    [InlineData("complete fails", "the lock on the message was lost.")]
+    [InlineData("complete refused", "the broker refused it as not authorised.")]
+    [InlineData("complete times out", "the broker did not answer in time.")]
     public async Task A_single_resubmit_that_sent_its_copy_and_could_not_remove_the_original_says_so_as_a_possible_duplicate_never_returns_in_silence(string how, string why)
     {
         var broker = DetectingBroker();

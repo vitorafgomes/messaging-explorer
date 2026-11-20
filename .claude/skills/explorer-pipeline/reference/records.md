@@ -12,6 +12,7 @@ while the lines are still in front of them.
 | A decision was amended | A dated amendment in the decision page that names the earlier text it replaces; the earlier text stays |
 | A follow-up was closed | Its entry removed from `context/pages/roadmap/followups.md` |
 | A "Known gaps" entry was closed | Removed from the project's `known-gaps` page and from `context/pages/roadmap/followups.md`, in the same commit |
+| A screen changed: something a user sees, a label, a state, a place in the toolbar | Its artboard under `context/prototypes/web-app/`, in the same commit, and that same file published to the owner's design canvas, whose address is not kept in this repository. The report names each artboard published, or says the canvas could not be reached |
 | Any of the above | One line at the top of `context/log.md` |
 
 A decision keeps its original text. The amendment is added below it, says which sentence of the
@@ -28,6 +29,11 @@ file), never by line number (`context/pages/decisions/0005-cite-code-by-name-and
 is in the file, not that the page still says what the code does: read each one you rewrite.
 
 No test counts go into the context; CI shows them.
+
+The design canvas the owner looks at is a copy of `context/prototypes/web-app/`. An artboard
+changed in the repository and not published leaves the owner looking at a screen the app no
+longer has; it is owed the same way a stale page is. Before publishing, the artboard on the
+canvas is read and compared with the repository's, because the owner may have changed it by hand.
 
 ## Before the commit message
 

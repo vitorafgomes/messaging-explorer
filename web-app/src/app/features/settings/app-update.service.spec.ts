@@ -128,6 +128,19 @@ describe('AppUpdateService', () => {
     expect(shell.checkForUpdates).toHaveBeenCalledTimes(1);
   });
 
+  it('setChannel answers once the shell accepted the channel, without waiting for the check and the versions', async () => {
+    const { updates } = await start({
+      checkForUpdates: vi.fn(() => new Promise(() => undefined)),
+      listUpdateVersions: vi.fn(() => new Promise(() => undefined)),
+    });
+    const answered = await Promise.race([
+      updates.setChannel('beta').then(() => 'answered'),
+      new Promise(resolve => setTimeout(() => resolve('still waiting'), 200)),
+    ]);
+    expect(answered, 'a slow check must not hold whoever asked for the channel').toBe('answered');
+    expect(updates.channel()).toBe('beta');
+  });
+
   it('a package that cannot update itself never downloads or installs', async () => {
     const { updates, shell, push } = await start({ getSelfUpdateBlocker: async () => 'windows-portable' });
     push({ status: 'available', version: '2.5.0' });

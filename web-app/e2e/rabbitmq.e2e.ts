@@ -126,7 +126,6 @@ test.describe('RabbitMQ', () => {
   });
 
   test('the Connections screen marks the active connection after navigating back to it', async ({ page }) => {
-    test.fail(true, 'Connect never stores IsConnected, so the mark set at connect is lost when the screen loads the list again');
     await open(page, 'connections');
     const card = page.locator('.connection-card', { hasText: 'orders-rabbitmq' });
     await expect(card.locator('.badge', { hasText: 'Connected' })).toBeVisible({ timeout: 5000 });

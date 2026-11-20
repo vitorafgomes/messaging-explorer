@@ -1,3 +1,32 @@
+## [2026-11-20] feature | The MCP server lists in pages, reads one message in full and gives structured content
+The four lists answer { items, next } with limit and after, read_message reads a body in pieces of 8000 characters under the protection of a peek, an object answer is also structured content, and the level Read says bodies are read. [[pages/services/api/mcp-reading]]
+
+## [2026-11-20] feature | The MCP server reads and changes the theme, Developer mode and the update channel, when the user allowed it
+Two tools that hand the request to the app over its own list of requests, a fixed list of settings and values, no ask per change: the choice in Settings is the consent and the record shows it. [[pages/services/api/mcp-app-settings]]
+
+## [2026-11-20] feature | The MCP server creates, changes and deletes queues, topics, subscriptions and rules, after the user allows it in the app
+Twelve tools through the routes' own bodies, always asked, a typed name before a delete, refused by capability and by the name before anybody is asked. [[pages/services/api/mcp-administering-entities]]
+
+## [2026-11-20] feature | The MCP server moves and removes messages, after the user allows it in the app
+The level all, six tools through the routes' own bodies, always asked, a typed name before a delete or a purge. [[pages/services/api/mcp-moving-and-removing]]
+
+## [2026-11-20] feature | The MCP server switches the active connection, after the user allows it in the app
+connect_to on an offered connection, always asked, checked again after the allow, connected as the connect route does; the app follows the switch. [[pages/services/api/mcp-asking-and-sending]]
+
+## [2026-11-20] feature | The MCP server sends, after the user allows it in the app
+send_message and send_messages, the requests that wait for the user, production offered and asked about every read, a local test broker never asked. [[pages/services/api/mcp-asking-and-sending]]
+
+## [2026-11-19] feature | The MCP server reads: /mcp behind its own token, offered connections only
+Off by default, a foreign Origin refused, seven read-only tools on the active offered connection, the logs when allowed, every call recorded. [[pages/services/api/mcp-server]]
+
+## [2026-11-19] integrate | ADR 0008 - An MCP server inside the local API
+
+Proposed: the endpoint inside the API, a token of its own, connections offered one by one, and the user asked in the app before a change. Listed in the decisions index and linked from the plan after 2.5.0.
+
+## [2026-11-19] integrate | After 2.5.0: the order of work on one branch
+
+The plan of what is built after the 2.5.0 release, with the MCP server first as the owner asked, listed in the roadmap index.
+
 ## [2026-11-19] feature | Connections as a tree, notes that hide, a body of any AMQP kind, and three gaps of the Connections artboard
 The list by client and environment; release notes that expand and hide; a value or sequence body is read; a refused credential is named, a client is deleted with its environments, an export is saved where the user chooses. [[pages/services/web-app/features-connections]]
 

@@ -18,7 +18,7 @@ input::placeholder{color:currentColor;opacity:.72}
 @media (prefers-reduced-motion: reduce){.spin{animation:none}}
 </style>
 </helmet>
-<div style="position: relative; min-height: 1840px; box-sizing: border-box; display: flex; flex-direction: column; background: {{t.surface}}; color: {{t.onSurface}}; font-family: Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 14px; line-height: 20px">
+<div style="position: relative; min-height: 3280px; box-sizing: border-box; display: flex; flex-direction: column; background: {{t.surface}}; color: {{t.onSurface}}; font-family: Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 14px; line-height: 20px">
 
   <div style="display: flex; align-items: center; gap: 8px; height: 28px; box-sizing: border-box; padding: 0 16px; background: {{t.surfaceHigh}}; color: {{t.onSurfaceVariant}}; border-bottom: 1px solid {{t.outlineVariant}}; font-size: 12px; line-height: 16px">
     <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M4 10h16M10 10v10"></path></svg>
@@ -31,6 +31,9 @@ input::placeholder{color:currentColor;opacity:.72}
       <a href="Connections.dc.html" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none; font-weight: 500">Connections</a>
       <a href="Main.dc.html" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none; font-weight: 500">Entities</a>
       <a href="Monitoring.dc.html" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none; font-weight: 500">Monitoring</a>
+      <sc-if value="{{devMode}}" hint-placeholder-val="{{false}}">
+        <a href="Logs.dc.html" class="hov" style="display: flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none; font-weight: 500">Logs</a>
+      </sc-if>
     </nav>
     <span aria-hidden="true" style="flex: none; width: 1px; height: 24px; background: {{bar.sep}}"></span>
     <sc-if value="{{hasConn}}" hint-placeholder-val="{{true}}">
@@ -56,6 +59,12 @@ input::placeholder{color:currentColor;opacity:.72}
       </div>
     </sc-if>
     <div style="display: flex; align-items: center; gap: 4px">
+      <sc-if value="{{mcp.on}}" hint-placeholder-val="{{true}}">
+        <a href="Settings.dc.html" aria-label="{{mcp.label}}" title="{{mcp.label}}" class="hov" style="position: relative; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 999px; color: {{bar.fg}}; text-decoration: none">
+          <svg aria-hidden="true" width="22" height="22" viewBox="0 0 180 180" fill="none" stroke="currentColor" stroke-width="13" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M18 84.8528L85.8822 16.9706C95.2548 7.59798 110.451 7.59798 119.823 16.9706C129.196 26.3431 129.196 41.5391 119.823 50.9117L68.5581 102.177"></path><path d="M69.2652 101.47L119.823 50.9117C129.196 41.5391 144.392 41.5391 153.765 50.9117L154.118 51.2652C163.491 60.6378 163.491 75.8338 154.118 85.2063L92.7248 146.6C89.6006 149.724 89.6006 154.789 92.7248 157.913L105.331 170.52"></path><path d="M102.853 33.9411L52.6482 84.1457C43.2756 93.5183 43.2756 108.714 52.6482 118.087C62.0208 127.459 77.2167 127.459 86.5893 118.087L136.794 67.8822"></path></svg>
+          <span aria-hidden="true" style="position: absolute; top: 5px; right: 5px; width: 11px; height: 11px; box-sizing: border-box; border: 2px solid {{bar.bg}}; border-radius: 999px; background: {{mcp.dot}}"></span>
+        </a>
+      </sc-if>
       <button type="button" aria-label="Notifications" title="Notifications" class="hov" style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: {{bar.fg}}; font: inherit; cursor: pointer">
         <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M6 16v-5a6 6 0 1 1 12 0v5l2 2H4zM10 21a2 2 0 0 0 4 0"></path></svg>
       </button>
@@ -383,6 +392,254 @@ input::placeholder{color:currentColor;opacity:.72}
       </div>
     </section>
 
+    <section aria-label="MCP server" style="display: flex; gap: 16px 32px; flex-wrap: wrap; padding: 24px 0; border-top: 1px solid {{t.outlineVariant}}">
+      <div style="flex: 0 0 200px">
+        <h2 style="display: flex; align-items: center; gap: 8px; margin: 0; font-size: 20px; line-height: 28px; font-weight: 500"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 180 180" fill="none" stroke="currentColor" stroke-width="13" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M18 84.8528L85.8822 16.9706C95.2548 7.59798 110.451 7.59798 119.823 16.9706C129.196 26.3431 129.196 41.5391 119.823 50.9117L68.5581 102.177"></path><path d="M69.2652 101.47L119.823 50.9117C129.196 41.5391 144.392 41.5391 153.765 50.9117L154.118 51.2652C163.491 60.6378 163.491 75.8338 154.118 85.2063L92.7248 146.6C89.6006 149.724 89.6006 154.789 92.7248 157.913L105.331 170.52"></path><path d="M102.853 33.9411L52.6482 84.1457C43.2756 93.5183 43.2756 108.714 52.6482 118.087C62.0208 127.459 77.2167 127.459 86.5893 118.087L136.794 67.8822"></path></svg>MCP server</h2>
+        <p style="margin: 4px 0 0; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Built 2026-11-20: reading, sending, the window that asks you first, production connections, the local test broker mark, changing the active connection, moving and removing messages, and creating, changing and deleting queues, topics, subscriptions and rules, with the name typed for a delete or a purge. The settings of the app an assistant can change are the theme, Developer mode and the update channel; the Monitoring history joins them when it is built.</p>
+      </div>
+      <div style="display: flex; flex-direction: column; flex: 1 1 520px; min-width: 0">
+        <div style="display: flex; align-items: flex-start; gap: 8px 12px; flex-wrap: wrap; min-height: 48px; padding: 12px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+          <span style="flex: 0 0 168px; font-weight: 500; padding-top: 6px">Server</span>
+          <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; flex: 1 1 320px; min-width: 0">
+            <button type="button" role="switch" aria-checked="{{mcp.checked}}" onClick="{{mcp.toggle}}" class="hov" style="display: inline-flex; align-items: center; gap: 10px; height: 40px; padding: 0 18px 0 12px; border: 1px solid {{t.outline}}; border-radius: 999px; background: {{mcp.switchBg}}; color: {{mcp.switchFg}}; font: inherit; font-weight: 600; cursor: pointer">
+              <span aria-hidden="true" style="position: relative; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px">
+                <svg width="22" height="22" viewBox="0 0 180 180" fill="none" stroke="currentColor" stroke-width="13" stroke-linecap="round" stroke-linejoin="round" style="opacity: {{mcp.opacity}}"><path d="M18 84.8528L85.8822 16.9706C95.2548 7.59798 110.451 7.59798 119.823 16.9706C129.196 26.3431 129.196 41.5391 119.823 50.9117L68.5581 102.177"></path><path d="M69.2652 101.47L119.823 50.9117C129.196 41.5391 144.392 41.5391 153.765 50.9117L154.118 51.2652C163.491 60.6378 163.491 75.8338 154.118 85.2063L92.7248 146.6C89.6006 149.724 89.6006 154.789 92.7248 157.913L105.331 170.52"></path><path d="M102.853 33.9411L52.6482 84.1457C43.2756 93.5183 43.2756 108.714 52.6482 118.087C62.0208 127.459 77.2167 127.459 86.5893 118.087L136.794 67.8822"></path></svg>
+                <sc-if value="{{mcp.off}}" hint-placeholder-val="{{false}}">
+                  <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="position: absolute"><path d="M4 4l16 16"></path></svg>
+                </sc-if>
+              </span>
+              {{mcp.switchLabel}}
+            </button>
+            <span role="status">{{mcp.status}}</span>
+            <p style="display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 10px 14px; border-radius: 8px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
+              <span><strong style="font-weight: 600">What an assistant reads leaves this computer.</strong> The names of entities, the counts and the bodies of the messages it reads are sent to the assistant and to the company that runs it. A connection string, a password or a key is never given to it.</span>
+            </p>
+          </div>
+        </div>
+        <sc-if value="{{mcp.on}}" hint-placeholder-val="{{true}}">
+          <div style="display: flex; align-items: flex-start; gap: 8px 12px; flex-wrap: wrap; min-height: 48px; padding: 12px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+            <span style="flex: 0 0 168px; font-weight: 500; padding-top: 6px">Connect an assistant</span>
+            <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; flex: 1 1 320px; min-width: 0">
+              <span style="color: {{t.onSurfaceVariant}}">Add this to the configuration of the assistant. The server answers only on this computer and only while the app is open.</span>
+              <pre style="align-self: stretch; margin: 0; padding: 12px 14px; border: 1px solid {{t.outlineVariant}}; border-radius: 8px; background: {{t.surfaceLow}}; color: {{t.onSurface}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; line-height: 20px; overflow-x: auto">{ "mcpServers": { "messaging-explorer": [HOW THE SERVER STARTS, TO DECIDE] } }</pre>
+              <button type="button" class="hov" style="display: inline-flex; align-items: center; height: 40px; padding: 0 16px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; cursor: pointer">Copy the configuration</button>
+            </div>
+          </div>
+        </sc-if>
+        <div style="display: flex; align-items: flex-start; gap: 8px 12px; flex-wrap: wrap; min-height: 48px; padding: 12px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+          <span style="flex: 0 0 168px; font-weight: 500; padding-top: 6px">Connections</span>
+          <div style="display: flex; flex-direction: column; gap: 8px; flex: 1 1 320px; min-width: 0">
+            <span style="color: {{t.onSurfaceVariant}}">Only the connections listed here exist for an assistant. A production connection always asks you first.</span>
+            <ul aria-label="Connections an assistant may use" style="display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; border: 1px solid {{t.outlineVariant}}; border-radius: 8px; overflow: hidden; opacity: {{mcp.listOpacity}}">
+              <sc-for list="{{mcp.rows}}" as="r" hint-placeholder-count="4">
+                <li style="display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-bottom: 1px solid {{t.outlineVariant}}">
+                  <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+                    <span style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 500">{{r.name}}
+                      <sc-if value="{{r.production}}" hint-placeholder-val="{{false}}">
+                        <span style="display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 4px; background: {{t.errorContainer}}; color: {{t.onErrorContainer}}; font-size: 12px; line-height: 16px; font-weight: 700">Production</span>
+                      </sc-if>
+                    </span>
+                    <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">{{r.where}}</span>
+                    <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">{{r.asks}}</span>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+                    <div role="group" aria-label="{{r.groupLabel}}" style="display: inline-flex; flex-wrap: wrap; border: 1px solid {{t.outline}}; border-radius: 999px; overflow: hidden">
+                    <sc-for list="{{r.levels}}" as="l" hint-placeholder-count="3">
+                      <button type="button" onClick="{{l.pick}}" aria-pressed="{{l.pressed}}" class="hov" style="min-height: 40px; padding: 0 14px; border: 0; background: {{l.bg}}; color: {{l.fg}}; font: inherit; font-weight: {{l.weight}}; cursor: pointer">{{l.label}}</button>
+                    </sc-for>
+                  </div>
+                    <button type="button" onClick="{{r.remove}}" class="hov" style="display: inline-flex; align-items: center; height: 40px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: {{t.error}}; font: inherit; font-weight: 500; cursor: pointer">Remove</button>
+                  </div>
+                  <sc-if value="{{r.canNeverAsk}}" hint-placeholder-val="{{false}}">
+                    <label style="display: flex; align-items: center; gap: 10px; min-height: 32px; cursor: pointer">
+                      <input type="checkbox" checked="{{r.neverAsk}}" onChange="{{r.toggleNeverAsk}}" style="width: 18px; height: 18px; margin: 0; accent-color: {{t.primary}}">
+                      <span>A local test broker: do not ask me before a send</span>
+                    </label>
+                  </sc-if>
+                </li>
+              </sc-for>
+            </ul>
+            <sc-if value="{{mcp.noRows}}" hint-placeholder-val="{{false}}">
+              <span style="padding: 12px 14px; border: 1px dashed {{t.outline}}; border-radius: 8px; color: {{t.onSurfaceVariant}}">No connection is offered. An assistant sees none.</span>
+            </sc-if>
+            <div><button type="button" onClick="{{mcp.toggleAdd}}" aria-expanded="{{mcp.addExpanded}}" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px 0 12px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; cursor: pointer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>Offer a connection</button></div>
+            <sc-if value="{{mcp.adding}}" hint-placeholder-val="{{false}}">
+              <div style="display: flex; flex-direction: column; gap: 10px; padding: 14px; border: 1px solid {{t.outlineVariant}}; border-radius: 8px; background: {{t.surfaceLow}}">
+                <label style="display: flex; flex-direction: column; gap: 4px">
+                  <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Find a connection</span>
+                  <input type="search" onChange="{{mcp.setFind}}" placeholder="A name, a client, an environment" style="height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit">
+                </label>
+                <ul aria-label="Connections not offered" style="display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; border: 1px solid {{t.outlineVariant}}; border-radius: 8px; overflow: hidden; background: {{t.surface}}">
+                  <sc-for list="{{mcp.candidates}}" as="c" hint-placeholder-count="3">
+                    <li style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 14px; border-bottom: 1px solid {{t.outlineVariant}}">
+                      <div style="flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+                        <span style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 500">{{c.name}}
+                          <sc-if value="{{c.production}}" hint-placeholder-val="{{false}}">
+                            <span style="display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 4px; background: {{t.errorContainer}}; color: {{t.onErrorContainer}}; font-size: 12px; line-height: 16px; font-weight: 700">Production</span>
+                          </sc-if>
+                        </span>
+                        <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">{{c.where}}</span>
+                      </div>
+                      <button type="button" onClick="{{c.offer}}" class="hov" style="display: inline-flex; align-items: center; height: 36px; padding: 0 14px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; cursor: pointer">{{c.offerLabel}}</button>
+                    </li>
+                  </sc-for>
+                </ul>
+                <sc-if value="{{mcp.noCandidates}}" hint-placeholder-val="{{false}}">
+                  <span style="color: {{t.onSurfaceVariant}}">No other connection matches.</span>
+                </sc-if>
+                <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">A connection comes in at "Read". Offering a production connection asks you to confirm it.</span>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+        <div style="display: flex; align-items: flex-start; gap: 8px 12px; flex-wrap: wrap; min-height: 48px; padding: 12px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+          <span style="flex: 0 0 168px; font-weight: 500; padding-top: 6px">Logs of the app</span>
+          <div style="display: flex; flex-direction: column; gap: 4px; flex: 1 1 320px; min-width: 0">
+            <label style="display: flex; align-items: center; gap: 10px; min-height: 32px; cursor: pointer">
+              <input type="checkbox" checked="{{mcp.logs}}" onChange="{{mcp.toggleLogs}}" style="width: 18px; height: 18px; margin: 0; accent-color: {{t.primary}}">
+              <span>Let an assistant read the logs</span>
+            </label>
+            <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">The lines the Logs screen shows, by level and by a word. They carry no secret, no message body and no error text of a broker, but a line can name a connection you did not offer above. Never asks you.</span>
+          </div>
+        </div>
+        <div style="display: flex; align-items: flex-start; gap: 8px 12px; flex-wrap: wrap; min-height: 48px; padding: 12px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+          <span style="flex: 0 0 168px; font-weight: 500; padding-top: 6px">Settings of the app</span>
+          <div style="display: flex; flex-direction: column; gap: 4px; flex: 1 1 320px; min-width: 0">
+            <label style="display: flex; align-items: center; gap: 10px; min-height: 32px; cursor: pointer">
+              <input type="checkbox" checked="{{mcp.settings}}" onChange="{{mcp.toggleSettings}}" style="width: 18px; height: 18px; margin: 0; accent-color: {{t.primary}}">
+              <span>Let an assistant change settings of this app</span>
+            </label>
+            <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">The theme, Developer mode and the update channel. Each change shows in the list below.</span>
+            <span style="font-size: 12px; line-height: 16px; font-weight: 500">Never, whatever is chosen here: this MCP server group, clearing the data, and downloading or installing an update.</span>
+          </div>
+        </div>
+        <div style="display: flex; align-items: flex-start; gap: 8px 12px; flex-wrap: wrap; min-height: 48px; padding: 12px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+          <span style="flex: 0 0 168px; font-weight: 500; padding-top: 6px">What each choice allows</span>
+          <div style="display: flex; flex-direction: column; gap: 8px; flex: 1 1 320px; min-width: 0">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px">
+              <sc-for list="{{mcp.groups}}" as="g" hint-placeholder-count="4">
+                <div style="display: flex; flex-direction: column; gap: 4px; padding: 12px; border-radius: 8px; background: {{t.surfaceLow}}">
+                  <h3 style="margin: 0; font-size: 14px; line-height: 20px; font-weight: 600">{{g.title}}</h3>
+                  <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">{{g.level}}</span>
+                  <span>{{g.what}}</span>
+                  <span style="font-size: 12px; line-height: 16px; font-weight: 500">{{g.asks}}</span>
+                </div>
+              </sc-for>
+            </div>
+            <span style="color: {{t.onSurfaceVariant}}">A bulk operation an assistant starts answers what happened to each message, and a message sent and not removed is reported as a possible duplicate, exactly as on the screen.</span>
+          </div>
+        </div>
+        <div style="display: flex; align-items: flex-start; gap: 8px 12px; flex-wrap: wrap; min-height: 48px; padding: 12px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+          <span style="flex: 0 0 168px; font-weight: 500; padding-top: 6px">What assistants did</span>
+          <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; flex: 1 1 320px; min-width: 0">
+            <span style="color: {{t.onSurfaceVariant}}">Kept in memory since the app opened. No message body and no secret is written here.</span>
+            <div style="align-self: stretch; overflow-x: auto; border: 1px solid {{t.outlineVariant}}; border-radius: 8px">
+              <table style="width: 100%; min-width: 620px; border-collapse: collapse; font-variant-numeric: tabular-nums">
+                <thead>
+                  <tr style="background: {{t.surfaceLow}}; text-align: left">
+                    <th scope="col" style="padding: 8px 12px; font-size: 12px; line-height: 16px; font-weight: 600; color: {{t.onSurfaceVariant}}">Time</th>
+                    <th scope="col" style="padding: 8px 12px; font-size: 12px; line-height: 16px; font-weight: 600; color: {{t.onSurfaceVariant}}">Assistant</th>
+                    <th scope="col" style="padding: 8px 12px; font-size: 12px; line-height: 16px; font-weight: 600; color: {{t.onSurfaceVariant}}">Asked for</th>
+                    <th scope="col" style="padding: 8px 12px; font-size: 12px; line-height: 16px; font-weight: 600; color: {{t.onSurfaceVariant}}">Where</th>
+                    <th scope="col" style="padding: 8px 12px; font-size: 12px; line-height: 16px; font-weight: 600; color: {{t.onSurfaceVariant}}">What happened</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <sc-for list="{{mcp.activity}}" as="a" hint-placeholder-count="5">
+                    <tr style="border-top: 1px solid {{t.outlineVariant}}">
+                      <td style="padding: 8px 12px; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; color: {{t.onSurfaceVariant}}; white-space: nowrap">{{a.time}}</td>
+                      <td style="padding: 8px 12px; white-space: nowrap">{{a.who}}</td>
+                      <td style="padding: 8px 12px">{{a.what}}</td>
+                      <td style="padding: 8px 12px; color: {{t.onSurfaceVariant}}">{{a.where}}</td>
+                      <td style="padding: 8px 12px"><span style="display: inline-flex; align-items: center; min-height: 20px; padding: 0 8px; border-radius: 4px; background: {{a.chipBg}}; color: {{a.chipFg}}; font-size: 12px; line-height: 16px; font-weight: 700">{{a.result}}</span></td>
+                    </tr>
+                  </sc-for>
+                </tbody>
+              </table>
+            </div>
+            <button type="button" class="hov" style="display: inline-flex; align-items: center; height: 40px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: {{t.error}}; font: inherit; font-weight: 500; cursor: pointer">Clear the list</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section aria-label="Local test brokers" style="display: flex; gap: 16px 32px; flex-wrap: wrap; padding: 24px 0; border-top: 1px solid {{t.outlineVariant}}">
+      <div style="flex: 0 0 200px">
+        <h2 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">Local test brokers</h2>
+        <p style="margin: 4px 0 0; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">A broker to try the app with, started in Docker when you ask. Nothing is installed on this computer.</p>
+        <span style="display: inline-flex; align-items: center; margin-top: 8px; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built</span>
+      </div>
+      <div style="display: flex; flex-direction: column; flex: 1 1 520px; min-width: 0">
+        <div style="display: flex; align-items: flex-start; gap: 8px 12px; flex-wrap: wrap; min-height: 48px; padding: 12px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+          <span style="flex: 0 0 168px; font-weight: 500; padding-top: 6px">Docker</span>
+          <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; flex: 1 1 320px; min-width: 0">
+            <span>{{lb.docker}}</span>
+            <sc-if value="{{lb.noDocker}}" hint-placeholder-val="{{false}}">
+              <section aria-label="Docker is needed" style="display: flex; align-items: flex-start; gap: 12px; width: 100%; box-sizing: border-box; padding: 12px 16px; border-radius: 8px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}">
+                <span><strong>These brokers run only in Docker.</strong> Install Docker and start it, then come back: this app installs nothing and runs no broker outside a container. <span style="text-decoration: underline">How to install Docker</span></span>
+              </section>
+            </sc-if>
+          </div>
+        </div>
+        <div style="display: flex; align-items: flex-start; gap: 8px 12px; flex-wrap: wrap; min-height: 48px; padding: 12px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+          <span style="flex: 0 0 168px; font-weight: 500; padding-top: 6px">{{lb.sb.name}}</span>
+          <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; flex: 1 1 320px; min-width: 0">
+            <button type="button" role="switch" aria-checked="{{lb.sb.checked}}" aria-label="{{lb.sb.switchLabel}}" disabled="{{lb.sb.locked}}" onClick="{{lb.sb.toggle}}" class="hov" style="display: inline-flex; align-items: center; gap: 10px; height: 40px; padding: 0 18px 0 12px; border: 1px solid {{t.outline}}; border-radius: 999px; background: {{lb.sb.switchBg}}; color: {{lb.sb.switchFg}}; opacity: {{lb.sb.opacity}}; font: inherit; font-weight: 600; cursor: pointer">{{lb.sb.switchText}}</button>
+            <span>{{lb.sb.status}}</span>
+            <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">{{lb.sb.what}}</span>
+            <sc-if value="{{lb.sb.license}}" hint-placeholder-val="{{false}}">
+              <label style="display: flex; align-items: center; gap: 10px; min-height: 32px; cursor: pointer">
+                <input type="checkbox" checked="{{lb.sb.accepted}}" onChange="{{lb.sb.accept}}" style="width: 18px; height: 18px; margin: 0; accent-color: {{t.primary}}">
+                <span>I accept the license of the Azure Service Bus emulator and of the database it runs on</span>
+              </label>
+              <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">The license is Microsoft's and it is yours to accept: this app never accepts it for you. <span style="color: {{t.primary}}; text-decoration: underline">Read the license</span></span>
+            </sc-if>
+            <sc-if value="{{lb.sb.failed}}" hint-placeholder-val="{{false}}">
+              <section aria-label="Error" style="display: flex; align-items: flex-start; gap: 12px; width: 100%; box-sizing: border-box; padding: 12px 16px; border-radius: 8px; background: {{t.errorContainer}}; color: {{t.onErrorContainer}}">
+                <span style="flex: 1 1 240px"><strong>It did not start.</strong> {{lb.sb.error}}</span>
+                <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; white-space: nowrap; cursor: pointer; border-color: currentColor; color: inherit">Try again</button>
+              </section>
+            </sc-if>
+            <sc-if value="{{lb.sb.running}}" hint-placeholder-val="{{false}}">
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+                <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; white-space: nowrap; cursor: pointer">Open in Connections</button>
+                <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; white-space: nowrap; cursor: pointer; color: {{t.error}}">Delete its data</button>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+        <div style="display: flex; align-items: flex-start; gap: 8px 12px; flex-wrap: wrap; min-height: 48px; padding: 12px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+          <span style="flex: 0 0 168px; font-weight: 500; padding-top: 6px">{{lb.rabbit.name}}</span>
+          <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; flex: 1 1 320px; min-width: 0">
+            <button type="button" role="switch" aria-checked="{{lb.rabbit.checked}}" aria-label="{{lb.rabbit.switchLabel}}" disabled="{{lb.rabbit.locked}}" onClick="{{lb.rabbit.toggle}}" class="hov" style="display: inline-flex; align-items: center; gap: 10px; height: 40px; padding: 0 18px 0 12px; border: 1px solid {{t.outline}}; border-radius: 999px; background: {{lb.rabbit.switchBg}}; color: {{lb.rabbit.switchFg}}; opacity: {{lb.rabbit.opacity}}; font: inherit; font-weight: 600; cursor: pointer">{{lb.rabbit.switchText}}</button>
+            <span>{{lb.rabbit.status}}</span>
+            <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">{{lb.rabbit.what}}</span>
+            <sc-if value="{{lb.rabbit.license}}" hint-placeholder-val="{{false}}">
+              <label style="display: flex; align-items: center; gap: 10px; min-height: 32px; cursor: pointer">
+                <input type="checkbox" checked="{{lb.rabbit.accepted}}" onChange="{{lb.rabbit.accept}}" style="width: 18px; height: 18px; margin: 0; accent-color: {{t.primary}}">
+                <span>I accept the license of the Azure Service Bus emulator and of the database it runs on</span>
+              </label>
+              <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">The license is Microsoft's and it is yours to accept: this app never accepts it for you. <span style="color: {{t.primary}}; text-decoration: underline">Read the license</span></span>
+            </sc-if>
+            <sc-if value="{{lb.rabbit.failed}}" hint-placeholder-val="{{false}}">
+              <section aria-label="Error" style="display: flex; align-items: flex-start; gap: 12px; width: 100%; box-sizing: border-box; padding: 12px 16px; border-radius: 8px; background: {{t.errorContainer}}; color: {{t.onErrorContainer}}">
+                <span style="flex: 1 1 240px"><strong>It did not start.</strong> {{lb.rabbit.error}}</span>
+                <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; white-space: nowrap; cursor: pointer; border-color: currentColor; color: inherit">Try again</button>
+              </section>
+            </sc-if>
+            <sc-if value="{{lb.rabbit.running}}" hint-placeholder-val="{{false}}">
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+                <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; white-space: nowrap; cursor: pointer">Open in Connections</button>
+                <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; white-space: nowrap; cursor: pointer; color: {{t.error}}">Delete its data</button>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+        <p style="margin: 8px 0 0; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Each broker starts only when you turn it on, one without the other, and nothing starts with the app. Both listen on this computer only. A broker stops when you turn it off or quit the app; its data stays until you delete it. The first start downloads the images: about 2 GB for the Service Bus emulator, about 200 MB for RabbitMQ.</p>
+      </div>
+    </section>
+
     <section aria-label="Developer" style="display: flex; gap: 16px 32px; flex-wrap: wrap; padding: 24px 0; border-top: 1px solid {{t.outlineVariant}}">
       <div style="flex: 0 0 200px">
         <h2 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">Developer</h2>
@@ -392,7 +649,7 @@ input::placeholder{color:currentColor;opacity:.72}
           <span style="flex: 0 0 168px; font-weight: 500">Developer mode</span>
           <label style="display: flex; align-items: center; gap: 10px; min-height: 32px; cursor: pointer">
             <input type="checkbox" checked="{{devMode}}" onChange="{{toggleDev}}" style="width: 18px; height: 18px; margin: 0; accent-color: {{t.primary}}">
-            <span>Show the Debug button on the Connections screen</span>
+            <span>Show the Logs screen in the toolbar and the Debug button on the Connections screen</span>
           </label>
           <span style="display: inline-flex; align-items: center; gap: 4px"><kbd style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid {{t.outline}}; border-bottom-width: 2px; border-radius: 4px; background: {{t.surfaceLow}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px">Ctrl</kbd><kbd style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid {{t.outline}}; border-bottom-width: 2px; border-radius: 4px; background: {{t.surfaceLow}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px">Shift</kbd><kbd style="display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid {{t.outline}}; border-bottom-width: 2px; border-radius: 4px; background: {{t.surfaceLow}}; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; line-height: 16px">D</kbd></span>
           <span style="flex: 1"></span>
@@ -453,6 +710,33 @@ input::placeholder{color:currentColor;opacity:.72}
 
   <sc-if value="{{showDialog}}" hint-placeholder-val="{{false}}">
     <div style="position: absolute; top: 0; right: 0; bottom: 0; left: 0; z-index: 3; display: flex; justify-content: center; align-items: flex-start; box-sizing: border-box; padding: 96px 24px 24px; background: {{t.scrim}}">
+
+      <sc-if value="{{mcp.asking}}" hint-placeholder-val="{{false}}">
+        <section role="dialog" aria-modal="true" aria-label="{{mcp.ask.title}}" style="display: flex; flex-direction: column; gap: 16px; width: 100%; max-width: 560px; box-sizing: border-box; padding: 24px; border-radius: 20px; background: {{t.surfaceContainer}}; color: {{t.onSurface}}; box-shadow: {{t.shadow}}">
+          <h2 style="display: flex; align-items: center; gap: 10px; margin: 0; font-size: 20px; line-height: 28px; font-weight: 500"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 180 180" fill="none" stroke="currentColor" stroke-width="13" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M18 84.8528L85.8822 16.9706C95.2548 7.59798 110.451 7.59798 119.823 16.9706C129.196 26.3431 129.196 41.5391 119.823 50.9117L68.5581 102.177"></path><path d="M69.2652 101.47L119.823 50.9117C129.196 41.5391 144.392 41.5391 153.765 50.9117L154.118 51.2652C163.491 60.6378 163.491 75.8338 154.118 85.2063L92.7248 146.6C89.6006 149.724 89.6006 154.789 92.7248 157.913L105.331 170.52"></path><path d="M102.853 33.9411L52.6482 84.1457C43.2756 93.5183 43.2756 108.714 52.6482 118.087C62.0208 127.459 77.2167 127.459 86.5893 118.087L136.794 67.8822"></path></svg>{{mcp.ask.title}}</h2>
+          <dl style="display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0">
+            <sc-for list="{{mcp.ask.facts}}" as="f" hint-placeholder-count="4">
+              <dt style="color: {{t.onSurfaceVariant}}">{{f.k}}</dt>
+              <dd style="margin: 0; font-weight: 500; overflow-wrap: anywhere">{{f.v}}</dd>
+            </sc-for>
+          </dl>
+          <p style="display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 10px 14px; border-radius: 8px; background: {{mcp.ask.noteBg}}; color: {{mcp.ask.noteFg}}">
+            <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
+            <span>{{mcp.ask.note}}</span>
+          </p>
+          <sc-if value="{{mcp.ask.typed}}" hint-placeholder-val="{{false}}">
+            <label style="display: flex; flex-direction: column; gap: 4px">
+              <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{t.onSurfaceVariant}}">Type the queue name to allow it</span>
+              <input type="text" onChange="{{mcp.setTyped}}" style="height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid {{t.outline}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit">
+            </label>
+          </sc-if>
+          <div style="display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap">
+            <button type="button" onClick="{{mcp.closeAsk}}" class="hov" style="display: inline-flex; align-items: center; height: 40px; padding: 0 16px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; cursor: pointer">Deny</button>
+            <button type="button" onClick="{{mcp.closeAsk}}" aria-disabled="{{mcp.ask.ariaDisabled}}" class="hov" style="display: inline-flex; align-items: center; height: 40px; padding: 0 20px; border: 0; border-radius: 999px; background: {{mcp.ask.goBg}}; color: {{mcp.ask.goFg}}; font: inherit; font-weight: 600; cursor: pointer; opacity: {{mcp.ask.goOpacity}}">{{mcp.ask.go}}</button>
+          </div>
+          <p style="margin: 0; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">The assistant waits for your answer. With no answer in 2 minutes it is told the request was denied.</p>
+        </section>
+      </sc-if>
 
       <sc-if value="{{dlgBug}}" hint-placeholder-val="{{false}}">
         <section aria-label="Report a Bug" style="display: flex; flex-direction: column; gap: 16px; width: 100%; box-sizing: border-box; padding: 24px; border-radius: 20px; background: {{t.surfaceContainer}}; color: {{t.onSurface}}; box-shadow: {{t.shadow}}; max-width: 640px">
@@ -533,7 +817,7 @@ input::placeholder{color:currentColor;opacity:.72}
   </sc-if>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Preview"},"state":{"editor":"enum","options":["upToDate","available","downloading","ready","failed","cannotSelfUpdate","bugReport","clearConfirm"],"default":"upToDate","section":"Preview"},"environment":{"editor":"enum","options":["production","development"],"default":"production","section":"Preview"},"$preview":{"width":1280,"height":2520}}'>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Preview"},"state":{"editor":"enum","options":["upToDate","available","downloading","ready","failed","cannotSelfUpdate","bugReport","clearConfirm"],"default":"upToDate","section":"Preview"},"environment":{"editor":"enum","options":["production","development"],"default":"production","section":"Preview"},"mcp":{"editor":"enum","options":["active","inactive","offerConnection","askedToRead","askedToSend","askedToDelete"],"default":"active","section":"Preview"},"brokers":{"editor":"enum","options":["off","noDocker","starting","running","failed"],"default":"off","section":"Preview"},"$preview":{"width":1280,"height":4560}}'>
 const LIGHT = { surface:'#f9f9ff', surfaceLow:'#f2f3fa', surfaceContainer:'#ecedf4', surfaceHigh:'#e6e8ee',
   onSurface:'#191c20', onSurfaceVariant:'#43474e', outline:'#73777f', outlineVariant:'#c3c6cf',
   primary:'#005cbb', onPrimary:'#ffffff', primaryContainer:'#d7e3ff', onPrimaryContainer:'#001b3f',
@@ -549,6 +833,30 @@ const DARK = { surface:'#111318', surfaceLow:'#191c20', surfaceContainer:'#1d202
   warnContainer:'#5c4300', onWarnContainer:'#ffdea3', success:'#9bd6a4', successContainer:'#00531f', onSuccessContainer:'#b6f2be',
   scrim:'rgba(0,0,0,.6)', shadow:'0 1px 3px rgba(0,0,0,.6), 0 4px 8px 3px rgba(0,0,0,.3)' };
 
+const MCP_LEVELS = ['Not offered', 'Read', 'Read and send', 'Read, send and remove'];
+const MCP_ROWS = [
+  { id: 'rabbit', name: 'Local RabbitMQ', where: 'Local brokers, Development. localhost:5672', level: 3, local: true },
+  { id: 'emulator', name: 'Local Service Bus', where: 'Local brokers, Development. The emulator on localhost:5673', level: 3, local: true },
+  { id: 'dev', name: 'contoso-dev', where: 'Contoso, Development. contoso-dev.servicebus.windows.net', level: 2 },
+  { id: 'prod', name: 'contoso-prod', where: 'Contoso, Production. contoso-prod.servicebus.windows.net', level: 0, production: true },
+  { id: 'fab-dev', name: 'fabrikam-dev', where: 'Fabrikam, Development. fabrikam-dev.servicebus.windows.net', level: 0 },
+  { id: 'fab-rabbit', name: 'fabrikam-orders', where: 'Fabrikam, Staging. rabbit.fabrikam.example:5672', level: 0 }
+];
+const MCP_GROUPS = [
+  { title: 'Read', level: 'Every connection listed', what: 'List the connections offered, queues, topics, subscriptions and rules; read the counts; read the active, dead-letter, scheduled and deferred messages, their bodies included.', asks: 'Never asks you.' },
+  { title: 'Send', level: 'From "Read and send" up', what: 'Send one message or many to a queue or a topic, now or scheduled.', asks: 'Asks you before each send, except on a local test broker.' },
+  { title: 'Move and remove', level: '"Read, send and remove" only', what: 'Dead-letter, resubmit, move, delete, purge and cancel scheduled messages.', asks: 'Asks you every time, a local test broker included; a delete or a purge asks for the name typed.' },
+  { title: 'Entities', level: '"Read, send and remove" only', what: 'Create, change and delete a queue, a topic, a subscription or a rule.', asks: 'Asks you every time; a delete asks for the name typed.' }
+];
+const MCP_ACTIVITY = [
+  { time: '10:44:10', who: 'Claude Code', what: 'Delete 12 messages', where: 'orders, dead-letter. contoso-dev', result: 'Denied by you', kind: 'error' },
+  { time: '10:43:02', who: 'Claude Code', what: 'Send 3 messages', where: 'orders. contoso-dev', result: '3 sent, allowed by you', kind: 'ok' },
+  { time: '10:42:31', who: 'Claude Code', what: 'Peek 20 messages', where: 'orders, dead-letter. contoso-dev', result: '20 read', kind: 'plain' },
+  { time: '10:42:12', who: 'Claude Code', what: 'Turn Developer mode on', where: 'Settings of this app', result: 'Done', kind: 'ok' },
+  { time: '10:42:19', who: 'Claude Code', what: 'Read the logs, errors only', where: 'This app', result: '2 lines', kind: 'plain' },
+  { time: '10:42:07', who: 'Claude Code', what: 'Read the counts', where: 'Every queue. contoso-dev', result: '14 queues', kind: 'plain' },
+  { time: '10:41:55', who: 'Claude Code', what: 'List the connections', where: 'This app', result: '3 offered', kind: 'plain' }
+];
 const UPDATE_STATES = ['upToDate', 'available', 'downloading', 'ready', 'failed', 'cannotSelfUpdate'];
 const CLEAR_WORDS = 'clear all data';
 const VERSIONS = {
@@ -589,6 +897,103 @@ class Component extends DCLogic {
     const snack = dark
       ? { bg: LIGHT.surface, fg: LIGHT.onSurface, action: LIGHT.primary }
       : { bg: LIGHT.onSurface, fg: LIGHT.surface, action: DARK.primary };
+
+    const lbView = this.props.brokers ?? 'off';
+    const lbOn = s.lbOn ?? {};
+    const lbAccepted = s.lbAccepted ?? (lbView === 'starting' || lbView === 'running');
+    const lbBroker = (key, name, what, license, connection, failure) => {
+      const noDocker = lbView === 'noDocker';
+      const fromView = lbView === 'running' || (lbView === 'starting' && key === 'sb');
+      const on = !noDocker && (lbOn[key] ?? fromView);
+      const starting = on && lbView === 'starting';
+      const failed = lbView === 'failed' && key === 'rabbit' && lbOn[key] === undefined;
+      const locked = noDocker || (license && !lbAccepted);
+      return {
+        name, what, license, accepted: lbAccepted, accept: () => this.setState({ lbAccepted: !lbAccepted }),
+        checked: on ? 'true' : 'false', locked, opacity: locked ? 0.5 : 1,
+        switchLabel: 'Run a local ' + name + ' in Docker',
+        switchText: starting ? 'Starting' : on ? 'Running' : 'Off',
+        switchBg: on ? t.secondaryContainer : 'transparent', switchFg: on ? t.onSecondaryContainer : t.onSurface,
+        toggle: () => { if (!locked) this.setState({ lbOn: { ...lbOn, [key]: !on } }); },
+        status: noDocker ? 'Needs Docker.'
+          : failed ? 'Off.'
+          : starting ? 'Starting: downloading the images, then waiting for the broker to answer. This can take a few minutes the first time.'
+          : on ? 'Running since 10:41. The connection "' + connection + '" is in Connections.'
+          : license && !lbAccepted ? 'Off. Accept the license below to turn it on.' : 'Off.',
+        failed, error: failure, running: on && !starting,
+      };
+    };
+    const lb = {
+      noDocker: lbView === 'noDocker',
+      docker: lbView === 'noDocker' ? 'Docker was not found on this computer, or it is not running.' : 'Docker is running on this computer.',
+      sb: lbBroker('sb', 'Azure Service Bus', 'The emulator Microsoft publishes, with the database it needs. It is an emulator: it reports no message counts and does not fail the way the real service does.', true, 'Local Service Bus', ''),
+      rabbit: lbBroker('rabbit', 'RabbitMQ', 'A real RabbitMQ with its management screen. The app writes a password of its own for it and never uses the guest account.', false, 'Local RabbitMQ', 'Port 5672 is in use by another program on this computer. Stop that program, or the RabbitMQ it belongs to, and try again.'),
+    };
+
+    const mcpView = this.props.mcp ?? 'active';
+    const mcpOn = s.mcpOn ?? (mcpView !== 'inactive');
+    const mcpLevels = s.mcpLevels ?? {};
+    const mcpDelete = mcpView === 'askedToDelete';
+    const mcpTypedOk = (s.mcpTyped ?? '') === 'orders';
+    const mcpChip = k => k === 'error' ? [t.errorContainer, t.onErrorContainer] : k === 'ok' ? [t.secondaryContainer, t.onSecondaryContainer] : [t.surfaceHigh, t.onSurfaceVariant];
+    const mcpRead = mcpView === 'askedToRead';
+    const mcpAsk = mcpRead
+      ? { title: 'Claude Code asks to read 20 messages', typed: false, go: 'Allow this read', goBg: t.primary, goFg: t.onPrimary,
+          ariaDisabled: 'false', goOpacity: 1, noteBg: t.warnContainer, noteFg: t.onWarnContainer,
+          note: 'This is a production connection. The bodies of the messages read are sent to the assistant and to the company that runs it.',
+          facts: [['From', 'orders, dead-letter queue'], ['On', 'contoso-prod (Contoso, Production)'], ['Messages', 'Up to 20, read without removing them'], ['It said why', 'To see why orders are failing']] }
+      : mcpDelete
+      ? { title: 'Claude Code asks to delete 12 messages', typed: true, go: 'Delete 12 messages', goBg: t.error, goFg: t.onError,
+          ariaDisabled: mcpTypedOk ? 'false' : 'true', goOpacity: mcpTypedOk ? 1 : .5, noteBg: t.errorContainer, noteFg: t.onErrorContainer,
+          note: 'A deleted message cannot be brought back. The 12 messages are the ones the assistant named by their sequence numbers; nothing else in the queue is touched.',
+          facts: [['From', 'orders, dead-letter queue'], ['On', 'contoso-dev (Contoso, Development)'], ['Messages', '12, sequence numbers 4401 to 4412'], ['It said why', 'They are copies of orders already processed']] }
+      : { title: 'Claude Code asks to send 3 messages', typed: false, go: 'Send 3 messages', goBg: t.primary, goFg: t.onPrimary,
+          ariaDisabled: 'false', goOpacity: 1, noteBg: t.warnContainer, noteFg: t.onWarnContainer,
+          note: 'Every consumer of this queue receives these messages. A message sent cannot be taken back.',
+          facts: [['To', 'orders, a queue'], ['On', 'contoso-dev (Contoso, Development)'], ['Messages', '3, application/json, 412 bytes in all'], ['It said why', 'To reproduce the failure of order 1042']] };
+    const mcp = {
+      on: mcpOn, off: !mcpOn, checked: mcpOn ? 'true' : 'false',
+      toggle: () => this.setState({ mcpOn: !mcpOn }),
+      label: 'MCP server is active: 1 assistant connected. Open its settings',
+      opacity: mcpOn ? 1 : .55, dot: dark ? '#7ddc8a' : '#9af0a6',
+      switchLabel: mcpOn ? 'Active' : 'Inactive', switchBg: mcpOn ? t.secondaryContainer : 'transparent', switchFg: mcpOn ? t.onSecondaryContainer : t.onSurface,
+      status: mcpOn ? 'Active. Answering on this computer only. 1 assistant connected: Claude Code, since 10:41.'
+        : 'Inactive. No assistant can reach this app, and the choices below are kept for when it is turned on.',
+      listOpacity: mcpOn ? 1 : .6,
+      settings: s.mcpSettings ?? true, toggleSettings: () => this.setState({ mcpSettings: !(s.mcpSettings ?? true) }),
+      logs: s.mcpLogs ?? true, toggleLogs: () => this.setState({ mcpLogs: !(s.mcpLogs ?? true) }),
+      asking: mcpOn && !s.mcpClosed && (mcpView === 'askedToRead' || mcpView === 'askedToSend' || mcpView === 'askedToDelete'),
+      ask: Object.assign({}, mcpAsk, { facts: mcpAsk.facts.map(f => ({ k: f[0], v: f[1] })) }),
+      setTyped: ev => this.setState({ mcpTyped: ev.target.value }),
+      closeAsk: () => this.setState({ mcpClosed: true }),
+      groups: MCP_GROUPS,
+      activity: MCP_ACTIVITY.map(a => { const c = mcpChip(a.kind); return { time: a.time, who: a.who, what: a.what, where: a.where, result: a.result, chipBg: c[0], chipFg: c[1] }; }),
+      rows: MCP_ROWS.filter(r => (mcpLevels[r.id] ?? r.level) > 0).map(r => {
+        const level = mcpLevels[r.id] ?? r.level;
+        const neverAsk = (s.mcpNeverAsk ?? {})[r.id] ?? !!r.local;
+        const asks = r.production ? 'Asks you before every operation, a read included.'
+          : r.local && neverAsk ? (level === 3 ? 'A local test broker: sends without asking; asks you before each move or removal.' : 'A local test broker: never asks you.')
+          : level === 1 ? 'Reads without asking you.'
+          : level === 2 ? 'Reads without asking; asks you before each send.'
+          : 'Reads without asking; asks you before each send, move or removal.';
+        return { name: r.name, where: r.where, production: !!r.production, asks, groupLabel: 'What an assistant may do on ' + r.name,
+          canNeverAsk: !!r.local, neverAsk, toggleNeverAsk: () => this.setState({ mcpNeverAsk: Object.assign({}, s.mcpNeverAsk ?? {}, { [r.id]: !neverAsk }) }),
+          remove: () => this.setState({ mcpLevels: Object.assign({}, mcpLevels, { [r.id]: 0 }) }),
+          levels: MCP_LEVELS.slice(1).map((label, n) => {
+            const i = n + 1, on = i === level;
+            return { label, pressed: on ? 'true' : 'false', bg: on ? t.secondaryContainer : 'transparent', fg: on ? t.onSecondaryContainer : t.onSurface, weight: on ? 600 : 500,
+              pick: () => this.setState({ mcpLevels: Object.assign({}, mcpLevels, { [r.id]: i }) }) };
+          }) };
+      }),
+      noRows: MCP_ROWS.every(r => (mcpLevels[r.id] ?? r.level) === 0),
+      adding: s.mcpAdding ?? (mcpView === 'offerConnection'), addExpanded: (s.mcpAdding ?? (mcpView === 'offerConnection')) ? 'true' : 'false',
+      toggleAdd: () => this.setState({ mcpAdding: !(s.mcpAdding ?? (mcpView === 'offerConnection')) }),
+      setFind: ev => this.setState({ mcpFind: ev.target.value }),
+      candidates: MCP_ROWS.filter(r => (mcpLevels[r.id] ?? r.level) === 0 && (r.name + ' ' + r.where).toLowerCase().includes((s.mcpFind ?? '').toLowerCase())).map(r => ({
+        name: r.name, where: r.where, production: !!r.production, offerLabel: r.production ? 'Offer, after you confirm' : 'Offer',
+        offer: () => this.setState({ mcpLevels: Object.assign({}, mcpLevels, { [r.id]: 1 }) }) })),
+      noCandidates: MCP_ROWS.filter(r => (mcpLevels[r.id] ?? r.level) === 0 && (r.name + ' ' + r.where).toLowerCase().includes((s.mcpFind ?? '').toLowerCase())).length === 0
+    };
 
     const stateProp = this.props.state ?? 'upToDate';
     const upd = s.upd ?? (UPDATE_STATES.includes(stateProp) ? stateProp : 'upToDate');
@@ -635,6 +1040,7 @@ class Component extends DCLogic {
       agreedUp: !!s.agreedUp, toggleAgreeUp: () => this.setState({ agreedUp: !s.agreedUp }), cannotDownload: !s.agreedUp,
       upBg: s.agreedUp ? t.primary : t.surfaceHigh, upFg: s.agreedUp ? t.onPrimary : t.onSurfaceVariant, upCursor: s.agreedUp ? 'pointer' : 'not-allowed',
       retryUpdate: () => this.setState({ upd: 'downloading' }),
+      lb,
       devMode, toggleDev: () => this.setState({ dev: !devMode }),
       historyOn, toggleHistory: () => this.setState({ history: !historyOn }),
       keepOpts: seg([['1', '1 day'], ['7', '7 days'], ['30', '30 days'], ['90', '90 days']], keep, v => this.setState({ keep: v })),
@@ -651,7 +1057,7 @@ class Component extends DCLogic {
       versionOpts, pickVer: ev => this.setState({ ver: ev.target.value, agreed: false, notesOpen: true, notesAll: false }), sel, selOlder: sel.rank < 0, selInstalled: sel.rank === 0, selCanInstall: sel.rank !== 0,
       agreed, toggleAgree: () => this.setState({ agreed: !agreed }), cannotInstall: !agreed, install: () => this.setState({ upd: 'downloading', agreed: false }),
       installBg: agreed ? t.primary : t.surfaceHigh, installFg: agreed ? t.onPrimary : t.onSurfaceVariant, installCursor: agreed ? 'pointer' : 'not-allowed',
-      showDialog: dlg !== 'none', dlgBug: dlg === 'bug', dlgClear: dlg === 'clear',
+      showDialog: dlg !== 'none' || mcp.asking, dlgBug: dlg === 'bug', dlgClear: dlg === 'clear', mcp,
       openBug: () => this.setState({ dlg: 'bug' }),
       openClear: () => this.setState({ dlg: 'clear', typed: '' }),
       closeDialog: () => this.setState({ dlg: 'none', typed: '' }),

@@ -8,9 +8,10 @@ function loadPreload() {
   const listened = [];
   const invoked = [];
   const invokedArgs = [];
+  const sent = [];
   const fakeElectron = {
     contextBridge: { exposeInMainWorld: (name, api) => { exposed[name] = api; } },
-    ipcRenderer: { invoke: (channel, ...args) => { invoked.push(channel); invokedArgs.push(args); return Promise.resolve(); }, on: (channel) => { listened.push(channel); } }
+    ipcRenderer: { invoke: (channel, ...args) => { invoked.push(channel); invokedArgs.push(args); return Promise.resolve(); }, on: (channel) => { listened.push(channel); }, send: (...args) => { sent.push(args); } }
   };
   const originalLoad = Module._load;
   Module._load = function (request, ...rest) {
@@ -26,7 +27,7 @@ function loadPreload() {
     Module._load = originalLoad;
     console.log = originalLog;
   }
-  return { exposed, listened, invoked, invokedArgs };
+  return { exposed, listened, invoked, invokedArgs, sent };
 }
 
 test('the preload exposes only window.electronAPI, with no generic channel listener', () => {
@@ -105,4 +106,21 @@ test('downloadUpdate sends the agreement as true only when it was given as true,
   exposed.electronAPI.downloadUpdate('yes', '2.5.0');
   assert.deepEqual(invoked, ['download-update', 'download-update', 'download-update']);
   assert.deepEqual(invokedArgs, [[{ agreed: true, version: '2.5.0' }], [{ agreed: false, version: undefined }], [{ agreed: false, version: '2.5.0' }]]);
+});
+
+test('the preload exposes exactly these members, setActiveRuns included', () => {
+  const { exposed } = loadPreload();
+  assert.deepEqual(Object.keys(exposed.electronAPI).sort(), [
+    'checkForUpdates', 'clearShellLogs', 'downloadUpdate', 'getApiPort', 'getApiSecret', 'getAppVersion', 'getDataFile',
+    'getSelfUpdateBlocker', 'getShellLogs', 'getUpdateChannel', 'installUpdate', 'installUpdateVersion', 'isElectron',
+    'listUpdateVersions', 'onChangeConnection', 'onNavigate', 'onUpdateStatus', 'openDevTools', 'platform', 'saveExportFile',
+    'setActiveRuns', 'setUpdateChannel', 'showDataFile'
+  ], 'a new member of window.electronAPI must be listed here');
+});
+
+test('setActiveRuns sends only a number on the set-active-runs channel, never a name or a body', () => {
+  const { exposed, sent } = loadPreload();
+  exposed.electronAPI.setActiveRuns(2, 'orders');
+  exposed.electronAPI.setActiveRuns({ name: 'orders', body: 'x' });
+  assert.deepEqual(sent, [['set-active-runs', 2], ['set-active-runs', NaN]], 'setActiveRuns must send one number and nothing else');
 });

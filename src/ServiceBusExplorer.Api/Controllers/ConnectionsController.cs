@@ -1,6 +1,7 @@
 using System.Net.Sockets;
 using System.Security.Authentication;
 using Microsoft.AspNetCore.Mvc;
+using ServiceBusExplorer.Api.Mcp;
 using ServiceBusExplorer.Core.Abstractions;
 using ServiceBusExplorer.Core.Models;
 using ServiceBusExplorer.Core.Providers;
@@ -17,6 +18,7 @@ public class ConnectionsController : ControllerBase
     private readonly IConnectionGroupManager _groupManager;
     private readonly IProviderFactory _providerFactory;
     private readonly ILogger<ConnectionsController> _logger;
+    private readonly McpSettingsStore _mcpSettings;
 
     /// <summary>
     /// Holds the currently connected messaging provider instance.
@@ -24,6 +26,9 @@ public class ConnectionsController : ControllerBase
     /// Thread-safe access via lock.
     /// </summary>
     private static IMessagingProvider? _currentProvider;
+
+    /// <summary>The id of the stored connection <see cref="_currentProvider"/> was connected from; null when none. Guarded by <see cref="_providerLock"/>.</summary>
+    private static string? _currentConnectionId;
     private static readonly object _providerLock = new();
 
     // Static logger used by the SetCurrentProviderAsync helper, which is static
@@ -36,13 +41,15 @@ public class ConnectionsController : ControllerBase
         IServiceBusService serviceBusService,
         IConnectionGroupManager groupManager,
         IProviderFactory providerFactory,
-        ILogger<ConnectionsController> logger)
+        ILogger<ConnectionsController> logger,
+        McpSettingsStore mcpSettings)
     {
         _connectionManager = connectionManager;
         _serviceBusService = serviceBusService;
         _groupManager = groupManager;
         _providerFactory = providerFactory;
         _logger = logger;
+        _mcpSettings = mcpSettings;
         _staticLogger ??= logger;
     }
 
@@ -56,15 +63,17 @@ public class ConnectionsController : ControllerBase
 
     /// <summary>
     /// Sets the current messaging provider instance (thread-safe).
-    /// Disposes the previous provider if one exists.
+    /// Disposes the previous provider if one exists. <paramref name="connectionId"/> is the stored connection the
+    /// provider was connected from, null when the provider is null.
     /// </summary>
-    private static async Task SetCurrentProviderAsync(IMessagingProvider? provider)
+    private static async Task SetCurrentProviderAsync(IMessagingProvider? provider, string? connectionId)
     {
         IMessagingProvider? oldProvider;
         lock (_providerLock)
         {
             oldProvider = _currentProvider;
             _currentProvider = provider;
+            _currentConnectionId = provider == null ? null : connectionId;
         }
 
         // Dispose old provider outside the lock to avoid deadlocks
@@ -257,37 +266,11 @@ public class ConnectionsController : ControllerBase
     {
         try
         {
-            // Connecting requires raw secrets (connection string / password).
-            var connection = await _connectionManager.GetConnectionWithSecretAsync(id);
-            if (connection == null)
+            var result = await ConnectStoredAsync(id, _connectionManager, _providerFactory, _logger);
+            if (!result.Found)
                 return NotFound();
-
-            _logger.LogInformation("Connecting to {Name} ({ProviderType})", connection.Name, connection.ProviderType);
-
-            IMessagingProvider provider;
-            try
-            {
-                provider = await _providerFactory.CreateConnectedProviderAsync(connection);
-            }
-            catch (Exception ex) when (ConnectFailureReason(ex) is { } reason)
-            {
-                _logger.LogError(ex, "Failed to connect to {ConnectionId} ({Reason})", id, reason.Code);
-                return StatusCode(500, new { message = reason.Message, code = reason.Code });
-            }
-
-            // Store the provider for use by other controllers
-            await SetCurrentProviderAsync(provider);
-
-            try
-            {
-                await _connectionManager.MarkUsedAsync(id);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Could not record the last use of connection {ConnectionId} ({ExceptionType})", id, ex.GetType().Name);
-            }
-
-            _logger.LogInformation("Connected successfully to {Target}", provider.CurrentTarget);
+            if (result.Provider is not { } provider)
+                return StatusCode(500, new { message = result.Failure!.Value.Message, code = result.Failure.Value.Code });
 
             return Ok(new
             {
@@ -295,7 +278,8 @@ public class ConnectionsController : ControllerBase
                 target = provider.CurrentTarget,
                 providerType = provider.ProviderType.ToString(),
                 // Keep @namespace for backward compatibility with Azure Service Bus
-                @namespace = provider.CurrentTarget
+                @namespace = provider.CurrentTarget,
+                connectionId = id
             });
         }
         catch (Exception ex)
@@ -303,6 +287,52 @@ public class ConnectionsController : ControllerBase
             _logger.LogError(ex, "Failed to connect to {ConnectionId}", id);
             return EntityAdministrationResults.Unhandled(ex);
         }
+    }
+
+    /// <summary>How a connect of a stored connection ended.</summary>
+    /// <param name="Found">False when no stored connection has the id; nothing was attempted.</param>
+    /// <param name="Provider">The connected provider, now the active one; null when not found or failed.</param>
+    /// <param name="Failure">The fixed code and sentence of a failure <see cref="ConnectFailureReason"/> knows.</param>
+    internal readonly record struct ConnectResult(bool Found, IMessagingProvider? Provider, (string Code, string Message)? Failure);
+
+    /// <summary>
+    /// Connects the stored connection <paramref name="id"/>, the one way the route and the connect_to tool do it: reads
+    /// it with its secret, creates the connected provider through the factory, makes it the active one with its id,
+    /// disposing the one before, and marks the connection used. A failure <see cref="ConnectFailureReason"/> knows is
+    /// answered as its fixed code and sentence and leaves the active provider as it was; any other failure throws.
+    /// </summary>
+    internal static async Task<ConnectResult> ConnectStoredAsync(string id, IConnectionManager connectionManager, IProviderFactory providerFactory, ILogger logger)
+    {
+        var connection = await connectionManager.GetConnectionWithSecretAsync(id);
+        if (connection == null)
+            return new ConnectResult(false, null, null);
+
+        logger.LogInformation("Connecting to {Name} ({ProviderType})", connection.Name, connection.ProviderType);
+
+        IMessagingProvider provider;
+        try
+        {
+            provider = await providerFactory.CreateConnectedProviderAsync(connection);
+        }
+        catch (Exception ex) when (ConnectFailureReason(ex) is { } reason)
+        {
+            logger.LogError(ex, "Failed to connect to {ConnectionId} ({Reason})", id, reason.Code);
+            return new ConnectResult(true, null, reason);
+        }
+
+        await SetCurrentProviderAsync(provider, id);
+
+        try
+        {
+            await connectionManager.MarkUsedAsync(id);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not record the last use of connection {ConnectionId} ({ExceptionType})", id, ex.GetType().Name);
+        }
+
+        logger.LogInformation("Connected successfully to {Target}", provider.CurrentTarget);
+        return new ConnectResult(true, provider, null);
     }
 
     /// <summary>
@@ -357,7 +387,7 @@ public class ConnectionsController : ControllerBase
                 var providerType = provider.ProviderType;
 
                 // Clear and dispose the provider
-                await SetCurrentProviderAsync(null);
+                await SetCurrentProviderAsync(null, null);
 
                 _logger.LogInformation("Disconnected from {Target} ({ProviderType})", target, providerType);
 
@@ -388,7 +418,13 @@ public class ConnectionsController : ControllerBase
     [HttpGet("status")]
     public ActionResult GetStatus()
     {
-        var provider = CurrentProvider;
+        IMessagingProvider? provider;
+        string? connectionId;
+        lock (_providerLock)
+        {
+            provider = _currentProvider;
+            connectionId = _currentConnectionId;
+        }
 
         if (provider != null && provider.IsConnected)
         {
@@ -398,7 +434,8 @@ public class ConnectionsController : ControllerBase
                 target = provider.CurrentTarget,
                 providerType = provider.ProviderType.ToString(),
                 // Keep @namespace for backward compatibility
-                @namespace = provider.CurrentTarget
+                @namespace = provider.CurrentTarget,
+                connectionId
             });
         }
 
@@ -500,10 +537,24 @@ public class ConnectionsController : ControllerBase
     /// </summary>
     public static IMessagingProvider? GetCurrentProvider() => CurrentProvider;
 
+    /// <summary>
+    /// The active provider and the id of the stored connection it was connected from, read together; both null when
+    /// nothing is connected, the id null when its stored connection was deleted.
+    /// </summary>
+    internal static (IMessagingProvider? Provider, string? ConnectionId) GetCurrent()
+    {
+        lock (_providerLock) { return (_currentProvider, _currentConnectionId); }
+    }
+
     [HttpDelete("{id}")]
     public async Task<ActionResult> DeleteConnection(string id)
     {
+        _mcpSettings.Withdraw([id]);
         await _connectionManager.DeleteConnectionAsync(id);
+        lock (_providerLock)
+        {
+            if (_currentConnectionId == id) _currentConnectionId = null;
+        }
         return NoContent();
     }
 
@@ -752,7 +803,7 @@ public class ConnectionsController : ControllerBase
             if (provider != null)
             {
                 _logger.LogInformation("Disconnecting active {ProviderType} provider before clear", provider.ProviderType);
-                await SetCurrentProviderAsync(null);
+                await SetCurrentProviderAsync(null, null);
             }
 
             // Also disconnect legacy service for backward compatibility
@@ -762,6 +813,7 @@ public class ConnectionsController : ControllerBase
                 await _serviceBusService.DisconnectAsync();
             }
 
+            _mcpSettings.Withdraw(_mcpSettings.Current.Connections.Keys);
             var (connectionCount, groupCount) = await _connectionManager.ClearAllAsync();
 
             _logger.LogInformation(

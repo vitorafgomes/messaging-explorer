@@ -2,8 +2,8 @@
 title: "Web App: Hot spots and known gaps"
 version: "1.0"
 date: 2026-11-13
-updated: 2026-11-16
-changes: "2026-11-16: the possible-duplicate gap is now the second guard only. v1.0: split out of the Web App service page"
+updated: 2026-11-20
+changes: "2026-11-20: quitting asks while a resubmit runs. 2026-11-16: the possible-duplicate gap is now the second guard only. v1.0: split out of the Web App service page"
 page_type: service
 status: active
 description: "Read when a change touches a hot spot of the app or a gap recorded as it was found."
@@ -51,7 +51,7 @@ One topic of [[pages/services/web-app|Web App]]; the map lists the others.
 - If `getApiSecret()` fails the app silently sends unauthenticated requests: `web-app/src/app/core/services/api.service.ts#electronAPI`.
 - `ProviderShellComponent` silently renders nothing when no component is registered (TODO in code): `web-app/src/app/features/entities/provider-shell.component.ts#componentType`.
 - A name that is exactly `.` or `..` cannot be sent as a path segment: `encodeURIComponent` leaves dots alone and the browser's URL parser resolves `.`, `..` and their `%2E` forms as dot segments. Azure names cannot take that form; RabbitMQ names can, and deleting a subscription named `..` under topic `t` would become `DELETE /api/topics/t/` and delete the topic (read from the URL standard and the route table, not executed). `apiPath` does not refuse such a value today: `web-app/src/app/core/services/api-path.ts#apiPath`.
-- An automatic resubmit run lives in the renderer's memory: a reload or quitting the app ends it without asking, and its report is lost unless saved; the prototype draws a question on quit (`web-app/src/app/core/services/resubmit-run.service.ts#ResubmitRunService`). After a connect that failed, no run starts until the status read again from the API arrives; if that read fails too, none starts until a later status does.
+- An automatic resubmit run lives in the renderer's memory: a reload ends it without asking, and its report is lost unless saved (`web-app/src/app/core/services/resubmit-run.service.ts#ResubmitRunService`). Quitting the desktop app asks first since 2026-11-20 ([[pages/services/electron-shell/ipc-and-tray]]). After a connect that failed, no run starts until the status read again from the API arrives; if that read fails too, none starts until a later status does.
 - The server's resubmit reaches only a few hundred messages past the head of the dead-letter queue. A filtered run, or one that leaves refused messages behind, fills the head with messages it does not send, and the run ends as failed once a message stays not found after one wait, short of N. A message "Not found within scan window" is recognised by the provider's English text, like a possible duplicate (`web-app/src/app/core/services/bulk-operations.service.ts#isNotFoundInScanWindow`): a change of that text would make the run continue past such messages again. The wait and the second try are unit-tested with a fake clock only, not against a broker: `web-app/src/app/core/services/resubmit-run.service.ts#waitForLocks`.
 - The Settings screen's cannot-update and ready panels use the tertiary and primary containers because the theme defines no warning or success colour; the artboard draws warning and success (`web-app/src/app/features/settings/settings.component.scss#.blocked-panel {`).
 - The toolbar at the minimum window width was seen once in a headless browser at 1000 px, disconnected, light and dark; with a long namespace connected, with an update button, and in Electron on each system it was not: `web-app/src/app/app.html`.

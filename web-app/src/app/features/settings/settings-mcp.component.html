@@ -1,0 +1,261 @@
+@if (!absent() && (state() || loadError())) {
+  <section class="group" aria-label="MCP server">
+    <div class="group-head">
+      <h2>
+        <svg class="mcp-mark" aria-hidden="true" width="22" height="22" viewBox="0 0 180 180" fill="none" stroke="currentColor" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"><path d="M18 84.8528L85.8822 16.9706C95.2548 7.59798 110.451 7.59798 119.823 16.9706C129.196 26.3431 129.196 41.5391 119.823 50.9117L68.5581 102.177"></path><path d="M69.2652 101.47L119.823 50.9117C129.196 41.5391 144.392 41.5391 153.765 50.9117L154.118 51.2652C163.491 60.6378 163.491 75.8338 154.118 85.2063L92.7248 146.6C89.6006 149.724 89.6006 154.789 92.7248 157.913L105.331 170.52"></path><path d="M102.853 33.9411L52.6482 84.1457C43.2756 93.5183 43.2756 108.714 52.6482 118.087C62.0208 127.459 77.2167 127.459 86.5893 118.087L136.794 67.8822"></path></svg>
+        MCP server
+      </h2>
+      @if (state()) {
+        <p class="note">{{ summary() }}</p>
+      }
+    </div>
+
+    <div class="group-body">
+      @if (loadError()) {
+        <div class="inline-error" role="alert">
+          {{ loadError() }}
+          <button mat-stroked-button type="button" (click)="load()"><mat-icon aria-hidden="true">refresh</mat-icon>Retry</button>
+        </div>
+      } @else if (state(); as s) {
+        <div class="setting-row top">
+          <span class="row-label">Server</span>
+          <div class="row-body">
+            <button mat-stroked-button type="button" role="switch" class="switch" [class.on]="s.enabled" [attr.aria-checked]="s.enabled" (click)="toggle()">
+              <span class="switch-mark" aria-hidden="true">
+                <svg class="mcp-mark" width="22" height="22" viewBox="0 0 180 180" fill="none" stroke="currentColor" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"><path d="M18 84.8528L85.8822 16.9706C95.2548 7.59798 110.451 7.59798 119.823 16.9706C129.196 26.3431 129.196 41.5391 119.823 50.9117L68.5581 102.177"></path><path d="M69.2652 101.47L119.823 50.9117C129.196 41.5391 144.392 41.5391 153.765 50.9117L154.118 51.2652C163.491 60.6378 163.491 75.8338 154.118 85.2063L92.7248 146.6C89.6006 149.724 89.6006 154.789 92.7248 157.913L105.331 170.52"></path><path d="M102.853 33.9411L52.6482 84.1457C43.2756 93.5183 43.2756 108.714 52.6482 118.087C62.0208 127.459 77.2167 127.459 86.5893 118.087L136.794 67.8822"></path></svg>
+                @if (!s.enabled) {
+                  <svg class="strike" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4l16 16"></path></svg>
+                }
+              </span>
+              {{ s.enabled ? 'Active' : 'Inactive' }}
+            </button>
+            <span role="status">
+              @if (s.enabled) {
+                Active. Answering on this computer only.
+              } @else {
+                Inactive. No assistant can reach this app, and the choices below are kept for when it is turned on.
+              }
+            </span>
+            @if (errors()['server']) {
+              <p class="inline-error" role="alert">{{ errors()['server'] }}</p>
+            }
+            <p class="warning">
+              <mat-icon aria-hidden="true">warning</mat-icon>
+              <span><strong>What an assistant reads leaves this computer.</strong> The names of entities, the counts and the bodies of the messages it reads are sent to the assistant and to the company that runs it. A connection string, a password or a key is never given to it.</span>
+            </p>
+          </div>
+        </div>
+
+        @if (s.enabled) {
+          <div class="setting-row top">
+            <span class="row-label">Connect an assistant</span>
+            <div class="row-body">
+              <span class="note">Add this to the configuration of the assistant. The server answers only on this computer and only while the app is open.</span>
+              <div class="actions">
+                <button mat-stroked-button type="button" (click)="createToken()">
+                  <mat-icon aria-hidden="true">key</mat-icon>{{ s.hasToken ? 'Replace the token' : 'Create a token' }}
+                </button>
+                @if (s.hasToken && s.tokenCreatedAt && !token()) {
+                  <span class="muted">A token was created {{ s.tokenCreatedAt | date: 'medium' }}. Replacing it ends that one.</span>
+                }
+              </div>
+              @if (token()) {
+                <div class="token" data-testid="mcp-token">
+                  <code class="mono" aria-label="The token">{{ token() }}</code>
+                  <button mat-stroked-button type="button" aria-label="Copy the token" (click)="copy(token(), 'The token')">
+                    <mat-icon aria-hidden="true">content_copy</mat-icon>Copy
+                  </button>
+                  <span class="note">Copy it now. It is not shown again.</span>
+                </div>
+              }
+              @if (errors()['token']) {
+                <p class="inline-error" role="alert">{{ errors()['token'] }}</p>
+              }
+              <pre class="config mono">{{ configuration() }}</pre>
+              <button mat-stroked-button type="button" (click)="copy(configuration(), 'The configuration')">Copy the configuration</button>
+            </div>
+          </div>
+        }
+
+        <div class="setting-row top">
+          <span class="row-label">Connections</span>
+          <div class="row-body">
+            <span class="note">Only the connections listed here exist for an assistant.@if (canAsk()) { A production connection always asks you first.}</span>
+            <ul class="offered" [class.dimmed]="!s.enabled" aria-label="Connections an assistant may use">
+              @for (row of offered(); track row.id) {
+                <li>
+                  <div class="who">
+                    <span class="name" [class.mono]="!row.found && !known()">{{ row.name }}
+                      @if (row.production) {
+                        <span class="prod-chip">Production</span>
+                      }
+                    </span>
+                    @if (row.found) {
+                      <span class="where">{{ row.found.where }}</span>
+                      <span class="asks">{{ row.asks }}</span>
+                    }
+                  </div>
+                  <div class="row-actions">
+                    @if (row.found) {
+                      <div class="levels" role="group" [attr.aria-label]="'What an assistant may do on ' + row.name">
+                        @for (l of levels(); track l.level) {
+                          <button mat-button type="button" [class.on]="l.level === row.level" [attr.aria-pressed]="l.level === row.level"
+                                  (click)="setLevel(row.id, row.name, l.level, row.level)">{{ l.label }}</button>
+                        }
+                      </div>
+                    }
+                    <button mat-button type="button" class="remove" [attr.aria-label]="'Remove ' + row.name" (click)="remove(row.id, row.name)">Remove</button>
+                  </div>
+                  @if (row.canNeverAsk) {
+                    <mat-checkbox class="never-ask" [checked]="row.neverAsk" (change)="setNeverAsk(row.id, row.name, row.level, $event)">A local test broker: do not ask me before a send</mat-checkbox>
+                  }
+                </li>
+              }
+            </ul>
+            @if (offered().length === 0) {
+              <span class="empty" data-testid="mcp-none-offered">No connection is offered. An assistant sees none.</span>
+            }
+            @if (errors()['names']) {
+              <div class="inline-error" role="alert">
+                {{ errors()['names'] }}
+                <button mat-stroked-button type="button" (click)="readConnections()"><mat-icon aria-hidden="true">refresh</mat-icon>Retry</button>
+              </div>
+            }
+            @if (errors()['connections']) {
+              <p class="inline-error" role="alert">{{ errors()['connections'] }}</p>
+            }
+            <div>
+              <button mat-stroked-button type="button" [attr.aria-expanded]="offering()" (click)="offering.set(!offering())">
+                <mat-icon aria-hidden="true">add</mat-icon>Offer a connection
+              </button>
+            </div>
+            @if (offering()) {
+              <div class="offer-panel" data-testid="mcp-offer">
+                <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                  <mat-label>Find a connection</mat-label>
+                  <input matInput type="search" placeholder="A name, a client, an environment" [value]="query()" (input)="query.set($any($event.target).value)">
+                </mat-form-field>
+                <ul aria-label="Connections not offered">
+                  @for (c of candidates(); track c.id) {
+                    <li>
+                      <div class="who">
+                        <span class="name">{{ c.name }}
+                          @if (c.production) {
+                            <span class="prod-chip">Production</span>
+                          }
+                        </span>
+                        <span class="where">{{ c.where }}</span>
+                        @if (c.production && !canAsk()) {
+                          <span class="why">A production connection can be offered once the app can ask you before each operation.</span>
+                        }
+                      </div>
+                      <button mat-stroked-button type="button" [disabled]="c.production && !canAsk()" (click)="offer(c)">{{ c.production && canAsk() ? 'Offer, after you confirm' : 'Offer' }}</button>
+                    </li>
+                  }
+                </ul>
+                @if (known() && candidates().length === 0) {
+                  <span class="muted" data-testid="mcp-no-match">No other connection matches.</span>
+                }
+                <span class="note footnote">A connection comes in at "Read".@if (canAsk()) { Offering a production connection asks you to confirm it.}</span>
+              </div>
+            }
+          </div>
+        </div>
+
+        @if (s.supports.logs) {
+          <div class="setting-row top">
+            <span class="row-label">Logs of the app</span>
+            <div class="row-body">
+              <mat-checkbox [checked]="s.logsAllowed" (change)="setLogs($event)">Let an assistant read the logs</mat-checkbox>
+              <span class="note">The lines the Logs screen shows, by level and by a word. They carry no secret, no message body and no error text of a broker, but a line can name a connection you did not offer above. Never asks you.</span>
+              @if (errors()['logs']) {
+                <p class="inline-error" role="alert">{{ errors()['logs'] }}</p>
+              }
+            </div>
+          </div>
+        }
+
+        @if (s.supports.appSettings) {
+          <div class="setting-row top">
+            <span class="row-label">Settings of the app</span>
+            <div class="row-body">
+              <mat-checkbox [checked]="!!s.appSettingsAllowed" (change)="setAppSettings($event)">Let an assistant change settings of this app</mat-checkbox>
+              <span class="note">The theme, Developer mode and the update channel. Each change shows in the list below.</span>
+              <span class="note never">Never, whatever is chosen here: this MCP server group, clearing the data, and downloading or installing an update.</span>
+              @if (errors()['appSettings']) {
+                <p class="inline-error" role="alert">{{ errors()['appSettings'] }}</p>
+              }
+            </div>
+          </div>
+        }
+
+        <div class="setting-row top">
+          <span class="row-label">What each choice allows</span>
+          <div class="row-body">
+            <div class="choices">
+              @for (choice of choices(); track choice.title) {
+                <div class="choice">
+                  <h3>{{ choice.title }}</h3>
+                  <span class="note">{{ choice.who }}</span>
+                  <span>{{ choice.what }}</span>
+                  <span class="strong">{{ choice.asks }}</span>
+                </div>
+              }
+            </div>
+            @if (beyondRead()) {
+              <span class="note">A bulk operation an assistant starts answers what happened to each message, and a message sent and not removed is reported as a possible duplicate, exactly as on the screen.</span>
+            }
+          </div>
+        </div>
+
+        <div class="setting-row top">
+          <span class="row-label">What assistants did</span>
+          <div class="row-body">
+            <span class="note">Kept in memory since the app opened. No message body and no secret is written here.</span>
+            @if (activityError()) {
+              <div class="inline-error" role="alert">
+                {{ activityError() }}
+                <button mat-stroked-button type="button" (click)="readActivity()"><mat-icon aria-hidden="true">refresh</mat-icon>Retry</button>
+              </div>
+            } @else if (activity(); as list) {
+              @if (list.length === 0) {
+                <span class="empty" data-testid="mcp-no-activity">No assistant has asked for anything since the app opened.</span>
+              } @else {
+                <div class="activity">
+                  <table mat-table [dataSource]="list" aria-label="What assistants did">
+                    <ng-container matColumnDef="time">
+                      <th mat-header-cell *matHeaderCellDef>Time</th>
+                      <td mat-cell *matCellDef="let a" class="mono" [attr.title]="a.time | date: 'medium'">{{ a.time | date: 'HH:mm:ss' }}</td>
+                    </ng-container>
+                    <ng-container matColumnDef="assistant">
+                      <th mat-header-cell *matHeaderCellDef>Assistant</th>
+                      <td mat-cell *matCellDef="let a">{{ a.assistant }}</td>
+                    </ng-container>
+                    <ng-container matColumnDef="asked">
+                      <th mat-header-cell *matHeaderCellDef>Asked for</th>
+                      <td mat-cell *matCellDef="let a">{{ a.asked }}</td>
+                    </ng-container>
+                    <ng-container matColumnDef="where">
+                      <th mat-header-cell *matHeaderCellDef>Where</th>
+                      <td mat-cell *matCellDef="let a" class="muted">{{ a.where }}</td>
+                    </ng-container>
+                    <ng-container matColumnDef="outcome">
+                      <th mat-header-cell *matHeaderCellDef>What happened</th>
+                      <td mat-cell *matCellDef="let a"><span [class]="'outcome ' + a.kind">{{ a.outcome }}</span></td>
+                    </ng-container>
+                    <tr mat-header-row *matHeaderRowDef="columns"></tr>
+                    <tr mat-row *matRowDef="let row; columns: columns"></tr>
+                  </table>
+                </div>
+              }
+              <button mat-button type="button" class="remove" (click)="clearActivity()">Clear the list</button>
+            }
+            @if (errors()['activity']) {
+              <p class="inline-error" role="alert">{{ errors()['activity'] }}</p>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  </section>
+}

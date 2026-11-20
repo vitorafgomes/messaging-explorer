@@ -132,8 +132,7 @@ Since 2026-11-13, `web-app/e2e/` drives the app in Chromium with Playwright agai
     - Not checked yet, then Check now: up to date; then an available version, in the screen and as the toolbar link.
     - Opens Clear all data, whose button is disabled until the words are typed, and cancels it; nothing is cleared.
   - Connections dialogs, last: screenshots only (`web-app/e2e/ui-dialogs.e2e.ts#Connections dialogs as Connections.dc.html draws them`).
-- **Known defects are pinned as expected failures.** A flow that meets a recorded defect asserts what works. The correct behaviour sits in its own test, marked `test.fail` with the defect in one line. The suite stays green while the defect stands and turns red on the day it is fixed, when the mark is removed. Three are pinned:
-  - The Connections screen loses the Connected mark when it reloads its list, because Connect never stores `IsConnected`.
+- **Known defects are pinned as expected failures.** A flow that meets a recorded defect asserts what works. The correct behaviour sits in its own test, marked `test.fail` with the defect in one line. The suite stays green while the defect stands and turns red on the day it is fixed, when the mark is removed. None is pinned today: the last, the Connected mark of the Connections screen, was fixed on 2026-11-19.
 - **Screenshots** go to `web-app/dist/e2e/screenshots/` as `<screen>-<broker>-<light|dark>.png`, 1280 by 800, cleared at the start of each run. The dark one is taken by applying the theme the way `ThemeService` does, the `dark-theme` class and `app-theme` in localStorage, with no reload, so a dialog stays open (`web-app/e2e/fixtures.ts#setDark`).
 - **Not covered, and why:**
   - The emulator applies a status, or frees a session lock, a moment late; tests wait (`src/ServiceBusExplorer.IntegrationTests/AzureServiceBusProviderTests.cs#StatusAppliedAsync`).

@@ -199,11 +199,21 @@ export class ConnectionService {
     this.readStatus().subscribe();
   }
 
-  /** Reads the status from the API and publishes it, with the same rule as {@link refreshStatus}. */
+  /** Reads the status from the API without publishing it, for a caller that waits for it to change. */
+  peekStatus(): Observable<ConnectionStatus> {
+    return this.api.get<ConnectionStatus>('connections/status');
+  }
+
+  /**
+   * Reads the status from the API and publishes it, with the same rule as {@link refreshStatus};
+   * when the API is connected and names the stored connection that is active, that id is taken.
+   */
   readStatus(): Observable<ConnectionStatus> {
     const connectedTarget = this.connectionStatusSubject.value.namespace;
     return this.api.get<ConnectionStatus>('connections/status').pipe(tap(status => {
-      if (!status.connected || status.namespace !== connectedTarget) {
+      if (status.connected && status.connectionId) {
+        this.currentConnectionId = status.connectionId;
+      } else if (!status.connected || status.namespace !== connectedTarget) {
         this.currentConnectionId = null;
       }
       this.connectionStatusSubject.next(status);

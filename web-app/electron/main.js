@@ -4,7 +4,7 @@ const { spawn } = require('child_process');
 const { autoUpdater } = require('electron-updater');
 const crypto = require('crypto');
 const Store = require('electron-store');
-const { dataFilePath, showDataFile, openDevTools, isSafeExternalUrl, normalizeUpdateChannel, applyUpdateChannel, waitForHealth, stopProcess, applicationMenuTemplate, mainWindowOptions, shellShortcut, selfUpdateBlocker, configureAutoUpdate, readUpdateVersions, installUpdateVersion, backupDataFile, saveExportFile, createShellLog, captureConsole, downloadAgreedUpdate, followFoundVersion } = require('./shell-helpers');
+const { dataFilePath, showDataFile, openDevTools, acceptActiveRuns, quitDecision, isSafeExternalUrl, normalizeUpdateChannel, applyUpdateChannel, waitForHealth, stopProcess, applicationMenuTemplate, mainWindowOptions, shellShortcut, selfUpdateBlocker, configureAutoUpdate, readUpdateVersions, installUpdateVersion, backupDataFile, saveExportFile, createShellLog, captureConsole, downloadAgreedUpdate, followFoundVersion } = require('./shell-helpers');
 
 // Generate a per-session API secret for Electron <-> .NET API authentication
 const API_SECRET = crypto.randomBytes(32).toString('hex');
@@ -812,8 +812,30 @@ app.whenReady().then(() => {
   });
 });
 
-// Quit properly
-app.on('before-quit', () => {
+// How many automatic resubmits the page runs, and whether the quit under way installs an update
+let activeRuns = 0;
+let quittingForUpdate = false;
+
+// electron-updater's quitAndInstall emits this on electron's own autoUpdater, not on its own object
+require('electron').autoUpdater.on('before-quit-for-update', () => {
+  quittingForUpdate = true;
+});
+
+app.on('render-process-gone', (event, webContents) => {
+  if (mainWindow && webContents === mainWindow.webContents) activeRuns = 0;
+});
+
+ipcMain.on('set-active-runs', (event, count) => {
+  activeRuns = acceptActiveRuns(event.sender, mainWindow, count, activeRuns);
+});
+
+// Quit properly: while a resubmit runs, ask first, since quitting stops it
+app.on('before-quit', (event) => {
+  if (quitDecision({ activeRuns, forUpdate: quittingForUpdate, alreadyQuitting: app.isQuitting === true, ask: (question) => dialog.showMessageBoxSync(question) }) === 'cancel') {
+    event.preventDefault();
+    showAndFocusWindow();
+    return;
+  }
   app.isQuitting = true;
   if (apiProcess && apiProcess.exitCode === null && apiProcess.signalCode === null) {
     console.log('[beforeQuit] Terminating API process with PID:', apiProcess.pid);
