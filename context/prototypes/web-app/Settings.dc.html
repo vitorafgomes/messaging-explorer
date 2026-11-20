@@ -564,6 +564,82 @@ input::placeholder{color:currentColor;opacity:.72}
       </div>
     </section>
 
+    <section aria-label="Local test brokers" style="display: flex; gap: 16px 32px; flex-wrap: wrap; padding: 24px 0; border-top: 1px solid {{t.outlineVariant}}">
+      <div style="flex: 0 0 200px">
+        <h2 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">Local test brokers</h2>
+        <p style="margin: 4px 0 0; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">A broker to try the app with, started in Docker when you ask. Nothing is installed on this computer.</p>
+        <span style="display: inline-flex; align-items: center; margin-top: 8px; height: 20px; padding: 0 8px; border: 1px dashed {{t.outline}}; border-radius: 4px; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}; white-space: nowrap">Design, not built</span>
+      </div>
+      <div style="display: flex; flex-direction: column; flex: 1 1 520px; min-width: 0">
+        <div style="display: flex; align-items: flex-start; gap: 8px 12px; flex-wrap: wrap; min-height: 48px; padding: 12px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+          <span style="flex: 0 0 168px; font-weight: 500; padding-top: 6px">Docker</span>
+          <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; flex: 1 1 320px; min-width: 0">
+            <span>{{lb.docker}}</span>
+            <sc-if value="{{lb.noDocker}}" hint-placeholder-val="{{false}}">
+              <section aria-label="Docker is needed" style="display: flex; align-items: flex-start; gap: 12px; width: 100%; box-sizing: border-box; padding: 12px 16px; border-radius: 8px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}">
+                <span><strong>These brokers run only in Docker.</strong> Install Docker and start it, then come back: this app installs nothing and runs no broker outside a container. <span style="text-decoration: underline">How to install Docker</span></span>
+              </section>
+            </sc-if>
+          </div>
+        </div>
+        <div style="display: flex; align-items: flex-start; gap: 8px 12px; flex-wrap: wrap; min-height: 48px; padding: 12px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+          <span style="flex: 0 0 168px; font-weight: 500; padding-top: 6px">{{lb.sb.name}}</span>
+          <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; flex: 1 1 320px; min-width: 0">
+            <button type="button" role="switch" aria-checked="{{lb.sb.checked}}" aria-label="{{lb.sb.switchLabel}}" disabled="{{lb.sb.locked}}" onClick="{{lb.sb.toggle}}" class="hov" style="display: inline-flex; align-items: center; gap: 10px; height: 40px; padding: 0 18px 0 12px; border: 1px solid {{t.outline}}; border-radius: 999px; background: {{lb.sb.switchBg}}; color: {{lb.sb.switchFg}}; opacity: {{lb.sb.opacity}}; font: inherit; font-weight: 600; cursor: pointer">{{lb.sb.switchText}}</button>
+            <span>{{lb.sb.status}}</span>
+            <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">{{lb.sb.what}}</span>
+            <sc-if value="{{lb.sb.license}}" hint-placeholder-val="{{false}}">
+              <label style="display: flex; align-items: center; gap: 10px; min-height: 32px; cursor: pointer">
+                <input type="checkbox" checked="{{lb.sb.accepted}}" onChange="{{lb.sb.accept}}" style="width: 18px; height: 18px; margin: 0; accent-color: {{t.primary}}">
+                <span>I accept the license of the Azure Service Bus emulator and of the database it runs on</span>
+              </label>
+              <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">The license is Microsoft's and it is yours to accept: this app never accepts it for you. <span style="color: {{t.primary}}; text-decoration: underline">Read the license</span></span>
+            </sc-if>
+            <sc-if value="{{lb.sb.failed}}" hint-placeholder-val="{{false}}">
+              <section aria-label="Error" style="display: flex; align-items: flex-start; gap: 12px; width: 100%; box-sizing: border-box; padding: 12px 16px; border-radius: 8px; background: {{t.errorContainer}}; color: {{t.onErrorContainer}}">
+                <span style="flex: 1 1 240px"><strong>It did not start.</strong> {{lb.sb.error}}</span>
+                <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; white-space: nowrap; cursor: pointer; border-color: currentColor; color: inherit">Try again</button>
+              </section>
+            </sc-if>
+            <sc-if value="{{lb.sb.running}}" hint-placeholder-val="{{false}}">
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+                <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; white-space: nowrap; cursor: pointer">Open in Connections</button>
+                <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; white-space: nowrap; cursor: pointer; color: {{t.error}}">Delete its data</button>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+        <div style="display: flex; align-items: flex-start; gap: 8px 12px; flex-wrap: wrap; min-height: 48px; padding: 12px 0; border-bottom: 1px solid {{t.outlineVariant}}">
+          <span style="flex: 0 0 168px; font-weight: 500; padding-top: 6px">{{lb.rabbit.name}}</span>
+          <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; flex: 1 1 320px; min-width: 0">
+            <button type="button" role="switch" aria-checked="{{lb.rabbit.checked}}" aria-label="{{lb.rabbit.switchLabel}}" disabled="{{lb.rabbit.locked}}" onClick="{{lb.rabbit.toggle}}" class="hov" style="display: inline-flex; align-items: center; gap: 10px; height: 40px; padding: 0 18px 0 12px; border: 1px solid {{t.outline}}; border-radius: 999px; background: {{lb.rabbit.switchBg}}; color: {{lb.rabbit.switchFg}}; opacity: {{lb.rabbit.opacity}}; font: inherit; font-weight: 600; cursor: pointer">{{lb.rabbit.switchText}}</button>
+            <span>{{lb.rabbit.status}}</span>
+            <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">{{lb.rabbit.what}}</span>
+            <sc-if value="{{lb.rabbit.license}}" hint-placeholder-val="{{false}}">
+              <label style="display: flex; align-items: center; gap: 10px; min-height: 32px; cursor: pointer">
+                <input type="checkbox" checked="{{lb.rabbit.accepted}}" onChange="{{lb.rabbit.accept}}" style="width: 18px; height: 18px; margin: 0; accent-color: {{t.primary}}">
+                <span>I accept the license of the Azure Service Bus emulator and of the database it runs on</span>
+              </label>
+              <span style="font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">The license is Microsoft's and it is yours to accept: this app never accepts it for you. <span style="color: {{t.primary}}; text-decoration: underline">Read the license</span></span>
+            </sc-if>
+            <sc-if value="{{lb.rabbit.failed}}" hint-placeholder-val="{{false}}">
+              <section aria-label="Error" style="display: flex; align-items: flex-start; gap: 12px; width: 100%; box-sizing: border-box; padding: 12px 16px; border-radius: 8px; background: {{t.errorContainer}}; color: {{t.onErrorContainer}}">
+                <span style="flex: 1 1 240px"><strong>It did not start.</strong> {{lb.rabbit.error}}</span>
+                <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; white-space: nowrap; cursor: pointer; border-color: currentColor; color: inherit">Try again</button>
+              </section>
+            </sc-if>
+            <sc-if value="{{lb.rabbit.running}}" hint-placeholder-val="{{false}}">
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+                <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; white-space: nowrap; cursor: pointer">Open in Connections</button>
+                <button type="button" class="hov" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; box-sizing: border-box; padding: 0 16px; border: 1px solid {{t.outline}}; border-radius: 999px; background: transparent; color: {{t.primary}}; font: inherit; font-weight: 500; white-space: nowrap; cursor: pointer; color: {{t.error}}">Delete its data</button>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+        <p style="margin: 8px 0 0; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Each broker starts only when you turn it on, one without the other, and nothing starts with the app. Both listen on this computer only. A broker stops when you turn it off or quit the app; its data stays until you delete it. The first start downloads the images: about 2 GB for the Service Bus emulator, about 200 MB for RabbitMQ.</p>
+      </div>
+    </section>
+
     <section aria-label="Developer" style="display: flex; gap: 16px 32px; flex-wrap: wrap; padding: 24px 0; border-top: 1px solid {{t.outlineVariant}}">
       <div style="flex: 0 0 200px">
         <h2 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500">Developer</h2>
@@ -741,7 +817,7 @@ input::placeholder{color:currentColor;opacity:.72}
   </sc-if>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Preview"},"state":{"editor":"enum","options":["upToDate","available","downloading","ready","failed","cannotSelfUpdate","bugReport","clearConfirm"],"default":"upToDate","section":"Preview"},"environment":{"editor":"enum","options":["production","development"],"default":"production","section":"Preview"},"mcp":{"editor":"enum","options":["active","inactive","offerConnection","askedToRead","askedToSend","askedToDelete"],"default":"active","section":"Preview"},"$preview":{"width":1280,"height":3960}}'>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Preview"},"state":{"editor":"enum","options":["upToDate","available","downloading","ready","failed","cannotSelfUpdate","bugReport","clearConfirm"],"default":"upToDate","section":"Preview"},"environment":{"editor":"enum","options":["production","development"],"default":"production","section":"Preview"},"mcp":{"editor":"enum","options":["active","inactive","offerConnection","askedToRead","askedToSend","askedToDelete"],"default":"active","section":"Preview"},"brokers":{"editor":"enum","options":["off","noDocker","starting","running","failed"],"default":"off","section":"Preview"},"$preview":{"width":1280,"height":4560}}'>
 const LIGHT = { surface:'#f9f9ff', surfaceLow:'#f2f3fa', surfaceContainer:'#ecedf4', surfaceHigh:'#e6e8ee',
   onSurface:'#191c20', onSurfaceVariant:'#43474e', outline:'#73777f', outlineVariant:'#c3c6cf',
   primary:'#005cbb', onPrimary:'#ffffff', primaryContainer:'#d7e3ff', onPrimaryContainer:'#001b3f',
@@ -821,6 +897,38 @@ class Component extends DCLogic {
     const snack = dark
       ? { bg: LIGHT.surface, fg: LIGHT.onSurface, action: LIGHT.primary }
       : { bg: LIGHT.onSurface, fg: LIGHT.surface, action: DARK.primary };
+
+    const lbView = this.props.brokers ?? 'off';
+    const lbOn = s.lbOn ?? {};
+    const lbAccepted = s.lbAccepted ?? (lbView === 'starting' || lbView === 'running');
+    const lbBroker = (key, name, what, license, connection, failure) => {
+      const noDocker = lbView === 'noDocker';
+      const fromView = lbView === 'running' || (lbView === 'starting' && key === 'sb');
+      const on = !noDocker && (lbOn[key] ?? fromView);
+      const starting = on && lbView === 'starting';
+      const failed = lbView === 'failed' && key === 'rabbit' && lbOn[key] === undefined;
+      const locked = noDocker || (license && !lbAccepted);
+      return {
+        name, what, license, accepted: lbAccepted, accept: () => this.setState({ lbAccepted: !lbAccepted }),
+        checked: on ? 'true' : 'false', locked, opacity: locked ? 0.5 : 1,
+        switchLabel: 'Run a local ' + name + ' in Docker',
+        switchText: starting ? 'Starting' : on ? 'Running' : 'Off',
+        switchBg: on ? t.secondaryContainer : 'transparent', switchFg: on ? t.onSecondaryContainer : t.onSurface,
+        toggle: () => { if (!locked) this.setState({ lbOn: { ...lbOn, [key]: !on } }); },
+        status: noDocker ? 'Needs Docker.'
+          : failed ? 'Off.'
+          : starting ? 'Starting: downloading the images, then waiting for the broker to answer. This can take a few minutes the first time.'
+          : on ? 'Running since 10:41. The connection "' + connection + '" is in Connections.'
+          : license && !lbAccepted ? 'Off. Accept the license below to turn it on.' : 'Off.',
+        failed, error: failure, running: on && !starting,
+      };
+    };
+    const lb = {
+      noDocker: lbView === 'noDocker',
+      docker: lbView === 'noDocker' ? 'Docker was not found on this computer, or it is not running.' : 'Docker is running on this computer.',
+      sb: lbBroker('sb', 'Azure Service Bus', 'The emulator Microsoft publishes, with the database it needs. It is an emulator: it reports no message counts and does not fail the way the real service does.', true, 'Local Service Bus', ''),
+      rabbit: lbBroker('rabbit', 'RabbitMQ', 'A real RabbitMQ with its management screen. The app writes a password of its own for it and never uses the guest account.', false, 'Local RabbitMQ', 'Port 5672 is in use by another program on this computer. Stop that program, or the RabbitMQ it belongs to, and try again.'),
+    };
 
     const mcpView = this.props.mcp ?? 'active';
     const mcpOn = s.mcpOn ?? (mcpView !== 'inactive');
@@ -932,6 +1040,7 @@ class Component extends DCLogic {
       agreedUp: !!s.agreedUp, toggleAgreeUp: () => this.setState({ agreedUp: !s.agreedUp }), cannotDownload: !s.agreedUp,
       upBg: s.agreedUp ? t.primary : t.surfaceHigh, upFg: s.agreedUp ? t.onPrimary : t.onSurfaceVariant, upCursor: s.agreedUp ? 'pointer' : 'not-allowed',
       retryUpdate: () => this.setState({ upd: 'downloading' }),
+      lb,
       devMode, toggleDev: () => this.setState({ dev: !devMode }),
       historyOn, toggleHistory: () => this.setState({ history: !historyOn }),
       keepOpts: seg([['1', '1 day'], ['7', '7 days'], ['30', '30 days'], ['90', '90 days']], keep, v => this.setState({ keep: v })),

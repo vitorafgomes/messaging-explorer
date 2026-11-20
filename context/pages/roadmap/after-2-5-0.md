@@ -63,6 +63,7 @@ The owner wants an assistant to reach the brokers through the app, the way an ID
 
 - The Monitoring history in SQLite, decided ([[pages/roadmap/settings-data-and-updates]]).
 - Send many messages, and the sort of the loaded list. **The artboards wait for the owner's opinion.**
+- **Local test brokers, asked on 2026-11-20.** A group in Settings that starts an Azure Service Bus emulator and a RabbitMQ in Docker, each by its own switch, off by default, and adds its connection. The owner's conditions: Docker only, nothing installed on the computer; neither starts unless the user turns it on; without Docker the switches cannot be turned on and the group says why. The emulator's license is accepted by the user, never by the app. Drawn on the Settings artboard as "Local test brokers", design, not built. **Waits for the owner's word on the drawing.**
 - Keep the sign-in across launches; a second confirmation on Restart to Update; the steps of Add Connection clickable. **Owner decisions.**
 
 ## 6. Performance and cleanup
