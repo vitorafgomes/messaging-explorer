@@ -5,8 +5,8 @@ using ServiceBusExplorer.Core.Services;
 namespace ServiceBusExplorer.Api.Controllers;
 
 /// <summary>
-/// What the MCP server group of Settings reads and changes, and the requests of assistants waiting for the user's
-/// answer. It answers the token once, at creation, and never its hash.
+/// What the MCP server group of Settings reads and changes, the requests of assistants waiting for the user's
+/// answer, and those waiting for the app to read or change its settings. It answers the token once, at creation, and never its hash.
 /// </summary>
 [ApiController]
 [Route("api/mcp")]
@@ -14,6 +14,7 @@ public class McpController(
     McpSettingsStore settings,
     McpActivityLog activity,
     McpRequests requests,
+    McpAppRequests appRequests,
     IConnectionManager connections,
     IConnectionGroupManager groups) : ControllerBase
 {
@@ -74,6 +75,33 @@ public class McpController(
         return Ok(await StateAsync());
     }
 
+    /// <summary>Allows or refuses the tools that read and change settings of the app; a body without allowed is 400.</summary>
+    [HttpPut("app-settings")]
+    public async Task<ActionResult<McpState>> SetAppSettingsAllowed([FromBody] McpAppSettingsRequest request)
+    {
+        if (request.Allowed is not { } allowed) return BadRequest(new { message = "allowed must be true or false." });
+        settings.SetAppSettingsAllowed(allowed);
+        return Ok(await StateAsync());
+    }
+
+    /// <summary>The requests of assistants waiting for the app to read or change its settings, oldest first.</summary>
+    [HttpGet("app-requests")]
+    public ActionResult<IReadOnlyList<McpAppRequest>> GetAppRequests() => Ok(appRequests.Waiting());
+
+    /// <summary>The answer of the app to a body that does not say what it did and what its settings are.</summary>
+    public const string InvalidAppAnswer = "The answer is not valid.";
+
+    /// <summary>
+    /// The app's answer to a waiting request; 400 when the body is not valid, and the request keeps waiting; 404 when it
+    /// is not waiting any more.
+    /// </summary>
+    [HttpPost("app-requests/{id}/answer")]
+    public IActionResult AnswerAppRequest(string id, [FromBody] McpAppAnswer answer)
+    {
+        if (!McpAppRequests.IsValid(answer)) return BadRequest(new { message = InvalidAppAnswer });
+        return appRequests.Answer(id, answer) ? NoContent() : NotFound(new { message = "This request is no longer waiting." });
+    }
+
     /// <summary>The requests of assistants waiting for the user's answer, oldest first.</summary>
     [HttpGet("requests")]
     public ActionResult<IReadOnlyList<McpPendingRequest>> GetRequests() => Ok(requests.Waiting());
@@ -123,8 +151,9 @@ public class McpController(
             current.TokenHash is not null,
             current.TokenCreatedAt,
             McpSettingsStore.Levels,
-            new McpSupports(Logs: true, AppSettings: false, Confirmation: true, Entities: true),
+            new McpSupports(Logs: true, AppSettings: true, Confirmation: true, Entities: true),
             current.LogsAllowed,
+            current.AppSettingsAllowed,
             offered);
     }
 }
@@ -134,6 +163,9 @@ public sealed record McpEnabledRequest(bool Enabled);
 
 /// <summary>The body of PUT api/mcp/logs.</summary>
 public sealed record McpLogsRequest(bool Allowed);
+
+/// <summary>The body of PUT api/mcp/app-settings; a missing <paramref name="Allowed"/> is refused.</summary>
+public sealed record McpAppSettingsRequest(bool? Allowed);
 
 /// <summary>The body of PUT api/mcp/connections/{id}; a null <paramref name="NeverAsk"/> keeps the mark the connection had.</summary>
 public sealed record McpOfferRequest(string? Level, bool? NeverAsk = null);
@@ -162,4 +194,5 @@ public sealed record McpState(
     IReadOnlyList<string> Levels,
     McpSupports Supports,
     bool LogsAllowed,
+    bool AppSettingsAllowed,
     IReadOnlyList<McpOfferedConnection> Connections);

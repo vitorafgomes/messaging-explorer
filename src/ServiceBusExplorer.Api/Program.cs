@@ -135,6 +135,7 @@ builder.Services.AddSingleton(sp => new McpSettingsStore(
 builder.Services.AddSingleton<McpActivityLog>();
 builder.Services.AddSingleton(McpRequestOptions.Default);
 builder.Services.AddSingleton<McpRequests>();
+builder.Services.AddSingleton(new McpAppRequests(McpAppRequests.DefaultWait));
 builder.Services.AddSingleton<McpToolCalls>();
 builder.Services.AddMcpServer()
     .WithHttpTransport(o => o.Stateless = true)
@@ -142,7 +143,8 @@ builder.Services.AddMcpServer()
     .WithTools<McpSendTools>()
     .WithTools<McpConnectTools>()
     .WithTools<McpRemoveTools>()
-    .WithTools<McpEntityTools>();
+    .WithTools<McpEntityTools>()
+    .WithTools<McpAppSettingsTools>();
 builder.Services.AddHostedService<MonitoringBackgroundService>();
 
 // ─────────────────────────────────────────────────────────────

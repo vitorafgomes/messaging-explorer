@@ -1,3 +1,6 @@
+## [2026-11-20] feature | The MCP server reads and changes the theme, Developer mode and the update channel, when the user allowed it
+Two tools that hand the request to the app over its own list of requests, a fixed list of settings and values, no ask per change: the choice in Settings is the consent and the record shows it. [[pages/services/api/mcp-app-settings]]
+
 ## [2026-11-20] feature | The MCP server creates, changes and deletes queues, topics, subscriptions and rules, after the user allows it in the app
 Twelve tools through the routes' own bodies, always asked, a typed name before a delete, refused by capability and by the name before anybody is asked. [[pages/services/api/mcp-administering-entities]]
 

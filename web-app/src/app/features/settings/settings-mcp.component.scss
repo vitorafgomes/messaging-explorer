@@ -52,6 +52,11 @@
   font: var(--mat-sys-title-small);
 }
 
+.note.never {
+  color: var(--mat-sys-on-surface);
+  font-weight: 500;
+}
+
 .mono {
   font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace;
 }

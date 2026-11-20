@@ -62,6 +62,7 @@ function fakeApi(start: Partial<McpState> = {}, activity: McpActivity[] = ACTIVI
     put: vi.fn((path: string, body: any): Observable<unknown> => {
       if (path === 'mcp/enabled') return keep({ ...state, enabled: body.enabled });
       if (path === 'mcp/logs') return keep({ ...state, logsAllowed: body.allowed });
+      if (path === 'mcp/app-settings') return keep({ ...state, appSettingsAllowed: body.allowed });
       const id = decodeURIComponent(path.split('/')[2]);
       const was = state.connections.find(c => c.connectionId === id);
       const next = { ...was, connectionId: id, level: body.level, ...(body.neverAsk === undefined ? {} : { neverAsk: body.neverAsk }) };
@@ -210,6 +211,25 @@ describe('SettingsMcpComponent: the MCP server group of Settings, as Settings.dc
       (row('Logs of the app')?.querySelector('input[type="checkbox"]') as HTMLInputElement).click();
       await new Promise(r => setTimeout(r));
       expect(api.put.mock.calls[0], 'ticking it is PUT mcp/logs').toStrictEqual(['mcp/logs', { allowed: true }]);
+    });
+
+    it('"Settings of the app" follows "Logs of the app" when the API supports it, off as the API answers it, and ticking it is PUT mcp/app-settings', async () => {
+      const { el, row, refresh } = await render({ supports: { logs: true, appSettings: true, confirmation: false } });
+      const labels = Array.from(el.querySelectorAll('.setting-row .row-label')).map(words);
+      expect(labels.indexOf('Settings of the app'), 'the row comes right after the logs row').toBe(labels.indexOf('Logs of the app') + 1);
+      const box = () => row('Settings of the app')?.querySelector('input[type="checkbox"]') as HTMLInputElement;
+      expect(words(row('Settings of the app')?.querySelector('mat-checkbox'))).toBe('Let an assistant change settings of this app');
+      expect(Array.from(row('Settings of the app')?.querySelectorAll('.note') ?? []).map(words), 'the two notes the artboard draws, without the Monitoring history').toStrictEqual([
+        'The theme, Developer mode and the update channel. Each change shows in the list below.',
+        'Never, whatever is chosen here: this MCP server group, clearing the data, and downloading or installing an update.',
+      ]);
+      expect(box().checked, 'off while the API does not say it is allowed').toBe(false);
+
+      box().click();
+      await refresh();
+      expect(api.put.mock.calls, 'ticking it is PUT mcp/app-settings').toStrictEqual([['mcp/app-settings', { allowed: true }]]);
+      expect(TestBed.inject(McpSettingsService).state()?.appSettingsAllowed, 'the state the API answered').toBe(true);
+      expect(box().checked).toBe(true);
     });
 
     it('"Logs of the app" is absent when the API does not support it', async () => {
@@ -428,6 +448,10 @@ describe('SettingsMcpComponent: the MCP server group of Settings, as Settings.dc
       { call: 'PUT mcp/logs', arrange: a => a.put.mockReturnValueOnce(fail(500)),
         act: async v => { (v.row('Logs of the app')?.querySelector('input[type="checkbox"]') as HTMLInputElement).click(); await v.refresh(); },
         where: 'Logs of the app', text: 'The choice for the logs was not saved: the API answered 500.' },
+      { call: 'PUT mcp/app-settings', start: { supports: { logs: true, appSettings: true, confirmation: false } },
+        arrange: a => a.put.mockReturnValueOnce(fail(500, 'The settings could not be saved.')),
+        act: async v => { (v.row('Settings of the app')?.querySelector('input[type="checkbox"]') as HTMLInputElement).click(); await v.refresh(); },
+        where: 'Settings of the app', text: 'The choice for the settings of the app was not saved: The settings could not be saved.' },
       { call: 'DELETE mcp/activity', arrange: a => a.delete.mockReturnValueOnce(fail(500)),
         act: v => v.click('Clear the list'), where: 'What assistants did', text: 'The list was not cleared: the API answered 500.' },
     ];

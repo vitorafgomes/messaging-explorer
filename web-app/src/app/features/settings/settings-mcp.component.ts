@@ -264,6 +264,16 @@ export class SettingsMcpComponent {
     });
   }
 
+  setAppSettings(change: MatCheckboxChange): void {
+    this.fail('appSettings', '');
+    this.mcp.setAppSettings(change.checked).subscribe({
+      error: error => {
+        change.source.checked = !!this.state()?.appSettingsAllowed;
+        this.fail('appSettings', `The choice for the settings of the app was not saved: ${reason(error)}`);
+      },
+    });
+  }
+
   clearActivity(): void {
     this.fail('activity', '');
     this.mcp.clearActivity().subscribe({

@@ -14,6 +14,8 @@ export interface McpState {
   /** What this API can do; `entities` comes with a later phase, and an absent field is read as false. */
   supports: { logs: boolean; appSettings: boolean; confirmation: boolean; entities?: boolean };
   logsAllowed: boolean;
+  /** Whether the user lets an assistant change settings of this app; an older API leaves it out, which is read as false. */
+  appSettingsAllowed?: boolean;
   /**
    * The connections offered. The last three fields come with the confirmation window; an older API leaves them out,
    * and an absent field is read as false.
@@ -37,6 +39,25 @@ export interface McpRequest {
   danger?: boolean;
   /** The word the user types, exactly, before the request can be allowed; absent or null when none is asked. */
   typed?: { label: string; word: string } | null;
+}
+
+/** A setting an assistant may ask this app to change; null asks only for the settings as they are. */
+export type McpAppSetting = 'theme' | 'developerMode' | 'updateChannel';
+
+/** One change of a setting of this app an assistant asked for, which the app applies and answers. Its texts are shown as text. */
+export interface McpAppRequest {
+  id: string;
+  time: string;
+  assistant: string;
+  setting: McpAppSetting | null;
+  value: string | null;
+}
+
+/** What the app answers to one request of an assistant: whether the change was made, why not, and the settings after it. */
+export interface McpAppAnswer {
+  applied: boolean;
+  code: null | 'desktopOnly' | 'failed';
+  settings: { theme: 'system' | 'light' | 'dark'; developerMode: boolean; updateChannel: 'latest' | 'beta' | null };
 }
 
 /** One thing an assistant asked for, as the API kept it: no message body and no secret. */
@@ -96,6 +117,20 @@ export class McpSettingsService {
 
   setLogs(allowed: boolean): Observable<McpState> {
     return this.keep(this.api.put<McpState>('mcp/logs', { allowed }));
+  }
+
+  setAppSettings(allowed: boolean): Observable<McpState> {
+    return this.keep(this.api.put<McpState>('mcp/app-settings', { allowed }));
+  }
+
+  /** The changes of a setting of this app that wait to be applied. An older API answers 404, which reaches the caller. */
+  appRequests(): Observable<McpAppRequest[]> {
+    return this.api.get<McpAppRequest[]>('mcp/app-requests');
+  }
+
+  /** Answers one change of a setting; a 404 means it is no longer waiting. */
+  answerAppRequest(id: string, answer: McpAppAnswer): Observable<void> {
+    return this.api.post<void>(apiPath`mcp/app-requests/${id}/answer`, answer);
   }
 
   /** What assistants asked for since the app opened, newest first. */

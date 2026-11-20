@@ -251,18 +251,22 @@ public class McpToolTests
             : Task.FromResult<IEnumerable<IMessage>>(broker.Messages);
     }
 
-    /// <summary>The API on a test server with the stub provider; a wait given replaces the two minutes a request waits.</summary>
+    /// <summary>
+    /// The API on a test server with the stub provider; a wait given replaces the two minutes a request waits, and an
+    /// app wait the ten seconds a tool waits for the app.
+    /// </summary>
     internal sealed class Host : IAsyncDisposable
     {
         private readonly ApiFactory _base;
 
-        public Host(Broker broker, TimeSpan? wait = null)
+        public Host(Broker broker, TimeSpan? wait = null, TimeSpan? appWait = null)
         {
             _base = new ApiFactory();
             Factory = _base.WithWebHostBuilder(b => b.ConfigureTestServices(s =>
             {
                 s.AddSingleton(FactoryFor(broker));
                 if (wait is { } replaced) s.AddSingleton(new McpRequestOptions(replaced));
+                if (appWait is { } appReplaced) s.AddSingleton(new McpAppRequests(appReplaced));
             }));
             Keyed = Factory.CreateClient();
             Keyed.DefaultRequestHeaders.Add("X-Api-Key", ApiFactory.TestApiSecret);

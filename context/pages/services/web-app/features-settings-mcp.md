@@ -1,9 +1,9 @@
 ---
 title: "Web App: The MCP server group of Settings"
-version: "1.4"
+version: "1.5"
 date: 2026-11-19
 updated: 2026-11-20
-changes: "v1.4: phase 3b, the Entities block and the confirmation of all with entities. v1.3: phase three, the level all with its confirmation and blocks; the window that asks the user moved to its own page. v1.2: the kind connect. v1.1: phase two, sending: the window that asks the user, the production offer, the local test broker choice, the activity refreshed. v1.0: phase one, reading: the group of Settings and the toolbar mark"
+changes: "v1.5: the routes of the settings of the app. v1.4: phase 3b, the Entities block and the confirmation of all with entities. v1.3: phase three, the level all with its confirmation and blocks; the window that asks the user moved to its own page. v1.2: the kind connect. v1.1: phase two, sending: the window that asks the user, the production offer, the local test broker choice, the activity refreshed. v1.0: phase one, reading: the group of Settings and the toolbar mark"
 page_type: service
 status: active
 description: "Read when a change touches the MCP server group of Settings, McpSettingsService, the level that moves and removes messages, the MCP token shown in the app, or the MCP mark on the toolbar."
@@ -24,7 +24,7 @@ One topic of [[pages/services/web-app|Web App]]; the map lists the others. Why t
 
 ## Contract
 
-`McpSettingsService` (`web-app/src/app/features/settings/mcp-settings.service.ts#McpSettingsService`), a root service, calls the routes of the API through `ApiService` only, a connection id through `apiPath`: `GET mcp`, `PUT mcp/enabled`, `POST mcp/token`, `PUT` and `DELETE mcp/connections/{id}`, `PUT mcp/logs`, `GET` and `DELETE mcp/activity`, `GET mcp/requests` and `POST mcp/requests/{id}/answer` (their fields: [[pages/services/web-app/features-settings-mcp-requests]]). A level is `PUT` with `neverAsk` only when the caller gives it (`web-app/src/app/features/settings/mcp-settings.service.ts#setLevel`). The fields `production`, `canNeverAsk` and `neverAsk` of an offered connection, `supports.confirmation` and `supports.entities` may be absent on an older API, and an absent field is read as false. It keeps the state the API answered last and nothing else; a call that fails leaves it as it was and reaches the caller. A 404 to `GET mcp` marks the feature absent (`web-app/src/app/features/settings/mcp-settings.service.ts#load`), so the app runs against an API without it. The token is answered to the caller and never kept by the service (`web-app/src/app/features/settings/mcp-settings.service.ts#createToken`).
+`McpSettingsService` (`web-app/src/app/features/settings/mcp-settings.service.ts#McpSettingsService`), a root service, calls the routes of the API through `ApiService` only, a connection id through `apiPath`: `GET mcp`, `PUT mcp/enabled`, `POST mcp/token`, `PUT` and `DELETE mcp/connections/{id}`, `PUT mcp/logs`, `PUT mcp/app-settings`, `GET mcp/app-requests` and `POST mcp/app-requests/{id}/answer` ([[pages/services/web-app/features-settings-mcp-app-settings]]), `GET` and `DELETE mcp/activity`, `GET mcp/requests` and `POST mcp/requests/{id}/answer` (their fields: [[pages/services/web-app/features-settings-mcp-requests]]). A level is `PUT` with `neverAsk` only when the caller gives it (`web-app/src/app/features/settings/mcp-settings.service.ts#setLevel`). The fields `production`, `canNeverAsk` and `neverAsk` of an offered connection, `supports.confirmation` and `supports.entities` may be absent on an older API, and an absent field is read as false. It keeps the state the API answered last and nothing else; a call that fails leaves it as it was and reaches the caller. A 404 to `GET mcp` marks the feature absent (`web-app/src/app/features/settings/mcp-settings.service.ts#load`), so the app runs against an API without it. The token is answered to the caller and never kept by the service (`web-app/src/app/features/settings/mcp-settings.service.ts#createToken`).
 
 ## How it works
 
@@ -35,7 +35,7 @@ One topic of [[pages/services/web-app|Web App]]; the map lists the others. Why t
 - The connections offered, named from the list the Connections screen reads, with client, environment and target; an id the list does not know is "A connection that no longer exists" with Remove only. A list that could not be read is an error with Retry, and a row then shows its id, never "no longer exists".
 - The levels of a row are the ones in `levels`, with the artboard's labels (`web-app/src/app/features/settings/settings-mcp.component.ts#levels`); "What each choice allows" shows the blocks of those levels only, and the sentence on bulk operations only beyond reading (`web-app/src/app/features/settings/settings-mcp.component.ts#choices`).
 - "Offer a connection" opens a flat list with the search. A connection of a production environment has its Offer disabled and says "A production connection can be offered once the app can ask you before each operation." (`web-app/src/app/features/settings/settings-mcp.component.ts#candidates`).
-- "Logs of the app" only when `supports.logs`; "Settings of the app" only when `supports.appSettings`, so not in phase one. With `supports.confirmation` false the "asks you" sentences say "Reads without asking you." and no confirmation dialog exists.
+- "Logs of the app" only when `supports.logs`; "Settings of the app" only when `supports.appSettings`, after the logs row. With `supports.confirmation` false the "asks you" sentences say "Reads without asking you." and no confirmation dialog exists.
 - What assistants did: the table of `GET mcp/activity`, an empty sentence, and Clear the list in the error colour.
 
 Each call that fails says so in its own row, with the API's message or its status; none leaves an empty list.

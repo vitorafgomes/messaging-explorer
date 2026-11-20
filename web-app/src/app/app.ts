@@ -22,6 +22,7 @@ import { BugReportService } from './shared/bug-report.service';
 import { AppUpdateService } from './features/settings/app-update.service';
 import { McpRequest, McpSettingsService } from './features/settings/mcp-settings.service';
 import { McpRequestDialogComponent, McpRequestOutcome } from './features/settings/mcp-request-dialog.component';
+import { McpAppSettingsService } from './features/settings/mcp-app-settings.service';
 import { ResubmitRunIndicatorComponent, runPercent, runSummary } from './features/messages/resubmit-run-indicator.component';
 import { EnvironmentChipComponent } from './shared/environment-chip.component';
 import { readConnectionContext } from './features/entities/connection-context';
@@ -98,6 +99,14 @@ export class App implements OnInit {
     const state = this.mcp.state();
     return !!state?.enabled && !!state.supports?.confirmation && !this.requestsAbsent();
   });
+  private readonly appSettings = inject(McpAppSettingsService);
+  /** Whether the API answered 404 to GET mcp/app-requests: it cannot change settings of this app, so nothing is polled again. */
+  private readonly appRequestsAbsent = signal(false);
+  /** The app applies what an assistant asked of its settings while the server is enabled and the user allowed it. */
+  private readonly applying = computed(() => {
+    const state = this.mcp.state();
+    return !!state?.enabled && !!state.supports?.appSettings && !!state.appSettingsAllowed && !this.appRequestsAbsent();
+  });
   /** The request whose dialog is open; one at a time. */
   private openRequest: { id: string; ref: MatDialogRef<McpRequestDialogComponent, McpRequestOutcome> } | null = null;
   /** The requests already shown, which a later poll never opens again. */
@@ -126,6 +135,8 @@ export class App implements OnInit {
   /**
    * Polls the waiting requests every 2 seconds while asking, one GET in flight at a time; a failed poll waits for the
    * next tick and shows nothing. Polling stops when the server is turned off and when the app is destroyed.
+   * The changes of a setting of this app are polled on their own 2 second tick while applying, and each tick waits
+   * until the list it read is applied.
    */
   constructor() {
     this.destroyRef.onDestroy(() => this.openRequest?.ref.close());
@@ -139,6 +150,16 @@ export class App implements OnInit {
       }),
       takeUntilDestroyed(),
     ).subscribe(list => this.showRequest(list));
+    toObservable(this.applying).pipe(
+      switchMap(on => on ? timer(0, 2000) : EMPTY),
+      exhaustMap(() => this.mcp.appRequests().pipe(
+        switchMap(list => this.appSettings.apply(list)),
+        catchError((error: { status?: number }) => {
+          if (error?.status === 404) this.appRequestsAbsent.set(true);
+          return EMPTY;
+        }))),
+      takeUntilDestroyed(),
+    ).subscribe();
   }
 
   ngOnInit() {

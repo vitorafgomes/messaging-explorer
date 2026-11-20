@@ -6,7 +6,7 @@ namespace ServiceBusExplorer.Api.Mcp;
 
 /// <summary>
 /// What the user chose for the MCP server, as <c>mcp-settings.json</c> in the data folder holds it: whether it is on,
-/// the SHA-256 of the token and when it was made, whether an assistant may read the logs, the level each offered
+/// the SHA-256 of the token and when it was made, whether an assistant may read the logs and the settings of the app, the level each offered
 /// connection is offered at, and which of them the user marked as never asked. The plain token is never stored.
 /// </summary>
 public sealed class McpSettings
@@ -22,6 +22,9 @@ public sealed class McpSettings
 
     /// <summary>True when the read_logs tool may answer the lines of the backend's log.</summary>
     public bool LogsAllowed { get; set; }
+
+    /// <summary>True when the tools that read and change settings of the app may answer.</summary>
+    public bool AppSettingsAllowed { get; set; }
 
     /// <summary>The offered connections, by stored connection id, with the level each is offered at.</summary>
     public Dictionary<string, string> Connections { get; set; } = new();
@@ -39,6 +42,7 @@ public sealed class McpSettings
         TokenHash = TokenHash,
         TokenCreatedAt = TokenCreatedAt,
         LogsAllowed = LogsAllowed,
+        AppSettingsAllowed = AppSettingsAllowed,
         Connections = new Dictionary<string, string>(Connections),
         NeverAsk = new HashSet<string>(NeverAsk),
     };
@@ -119,6 +123,9 @@ public sealed class McpSettingsStore
 
     /// <summary>Allows or refuses the read_logs tool.</summary>
     public void SetLogsAllowed(bool allowed) => Change(s => s.LogsAllowed = allowed);
+
+    /// <summary>Allows or refuses the tools that read and change settings of the app.</summary>
+    public void SetAppSettingsAllowed(bool allowed) => Change(s => s.AppSettingsAllowed = allowed);
 
     /// <summary>True when the user marked <paramref name="connectionId"/> as never asked.</summary>
     public bool IsNeverAsk(string? connectionId)

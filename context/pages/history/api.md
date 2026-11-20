@@ -18,6 +18,10 @@ What changed when in the project [[pages/services/api|Api]] describes, newest fi
 
 ## 2026-11-20
 
+- From the review of the app settings tools: the test that no record line or request holds the token or the key now reads the request while it waits and checks both secrets, and it and the reason test were each shown red by a mutation (`src/ServiceBusExplorer.Api.Tests/McpAppSettingsTests.cs#No_record_line_holds_the_token_or_the_key_whatever_an_assistant_passes`).
+
+- An assistant reads and changes the theme, Developer mode and the update channel of the app, when the user allowed it in Settings (ADR 0008, the settings of the app): `read_app_settings` and `change_app_setting`, refused while `appSettingsAllowed` is false, off by default; only those three settings and their fixed values are handed to the app, through `GET api/mcp/app-requests` and `POST api/mcp/app-requests/{id}/answer`, at most 20 waiting for at most ten seconds; `PUT api/mcp/app-settings` turns the choice on and off. `supports.appSettings` is true. [[pages/services/api/mcp-app-settings]]
+
 - From the review of the tools that administer entities: a name with a space at an edge, a control character or more than 260 characters is refused before anybody is asked, in those tools and in the ones that move and remove, because the request showed and asked the user to type the cleaned name while the broker was given the raw one (`src/ServiceBusExplorer.Api/Mcp/McpToolCalls.cs#RequireExactNames`).
 
 - The MCP server creates, changes and deletes entities, asking the user first (ADR 0008, fourth phase): twelve tools, `create_`, `update_` and `delete_` of queues, topics, subscriptions and rules, on a connection offered at `all`, each always asked, a delete with the name typed; capabilities, a blank or renamed name and the lookups the request needs refuse before anybody is asked. After the allow each runs its route's body, now one internal method per route in `QueuesController` and `TopicsController`, with unchanged answers; a create or delete whose route has no body answers `{ success: true }`. `supports.entities` is true. [[pages/services/api/mcp-administering-entities]]

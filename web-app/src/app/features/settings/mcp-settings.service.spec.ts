@@ -39,14 +39,22 @@ describe('McpSettingsService: the MCP server group reads and changes its state t
     service.setLogs(true).subscribe();
     service.activity().subscribe();
     service.clearActivity().subscribe();
+    service.setAppSettings(true).subscribe();
+    service.appRequests().subscribe();
+    const settings = { theme: 'dark' as const, developerMode: false, updateChannel: null };
+    service.answerAppRequest('a/1 ?', { applied: true, code: null, settings }).subscribe();
 
-    expect(api.get.mock.calls, 'GET mcp and GET mcp/activity, through ApiService, which attaches the key').toStrictEqual([['mcp'], ['mcp/activity']]);
-    expect(api.put.mock.calls, 'the switch, the level of a connection and the logs choice').toStrictEqual([
+    expect(api.get.mock.calls, 'GET mcp, GET mcp/activity and GET mcp/app-requests, through ApiService, which attaches the key').toStrictEqual([['mcp'], ['mcp/activity'], ['mcp/app-requests']]);
+    expect(api.put.mock.calls, 'the switch, the level of a connection, the logs choice and the settings-of-the-app choice').toStrictEqual([
       ['mcp/enabled', { enabled: false }],
       ['mcp/connections/c%2F1%20%3F', { level: 'read' }],
       ['mcp/logs', { allowed: true }],
+      ['mcp/app-settings', { allowed: true }],
     ]);
-    expect(api.post.mock.calls, 'a token is created with a POST').toStrictEqual([['mcp/token', {}]]);
+    expect(api.post.mock.calls, 'a token is created with a POST, and a change of a setting is answered with a POST, its id encoded as one path segment').toStrictEqual([
+      ['mcp/token', {}],
+      ['mcp/app-requests/a%2F1%20%3F/answer', { applied: true, code: null, settings }],
+    ]);
     expect(api.delete.mock.calls, 'removing a connection and clearing the list').toStrictEqual([['mcp/connections/c%2F1%20%3F'], ['mcp/activity']]);
   });
 

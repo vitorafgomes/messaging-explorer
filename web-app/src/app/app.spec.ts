@@ -10,7 +10,8 @@ import { App } from './app';
 import { routes } from './app.routes';
 import { ConnectionService, ConnectionGroupService, ThemeService, EntitySelectionService, DevSettingsService, ResubmitRun, ResubmitRunService } from './core/services';
 import { DeadLetterNotificationService } from './core/services/dead-letter-notification.service';
-import { McpRequest, McpSettingsService, McpState } from './features/settings/mcp-settings.service';
+import { McpAppRequest, McpRequest, McpSettingsService, McpState } from './features/settings/mcp-settings.service';
+import { McpAppSettingsService } from './features/settings/mcp-app-settings.service';
 
 @Component({ template: '' })
 class StubScreen {}
@@ -75,7 +76,9 @@ describe('App', () => {
     load: vi.fn(() => of(mcpState())),
     requests: vi.fn((): Observable<McpRequest[]> => of([])),
     answer: vi.fn((): Observable<void> => of(undefined)),
+    appRequests: vi.fn((): Observable<McpAppRequest[]> => of([])),
   };
+  const mockAppSettings = { apply: vi.fn(async (_list: McpAppRequest[]) => {}) };
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -90,6 +93,7 @@ describe('App', () => {
         { provide: DeadLetterNotificationService, useValue: mockDlqService },
         { provide: ResubmitRunService, useValue: { activeRuns } },
         { provide: McpSettingsService, useValue: mockMcp },
+        { provide: McpAppSettingsService, useValue: mockAppSettings },
       ],
     }).compileComponents();
   });
@@ -101,6 +105,7 @@ describe('App', () => {
     vi.clearAllMocks();
     mockMcp.requests.mockImplementation(() => of([]));
     mockMcp.answer.mockImplementation(() => of(undefined));
+    mockMcp.appRequests.mockImplementation(() => of([]));
     mockConnectionService.readStatus.mockImplementation(() => of({ connected: false }));
     status.next({ connected: false });
     activeRuns.set([]);
@@ -604,6 +609,60 @@ describe('App', () => {
           await tick(sent, 5000);
           expect(mockMcp.answer.mock.calls, 'both requests were answered').toStrictEqual([['r-connect', false], ['r-send', true]]);
           expect(reads(), 'only an allowed request of kind connect makes the app read the status').toBe(0);
+        });
+      });
+
+      describe('the changes of a setting of this app an assistant asked for', () => {
+        const APP: Partial<McpState> = { supports: { logs: true, appSettings: true, confirmation: true }, appSettingsAllowed: true };
+        const THEME: McpAppRequest = { id: 'a-1', time: '2026-11-20T10:44:00Z', assistant: 'Claude Code', setting: 'theme', value: 'dark' };
+        const appGets = () => mockMcp.appRequests.mock.calls.length;
+
+        it('GET mcp/app-requests runs every 2 seconds while the server is on, the API supports it and the user allowed it, and each list goes to McpAppSettingsService', async () => {
+          mockMcp.appRequests.mockImplementation(() => of([THEME]));
+          const fixture = await start({ supports: { logs: true, appSettings: false, confirmation: true }, appSettingsAllowed: true });
+          await tick(fixture, 4000);
+          expect(appGets(), 'no GET mcp/app-requests while the API does not support it').toBe(0);
+
+          mcpState.set(asking({ ...APP, appSettingsAllowed: false }));
+          fixture.detectChanges();
+          await tick(fixture, 4000);
+          expect(appGets(), 'no GET mcp/app-requests while the user has not allowed it').toBe(0);
+
+          mcpState.set(asking(APP));
+          fixture.detectChanges();
+          await tick(fixture, 0);
+          expect(appGets(), 'allowed: one GET at once').toBe(1);
+          await tick(fixture, 4000);
+          expect(appGets(), 'then one every 2 seconds, through McpSettingsService').toBe(3);
+          expect(mockAppSettings.apply.mock.calls, 'each list the API answered is applied by McpAppSettingsService').toStrictEqual([[[THEME]], [[THEME]], [[THEME]]]);
+
+          mcpState.set(asking({ ...APP, enabled: false }));
+          fixture.detectChanges();
+          await tick(fixture, 10_000);
+          expect(appGets(), 'turned off: no further GET').toBe(3);
+        });
+
+        it('a 404 on GET mcp/app-requests stops polling it for good, and the requests that ask the user are still polled', async () => {
+          mockMcp.appRequests.mockImplementation(() => throwError(() => new HttpErrorResponse({ status: 404 })));
+          const fixture = await start(APP);
+          await tick(fixture, 6000);
+
+          expect(appGets(), 'an API without the route is asked once, then never again').toBe(1);
+          expect(gets(), 'GET mcp/requests keeps its own 2 second tick').toBe(4);
+          expect(mockAppSettings.apply, 'nothing is applied').not.toHaveBeenCalled();
+          expect(snack(), 'a 404 shows no error').toBeNull();
+        });
+
+        it('any other failure of GET mcp/app-requests shows nothing and is tried again on the next tick', async () => {
+          mockMcp.appRequests.mockImplementation(() => throwError(() => new HttpErrorResponse({ status: 500 })));
+          const fixture = await start(APP);
+          expect(appGets()).toBe(1);
+
+          mockMcp.appRequests.mockImplementation(() => of([THEME]));
+          await tick(fixture, 2000);
+          expect(appGets(), 'the next tick asks again').toBe(2);
+          expect(mockAppSettings.apply.mock.calls, 'and applies what waits').toStrictEqual([[[THEME]]]);
+          expect(snack(), 'a failed poll says nothing').toBeNull();
         });
       });
 

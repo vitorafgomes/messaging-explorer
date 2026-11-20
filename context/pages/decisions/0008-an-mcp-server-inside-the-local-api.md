@@ -2,7 +2,7 @@
 title: "ADR 0008 - An MCP server inside the local API"
 version: "1.0"
 date: 2026-11-19
-changes: "2026-11-20: Enforcement names each phase, entities included. 2026-11-19: accepted by the owner with the screen as drawn. Initial ADR draft"
+changes: "2026-11-20: Enforcement names each phase; nothing owed. 2026-11-19: accepted by the owner with the screen as drawn. Initial ADR draft"
 page_type: adr
 status: accepted
 description: "The local API serves an MCP endpoint, off by default, for the connections the user chose, behind its own token, asking the user in the app before anything is sent, moved or removed."
@@ -58,7 +58,7 @@ What was read on 2026-11-19, and what was not:
 
 **The logs of the app.** Asked by the owner on 2026-11-19: an assistant can read the lines of the backend store the Logs screen shows (`src/ServiceBusExplorer.Api/Logs/RecentLogStore.cs#RecentLogStore`), filtered by level and text, which by rule carry no secret, no message body and no exception text. It is its own choice in the Settings group, off by default, because a line can name the target or an entity of a connection not offered. Lines of the shell and the screen come in a later phase, once handed to the API.
 
-**The settings of the app.** Asked by the owner on 2026-11-19: an assistant can turn settings of the app on and off, as its own choice in the Settings group, off by default. A tool reads the settings and changes those on a fixed list: the theme, Developer mode, the update channel and the Monitoring history. Never on that list: the MCP server group itself (the switch, the token, the level of a connection, the choices for logs and settings), so an assistant cannot widen its own reach; clearing the data; and installing or downloading an update, which keeps the user's agreement to the exact version. These settings live in the screen and the shell: the tool hands the change to the app over the channel of the requests, and the record shows it.
+**The settings of the app.** Asked by the owner on 2026-11-19: an assistant can change settings of the app, as its own choice in the Settings group, off by default. A tool reads the settings and changes those on a fixed list: the theme, Developer mode, the update channel and the Monitoring history. Never on that list: the MCP server group (the switch, the token, a level, the logs and settings choices), so an assistant cannot widen its own reach; clearing the data; and installing or downloading an update, which keeps the user's agreement to the exact version. They live in the screen and the shell, so the tool hands the change to the app; the record shows it.
 
 **A record.** What assistants asked for and what happened is kept in memory while the app is open, with no message body and no secret, and shown in Settings.
 
@@ -90,7 +90,7 @@ Tests: the MCP topic pages of [[pages/services/api]].
 - **Production asks before every read; a local test broker is never asked:** `src/ServiceBusExplorer.Api/Mcp/McpToolCalls.cs#ProtectionAsync`. Pinned by `src/ServiceBusExplorer.Api.Tests/McpRequestTests.cs#A_production_connection_asks_before_every_read_and_list_connections_and_read_logs_never_ask`, `src/ServiceBusExplorer.Api.Tests/McpSettingsRouteTests.cs#Never_asked_is_accepted_only_for_a_broker_on_this_computer_that_is_not_production_and_stops_counting_when_that_changes`.
 - **No secret or body leaves:** `src/ServiceBusExplorer.Api.Tests/McpToolTests.cs#Every_tool_call_is_recorded_newest_first_without_a_body_or_a_secret`, `src/ServiceBusExplorer.Api.Tests/McpSendToolTests.cs#The_request_says_what_where_how_many_and_why_in_fixed_words_with_no_body_and_no_secret`.
 - **Moving, removing, entities; a typed name:** `src/ServiceBusExplorer.Api/Mcp/McpRemoveTools.cs#PrepareAsync`, `src/ServiceBusExplorer.Api/Mcp/McpEntityTools.cs#PrepareAsync`, `src/ServiceBusExplorer.Api/Mcp/McpRequests.cs#Answer`.
-- **Owed:** the settings of the app.
+- **Owed:** nothing; the Monitoring history joins the list once built. No change is asked: the choice is the consent.
 - **Invariant page and lenses:** [[pages/invariants/local-authenticated-api]] carries the second exemption; `api-surface`, `secrets` and `message-safety` review every phase.
 
 ## Related
