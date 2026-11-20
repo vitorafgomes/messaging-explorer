@@ -1,3 +1,6 @@
+## [2026-11-19] feature | The MCP server reads: /mcp behind its own token, offered connections only
+Off by default, a foreign Origin refused, seven read-only tools on the active offered connection, the logs when allowed, every call recorded. [[pages/services/api/mcp-server]]
+
 ## [2026-11-19] integrate | ADR 0008 - An MCP server inside the local API
 
 Proposed: the endpoint inside the API, a token of its own, connections offered one by one, and the user asked in the app before a change. Listed in the decisions index and linked from the plan after 2.5.0.

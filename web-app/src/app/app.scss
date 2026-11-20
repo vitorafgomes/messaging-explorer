@@ -209,3 +209,24 @@
   font: var(--mat-sys-label-medium);
   font-weight: 700;
 }
+
+.mcp-link {
+  position: relative;
+  color: var(--bar-fg);
+
+  .mcp-dot {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 11px;
+    height: 11px;
+    box-sizing: border-box;
+    border: 2px solid var(--bar-bg);
+    border-radius: 999px;
+    background: var(--app-success-container);
+  }
+}
+
+:host-context(.dark-theme) .mcp-link .mcp-dot {
+  background: var(--app-success);
+}

@@ -42,7 +42,7 @@ Connection strings and passwords for production brokers pass through this tool. 
 
 ## Scope
 
-- **Applies to:** `ConnectionString`, `Password` and `ClientSecret` of `ServiceBusConnection`, the per-launch API secret, the Azure directory token, any later secret field; every response, log line and exception message, the console output of the Electron shell.
+- **Applies to:** `ConnectionString`, `Password` and `ClientSecret` of `ServiceBusConnection`, the API secret, the Azure directory and MCP tokens, any later secret field; every response, log line and exception message, the console output of the Electron shell.
 - **Does not cover:** storage. `workspace.json` holds the secrets in plain text ([[pages/services/core]]); encrypting it is a tracked gap in [[pages/roadmap/followups]], not part of this rule.
 
 ## Where it's enforced

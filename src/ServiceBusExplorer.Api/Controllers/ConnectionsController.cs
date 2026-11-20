@@ -1,6 +1,7 @@
 using System.Net.Sockets;
 using System.Security.Authentication;
 using Microsoft.AspNetCore.Mvc;
+using ServiceBusExplorer.Api.Mcp;
 using ServiceBusExplorer.Core.Abstractions;
 using ServiceBusExplorer.Core.Models;
 using ServiceBusExplorer.Core.Providers;
@@ -17,6 +18,7 @@ public class ConnectionsController : ControllerBase
     private readonly IConnectionGroupManager _groupManager;
     private readonly IProviderFactory _providerFactory;
     private readonly ILogger<ConnectionsController> _logger;
+    private readonly McpSettingsStore _mcpSettings;
 
     /// <summary>
     /// Holds the currently connected messaging provider instance.
@@ -39,13 +41,15 @@ public class ConnectionsController : ControllerBase
         IServiceBusService serviceBusService,
         IConnectionGroupManager groupManager,
         IProviderFactory providerFactory,
-        ILogger<ConnectionsController> logger)
+        ILogger<ConnectionsController> logger,
+        McpSettingsStore mcpSettings)
     {
         _connectionManager = connectionManager;
         _serviceBusService = serviceBusService;
         _groupManager = groupManager;
         _providerFactory = providerFactory;
         _logger = logger;
+        _mcpSettings = mcpSettings;
         _staticLogger ??= logger;
     }
 
@@ -513,9 +517,19 @@ public class ConnectionsController : ControllerBase
     /// </summary>
     public static IMessagingProvider? GetCurrentProvider() => CurrentProvider;
 
+    /// <summary>
+    /// The active provider and the id of the stored connection it was connected from, read together; both null when
+    /// nothing is connected, the id null when its stored connection was deleted.
+    /// </summary>
+    internal static (IMessagingProvider? Provider, string? ConnectionId) GetCurrent()
+    {
+        lock (_providerLock) { return (_currentProvider, _currentConnectionId); }
+    }
+
     [HttpDelete("{id}")]
     public async Task<ActionResult> DeleteConnection(string id)
     {
+        _mcpSettings.Withdraw([id]);
         await _connectionManager.DeleteConnectionAsync(id);
         lock (_providerLock)
         {
@@ -779,6 +793,7 @@ public class ConnectionsController : ControllerBase
                 await _serviceBusService.DisconnectAsync();
             }
 
+            _mcpSettings.Withdraw(_mcpSettings.Current.Connections.Keys);
             var (connectionCount, groupCount) = await _connectionManager.ClearAllAsync();
 
             _logger.LogInformation(

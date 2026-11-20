@@ -10,7 +10,7 @@ Owns the HTTP surface: startup configuration, the auth/CORS/host-filter pipeline
 
 ## Rules this project must keep
 
-- `context/pages/invariants/local-authenticated-api.md`: loopback only plus `X-Api-Key` on everything but `/health` and preflight (`src/ServiceBusExplorer.Api/Program.cs#FileWorkspaceManager`; pinned by `src/ServiceBusExplorer.Api.Tests/AuthMiddlewareTests.cs#Request_without_api_key_returns_401`, `:20`, `:29`, `:38`).
+- `context/pages/invariants/local-authenticated-api.md`: loopback only plus `X-Api-Key` on everything but `/health`, preflight and `/mcp`, which answers only to its own token while the user has the MCP server on (`src/ServiceBusExplorer.Api/Mcp/McpGate.cs#AdmitAsync`; `src/ServiceBusExplorer.Api/Program.cs#FileWorkspaceManager`; pinned by `src/ServiceBusExplorer.Api.Tests/AuthMiddlewareTests.cs#Request_without_api_key_returns_401`, `:20`, `:29`, `:38`).
 - `context/pages/invariants/secrets-masked-at-the-api-boundary.md`: only `includeSecrets` exports and internal `WithSecret` calls see raw secrets.
 - `context/pages/invariants/provider-boundaries.md`: controllers talk to `IMessagingProvider`, never to a broker SDK; the slot is process-wide.
 - `context/pages/invariants/bulk-operations-are-at-least-once.md`: the controllers only forward the request token; delivery semantics are in `context/pages/services/core/azure-bulk-operations.md`.
@@ -59,5 +59,6 @@ Read the one row your change matches. Pages are under `context/pages/services/ap
 | Entity create or edit, sub-queue, scheduled or peek routes | `routes-entities-and-messages.md` |
 | Session routes, namespace export or import | `routes-sessions-and-definitions.md` |
 | `ConnectionsController`: masking, save, export, import, clear-all | `connections-and-secrets.md` |
+| `src/ServiceBusExplorer.Api/Mcp/**`, `McpController`, `/mcp` and its gate | `mcp-server.md` |
 | `MonitoringBackgroundService`, `MonitoringStore`, monitoring routes | `monitoring.md` |
 | A test in `ServiceBusExplorer.Api.Tests` | `tests.md` |

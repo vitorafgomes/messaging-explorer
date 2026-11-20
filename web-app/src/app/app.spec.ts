@@ -7,6 +7,7 @@ import { App } from './app';
 import { routes } from './app.routes';
 import { ConnectionService, ConnectionGroupService, ThemeService, EntitySelectionService, DevSettingsService, ResubmitRun, ResubmitRunService } from './core/services';
 import { DeadLetterNotificationService } from './core/services/dead-letter-notification.service';
+import { McpSettingsService, McpState } from './features/settings/mcp-settings.service';
 
 @Component({ template: '' })
 class StubScreen {}
@@ -61,6 +62,10 @@ describe('App', () => {
 
   const activeRuns = signal<ResubmitRun[]>([]);
 
+  /** The MCP server as the API answers it; off unless a spec turns it on. */
+  const mcpState = signal<McpState | null>(null);
+  const mockMcp = { state: mcpState, load: vi.fn(() => of(mcpState())) };
+
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [App],
@@ -73,6 +78,7 @@ describe('App', () => {
         { provide: EntitySelectionService, useValue: mockEntitySelectionService },
         { provide: DeadLetterNotificationService, useValue: mockDlqService },
         { provide: ResubmitRunService, useValue: { activeRuns } },
+        { provide: McpSettingsService, useValue: mockMcp },
       ],
     }).compileComponents();
   });
@@ -81,6 +87,7 @@ describe('App', () => {
     vi.clearAllMocks();
     status.next({ connected: false });
     activeRuns.set([]);
+    mcpState.set(null);
     mockConnectionService.currentConnectionId = null;
     alerts.set([]);
     delete (window as any).electronAPI;
@@ -367,6 +374,44 @@ describe('App', () => {
 
       buttons[1].click();
       expect(run.pause, 'Pause on the card pauses the run itself').toHaveBeenCalledTimes(1);
+    });
+
+    describe('the MCP mark, as Settings.dc.html draws it', () => {
+      const state = (enabled: boolean): McpState => ({ enabled, url: 'http://localhost:5917/mcp', hasToken: false, tokenCreatedAt: null, levels: ['read'],
+        supports: { logs: true, appSettings: false, confirmation: false }, logsAllowed: false, connections: [] });
+      const mark = (toolbar: HTMLElement) => toolbar.querySelector('a[aria-label="MCP server is active. Open its settings"]');
+
+      it('while the server is enabled, the toolbar shows the MCP mark and its dot, as a named link to Settings before Notifications', () => {
+        mcpState.set(state(true));
+        const toolbar = toolbarOf(render());
+        const link = mark(toolbar);
+
+        expect(mockMcp.load, 'the toolbar reads the state of the MCP server when the app starts').toHaveBeenCalledTimes(1);
+        expect(link, 'the MCP mark is on the toolbar while the server is enabled').not.toBeNull();
+        expect(link?.getAttribute('href'), 'it opens Settings').toBe('/settings');
+        expect(link?.getAttribute('title'), 'its tooltip names it').toBe('MCP server is active. Open its settings');
+        expect(link?.querySelectorAll('svg path').length, 'the three strokes of the MCP mark').toBe(3);
+        expect(link?.querySelector('.mcp-dot')?.getAttribute('aria-hidden'), 'the green dot, hidden from a reader').toBe('true');
+        expect(follows(link!, toolbar.querySelector('.notifications')!), 'before Notifications').toBe(true);
+      });
+
+      it('while the server is off, and against an API without it, the toolbar shows no MCP mark', () => {
+        mcpState.set(state(false));
+        expect(mark(toolbarOf(render())), 'no mark while the server is off').toBeNull();
+
+        mcpState.set(null);
+        expect(mark(toolbarOf(render())), 'no mark against an API without the MCP server').toBeNull();
+      });
+
+      it('turning the server on or off in Settings shows or hides the mark at once', () => {
+        const fixture = render();
+        mcpState.set(state(true));
+        fixture.detectChanges();
+        expect(mark(toolbarOf(fixture))).not.toBeNull();
+        mcpState.set(state(false));
+        fixture.detectChanges();
+        expect(mark(toolbarOf(fixture))).toBeNull();
+      });
     });
 
     it('only three icon buttons at the right: Notifications, Help and Settings; the theme toggle has left the toolbar', () => {

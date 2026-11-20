@@ -2,13 +2,15 @@ import { TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { provideRouter } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
+import { signal } from '@angular/core';
 import { of } from 'rxjs';
 import { SettingsComponent } from './settings.component';
+import { McpSettingsService, McpState } from './mcp-settings.service';
 import { AppUpdateService, RELEASES_URL, REPOSITORY_URL } from './app-update.service';
 import { ClearAllDataDialogComponent } from './clear-all-data-dialog.component';
 import { BugReportDialogComponent } from '../../shared/bug-report-dialog.component';
 import { BugReportService } from '../../shared/bug-report.service';
-import { ConnectionService, DevSettingsService, ThemeService } from '../../core/services';
+import { ConnectionGroupService, ConnectionService, DevSettingsService, ThemeService } from '../../core/services';
 
 /** The text of an element as a reader hears it: every text node, separated by one space. */
 function words(node: Element | null | undefined): string {
@@ -43,7 +45,10 @@ function fakeShell(overrides: Record<string, unknown> = {}) {
 
 describe('SettingsComponent', () => {
   const dialog = { open: vi.fn((..._args: unknown[]) => ({ afterClosed: () => of(undefined as unknown) })) };
-  const connectionService = { refreshStatus: vi.fn() };
+  const connectionService = { refreshStatus: vi.fn(), getConnections: () => of([]) };
+  /** An API without the MCP server unless a spec says otherwise, so no spec here reaches the network. */
+  const mcpState = signal<McpState | null>(null);
+  const mcp = { state: mcpState, absent: signal(true), load: () => of(mcpState()), activity: () => of([]) };
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -53,12 +58,16 @@ describe('SettingsComponent', () => {
         provideRouter([]),
         { provide: MatDialog, useValue: dialog },
         { provide: ConnectionService, useValue: connectionService },
+        { provide: ConnectionGroupService, useValue: { getGroups: () => of([]) } },
+        { provide: McpSettingsService, useValue: mcp },
       ],
     }).compileComponents();
   });
 
   afterEach(() => {
     vi.clearAllMocks();
+    mcpState.set(null);
+    mcp.absent.set(true);
     delete (window as any).electronAPI;
     localStorage.removeItem('dev-mode');
     localStorage.removeItem('app-theme');
@@ -577,6 +586,18 @@ describe('SettingsComponent', () => {
     expect(TestBed.inject(ThemeService).mode()).toBe('dark');
     expect(document.documentElement.classList.contains('dark-theme')).toBe(true);
     expect(localStorage.getItem('app-theme')).toBe('dark');
+  });
+
+  it('the MCP server group sits between Data and Developer, as Settings.dc.html draws it, and is absent against an API without it', async () => {
+    const headings = (el: HTMLElement) => Array.from(el.querySelectorAll('main > section h2, main > app-settings-mcp section h2')).map(h => words(h));
+    const without = await render();
+    expect(headings(without.el), 'an API without the MCP server: no group').toStrictEqual(['Appearance', 'Updates', 'Data', 'Developer', 'About']);
+
+    mcpState.set({ enabled: false, url: 'http://localhost:5917/mcp', hasToken: false, tokenCreatedAt: null, levels: ['read'],
+      supports: { logs: false, appSettings: false, confirmation: false }, logsAllowed: false, connections: [] });
+    mcp.absent.set(false);
+    const withIt = await render();
+    expect(headings(withIt.el), 'the group between Data and Developer').toStrictEqual(['Appearance', 'Updates', 'Data', 'MCP server', 'Developer', 'About']);
   });
 
   it('the intro says what the screen gathers, as the artboard words it', async () => {

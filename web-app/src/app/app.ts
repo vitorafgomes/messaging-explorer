@@ -20,6 +20,7 @@ import { AppLogService } from './core/services/app-log.service';
 import { DeadLetterNotificationService, DeadLetterAlert } from './core/services/dead-letter-notification.service';
 import { BugReportService } from './shared/bug-report.service';
 import { AppUpdateService } from './features/settings/app-update.service';
+import { McpSettingsService } from './features/settings/mcp-settings.service';
 import { ResubmitRunIndicatorComponent, runPercent, runSummary } from './features/messages/resubmit-run-indicator.component';
 import { EnvironmentChipComponent } from './shared/environment-chip.component';
 import { readConnectionContext } from './features/entities/connection-context';
@@ -84,6 +85,8 @@ export class App implements OnInit {
   isElectron = typeof window !== 'undefined' && !!(window as any).electronAPI;
 
   readonly updates = inject(AppUpdateService);
+  /** The MCP server: its mark is on the toolbar only while it is enabled; a failed read leaves the mark off, and Settings says why. */
+  readonly mcp = inject(McpSettingsService);
   private readonly bugReport = inject(BugReportService);
 
   /** The Logs screen and its item on the toolbar exist only while Developer mode is on. */
@@ -110,6 +113,7 @@ export class App implements OnInit {
     this.themeService.initialize();
     this.devSettingsService.initialize();
     this.bugReport.startCapture();
+    this.mcp.load().subscribe({ error: () => {} });
 
     if (this.isElectron) {
       this.setupElectronListeners();

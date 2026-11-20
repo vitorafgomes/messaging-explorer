@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.HostFiltering;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using ServiceBusExplorer.Api.Mcp;
 using ServiceBusExplorer.Api.Monitoring;
 using ServiceBusExplorer.Core.Providers;
 using ServiceBusExplorer.Core.Providers.Azure;
@@ -125,6 +126,16 @@ var recentLogs = new ServiceBusExplorer.Api.Logs.RecentLogStore();
 builder.Services.AddSingleton(recentLogs);
 builder.Logging.AddProvider(recentLogs);
 builder.Services.AddSingleton<MonitoringStore>();
+
+// The MCP server: off until the user turns it on, behind a token of its own, reading only.
+builder.Services.AddSingleton(sp => new McpSettingsStore(
+    dataPath,
+    $"http://127.0.0.1:{apiPort}{McpGate.Path}",
+    sp.GetService<ILogger<McpSettingsStore>>()));
+builder.Services.AddSingleton<McpActivityLog>();
+builder.Services.AddMcpServer()
+    .WithHttpTransport(o => o.Stateless = true)
+    .WithTools<McpReadTools>();
 builder.Services.AddHostedService<MonitoringBackgroundService>();
 
 // ─────────────────────────────────────────────────────────────
@@ -198,9 +209,18 @@ app.UseCors("AllowAngular");
 // Health endpoint is exempt from authentication.
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
+var mcpSettings = app.Services.GetRequiredService<McpSettingsStore>();
+
 // API Key authentication for local Electron app (required).
 app.Use(async (context, next) =>
 {
+    // The MCP endpoint has its own gate and credential; the API key opens nothing there.
+    if (McpGate.Covers(context))
+    {
+        if (await McpGate.AdmitAsync(context, mcpSettings)) await next();
+        return;
+    }
+
     // CORS preflight bypass — already handled by UseCors above.
     if (HttpMethods.IsOptions(context.Request.Method))
     {
@@ -245,6 +265,7 @@ app.Use(async (context, next) =>
 // app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
+app.MapMcp(McpGate.Path);
 
 app.Run();
 

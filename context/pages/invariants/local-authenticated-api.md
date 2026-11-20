@@ -1,17 +1,19 @@
 ---
 title: "The API is local and authenticated"
-version: "1.2"
+version: "1.3"
 date: 2026-11-12
-changes: "v1.2 (2026-11-19): the exception handler answers 502 with a fixed sentence when a broker refused the operation as not authorised, 500 otherwise. v1.1 (2026-11-12): the Host filter and the API_SECRET fail-fast are pinned by tests; an exception handler answers one constant body, which closed a leak of the API key through the developer exception page. v1.0 founded from the code"
+changes: "v1.3 (2026-11-19): /mcp is the second exemption from the key, behind its own gate: off answers 404, a foreign Origin 403, no MCP bearer 401; the API key opens nothing there and the MCP token opens nothing else (ADR 0008). v1.2 (2026-11-19): the exception handler answers 502 with a fixed sentence when a broker refused the operation as not authorised, 500 otherwise. v1.1 (2026-11-12): the Host filter and the API_SECRET fail-fast are pinned by tests; an exception handler answers one constant body, which closed a leak of the API key through the developer exception page. v1.0 founded from the code"
 page_type: invariant
 status: active
-description: "The API listens on loopback, filters the Host header, restricts CORS to the configured front end and refuses every request without the per-launch API key, compared in fixed time; /health is the one exemption."
+description: "The API listens on loopback, filters the Host header, restricts CORS to the configured front end and refuses every request without the per-launch API key, compared in fixed time; /health is exempt, and /mcp answers only its own token while the user has it on."
 updated: 2026-11-19
 enforced_by:
   - "src/ServiceBusExplorer.Api/Program.cs"
   - "src/ServiceBusExplorer.Api/Program.cs#o.AllowedHosts = new[] { "localhost", "127.0.0.1" };"
   - "src/ServiceBusExplorer.Api/Program.cs#builder.WebHost.ConfigureKestrel(k => k.ListenLocalhost(apiPort));"
   - "src/ServiceBusExplorer.Api/Program.cs#FileWorkspaceManager"
+  - "src/ServiceBusExplorer.Api/Mcp/McpGate.cs#AdmitAsync"
+  - "src/ServiceBusExplorer.Api/Mcp/McpSettingsStore.cs#TokenMatches"
   - "web-app/electron/main.js#const API_SECRET = crypto.randomBytes(32).toString('hex');"
   - "web-app/src/app/core/services/api.service.ts#getHeaders"
 verified_by:
@@ -21,6 +23,12 @@ verified_by:
   - "src/ServiceBusExplorer.Api.Tests/BoundaryGuardTests.cs#The_API_does_not_start_without_a_32_character_API_SECRET"
   - "src/ServiceBusExplorer.Api.Tests/ErrorBodyTests.cs#An_unhandled_exception_answers_a_constant_500_body_and_never_the_exception_text"
   - "src/ServiceBusExplorer.Api.Tests/MessageRouteTests.cs#A_route_with_no_catch_of_its_own_answers_502_through_the_handler_when_the_broker_refuses_as_not_authorised"
+  - "src/ServiceBusExplorer.Api.Tests/McpGateTests.cs#The_mcp_endpoint_answers_404_while_the_user_has_not_turned_it_on_even_with_a_token_and_the_api_key"
+  - "src/ServiceBusExplorer.Api.Tests/McpGateTests.cs#A_request_without_the_right_bearer_is_refused_401_with_one_body_whatever_was_wrong"
+  - "src/ServiceBusExplorer.Api.Tests/McpGateTests.cs#A_request_is_refused_401_while_no_token_was_ever_created"
+  - "src/ServiceBusExplorer.Api.Tests/McpGateTests.cs#A_foreign_origin_is_refused_403_even_with_the_right_bearer"
+  - "src/ServiceBusExplorer.Api.Tests/McpGateTests.cs#The_api_key_alone_does_not_open_the_mcp_endpoint_in_any_letter_case"
+  - "src/ServiceBusExplorer.Api.Tests/McpGateTests.cs#The_mcp_token_alone_opens_no_api_route"
 source:
   - "src/ServiceBusExplorer.Api/Program.cs"
   - "src/ServiceBusExplorer.Api.Tests/"
@@ -31,7 +39,7 @@ reliability: high
 
 # The API is local and authenticated
 
-> No request reaches a controller unless it comes from the local machine and carries the API key generated for this launch. Rule A of root `CLAUDE.md`.
+> No request reaches a controller unless it comes from the local machine and carries the API key generated for this launch. Rule A of root `CLAUDE.md`. The one other door is `/mcp`, which the user turns on, and which answers only the MCP token ([[pages/decisions/0008-an-mcp-server-inside-the-local-api]]).
 
 ## Why this exists
 
@@ -50,6 +58,7 @@ The API holds broker credentials in memory and can purge a production queue with
 - `src/ServiceBusExplorer.Api/Program.cs#builder.WebHost.ConfigureKestrel(k => k.ListenLocalhost(apiPort));` - Kestrel binds to loopback when `ASPNETCORE_URLS` is not set.
 - `src/ServiceBusExplorer.Api/Program.cs#FileWorkspaceManager` - `/health` is mapped before the key middleware and answers without a key.
 - `src/ServiceBusExplorer.Api/Program.cs#FileWorkspaceManager` - the key middleware compares `X-Api-Key` with `CryptographicOperations.FixedTimeEquals` and answers 401 otherwise; it lets `OPTIONS` through for the CORS preflight (`src/ServiceBusExplorer.Api/Program.cs#FileWorkspaceManager`).
+- `src/ServiceBusExplorer.Api/Mcp/McpGate.cs#AdmitAsync` - `/mcp`, in any letter case, is the second exemption from the key, checked before the `OPTIONS` and `/health` exemptions: while the user has it off it answers 404; an `Origin` that is not `localhost`, `127.0.0.1` or `[::1]` over http answers 403; a request without `Authorization: Bearer` and the MCP token answers 401. The API key opens nothing there, and the MCP token is checked nowhere else. `src/ServiceBusExplorer.Api/Mcp/McpSettingsStore.cs#TokenMatches` compares the SHA-256 of the presented token with the stored hash in fixed time; the token is kept only as that hash and answered once ([[pages/services/api/mcp-server]]).
 - `web-app/electron/main.js#const API_SECRET = crypto.randomBytes(32).toString('hex');` - the secret is 32 random bytes per launch; it reaches the API as an environment variable (`web-app/electron/main.js#API_SECRET: API_SECRET`) and the renderer over the `get-api-secret` IPC channel (`web-app/electron/main.js#ipcMain.handle('get-api-secret', () => API_SECRET);`).
 - `web-app/src/app/core/services/api.service.ts#getHeaders` - the one place the header is attached.
 
@@ -60,6 +69,7 @@ The API holds broker credentials in memory and can purge a production queue with
 - `src/ServiceBusExplorer.Api.Tests/BoundaryGuardTests.cs#A_foreign_Host_is_refused` - a request with a foreign `Host` is refused with 400 and one to `127.0.0.1` passes.
 - `src/ServiceBusExplorer.Api.Tests/BoundaryGuardTests.cs#The_API_does_not_start_without_a_32_character_API_SECRET` - the API process exits with code 1 when `API_SECRET` is missing or has 31 characters.
 - `src/ServiceBusExplorer.Api.Tests/ErrorBodyTests.cs#An_unhandled_exception_answers_a_constant_500_body_and_never_the_exception_text` - an unhandled exception answers the constant 500 body in Development and in Production.
+- `src/ServiceBusExplorer.Api.Tests/McpGateTests.cs#The_mcp_endpoint_answers_404_while_the_user_has_not_turned_it_on_even_with_a_token_and_the_api_key` - `/mcp` answers 404 while off; `src/ServiceBusExplorer.Api.Tests/McpGateTests.cs#A_request_without_the_right_bearer_is_refused_401_with_one_body_whatever_was_wrong` and `src/ServiceBusExplorer.Api.Tests/McpGateTests.cs#A_request_is_refused_401_while_no_token_was_ever_created` - no, a wrong or a malformed bearer, and no token yet, answer 401; `src/ServiceBusExplorer.Api.Tests/McpGateTests.cs#A_foreign_origin_is_refused_403_even_with_the_right_bearer` - a foreign `Origin` answers 403; `src/ServiceBusExplorer.Api.Tests/McpGateTests.cs#The_api_key_alone_does_not_open_the_mcp_endpoint_in_any_letter_case` and `src/ServiceBusExplorer.Api.Tests/McpGateTests.cs#The_mcp_token_alone_opens_no_api_route` - neither credential opens the other's door. Making the comparison accept any token, or dropping the `Origin` check, turns them red.
 
 ## Known exceptions
 

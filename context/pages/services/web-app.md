@@ -80,6 +80,7 @@ Read the page your change touches, not all of them.
 | [[pages/services/web-app/features-entities-panel-and-definitions\|Entity panel, tree and definitions]] | the entity panel or the tree on Material, the export and import of definitions, EntitySelectionService, or the purge confirmation |
 | [[pages/services/web-app/features-entities-main\|Entities as drawn]] | the tree filter and rows, the panel header and actions, the More menu, delete of an entity, the cards and tabs, as the Main artboard draws them |
 | [[pages/services/web-app/features-settings-and-folders\|Settings and the feature folders]] | the Settings screen (updates, data, developer, about), AppUpdateService, or the connections, entities, messages, queues, topics and monitoring folders |
+| [[pages/services/web-app/features-settings-mcp\|The MCP server group]] | the MCP server group of Settings, McpSettingsService, the MCP token shown in the app, or the MCP mark on the toolbar |
 | [[pages/services/web-app/features-connections\|Connections]] | the Connections screen: list and columns, add and edit, a stored secret, Manage Groups and the Production mark, import with its preview |
 | [[pages/services/web-app/features-monitoring\|Monitoring screen]] | the Monitoring screen: the snapshot, the counts table of every entity, its sort, filter, threshold and refresh, the Overview |
 | [[pages/services/web-app/providers-and-shared\|Providers and shared]] | ProviderRegistryService, ProviderShellComponent, ProviderService and capabilities, docs/ADDING_PROVIDERS.md, or a shared component |

@@ -36,7 +36,7 @@ One topic of [[pages/services/api|Api]]; the map lists the others.
 
 ## Invariants
 
-- [[pages/invariants/local-authenticated-api]]: loopback only plus `X-Api-Key` on everything but `/health` and preflight (`src/ServiceBusExplorer.Api/Program.cs#FileWorkspaceManager`; pinned by `src/ServiceBusExplorer.Api.Tests/AuthMiddlewareTests.cs#Request_without_api_key_returns_401`, `:20`, `:29`, `:38`).
+- [[pages/invariants/local-authenticated-api]]: loopback only plus `X-Api-Key` on everything but `/health`, preflight and `/mcp`, which answers only to its own token while the user has the MCP server on (`src/ServiceBusExplorer.Api/Mcp/McpGate.cs#AdmitAsync`; `src/ServiceBusExplorer.Api/Program.cs#FileWorkspaceManager`; pinned by `src/ServiceBusExplorer.Api.Tests/AuthMiddlewareTests.cs#Request_without_api_key_returns_401`, `:20`, `:29`, `:38`).
 - [[pages/invariants/secrets-masked-at-the-api-boundary]]: only `includeSecrets` exports and internal `WithSecret` calls see raw secrets.
 - [[pages/invariants/provider-boundaries]]: controllers talk to `IMessagingProvider`, never to a broker SDK; the slot is process-wide.
 - [[pages/invariants/bulk-operations-are-at-least-once]]: the controllers only forward the request token; delivery semantics are in [[pages/services/core]].

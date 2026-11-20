@@ -46,6 +46,7 @@ Read the page your change touches, not all of them.
 | [[pages/services/api/routes-batch-send\|Batch send]] | the `POST .../messages/batch` of a queue or a topic: limits, the partial result, the token, the import dialog |
 | [[pages/services/api/routes-sessions-and-definitions\|Session and definition routes]] | the session routes of a queue or a subscription and their status codes, or the namespace export and import of entity definitions |
 | [[pages/services/api/connections-and-secrets\|Connections and secrets]] | the connections routes: masking, save with the *** placeholder, an unreadable workspace.json, export, export-full, import, clear-all |
+| [[pages/services/api/mcp-server\|MCP server]] | `/mcp` and its gate, the MCP token, the `api/mcp` routes of Settings, `mcp-settings.json`, the reading tools, the record of what assistants asked |
 | [[pages/services/api/monitoring\|Monitoring]] | MonitoringBackgroundService, its poll period and failures, MonitoringStore, or the monitoring routes |
 | [[pages/services/api/tests\|Tests]] | a test of the Api project, ApiFactory, or what has no test yet |
 | [[pages/services/api/known-gaps\|Hot spots and known gaps]] | a hot spot of the Api project or a gap recorded as it was found |
