@@ -395,7 +395,7 @@ input::placeholder{color:currentColor;opacity:.72}
     <section aria-label="MCP server" style="display: flex; gap: 16px 32px; flex-wrap: wrap; padding: 24px 0; border-top: 1px solid {{t.outlineVariant}}">
       <div style="flex: 0 0 200px">
         <h2 style="display: flex; align-items: center; gap: 8px; margin: 0; font-size: 20px; line-height: 28px; font-weight: 500"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 180 180" fill="none" stroke="currentColor" stroke-width="13" stroke-linecap="round" stroke-linejoin="round" style="flex: none"><path d="M18 84.8528L85.8822 16.9706C95.2548 7.59798 110.451 7.59798 119.823 16.9706C129.196 26.3431 129.196 41.5391 119.823 50.9117L68.5581 102.177"></path><path d="M69.2652 101.47L119.823 50.9117C129.196 41.5391 144.392 41.5391 153.765 50.9117L154.118 51.2652C163.491 60.6378 163.491 75.8338 154.118 85.2063L92.7248 146.6C89.6006 149.724 89.6006 154.789 92.7248 157.913L105.331 170.52"></path><path d="M102.853 33.9411L52.6482 84.1457C43.2756 93.5183 43.2756 108.714 52.6482 118.087C62.0208 127.459 77.2167 127.459 86.5893 118.087L136.794 67.8822"></path></svg>MCP server</h2>
-        <p style="margin: 4px 0 0; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Reading built 2026-11-20: the switch, the token, the connections at "Read", the logs and the list of what was asked. Sending, removing, the settings of the app and the window that asks you first are drawn and not built. An assistant such as Claude Code reads the brokers, sends messages and acts on them through this app.</p>
+        <p style="margin: 4px 0 0; font-size: 12px; line-height: 16px; color: {{t.onSurfaceVariant}}">Reading built 2026-11-20. Sending, the window that asks you first, production connections and the local test broker mark are the second phase; removing and the settings of the app are drawn and not built. An assistant such as Claude Code reads the brokers, sends messages and acts on them through this app.</p>
       </div>
       <div style="display: flex; flex-direction: column; flex: 1 1 520px; min-width: 0">
         <div style="display: flex; align-items: flex-start; gap: 8px 12px; flex-wrap: wrap; min-height: 48px; padding: 12px 0; border-bottom: 1px solid {{t.outlineVariant}}">
@@ -451,6 +451,12 @@ input::placeholder{color:currentColor;opacity:.72}
                   </div>
                     <button type="button" onClick="{{r.remove}}" class="hov" style="display: inline-flex; align-items: center; height: 40px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: {{t.error}}; font: inherit; font-weight: 500; cursor: pointer">Remove</button>
                   </div>
+                  <sc-if value="{{r.canNeverAsk}}" hint-placeholder-val="{{false}}">
+                    <label style="display: flex; align-items: center; gap: 10px; min-height: 32px; cursor: pointer">
+                      <input type="checkbox" checked="{{r.neverAsk}}" onChange="{{r.toggleNeverAsk}}" style="width: 18px; height: 18px; margin: 0; accent-color: {{t.primary}}">
+                      <span>A local test broker: do not ask me before a send</span>
+                    </label>
+                  </sc-if>
                 </li>
               </sc-for>
             </ul>
@@ -735,7 +741,7 @@ input::placeholder{color:currentColor;opacity:.72}
   </sc-if>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Preview"},"state":{"editor":"enum","options":["upToDate","available","downloading","ready","failed","cannotSelfUpdate","bugReport","clearConfirm"],"default":"upToDate","section":"Preview"},"environment":{"editor":"enum","options":["production","development"],"default":"production","section":"Preview"},"mcp":{"editor":"enum","options":["active","inactive","offerConnection","askedToSend","askedToDelete"],"default":"active","section":"Preview"},"$preview":{"width":1280,"height":3960}}'>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light","section":"Preview"},"state":{"editor":"enum","options":["upToDate","available","downloading","ready","failed","cannotSelfUpdate","bugReport","clearConfirm"],"default":"upToDate","section":"Preview"},"environment":{"editor":"enum","options":["production","development"],"default":"production","section":"Preview"},"mcp":{"editor":"enum","options":["active","inactive","offerConnection","askedToRead","askedToSend","askedToDelete"],"default":"active","section":"Preview"},"$preview":{"width":1280,"height":3960}}'>
 const LIGHT = { surface:'#f9f9ff', surfaceLow:'#f2f3fa', surfaceContainer:'#ecedf4', surfaceHigh:'#e6e8ee',
   onSurface:'#191c20', onSurfaceVariant:'#43474e', outline:'#73777f', outlineVariant:'#c3c6cf',
   primary:'#005cbb', onPrimary:'#ffffff', primaryContainer:'#d7e3ff', onPrimaryContainer:'#001b3f',
@@ -822,7 +828,13 @@ class Component extends DCLogic {
     const mcpDelete = mcpView === 'askedToDelete';
     const mcpTypedOk = (s.mcpTyped ?? '') === 'orders';
     const mcpChip = k => k === 'error' ? [t.errorContainer, t.onErrorContainer] : k === 'ok' ? [t.secondaryContainer, t.onSecondaryContainer] : [t.surfaceHigh, t.onSurfaceVariant];
-    const mcpAsk = mcpDelete
+    const mcpRead = mcpView === 'askedToRead';
+    const mcpAsk = mcpRead
+      ? { title: 'Claude Code asks to read 20 messages', typed: false, go: 'Allow this read', goBg: t.primary, goFg: t.onPrimary,
+          ariaDisabled: 'false', goOpacity: 1, noteBg: t.warnContainer, noteFg: t.onWarnContainer,
+          note: 'This is a production connection. The bodies of the messages read are sent to the assistant and to the company that runs it.',
+          facts: [['From', 'orders, dead-letter queue'], ['On', 'contoso-prod (Contoso, Production)'], ['Messages', 'Up to 20, read without removing them'], ['It said why', 'To see why orders are failing']] }
+      : mcpDelete
       ? { title: 'Claude Code asks to delete 12 messages', typed: true, go: 'Delete 12 messages', goBg: t.error, goFg: t.onError,
           ariaDisabled: mcpTypedOk ? 'false' : 'true', goOpacity: mcpTypedOk ? 1 : .5, noteBg: t.errorContainer, noteFg: t.onErrorContainer,
           note: 'A deleted message cannot be brought back. The 12 messages are the ones the assistant named by their sequence numbers; nothing else in the queue is touched.',
@@ -842,7 +854,7 @@ class Component extends DCLogic {
       listOpacity: mcpOn ? 1 : .6,
       settings: s.mcpSettings ?? true, toggleSettings: () => this.setState({ mcpSettings: !(s.mcpSettings ?? true) }),
       logs: s.mcpLogs ?? true, toggleLogs: () => this.setState({ mcpLogs: !(s.mcpLogs ?? true) }),
-      asking: mcpOn && !s.mcpClosed && (mcpView === 'askedToSend' || mcpView === 'askedToDelete'),
+      asking: mcpOn && !s.mcpClosed && (mcpView === 'askedToRead' || mcpView === 'askedToSend' || mcpView === 'askedToDelete'),
       ask: Object.assign({}, mcpAsk, { facts: mcpAsk.facts.map(f => ({ k: f[0], v: f[1] })) }),
       setTyped: ev => this.setState({ mcpTyped: ev.target.value }),
       closeAsk: () => this.setState({ mcpClosed: true }),
@@ -850,12 +862,14 @@ class Component extends DCLogic {
       activity: MCP_ACTIVITY.map(a => { const c = mcpChip(a.kind); return { time: a.time, who: a.who, what: a.what, where: a.where, result: a.result, chipBg: c[0], chipFg: c[1] }; }),
       rows: MCP_ROWS.filter(r => (mcpLevels[r.id] ?? r.level) > 0).map(r => {
         const level = mcpLevels[r.id] ?? r.level;
+        const neverAsk = (s.mcpNeverAsk ?? {})[r.id] ?? !!r.local;
         const asks = r.production ? 'Asks you before every operation, a read included.'
-          : r.local ? 'A local test broker: never asks you.'
+          : r.local && neverAsk ? 'A local test broker: never asks you.'
           : level === 1 ? 'Reads without asking you.'
           : level === 2 ? 'Reads without asking; asks you before each send.'
           : 'Reads without asking; asks you before each send, move or removal.';
         return { name: r.name, where: r.where, production: !!r.production, asks, groupLabel: 'What an assistant may do on ' + r.name,
+          canNeverAsk: !!r.local, neverAsk, toggleNeverAsk: () => this.setState({ mcpNeverAsk: Object.assign({}, s.mcpNeverAsk ?? {}, { [r.id]: !neverAsk }) }),
           remove: () => this.setState({ mcpLevels: Object.assign({}, mcpLevels, { [r.id]: 0 }) }),
           levels: MCP_LEVELS.slice(1).map((label, n) => {
             const i = n + 1, on = i === level;
