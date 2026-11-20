@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
@@ -45,12 +46,15 @@ public sealed class McpToolCalls(
     /// <summary>What a request to read a production connection tells the user.</summary>
     public const string ProductionReadNote = "This is a production connection. What is read is sent to the assistant and to the company that runs it.";
 
+    /// <summary>The answer of a tool that needs a reason when none, or a blank one, was given.</summary>
+    public const string ReasonRequired = "Say why: the reason is required and is shown to the user.";
+
     /// <summary>How many characters of the reason an assistant gives are shown.</summary>
     public const int MaxReasonLength = 200;
 
     private const string AllowedSuffix = ", allowed by you";
 
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, Converters = { new JsonStringEnumConverter() } };
 
     /// <summary>
     /// Runs one tool call and records it. A refusal and a broker failure are answered as an error result with a fixed
@@ -166,6 +170,17 @@ public sealed class McpToolCalls(
         if (connection.ClientId is { } clientId && await groups.GetGroupAsync(clientId) is { } client) parts.Add(client.Name);
         if (connection.EnvironmentId is { } environmentId && await groups.GetGroupAsync(environmentId) is { } environment) parts.Add(environment.Name);
         return parts.Count == 0 ? connection.Name : $"{connection.Name} ({string.Join(", ", parts)})";
+    }
+
+    /// <summary>
+    /// Refuses the call with <see cref="ReasonRequired"/> when <paramref name="reason"/> is missing or holds no visible
+    /// character. A tool that needs a reason takes it as optional and calls this first, so a call without one is answered
+    /// by the tool and recorded instead of rejected by the SDK.
+    /// </summary>
+    public static void RequireReason(ToolCall call, [System.Diagnostics.CodeAnalysis.NotNull] string? reason)
+    {
+        if (reason is null || Clean(reason, MaxReasonLength).Length == 0)
+            call.Refuse(ReasonRequired, "Refused: no reason");
     }
 
     /// <summary>The reason an assistant gave, without control characters and cut at <see cref="MaxReasonLength"/>, or "It gave no reason".</summary>

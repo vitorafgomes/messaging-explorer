@@ -37,10 +37,11 @@ public sealed class McpConnectTools(
     public Task<CallToolResult> ConnectTo(
         McpServer server,
         [Description("The id or the exact name of an offered connection, as list_connections answers them.")] string connection,
-        [Description("Why you want to connect to it; the user sees it.")] string reason,
+        [Description("Why you want to connect to it; the user sees it. Required.")] string? reason = null,
         CancellationToken cancellationToken = default) =>
         calls.RunAsync(server, "Connect to a connection", logger, async call =>
     {
+        McpToolCalls.RequireReason(call, reason);
         var target = await OfferedAsync(call, connection);
         call.Asked = $"Connect to {target.Name}";
 

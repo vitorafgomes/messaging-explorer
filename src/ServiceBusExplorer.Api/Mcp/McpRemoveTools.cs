@@ -26,12 +26,15 @@ public sealed class McpRemoveTools(McpToolCalls calls, ILogger<McpRemoveTools> l
     /// <summary>The answer when the provider declares no operations on chosen messages.</summary>
     public const string BulkRefused = "This provider does not support moving or removing chosen messages.";
 
+    /// <summary>The answer of move_messages when its target is neither a queue nor a topic.</summary>
+    public const string TargetNotFound = "The target was not found.";
+
     /// <summary>The most sequence numbers one call takes.</summary>
     public const int MaxSequenceNumbers = 100;
 
     private const string AskNote = " The user is always asked in the app first and may deny it. Operations are at least once: a message sent and not removed from its source is reported as a possible duplicate, never sent again.";
     private const string SequenceNumbersDescription = "The sequence numbers, 1 to 100, as numbers or numeric strings.";
-    private const string ReasonDescription = "Why you want to do it; the user sees it.";
+    private const string ReasonDescription = "Why you want to do it; the user sees it. Required.";
     private const string SubscriptionDescription = "The subscription of the topic; omit it for a queue.";
     private const string EntityDescription = "The queue, or the topic when a subscription is given.";
 
@@ -42,7 +45,7 @@ public sealed class McpRemoveTools(McpToolCalls calls, ILogger<McpRemoveTools> l
         McpServer server,
         [Description(EntityDescription)] string entity,
         [Description(SequenceNumbersDescription)] long[] sequenceNumbers,
-        [Description(ReasonDescription)] string reason,
+        [Description(ReasonDescription)] string? reason = null,
         [Description(SubscriptionDescription)] string? subscription = null,
         [Description("The dead-letter reason the messages carry.")] string? deadLetterReason = null,
         [Description("The dead-letter description the messages carry.")] string? deadLetterDescription = null,
@@ -51,6 +54,7 @@ public sealed class McpRemoveTools(McpToolCalls calls, ILogger<McpRemoveTools> l
         var n = sequenceNumbers?.Length ?? 0;
         return calls.RunAsync(server, $"Dead-letter {Messages(n)}", logger, async call =>
         {
+            McpToolCalls.RequireReason(call, reason);
             var target = await PrepareAsync(call, entity, subscription, "active", sequenceNumbers, numbered: true, bulk: false, MessageSubQueue.Active);
             if (!target.Active.Provider.Capabilities.SupportsManualDeadLetter)
                 call.Refuse(McpToolCalls.MessageOf(EntityAdministrationResults.ManualDeadLetterNotSupported()), "Refused: no dead-letter by sequence number");
@@ -69,7 +73,7 @@ public sealed class McpRemoveTools(McpToolCalls calls, ILogger<McpRemoveTools> l
         McpServer server,
         [Description(EntityDescription)] string entity,
         [Description(SequenceNumbersDescription)] long[] sequenceNumbers,
-        [Description(ReasonDescription)] string reason,
+        [Description(ReasonDescription)] string? reason = null,
         [Description(SubscriptionDescription)] string? subscription = null,
         [Description("deadLetter or transferDeadLetter.")] string subQueue = "deadLetter",
         [Description("True to give each message a new message id when the target detects duplicates.")] bool newMessageIds = false,
@@ -78,6 +82,7 @@ public sealed class McpRemoveTools(McpToolCalls calls, ILogger<McpRemoveTools> l
         var n = sequenceNumbers?.Length ?? 0;
         return calls.RunAsync(server, $"Resubmit {Messages(n)}", logger, async call =>
         {
+            McpToolCalls.RequireReason(call, reason);
             var target = await PrepareAsync(call, entity, subscription, subQueue, sequenceNumbers, numbered: true, bulk: true, MessageSubQueue.DeadLetter, MessageSubQueue.TransferDeadLetter);
             await LookupAsync(call, target);
             var note = subscription is null
@@ -97,7 +102,7 @@ public sealed class McpRemoveTools(McpToolCalls calls, ILogger<McpRemoveTools> l
         [Description(EntityDescription)] string entity,
         [Description(SequenceNumbersDescription)] long[] sequenceNumbers,
         [Description("The queue the messages go to.")] string target,
-        [Description(ReasonDescription)] string reason,
+        [Description(ReasonDescription)] string? reason = null,
         [Description(SubscriptionDescription)] string? subscription = null,
         [Description("active, deadLetter or transferDeadLetter.")] string subQueue = "active",
         CancellationToken cancellationToken = default)
@@ -105,8 +110,13 @@ public sealed class McpRemoveTools(McpToolCalls calls, ILogger<McpRemoveTools> l
         var n = sequenceNumbers?.Length ?? 0;
         return calls.RunAsync(server, $"Move {Messages(n)}", logger, async call =>
         {
+            McpToolCalls.RequireReason(call, reason);
             var source = await PrepareAsync(call, entity, subscription, subQueue, sequenceNumbers, numbered: true, bulk: true, MessageSubQueue.Active, MessageSubQueue.DeadLetter, MessageSubQueue.TransferDeadLetter);
             await LookupAsync(call, source);
+            var provider = source.Active.Provider;
+            if (await provider.GetQueueAsync(target) is null
+                && (!provider.Capabilities.SupportsTopics || await provider.GetTopicAsync(target, cancellationToken) is null))
+                call.Refuse(TargetNotFound, "Refused: target not found");
             var shownTarget = McpToolCalls.Clean(target, 100);
             await AskAsync(call, source, reason, "move", $"asks to move {Messages(n)}", [new McpFact("To", shownTarget)],
                 $"Each message is sent to {shownTarget} and then removed from its source. One that is sent and cannot be removed is reported as a possible duplicate.",
@@ -124,13 +134,14 @@ public sealed class McpRemoveTools(McpToolCalls calls, ILogger<McpRemoveTools> l
         [Description(EntityDescription)] string entity,
         [Description("active, deadLetter or transferDeadLetter.")] string subQueue,
         [Description(SequenceNumbersDescription)] long[] sequenceNumbers,
-        [Description(ReasonDescription)] string reason,
+        [Description(ReasonDescription)] string? reason = null,
         [Description(SubscriptionDescription)] string? subscription = null,
         CancellationToken cancellationToken = default)
     {
         var n = sequenceNumbers?.Length ?? 0;
         return calls.RunAsync(server, $"Delete {Messages(n)}", logger, async call =>
         {
+            McpToolCalls.RequireReason(call, reason);
             var target = await PrepareAsync(call, entity, subscription, subQueue, sequenceNumbers, numbered: true, bulk: true, MessageSubQueue.Active, MessageSubQueue.DeadLetter, MessageSubQueue.TransferDeadLetter);
             await LookupAsync(call, target);
             await AskAsync(call, target, reason, "delete", $"asks to delete {Messages(n)}", [], "A deleted message cannot be brought back. Only the messages named by their sequence numbers are removed.",
@@ -147,13 +158,14 @@ public sealed class McpRemoveTools(McpToolCalls calls, ILogger<McpRemoveTools> l
         McpServer server,
         [Description(EntityDescription)] string entity,
         [Description("active or deadLetter.")] string subQueue,
-        [Description(ReasonDescription)] string reason,
+        [Description(ReasonDescription)] string? reason = null,
         [Description(SubscriptionDescription)] string? subscription = null,
         CancellationToken cancellationToken = default)
     {
         var what = subscription is null ? "the queue" : "the subscription";
         return calls.RunAsync(server, $"Purge {what}", logger, async call =>
         {
+            McpToolCalls.RequireReason(call, reason);
             var target = await PrepareAsync(call, entity, subscription, subQueue, null, numbered: false, bulk: false, MessageSubQueue.Active, MessageSubQueue.DeadLetter);
             var counted = await LookupAsync(call, target);
             var count = target.Active.Provider.Capabilities.SupportsMessageCounts ? counted : null;
@@ -174,13 +186,14 @@ public sealed class McpRemoveTools(McpToolCalls calls, ILogger<McpRemoveTools> l
         McpServer server,
         [Description("The queue or the topic.")] string entity,
         [Description(SequenceNumbersDescription)] long[] sequenceNumbers,
-        [Description(ReasonDescription)] string reason,
+        [Description(ReasonDescription)] string? reason = null,
         CancellationToken cancellationToken = default)
     {
         var n = sequenceNumbers?.Length ?? 0;
         var scheduled = n == 1 ? "1 scheduled message" : $"{n} scheduled messages";
         return calls.RunAsync(server, $"Cancel {scheduled}", logger, async call =>
         {
+            McpToolCalls.RequireReason(call, reason);
             var target = await PrepareAsync(call, entity, null, null, sequenceNumbers, numbered: true, bulk: false);
             var provider = target.Active.Provider;
             if (!provider.Capabilities.SupportsScheduledMessages)

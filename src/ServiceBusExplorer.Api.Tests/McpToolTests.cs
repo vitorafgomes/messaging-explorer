@@ -71,11 +71,21 @@ public class McpToolTests
 
         /// <summary>The move, remove, purge and cancel calls the provider was asked, in order.</summary>
         public List<BatchCall> BatchCalls { get; } = [];
-        public HashSet<string> Queues { get; init; } = ["orders"];
+        public HashSet<string> Queues { get; init; } = ["orders", "orders-retry"];
+
+        /// <summary>The queues whose lookup answers RequiresSession true.</summary>
+        public HashSet<string> SessionQueues { get; init; } = [];
+
+        /// <summary>The status every listed queue, topic and subscription answers.</summary>
+        public string ListedStatus { get; init; } = "Active";
+
+        /// <summary>The rules list_rules is answered.</summary>
+        public List<SubscriptionRuleInfo> Rules { get; init; } = [new SubscriptionRuleInfo { Name = "$Default", SqlExpression = "1=1" }];
         public HashSet<string> Topics { get; init; } = ["events"];
         public Exception? SendFailure { get; init; }
         public Exception? LookupFailure { get; init; }
         public bool FailTopicLookup { get; init; }
+        public Exception? SubscriptionLookupFailure { get; init; }
         public Func<List<SendMessageRequest>, SendMessagesResult>? BatchAnswer { get; init; }
         public List<SendMessageRequest> Sent { get; } = [];
         public int SendCalls { get; set; }
@@ -138,17 +148,16 @@ public class McpToolTests
             "DisconnectAsync" => Task.CompletedTask,
             "DisposeAsync" => Counted(() => broker.Disposed.Add(connectionId), ValueTask.CompletedTask),
             nameof(IMessagingProvider.GetQueuesAsync) => Task.FromResult<IEnumerable<IQueueEntity>>(
-                [new QueueInfo { Name = "orders", Status = "Active", ActiveMessageCount = 3, DeadLetterMessageCount = 2 }]),
+                [new QueueInfo { Name = "orders", Status = broker.ListedStatus, ActiveMessageCount = 3, DeadLetterMessageCount = 2 }]),
             nameof(IMessagingProvider.GetTopicsAsync) => Counted(() => broker.TopicLists++, Task.FromResult<IEnumerable<ITopicEntity>>(
-                [new TopicInfo { Name = "events", Status = "Active", SubscriptionCount = 1 }])),
+                [new TopicInfo { Name = "events", Status = broker.ListedStatus, SubscriptionCount = 1 }])),
             nameof(IMessagingProvider.GetSubscriptionsAsync) => Counted(() => broker.SubscriptionLists++, Task.FromResult<IEnumerable<SubscriptionInfo>>(
-                [new SubscriptionInfo { TopicName = "events", Name = "audit", ActiveMessageCount = 5 }])),
-            nameof(IMessagingProvider.GetRulesAsync) => Task.FromResult<IReadOnlyList<SubscriptionRuleInfo>>(
-                [new SubscriptionRuleInfo { Name = "$Default", SqlExpression = "1=1" }]),
+                [new SubscriptionInfo { TopicName = "events", Name = "audit", Status = broker.ListedStatus, ActiveMessageCount = 5 }])),
+            nameof(IMessagingProvider.GetRulesAsync) => Task.FromResult<IReadOnlyList<SubscriptionRuleInfo>>(broker.Rules),
             nameof(IMessagingProvider.PeekMessagesAsync) => Peek(broker),
             nameof(IMessagingProvider.GetQueueAsync) => broker.LookupFailure is { } lookupFailed && !broker.FailTopicLookup ? Task.FromException<IQueueEntity?>(lookupFailed) : Task.FromResult<IQueueEntity?>(
-                broker.Queues.Contains((string)args[0]!) ? new QueueInfo { Name = (string)args[0]!, Status = "Active", ActiveMessageCount = 3, DeadLetterMessageCount = 2 } : null),
-            nameof(IMessagingProvider.GetSubscriptionAsync) => Task.FromResult<SubscriptionInfo?>(broker.Subscriptions.Contains($"{args[0]}/{args[1]}")
+                broker.Queues.Contains((string)args[0]!) ? new QueueInfo { Name = (string)args[0]!, Status = "Active", ActiveMessageCount = 3, DeadLetterMessageCount = 2, RequiresSession = broker.SessionQueues.Contains((string)args[0]!) } : null),
+            nameof(IMessagingProvider.GetSubscriptionAsync) => broker.SubscriptionLookupFailure is { } subscriptionLookupFailed ? Task.FromException<SubscriptionInfo?>(subscriptionLookupFailed) : Task.FromResult<SubscriptionInfo?>(broker.Subscriptions.Contains($"{args[0]}/{args[1]}")
                 ? new SubscriptionInfo { TopicName = (string)args[0]!, Name = (string)args[1]!, ActiveMessageCount = 5, DeadLetterMessageCount = 4 } : null),
             nameof(IMessagingProvider.PurgeMessagesAsync) => Batch(broker, new BatchCall(m.Name, (string)args[0]!, (string?)args[2], (MessageSubQueue)args[1]!, [], null, (CancellationToken)args[3]!)),
             nameof(IMessagingProvider.DeleteMessagesAsync) => Batch(broker, new BatchCall(m.Name, (string)args[0]!, (string?)args[3], (MessageSubQueue)args[2]!, (long[])args[1]!, null, (CancellationToken)args[5]!)),
@@ -758,6 +767,122 @@ public class McpToolTests
         var errors = store.After(0).Where(l => l.Level is "Error" or "Critical").ToList();
         Assert.True(errors.Count == 0,
             $"a refusal is not an error of the app: the log of the app holds no Error line after two refused calls; it held {string.Join(" | ", errors.Select(l => $"{l.Category}: {l.Text} ({l.ErrorType})"))}");
+    }
+
+    [Fact]
+    public async Task List_rules_answers_the_filter_type_and_a_property_type_by_their_names()
+    {
+        var broker = new Broker
+        {
+            Rules =
+            [
+                new SubscriptionRuleInfo { Name = "by-sql", FilterType = RuleFilterType.Sql, SqlExpression = "1=1" },
+                new SubscriptionRuleInfo
+                {
+                    Name = "by-correlation",
+                    FilterType = RuleFilterType.Correlation,
+                    Correlation = new CorrelationFilterInfo { ApplicationProperties = [new RuleApplicationProperty { Name = "tenant", Type = RulePropertyType.Int64, Value = "7" }] },
+                },
+            ],
+        };
+        await using var host = new Host(broker);
+        await host.StartAsync();
+        await host.SeedAsync(Offered());
+        await host.OfferAsync("c-offered");
+        await host.ConnectAsync("c-offered");
+
+        var (isError, text) = await host.CallAsync("list_rules", new { topic = "events", subscription = "audit" });
+
+        Assert.False(isError, text);
+        using var doc = JsonDocument.Parse(text);
+        var rules = doc.RootElement.EnumerateArray().ToList();
+        Assert.True(rules.Select(r => r.GetProperty("filterType")).All(f => f.ValueKind == JsonValueKind.String)
+                && rules.Select(r => r.GetProperty("filterType").GetString()).SequenceEqual(["Sql", "Correlation"]),
+            $"list_rules answers filterType as the name of the kind of filter, not a number; it answered {text}");
+        var property = rules[1].GetProperty("correlation").GetProperty("applicationProperties")[0].GetProperty("type");
+        Assert.True(property.ValueKind == JsonValueKind.String && property.GetString() == "Int64",
+            $"list_rules answers the type of a correlation property by its name, not a number; it answered {text}");
+    }
+
+    [Theory]
+    [InlineData("", true)]
+    [InlineData("", false)]
+    [InlineData("Active", true)]
+    [InlineData("Active", false)]
+    public async Task The_lists_leave_status_out_when_the_provider_gives_none(string status, bool countsGiven)
+    {
+        await using var host = new Host(new Broker { ListedStatus = status, SupportsMessageCounts = countsGiven });
+        await host.StartAsync();
+        await host.SeedAsync(Offered());
+        await host.OfferAsync("c-offered");
+        await host.ConnectAsync("c-offered");
+
+        foreach (var (tool, arguments, name) in new (string, object?, string)[] { ("list_queues", null, "orders"), ("list_topics", null, "events"), ("list_subscriptions", new { topic = "events" }, "audit") })
+        {
+            var (isError, text) = await host.CallAsync(tool, arguments);
+            Assert.False(isError, text);
+            using var doc = JsonDocument.Parse(text);
+            var entity = Assert.Single(doc.RootElement.EnumerateArray());
+            string? answered = entity.TryGetProperty("status", out var given) ? given.GetString() : null;
+            Assert.True(answered == (status.Length == 0 ? null : status),
+                $"{tool} leaves status out when the provider gives none and answers it when it does; with status '{status}' it answered {text}");
+            Assert.Equal(name, entity.GetProperty("name").GetString());
+        }
+    }
+
+    public static readonly TheoryData<string, string?> ToolsThatNeedAReason = new()
+    {
+        { "send_message", null }, { "send_message", "" }, { "send_message", " \t " },
+        { "send_messages", null }, { "send_messages", "" }, { "send_messages", " \t " },
+        { "connect_to", null }, { "connect_to", "" }, { "connect_to", " \t " },
+        { "dead_letter_messages", null }, { "dead_letter_messages", " \t " },
+        { "resubmit_messages", null }, { "resubmit_messages", " \t " },
+        { "move_messages", null }, { "move_messages", " \t " },
+        { "delete_messages", null }, { "delete_messages", " \t " },
+        { "purge_messages", null }, { "purge_messages", "" },
+        { "cancel_scheduled_messages", null }, { "cancel_scheduled_messages", "" },
+    };
+
+    [Theory]
+    [MemberData(nameof(ToolsThatNeedAReason))]
+    public async Task A_tool_called_without_a_reason_or_with_a_blank_one_is_refused_by_the_tool_before_anything_else(string tool, string? reason)
+    {
+        var broker = new Broker();
+        await using var host = new Host(broker);
+        await host.StartAsync();
+        await host.SeedAsync(Offered());
+        await host.OfferAsync("c-offered", "all");
+        await host.ConnectAsync("c-offered");
+        var store = host.Factory.Services.GetRequiredService<RecentLogStore>();
+        store.Clear();
+        var arguments = tool switch
+        {
+            "send_message" => new Dictionary<string, object?> { ["entity"] = "orders", ["body"] = "a" },
+            "send_messages" => new Dictionary<string, object?> { ["entity"] = "orders", ["messages"] = new[] { new { body = "a" } } },
+            "connect_to" => new Dictionary<string, object?> { ["connection"] = "c-offered" },
+            "purge_messages" => new Dictionary<string, object?> { ["entity"] = "orders", ["subQueue"] = "active" },
+            "delete_messages" => new Dictionary<string, object?> { ["entity"] = "orders", ["subQueue"] = "active", ["sequenceNumbers"] = new long[] { 12 } },
+            "move_messages" => new Dictionary<string, object?> { ["entity"] = "orders", ["sequenceNumbers"] = new long[] { 12 }, ["target"] = "orders-retry" },
+            _ => new Dictionary<string, object?> { ["entity"] = "orders", ["sequenceNumbers"] = new long[] { 12 } },
+        };
+        if (reason is not null) arguments["reason"] = reason;
+
+        var answer = await host.CallUnaskedAsync(tool, arguments, $"{tool} without a reason is refused before anybody is asked");
+        var listed = await host.ListedToolAsync(tool);
+
+        Assert.True(answer == (true, McpToolCalls.ReasonRequired),
+            $"{tool} called with reason {(reason is null ? "missing" : $"'{reason}'")} is refused by the tool with the fixed sentence, not rejected by the SDK; it answered {answer}");
+        Assert.True(broker.Sent.Count + broker.BatchCalls.Count == 0 && broker.Connects.Count == 1,
+            $"{tool} without a reason calls no provider: it sent {broker.Sent.Count}, made {broker.BatchCalls.Count} batch calls and {broker.Connects.Count - 1} connects");
+        Assert.Equal(0, (await host.RequestsAsync()).GetArrayLength());
+        var line = Assert.Single((await host.ActivityAsync()).EnumerateArray());
+        Assert.Equal(("Refused: no reason", "error"), (line.GetProperty("outcome").GetString(), line.GetProperty("kind").GetString()));
+        var errors = store.After(0).Where(l => l.Level is "Error" or "Critical").ToList();
+        Assert.True(errors.Count == 0, $"a call without a reason leaves no Error line in the app's log; it held {string.Join(" | ", errors.Select(l => $"{l.Category}: {l.Text}"))}");
+        var schema = listed.GetProperty("inputSchema");
+        var required = schema.TryGetProperty("required", out var names) ? names.EnumerateArray().Select(n => n.GetString()).ToList() : [];
+        Assert.True(!required.Contains("reason") && schema.GetProperty("properties").GetProperty("reason").GetProperty("description").GetString()!.Contains("Required", StringComparison.Ordinal),
+            $"{tool} takes reason as optional in its schema and its description still says it is required: {schema}");
     }
 
     [Fact]

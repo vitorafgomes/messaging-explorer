@@ -233,4 +233,14 @@ public class McpSettingsRouteTests
         Assert.True(!state.GetProperty("enabled").GetBoolean() && !state.GetProperty("hasToken").GetBoolean(),
             $"a change that could not be written does not take effect; the state was {state}");
     }
+
+    [Theory]
+    [InlineData("all", "all", true)]
+    [InlineData("readAndSend", "all", false)]
+    [InlineData("all", "read", true)]
+    [InlineData("all", "a level that does not exist", false)]
+    [InlineData("a level that does not exist", "read", false)]
+    [InlineData(null, "read", false)]
+    public void A_level_covers_the_levels_below_it_and_never_one_that_does_not_exist(string? offered, string needed, bool covers) =>
+        Assert.True(McpSettingsStore.Covers(offered, needed) == covers, $"offered {offered ?? "nothing"} covers {needed}: expected {covers}");
 }

@@ -312,6 +312,85 @@ public class McpRemoveToolTests
     }
 
     [Fact]
+    public async Task A_move_to_a_target_that_does_not_exist_is_refused_before_anybody_is_asked_and_moves_nothing()
+    {
+        var broker = new Broker();
+        await using var host = await StartAsync(broker);
+
+        var answer = await host.CallUnaskedAsync("move_messages", new { entity = "orders", subQueue = "deadLetter", sequenceNumbers = new long[] { 12 }, target = "no-such-queue", reason = "r" },
+            "a move to a target that does not exist is refused before anybody is asked");
+        var refusedRequests = (await host.RequestsAsync()).GetArrayLength();
+        var toTopic = host.CallAsync("move_messages", new { entity = "orders", subQueue = "deadLetter", sequenceNumbers = new long[] { 12 }, target = "events", reason = "r" });
+        var topicRequest = await host.AnswerOnlyRequestAsync(allow: false);
+        await toTopic;
+
+        Assert.True(answer == (true, McpRemoveTools.TargetNotFound), $"a move to a target that is neither a queue nor a topic answers the fixed sentence; it answered {answer}");
+        Assert.True(broker.BatchCalls.Count == 0, $"a move to a target that does not exist moves nothing; the provider was called {broker.BatchCalls.Count} times");
+        Assert.Equal(0, refusedRequests);
+        Assert.True(topicRequest.GetProperty("title").GetString() == "Assistant asks to move 1 message", $"a move to a target that is a topic is looked up as a send's is and asks the user; the request was {topicRequest}");
+        Assert.Equal(("Move 1 message", "orders (dead-letter queue) on offered-name", "Refused: target not found", "error"), Line((await host.ActivityAsync()).EnumerateArray().Last()));
+    }
+
+    [Theory]
+    [InlineData("broker", "queue")]
+    [InlineData("timeout", "queue")]
+    [InlineData("broker", "topic")]
+    [InlineData("timeout", "topic")]
+    public async Task A_move_whose_lookup_of_the_target_fails_answers_the_fixed_sentence_asks_nobody_and_moves_nothing(string failure, string lookup)
+    {
+        var broker = new Broker
+        {
+            FailTopicLookup = lookup == "topic",
+            LookupFailure = failure == "timeout"
+                ? new TimeoutException(Sentinel)
+                : new Azure.Messaging.ServiceBus.ServiceBusException(Sentinel, Azure.Messaging.ServiceBus.ServiceBusFailureReason.ServiceCommunicationProblem),
+        };
+        await using var host = await StartAsync(broker);
+
+        var answer = await host.CallUnaskedAsync("move_messages", new { entity = "events", subscription = "audit", sequenceNumbers = new long[] { 12 }, target = "no-such-queue", reason = "r" },
+            $"a move whose lookup of the target fails ({failure}, {lookup}) asks nobody");
+
+        Assert.True(answer == (true, "An internal error occurred."), $"a move whose lookup of the target fails ({failure}, {lookup}) answers the fixed sentence, never the broker's text; it answered {answer}");
+        Assert.True(broker.BatchCalls.Count == 0, $"nothing is moved when the target could not be looked up; the provider was called {broker.BatchCalls.Count} times");
+        Assert.Equal(0, (await host.RequestsAsync()).GetArrayLength());
+        Assert.Equal(("Move 1 message", "events / audit (active) on offered-name", "Failed", "error"), Line(Assert.Single((await host.ActivityAsync()).EnumerateArray())));
+    }
+
+    [Theory]
+    [InlineData("delete_messages", "queue", "broker")]
+    [InlineData("delete_messages", "queue", "timeout")]
+    [InlineData("dead_letter_messages", "queue", "broker")]
+    [InlineData("dead_letter_messages", "queue", "timeout")]
+    [InlineData("move_messages", "queue", "broker")]
+    [InlineData("purge_messages", "subscription", "broker")]
+    [InlineData("purge_messages", "subscription", "timeout")]
+    [InlineData("resubmit_messages", "subscription", "broker")]
+    [InlineData("resubmit_messages", "subscription", "timeout")]
+    [InlineData("cancel_scheduled_messages", "queue", "broker")]
+    [InlineData("cancel_scheduled_messages", "queue", "timeout")]
+    [InlineData("cancel_scheduled_messages", "topic", "broker")]
+    [InlineData("cancel_scheduled_messages", "topic", "timeout")]
+    public async Task A_tool_whose_lookup_of_its_entity_fails_answers_the_fixed_sentence_asks_nobody_and_does_nothing(string tool, string lookup, string failure)
+    {
+        Exception failed = failure == "timeout"
+            ? new TimeoutException(Sentinel)
+            : new Azure.Messaging.ServiceBus.ServiceBusException(Sentinel, Azure.Messaging.ServiceBus.ServiceBusFailureReason.ServiceCommunicationProblem);
+        var broker = lookup == "subscription"
+            ? new Broker { SubscriptionLookupFailure = failed }
+            : new Broker { LookupFailure = failed, FailTopicLookup = lookup == "topic" };
+        await using var host = await StartAsync(broker);
+        var arguments = lookup == "topic" ? new { entity = "events", sequenceNumbers = new long[] { 12 }, reason = "r" } : Args(tool);
+
+        var answer = await host.CallUnaskedAsync(tool, arguments, $"{tool} whose lookup of its {lookup} fails ({failure}) asks nobody");
+
+        Assert.True(answer == (true, "An internal error occurred."), $"{tool} whose lookup of its {lookup} fails ({failure}) answers the fixed sentence, never the broker's text; it answered {answer}");
+        Assert.True(broker.BatchCalls.Count == 0, $"nothing is done when the {lookup} could not be looked up; the provider was called {broker.BatchCalls.Count} times");
+        Assert.Equal(0, (await host.RequestsAsync()).GetArrayLength());
+        var line = Line(Assert.Single((await host.ActivityAsync()).EnumerateArray()));
+        Assert.True(line.Item3 == "Failed" && line.Item4 == "error", $"the failed lookup is recorded as a failure; the record said {line}");
+    }
+
+    [Fact]
     public async Task Sequence_numbers_are_taken_1_to_100_as_numbers_or_numeric_strings()
     {
         var broker = new Broker();

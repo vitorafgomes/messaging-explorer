@@ -23,7 +23,7 @@ const LEVEL_LABELS: Record<string, string> = { read: 'Read', readAndSend: 'Read 
 const CHOICES = [
   { level: 'read', title: 'Read', who: 'Every connection listed', what: 'List the connections offered, queues, topics, subscriptions and rules; read the counts; peek the active, dead-letter, scheduled and deferred messages.', asks: 'Never asks you.' },
   { level: 'readAndSend', title: 'Send', who: 'From "Read and send" up', what: 'Send one message or many to a queue or a topic, now or scheduled.', asks: 'Asks you before each send, except on a local test broker.' },
-  { level: 'all', title: 'Move and remove', who: '"Read, send and remove" only', what: 'Resubmit, move, delete, purge and cancel scheduled messages.', asks: 'Asks you every time; a delete or a purge asks for the name typed.' },
+  { level: 'all', title: 'Move and remove', who: '"Read, send and remove" only', what: 'Dead-letter, resubmit, move, delete, purge and cancel scheduled messages.', asks: 'Asks you every time, a local test broker included; a delete or a purge asks for the name typed.' },
   { level: 'all', title: 'Entities', who: '"Read, send and remove" only', what: 'Create, change and delete a queue, a topic, a subscription or a rule.', asks: 'Asks you every time.' },
 ];
 

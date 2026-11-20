@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Mvc;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
@@ -76,8 +77,8 @@ public sealed class McpReadTools(
         var queues = (await provider.GetQueuesAsync()).ToList();
         var counts = provider.Capabilities.SupportsMessageCounts;
         call.Outcome = $"{queues.Count} listed";
-        return queues.Select(q => counts
-            ? (object)new
+        return queues.Select(q => Listed(counts
+            ? new
             {
                 name = q.Name,
                 status = q.Status,
@@ -88,7 +89,7 @@ public sealed class McpReadTools(
                 transferMessageCount = q.TransferMessageCount,
                 transferDeadLetterMessageCount = q.TransferDeadLetterMessageCount,
             }
-            : new { name = q.Name, status = q.Status, countsAvailable = false });
+            : new { name = q.Name, status = q.Status, countsAvailable = false }));
     });
 
     /// <summary>The topics of the active offered connection.</summary>
@@ -104,8 +105,8 @@ public sealed class McpReadTools(
         var topics = (await provider.GetTopicsAsync()).ToList();
         call.Outcome = $"{topics.Count} listed";
         return provider.Capabilities.SupportsMessageCounts
-            ? topics.Select(t => (object)new { name = t.Name, status = t.Status, subscriptionCount = t.SubscriptionCount, countsAvailable = true, scheduledMessageCount = t.ScheduledMessageCount })
-            : topics.Select(t => (object)new { name = t.Name, status = t.Status, subscriptionCount = t.SubscriptionCount, countsAvailable = false });
+            ? topics.Select(t => Listed(new { name = t.Name, status = t.Status, subscriptionCount = t.SubscriptionCount, countsAvailable = true, scheduledMessageCount = t.ScheduledMessageCount }))
+            : topics.Select(t => Listed(new { name = t.Name, status = t.Status, subscriptionCount = t.SubscriptionCount, countsAvailable = false }));
     });
 
     /// <summary>The subscriptions of a topic of the active offered connection with their counts.</summary>
@@ -125,8 +126,8 @@ public sealed class McpReadTools(
         var subscriptions = (await provider.GetSubscriptionsAsync(topic)).ToList();
         var counts = provider.Capabilities.SupportsMessageCounts;
         call.Outcome = $"{subscriptions.Count} listed";
-        return subscriptions.Select(s => counts
-            ? (object)new
+        return subscriptions.Select(s => Listed(counts
+            ? new
             {
                 name = s.Name,
                 status = s.Status,
@@ -137,7 +138,7 @@ public sealed class McpReadTools(
                 transferMessageCount = s.TransferMessageCount,
                 transferDeadLetterMessageCount = s.TransferDeadLetterMessageCount,
             }
-            : new { name = s.Name, status = s.Status, countsAvailable = false });
+            : new { name = s.Name, status = s.Status, countsAvailable = false }));
     });
 
     /// <summary>The rules of a subscription of the active offered connection, when the provider has rules.</summary>
@@ -257,6 +258,14 @@ public sealed class McpReadTools(
             call.Outcome = $"{lines.Count} read";
             return Task.FromResult<object?>(lines);
         });
+    }
+
+    /// <summary>An entity of list_queues, list_topics or list_subscriptions, without status when the provider gives none.</summary>
+    private static JsonObject Listed(object entity)
+    {
+        var listed = JsonSerializer.SerializeToNode(entity)!.AsObject();
+        if (string.IsNullOrEmpty((string?)listed["status"])) listed.Remove("status");
+        return listed;
     }
 
     private static string? TargetOf(ServiceBusConnection connection) => connection.ProviderType == ProviderType.RabbitMQ

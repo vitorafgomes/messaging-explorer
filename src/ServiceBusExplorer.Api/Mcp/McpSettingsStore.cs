@@ -65,7 +65,7 @@ public sealed class McpSettingsStore
 
     /// <summary>True when a connection offered at <paramref name="offered"/> may do what <paramref name="needed"/> allows.</summary>
     public static bool Covers(string? offered, string needed) =>
-        offered is not null && Levels.Contains(offered) && Levels.ToList().IndexOf(offered) >= Levels.ToList().IndexOf(needed);
+        offered is not null && Levels.Contains(offered) && Levels.Contains(needed) && Levels.ToList().IndexOf(offered) >= Levels.ToList().IndexOf(needed);
 
     /// <summary>The name of the file in the data folder.</summary>
     public const string FileName = "mcp-settings.json";

@@ -55,6 +55,9 @@ public sealed class McpSendTools(McpToolCalls calls, ILogger<McpSendTools> logge
     /// <summary>The answer when the connection is offered for reading only.</summary>
     public const string ReadOnlyRefused = "This connection is offered for reading only. The user can change that in Settings, MCP server.";
 
+    /// <summary>The answer when a message to a queue that requires sessions carries no session id.</summary>
+    public const string SessionRequired = "This queue requires sessions: give each message a sessionId.";
+
     /// <summary>The most messages one send_messages call takes.</summary>
     public const int MaxMessages = 100;
 
@@ -67,7 +70,7 @@ public sealed class McpSendTools(McpToolCalls calls, ILogger<McpSendTools> logge
         McpServer server,
         [Description("The queue or the topic.")] string entity,
         [Description("The body, sent as UTF-8 text.")] string body,
-        [Description("Why you want to send it; the user sees it.")] string reason,
+        [Description("Why you want to send it; the user sees it. Required.")] string? reason = null,
         [Description("The content type; application/json when omitted.")] string? contentType = null,
         [Description("The subject, or label; on RabbitMQ the routing key of a send to an exchange.")] string? subject = null,
         [Description("The message id.")] string? messageId = null,
@@ -84,6 +87,7 @@ public sealed class McpSendTools(McpToolCalls calls, ILogger<McpSendTools> logge
         };
         return calls.RunAsync(server, "Send 1 message", logger, async call =>
         {
+            McpToolCalls.RequireReason(call, reason);
             var (active, requests) = await PrepareAsync(call, entity, [message], reason, cancellationToken);
             var sequenceNumber = await active.Provider.SendMessageAsync(entity, requests[0]);
             call.Outcome = "1 sent";
@@ -98,12 +102,13 @@ public sealed class McpSendTools(McpToolCalls calls, ILogger<McpSendTools> logge
         McpServer server,
         [Description("The queue or the topic.")] string entity,
         [Description("The messages, 1 to 100.")] McpOutgoingMessage[] messages,
-        [Description("Why you want to send them; the user sees it.")] string reason,
+        [Description("Why you want to send them; the user sees it. Required.")] string? reason = null,
         CancellationToken cancellationToken = default)
     {
         var count = messages?.Length ?? 0;
         return calls.RunAsync(server, count == 1 ? "Send 1 message" : $"Send {count} messages", logger, async call =>
         {
+            McpToolCalls.RequireReason(call, reason);
             var (active, requests) = await PrepareAsync(call, entity, messages ?? [], reason, cancellationToken);
             var result = await active.Provider.SendMessagesAsync(entity, requests, cancellationToken);
             call.Outcome = result.Success ? $"{result.SentCount} sent" : $"{result.SentCount} sent, {result.Failures.Count} not sent";
@@ -135,7 +140,10 @@ public sealed class McpSendTools(McpToolCalls calls, ILogger<McpSendTools> logge
         if (requests.Any(r => !string.IsNullOrEmpty(r.SessionId)) && !provider.Capabilities.SupportsSessions)
             call.Refuse("This provider does not support sessions.", "Refused: no sessions");
 
-        bool isQueue = await provider.GetQueueAsync(entity) is not null;
+        var queue = await provider.GetQueueAsync(entity);
+        bool isQueue = queue is not null;
+        if (queue is { RequiresSession: true } && requests.Any(r => string.IsNullOrEmpty(r.SessionId)))
+            call.Refuse(SessionRequired, "Refused: no session id");
         if (!isQueue && !provider.Capabilities.SupportsTopics)
             call.Refuse("This provider does not support topics.", "Refused: no topics");
         if (!isQueue && await provider.GetTopicAsync(entity, cancellationToken) is null)

@@ -152,7 +152,7 @@ public class McpSendToolTests
         });
         var topicRequest = await host.AnswerOnlyRequestAsync(allow: false);
         await topic;
-        var queue = host.CallAsync("send_message", new { entity = "orders", body = "{}", reason = "" });
+        var queue = host.CallAsync("send_message", new { entity = "orders", body = "{}", reason = "check the queue" });
         var queueRequest = await host.AnswerOnlyRequestAsync(allow: false);
         await queue;
 
@@ -166,7 +166,7 @@ public class McpSendToolTests
         Assert.Equal([("To", "events, a topic"), ("On", "offered-name (Contoso, staging)"), ("Messages", $"3, text/plain, {bytes} bytes in all"), ("It said why", shownReason)], Facts(topicRequest));
         Assert.Equal(("Assistant asks to send 1 message", "Every consumer of this queue receives these messages. A message sent cannot be taken back.", "Send 1 message"),
             (queueRequest.GetProperty("title").GetString(), queueRequest.GetProperty("note").GetString(), queueRequest.GetProperty("allowLabel").GetString()));
-        Assert.Equal([("To", "orders, a queue"), ("On", "offered-name (Contoso, staging)"), ("Messages", "1, application/json, 2 bytes in all"), ("It said why", "It gave no reason")], Facts(queueRequest));
+        Assert.Equal([("To", "orders, a queue"), ("On", "offered-name (Contoso, staging)"), ("Messages", "1, application/json, 2 bytes in all"), ("It said why", "check the queue")], Facts(queueRequest));
         var expires = topicRequest.GetProperty("expiresAt").GetDateTimeOffset() - topicRequest.GetProperty("time").GetDateTimeOffset();
         Assert.True(expires == TimeSpan.FromMinutes(2), $"a request expires two minutes after it was made; it said {expires}");
         foreach (var request in new[] { topicRequest, queueRequest })
@@ -285,6 +285,29 @@ public class McpSendToolTests
         Assert.True(broker.SendCalls == 0 && (await host.RequestsAsync()).GetArrayLength() == 0,
             $"a send the provider cannot do ({missing}) is refused before the user is asked or the provider sends; it was called {broker.SendCalls} times");
         Assert.True(missing != "topics" || broker.TopicLookups == 0, "a provider without topics is never asked for one");
+    }
+
+    [Theory]
+    [InlineData("send_message")]
+    [InlineData("send_messages")]
+    public async Task A_send_to_a_queue_that_requires_sessions_without_a_session_id_is_refused_before_anybody_is_asked(string tool)
+    {
+        var broker = new Broker { SessionQueues = ["orders"] };
+        await using var host = await StartAsync(broker);
+        object withoutSession = tool == "send_message"
+            ? new { entity = "orders", body = "a", reason = "r" }
+            : new { entity = "orders", messages = new object[] { new { body = "a", sessionId = "s1" }, new { body = "b" } }, reason = "r" };
+
+        var refused = await host.CallUnaskedAsync(tool, withoutSession, "a send to a queue that requires sessions without a sessionId is refused before anybody is asked");
+        var withSession = host.CallAsync("send_message", new { entity = "orders", body = "a", sessionId = "s1", reason = "r" });
+        var request = await host.AnswerOnlyRequestAsync(allow: false);
+        await withSession;
+
+        Assert.True(refused == (true, McpSendTools.SessionRequired),
+            $"a send to a queue that requires sessions, with a message that carries no sessionId, answers the fixed sentence; {tool} answered {refused}");
+        Assert.True(broker.SendCalls == 0, $"nothing is sent to a queue that requires sessions without a sessionId; the provider was asked to send {broker.SendCalls} times");
+        Assert.Equal("Assistant asks to send 1 message", request.GetProperty("title").GetString());
+        Assert.Equal("Refused: no session id", Line((await host.ActivityAsync()).EnumerateArray().Last()).Outcome);
     }
 
     [Theory]
