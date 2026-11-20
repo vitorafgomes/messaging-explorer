@@ -2,7 +2,7 @@
 title: "ADR 0008 - An MCP server inside the local API"
 version: "1.0"
 date: 2026-11-19
-changes: "2026-11-20: Enforcement names each phase. 2026-11-19: accepted by the owner with the screen as drawn. Initial ADR draft"
+changes: "2026-11-20: Enforcement names each phase, entities included. 2026-11-19: accepted by the owner with the screen as drawn. Initial ADR draft"
 page_type: adr
 status: accepted
 description: "The local API serves an MCP endpoint, off by default, for the connections the user chose, behind its own token, asking the user in the app before anything is sent, moved or removed."
@@ -82,15 +82,15 @@ What was read on 2026-11-19, and what was not:
 
 ## Enforcement
 
-Tests: [[pages/services/api/mcp-server]], [[pages/services/api/mcp-asking-and-sending]], [[pages/services/api/mcp-moving-and-removing]].
+Tests: the MCP topic pages of [[pages/services/api]].
 
 - **The gate:** `src/ServiceBusExplorer.Api/Mcp/McpGate.cs#AdmitAsync`, `src/ServiceBusExplorer.Api/Mcp/McpSettingsStore.cs#TokenMatches`. Pinned by `src/ServiceBusExplorer.Api.Tests/McpGateTests.cs#The_mcp_endpoint_answers_404_while_the_user_has_not_turned_it_on_even_with_a_token_and_the_api_key`, `src/ServiceBusExplorer.Api.Tests/McpGateTests.cs#The_mcp_token_alone_opens_no_api_route`.
 - **Only the connections offered, at their level:** `src/ServiceBusExplorer.Api/Mcp/McpToolCalls.cs#ActiveAsync`. Pinned by `src/ServiceBusExplorer.Api.Tests/McpToolTests.cs#A_tool_on_an_active_connection_that_is_not_offered_is_refused_and_names_nothing`, `src/ServiceBusExplorer.Api.Tests/McpSendToolTests.cs#A_connection_offered_for_reading_refuses_a_send_without_asking`.
 - **The user is asked in the app:** `src/ServiceBusExplorer.Api/Mcp/McpRequests.cs#AskAsync`; nothing is sent before an allow, at most 20 wait, the MCP token answers none. Pinned by `src/ServiceBusExplorer.Api.Tests/McpSendToolTests.cs#A_send_waits_for_the_user_and_is_sent_once_only_after_the_user_allows_it`, `src/ServiceBusExplorer.Api.Tests/McpRequestTests.cs#At_most_20_requests_wait_and_a_21st_is_refused_at_once`, `src/ServiceBusExplorer.Api.Tests/McpRequestTests.cs#The_mcp_token_cannot_answer_a_request_and_the_key_answers_it_once`.
 - **Production asks before every read; a local test broker is never asked:** `src/ServiceBusExplorer.Api/Mcp/McpToolCalls.cs#ProtectionAsync`. Pinned by `src/ServiceBusExplorer.Api.Tests/McpRequestTests.cs#A_production_connection_asks_before_every_read_and_list_connections_and_read_logs_never_ask`, `src/ServiceBusExplorer.Api.Tests/McpSettingsRouteTests.cs#Never_asked_is_accepted_only_for_a_broker_on_this_computer_that_is_not_production_and_stops_counting_when_that_changes`.
 - **No secret or body leaves:** `src/ServiceBusExplorer.Api.Tests/McpToolTests.cs#Every_tool_call_is_recorded_newest_first_without_a_body_or_a_secret`, `src/ServiceBusExplorer.Api.Tests/McpSendToolTests.cs#The_request_says_what_where_how_many_and_why_in_fixed_words_with_no_body_and_no_secret`.
-- **Moving and removing; a typed name:** `src/ServiceBusExplorer.Api/Mcp/McpRemoveTools.cs#PrepareAsync`, `src/ServiceBusExplorer.Api/Mcp/McpRequests.cs#Answer`.
-- **Owed:** administering entities.
+- **Moving, removing, entities; a typed name:** `src/ServiceBusExplorer.Api/Mcp/McpRemoveTools.cs#PrepareAsync`, `src/ServiceBusExplorer.Api/Mcp/McpEntityTools.cs#PrepareAsync`, `src/ServiceBusExplorer.Api/Mcp/McpRequests.cs#Answer`.
+- **Owed:** the settings of the app.
 - **Invariant page and lenses:** [[pages/invariants/local-authenticated-api]] carries the second exemption; `api-surface`, `secrets` and `message-safety` review every phase.
 
 ## Related

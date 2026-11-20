@@ -29,7 +29,7 @@ The reading phase of [[pages/decisions/0008-an-mcp-server-inside-the-local-api]]
 
 - **`/mcp`**, Streamable HTTP, stateless, served by the API process (`src/ServiceBusExplorer.Api/Program.cs#MapMcp`, package `ModelContextProtocol.AspNetCore` 2.4.0). It is the second exemption from the `X-Api-Key` middleware after `/health` ([[pages/invariants/local-authenticated-api]]); its gate is `src/ServiceBusExplorer.Api/Mcp/McpGate.cs#AdmitAsync`.
 - **Routes of Settings**, behind the key, camelCase (`src/ServiceBusExplorer.Api/Controllers/McpController.cs#McpController`):
-  - `GET api/mcp` answers `McpState`: `enabled`, `url` (`http://127.0.0.1:<apiPort>/mcp`), `hasToken`, `tokenCreatedAt`, `levels`, `supports` (`logs` and `confirmation` true, `appSettings` false), `logsAllowed`, `connections` ([[pages/services/api/mcp-asking-and-sending]]).
+  - `GET api/mcp` answers `McpState`: `enabled`, `url` (`http://127.0.0.1:<apiPort>/mcp`), `hasToken`, `tokenCreatedAt`, `levels`, `supports` (`logs`, `confirmation` and `entities` true, `appSettings` false), `logsAllowed`, `connections` ([[pages/services/api/mcp-asking-and-sending]]).
   - `PUT api/mcp/enabled` `{ enabled }`, `PUT api/mcp/logs` `{ allowed }`, `DELETE api/mcp/connections/{id}` (idempotent) answer the state.
   - `POST api/mcp/token` answers `{ token, state }`; the plain token is answered this once.
   - `PUT api/mcp/connections/{id}` and `api/mcp/requests`: [[pages/services/api/mcp-asking-and-sending]].

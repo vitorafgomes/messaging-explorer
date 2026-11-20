@@ -141,7 +141,8 @@ builder.Services.AddMcpServer()
     .WithTools<McpReadTools>()
     .WithTools<McpSendTools>()
     .WithTools<McpConnectTools>()
-    .WithTools<McpRemoveTools>();
+    .WithTools<McpRemoveTools>()
+    .WithTools<McpEntityTools>();
 builder.Services.AddHostedService<MonitoringBackgroundService>();
 
 // ─────────────────────────────────────────────────────────────

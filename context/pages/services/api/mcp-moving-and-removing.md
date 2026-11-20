@@ -61,6 +61,7 @@ sequenceDiagram
 
 ## Sharp edges
 
+- **A name is taken only as the user reads it.** A name with a space at an edge, a control character or more than 260 characters is refused before anybody is asked, here and in the tools that administer entities, so the word the user types is the entity the broker is given: `src/ServiceBusExplorer.Api/Mcp/McpToolCalls.cs#RequireExactNames`, pinned by `src/ServiceBusExplorer.Api.Tests/McpRemoveToolTests.cs#A_name_that_is_not_exactly_what_the_user_would_read_is_refused_before_anybody_is_asked` and its namesake in `src/ServiceBusExplorer.Api.Tests/McpEntityToolTests.cs`.
 - **A guard added to a shared body changes the route too.** The bodies of item 4 are the routes'; a check meant for the tools belongs in `src/ServiceBusExplorer.Api/Mcp/McpRemoveTools.cs#PrepareAsync`.
 - **A cancellation during the provider call** is answered by the route's catch-all as the constant 500, as it was before; the tool returns that sentence, the record says "Failed, allowed by you".
 - **The transfer dead-letter queue** is taken by delete, resubmit and move only; no route purges it. A move from it is checked by `src/ServiceBusExplorer.Api/Controllers/EntityAdministrationResults.cs#SubQueueNotSupported` in the shared body, which no route reaches.

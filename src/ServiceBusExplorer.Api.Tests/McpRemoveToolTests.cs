@@ -522,4 +522,20 @@ public class McpRemoveToolTests
         Assert.Equal((false, destructive, false),
             (annotations.GetProperty("readOnlyHint").GetBoolean(), annotations.GetProperty("destructiveHint").GetBoolean(), annotations.GetProperty("idempotentHint").GetBoolean()));
     }
+
+    [Theory]
+    [InlineData("delete_messages", """{"entity":"orders ","subQueue":"deadLetter","sequenceNumbers":[12],"reason":"r"}""")]
+    [InlineData("purge_messages", """{"entity":"events","subscription":"aud\u0007it","subQueue":"active","reason":"r"}""")]
+    [InlineData("move_messages", """{"entity":"orders","subQueue":"deadLetter","sequenceNumbers":[12],"target":"orders-retry ","reason":"r"}""")]
+    public async Task A_name_that_is_not_exactly_what_the_user_would_read_is_refused_before_anybody_is_asked(string tool, string json)
+    {
+        var broker = new Broker();
+        await using var host = await StartAsync(broker);
+
+        var answer = await host.CallUnaskedAsync(tool, JsonSerializer.Deserialize<JsonElement>(json), $"{tool} with a name the user would read differently is refused before anybody is asked");
+
+        Assert.True(answer == (true, "A name cannot begin or end with a space, hold a control character or be longer than 260 characters."), $"{tool} with {json} answers the sentence about the name; it answered {answer}");
+        Assert.True(broker.BatchCalls.Count == 0, $"nothing is done; the provider was called {broker.BatchCalls.Count} times");
+        Assert.Equal(0, (await host.RequestsAsync()).GetArrayLength());
+    }
 }

@@ -61,6 +61,13 @@ public class McpToolTests
         public bool SupportsSequenceNumbers { get; init; } = true;
         public bool SupportsManualDeadLetter { get; init; } = true;
         public bool SupportsBulkMessageOperations { get; init; } = true;
+        public bool SupportsEntityUpdate { get; init; } = true;
+
+        /// <summary>The create, update and delete calls of queues, topics, subscriptions and rules, in order.</summary>
+        public List<AdminCall> AdminCalls { get; } = [];
+
+        /// <summary>What every create, update and delete of an entity throws; null answers.</summary>
+        public Exception? AdminFailure { get; init; }
         public HashSet<string> Subscriptions { get; init; } = ["events/audit"];
 
         /// <summary>What a batch call answers for its sequence numbers; null answers each one done.</summary>
@@ -134,6 +141,7 @@ public class McpToolTests
             "get_SupportsSequenceNumbers" => broker.SupportsSequenceNumbers,
             "get_SupportsManualDeadLetter" => broker.SupportsManualDeadLetter,
             "get_SupportsBulkMessageOperations" => broker.SupportsBulkMessageOperations,
+            "get_SupportsEntityUpdate" => broker.SupportsEntityUpdate,
             "get_ProviderDisplayName" => "Stub",
             "get_ProviderVersion" => "1",
             _ when m.ReturnType == typeof(bool) => true,
@@ -166,11 +174,38 @@ public class McpToolTests
             nameof(IMessagingProvider.CancelScheduledMessagesAsync) => Batch(broker, new BatchCall(m.Name, (string)args[0]!, null, null, (long[])args[1]!, null, (CancellationToken)args[2]!)),
             nameof(IMessagingProvider.DeadLetterMessagesAsync) => Batch(broker, new BatchCall(m.Name, (string)args[0]!, (string?)args[2], MessageSubQueue.Active, (long[])args[1]!, $"{args[3]}|{args[4]}", (CancellationToken)args[5]!)),
             nameof(IMessagingProvider.GetTopicAsync) => broker.LookupFailure is { } topicLookupFailed && !broker.Queues.Contains((string)args[0]!) && broker.FailTopicLookup ? Task.FromException<ITopicEntity?>(topicLookupFailed) : Counted(() => broker.TopicLookups++, Task.FromResult<ITopicEntity?>(
-                broker.Topics.Contains((string)args[0]!) ? new TopicInfo { Name = (string)args[0]!, Status = "Active" } : null)),
+                broker.Topics.Contains((string)args[0]!) ? new TopicInfo { Name = (string)args[0]!, Status = "Active", SubscriptionCount = broker.Subscriptions.Count(s => s.StartsWith($"{args[0]}/", StringComparison.Ordinal)) } : null)),
             nameof(IMessagingProvider.SendMessageAsync) => SendOne(broker, (SendMessageRequest)args[1]!),
             nameof(IMessagingProvider.SendMessagesAsync) => SendMany(broker, ((IEnumerable<SendMessageRequest>)args[1]!).ToList()),
+            _ when AdminMethods.Contains(m.Name) => Admin(broker, m.Name, args),
             _ => throw new NotSupportedException(m.Name)
         });
+    }
+
+    private static readonly string[] AdminMethods =
+    [
+        nameof(IMessagingProvider.CreateQueueAsync), nameof(IMessagingProvider.UpdateQueueAsync), nameof(IMessagingProvider.DeleteQueueAsync),
+        nameof(IMessagingProvider.CreateTopicAsync), nameof(IMessagingProvider.UpdateTopicAsync), nameof(IMessagingProvider.DeleteTopicAsync),
+        nameof(IMessagingProvider.CreateSubscriptionAsync), nameof(IMessagingProvider.UpdateSubscriptionAsync), nameof(IMessagingProvider.DeleteSubscriptionAsync),
+        nameof(IMessagingProvider.CreateRuleAsync), nameof(IMessagingProvider.UpdateRuleAsync), nameof(IMessagingProvider.DeleteRuleAsync),
+    ];
+
+    /// <summary>One create, update or delete of an entity: the provider member and its arguments.</summary>
+    internal sealed record AdminCall(string Method, object?[] Args);
+
+    /// <summary>Records the call, then throws <see cref="Broker.AdminFailure"/> or answers; a rule call answers the rule it was given.</summary>
+    private static object Admin(Broker broker, string method, object?[] args)
+    {
+        broker.AdminCalls.Add(new AdminCall(method, args));
+        var rule = method switch
+        {
+            nameof(IMessagingProvider.CreateRuleAsync) => (SubscriptionRuleInfo?)args[2],
+            nameof(IMessagingProvider.UpdateRuleAsync) => new SubscriptionRuleInfo { Name = (string)args[2]!, FilterType = ((SubscriptionRuleInfo)args[3]!).FilterType },
+            _ => null,
+        };
+        if (rule is not null)
+            return broker.AdminFailure is { } ruleFailed ? Task.FromException<SubscriptionRuleInfo>(ruleFailed) : Task.FromResult(rule);
+        return broker.AdminFailure is { } failure ? Task.FromException(failure) : Task.CompletedTask;
     }
 
     /// <summary>One move, remove, purge or cancel call: the provider member, where, which numbers, the target, the token.</summary>

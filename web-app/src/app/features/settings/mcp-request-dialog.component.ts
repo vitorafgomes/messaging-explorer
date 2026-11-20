@@ -10,7 +10,7 @@ import { McpRequest, McpSettingsService } from './mcp-settings.service';
 export type McpRequestOutcome = 'allowed' | 'denied' | 'gone';
 
 /** The kinds of request this version of the app can allow. */
-const KNOWN_KINDS = ['read', 'send', 'connect', 'deadLetter', 'resubmit', 'move', 'delete', 'purge', 'cancelScheduled'];
+const KNOWN_KINDS = ['read', 'send', 'connect', 'deadLetter', 'resubmit', 'move', 'delete', 'purge', 'cancelScheduled', 'createEntity', 'updateEntity', 'deleteEntity'];
 
 /**
  * The window that asks the user about one request of an assistant, as Settings.dc.html draws `mcp.ask`.

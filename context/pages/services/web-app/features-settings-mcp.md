@@ -1,9 +1,9 @@
 ---
 title: "Web App: The MCP server group of Settings"
-version: "1.3"
+version: "1.4"
 date: 2026-11-19
 updated: 2026-11-20
-changes: "v1.3: phase three, the level all with its confirmation and blocks; the window that asks the user moved to its own page. v1.2: the kind connect. v1.1: phase two, sending: the window that asks the user, the production offer, the local test broker choice, the activity refreshed. v1.0: phase one, reading: the group of Settings and the toolbar mark"
+changes: "v1.4: phase 3b, the Entities block and the confirmation of all with entities. v1.3: phase three, the level all with its confirmation and blocks; the window that asks the user moved to its own page. v1.2: the kind connect. v1.1: phase two, sending: the window that asks the user, the production offer, the local test broker choice, the activity refreshed. v1.0: phase one, reading: the group of Settings and the toolbar mark"
 page_type: service
 status: active
 description: "Read when a change touches the MCP server group of Settings, McpSettingsService, the level that moves and removes messages, the MCP token shown in the app, or the MCP mark on the toolbar."
@@ -52,6 +52,7 @@ Each call that fails says so in its own row, with the API's message or its statu
 - A row draws "Read, send and remove". Raising a row to it opens the shared `ConfirmDialogComponent` first, "Let an assistant move and remove messages?", with Cancel and "Allow it"; only "Allow it" sends the `PUT` with level `all`. Lowering a level sends at once (`web-app/src/app/features/settings/settings-mcp.component.ts#setLevel`).
 - At `all` a row says "Reads without asking; asks you before each send, move or removal."; a never-asked local test broker, "A local test broker: sends without asking; asks you before each move or removal.", since the mark covers sends only.
 - "What each choice allows" adds "Move and remove". "Entities" shows only when `supports.entities` is true, absent read as false (`web-app/src/app/features/settings/settings-mcp.component.ts#choices`).
+- Phase 3b: with `supports.entities` the "Entities" block asks "Asks you every time; a delete asks for the name typed.", and the confirmation of `all` is titled "Let an assistant move, remove and administer?" and adds creating, changing and deleting queues, topics, subscriptions and rules; without it the confirmation is as above.
 
 **The window that asks the user** about a request, its polling and the word typed before a removal: [[pages/services/web-app/features-settings-mcp-requests]].
 
@@ -72,5 +73,5 @@ Each call that fails says so in its own row, with the API's message or its statu
 - The token: `web-app/src/app/features/settings/settings-mcp.component.spec.ts#creating a token shows it once with Copy and the sentence, puts it in the configuration, and writes it to no storage and no console` and `web-app/src/app/features/settings/settings-mcp.component.spec.ts#after the component is destroyed and created again, the token is gone and the configuration says <your token>`.
 - One spec per call that fails, under `web-app/src/app/features/settings/settings-mcp.component.spec.ts#each failed call says so where it happened`.
 - Phase two: `web-app/src/app/features/settings/settings-mcp.component.spec.ts#a production connection is offered only after Offer in the confirmation, at "Read"`.
-- Phase three: `web-app/src/app/features/settings/settings-mcp.component.spec.ts#the level "all" is PUT only after "Allow it" in the confirmation` and `web-app/src/app/features/settings/settings-mcp.component.spec.ts#"Entities" shows only when the API supports entities`.
+- Phase three: `web-app/src/app/features/settings/settings-mcp.component.spec.ts#the level "all" is PUT only after "Allow it" in the confirmation` and `web-app/src/app/features/settings/settings-mcp.component.spec.ts#"Entities" shows only when the API supports entities`; phase 3b, `web-app/src/app/features/settings/settings-mcp.component.spec.ts#phase 3b: with supports.entities, the confirmation of "all" says it also lets an assistant create, change and delete entities`.
 - The mark: `web-app/src/app/app.spec.ts#while the server is enabled, the toolbar shows the MCP mark and its dot, as a named link to Settings before Notifications`; the place of the group: `web-app/src/app/features/settings/settings.component.spec.ts#the MCP server group sits between Data and Developer, as Settings.dc.html draws it, and is absent against an API without it`.

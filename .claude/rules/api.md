@@ -59,6 +59,6 @@ Read the one row your change matches. Pages are under `context/pages/services/ap
 | Entity create or edit, sub-queue, scheduled or peek routes | `routes-entities-and-messages.md` |
 | Session routes, namespace export or import | `routes-sessions-and-definitions.md` |
 | `ConnectionsController`: masking, save, export, import, clear-all | `connections-and-secrets.md` |
-| `src/ServiceBusExplorer.Api/Mcp/**`, `McpController`, `/mcp` and its gate | `mcp-server.md`; the requests, the levels, never asked and the send tools: `mcp-asking-and-sending.md`; the level all and the tools that move and remove: `mcp-moving-and-removing.md` |
+| `src/ServiceBusExplorer.Api/Mcp/**`, `McpController`, `/mcp` and its gate | `mcp-server.md`; the requests, the levels, never asked and the send tools: `mcp-asking-and-sending.md`; the level all and the tools that move and remove: `mcp-moving-and-removing.md`; the tools that create, change and delete entities: `mcp-administering-entities.md` |
 | `MonitoringBackgroundService`, `MonitoringStore`, monitoring routes | `monitoring.md` |
 | A test in `ServiceBusExplorer.Api.Tests` | `tests.md` |

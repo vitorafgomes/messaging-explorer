@@ -56,11 +56,24 @@ public class QueuesController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<ActionResult> CreateQueue([FromBody] CreateQueueRequest request)
+    public Task<ActionResult> CreateQueue([FromBody] CreateQueueRequest request) => Add(GetProvider(), _logger, request);
+
+    [HttpPatch("{name}")]
+    public async Task<ActionResult<IQueueEntity>> UpdateQueue(string name, [FromBody] QueueUpdateOptions options) =>
+        await Change(GetProvider(), _logger, name, options, HttpContext.RequestAborted);
+
+    [HttpDelete("{name}")]
+    public Task<ActionResult> DeleteQueue(string name) => Remove(GetProvider(), name);
+
+    /// <summary>
+    /// The create of a queue, shared by the route and by the create_queue tool: 400 when no provider is connected or
+    /// the name is blank, 201 with no body when created, and the answers of
+    /// <see cref="EntityAdministrationResults.Failure"/> otherwise.
+    /// </summary>
+    internal static async Task<ActionResult> Add(IMessagingProvider? provider, ILogger logger, CreateQueueRequest request)
     {
-        var provider = GetProvider();
         if (provider == null)
-            return NoProviderConnected();
+            return new BadRequestObjectResult(new { message = "No messaging provider connected. Please connect to a provider first." });
 
         if (string.IsNullOrWhiteSpace(request.Name))
             return EntityAdministrationResults.NameRequired();
@@ -74,26 +87,29 @@ public class QueuesController : ControllerBase
                 await provider.CreateQueueAsync(name);
             else
                 await provider.CreateQueueAsync(name, options);
-            return CreatedAtAction(nameof(GetQueue), new { name }, null);
+            return new CreatedAtActionResult(nameof(GetQueue), null, new { name }, null);
         }
         catch (Exception ex)
         {
-            return EntityAdministrationResults.Failure(ex, _logger, "queue", name, "queue");
+            return EntityAdministrationResults.Failure(ex, logger, "queue", name, "queue");
         }
     }
 
-    [HttpPatch("{name}")]
-    public async Task<ActionResult<IQueueEntity>> UpdateQueue(string name, [FromBody] QueueUpdateOptions options)
+    /// <summary>
+    /// The edit of a queue, shared by the route and by the update_queue tool: the queue as read after the edit, 404
+    /// when it is gone, 400 when the provider cannot update, and the answers of
+    /// <see cref="EntityAdministrationResults.Failure"/> otherwise.
+    /// </summary>
+    internal static async Task<ActionResult> Change(IMessagingProvider? provider, ILogger logger, string name, QueueUpdateOptions options, CancellationToken cancellationToken)
     {
-        var provider = GetProvider();
         if (provider == null)
-            return NoProviderConnected();
+            return new BadRequestObjectResult(new { message = "No messaging provider connected. Please connect to a provider first." });
 
         try
         {
-            await provider.UpdateQueueAsync(name, options, HttpContext.RequestAborted);
+            await provider.UpdateQueueAsync(name, options, cancellationToken);
             var queue = await provider.GetQueueAsync(name);
-            return queue == null ? EntityAdministrationResults.NotFound("queue") : Ok(queue);
+            return queue == null ? EntityAdministrationResults.NotFound("queue") : new OkObjectResult(queue);
         }
         catch (NotSupportedException)
         {
@@ -101,19 +117,21 @@ public class QueuesController : ControllerBase
         }
         catch (Exception ex)
         {
-            return EntityAdministrationResults.Failure(ex, _logger, "queue", name, "queue");
+            return EntityAdministrationResults.Failure(ex, logger, "queue", name, "queue");
         }
     }
 
-    [HttpDelete("{name}")]
-    public async Task<ActionResult> DeleteQueue(string name)
+    /// <summary>
+    /// The delete of a queue, shared by the route and by the delete_queue tool: 204 when deleted; a failure is thrown
+    /// to the caller, which for the route is the error handler of the application.
+    /// </summary>
+    internal static async Task<ActionResult> Remove(IMessagingProvider? provider, string name)
     {
-        var provider = GetProvider();
         if (provider == null)
-            return NoProviderConnected();
+            return new BadRequestObjectResult(new { message = "No messaging provider connected. Please connect to a provider first." });
 
         await provider.DeleteQueueAsync(name);
-        return NoContent();
+        return new NoContentResult();
     }
 
     [HttpPost("{name}/messages/search")]

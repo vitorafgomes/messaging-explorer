@@ -56,12 +56,24 @@ public class TopicsController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<ActionResult> CreateTopic([FromBody] CreateTopicRequest request)
-    {
-        var provider = GetProvider();
-        if (provider == null)
-            return NoProviderConnected();
+    public Task<ActionResult> CreateTopic([FromBody] CreateTopicRequest request) => Add(GetProvider(), _logger, request);
 
+    [HttpPatch("{name}")]
+    public async Task<ActionResult<ITopicEntity>> UpdateTopic(string name, [FromBody] TopicUpdateOptions options) =>
+        await Change(GetProvider(), _logger, name, options, HttpContext.RequestAborted);
+
+    [HttpDelete("{name}")]
+    public Task<ActionResult> DeleteTopic(string name) => Remove(GetProvider(), name);
+
+    /// <summary>
+    /// The create of a topic, shared by the route and by the create_topic tool: 400 when no provider is connected or
+    /// the name is blank, 201 with no body when created, and the answers of
+    /// <see cref="EntityAdministrationResults.Failure"/> otherwise.
+    /// </summary>
+    internal static async Task<ActionResult> Add(IMessagingProvider? provider, ILogger logger, CreateTopicRequest request)
+    {
+        if (provider == null)
+            return new BadRequestObjectResult(new { message = "No messaging provider connected. Please connect to a provider first." });
         if (string.IsNullOrWhiteSpace(request.Name))
             return EntityAdministrationResults.NameRequired();
 
@@ -74,26 +86,28 @@ public class TopicsController : ControllerBase
                 await provider.CreateTopicAsync(name);
             else
                 await provider.CreateTopicAsync(name, options);
-            return CreatedAtAction(nameof(GetTopic), new { name }, null);
+            return new CreatedAtActionResult(nameof(GetTopic), null, new { name }, null);
         }
         catch (Exception ex)
         {
-            return EntityAdministrationResults.Failure(ex, _logger, "topic", name, "topic");
+            return EntityAdministrationResults.Failure(ex, logger, "topic", name, "topic");
         }
     }
 
-    [HttpPatch("{name}")]
-    public async Task<ActionResult<ITopicEntity>> UpdateTopic(string name, [FromBody] TopicUpdateOptions options)
+    /// <summary>
+    /// The edit of a topic, shared by the route and by the update_topic tool: the topic as read after the edit, 404
+    /// when it is gone, 400 when the provider cannot update, and the answers of
+    /// <see cref="EntityAdministrationResults.Failure"/> otherwise.
+    /// </summary>
+    internal static async Task<ActionResult> Change(IMessagingProvider? provider, ILogger logger, string name, TopicUpdateOptions options, CancellationToken cancellationToken)
     {
-        var provider = GetProvider();
         if (provider == null)
-            return NoProviderConnected();
-
+            return new BadRequestObjectResult(new { message = "No messaging provider connected. Please connect to a provider first." });
         try
         {
-            await provider.UpdateTopicAsync(name, options, HttpContext.RequestAborted);
-            var topic = await provider.GetTopicAsync(name, HttpContext.RequestAborted);
-            return topic == null ? EntityAdministrationResults.NotFound("topic") : Ok(topic);
+            await provider.UpdateTopicAsync(name, options, cancellationToken);
+            var topic = await provider.GetTopicAsync(name, cancellationToken);
+            return topic == null ? EntityAdministrationResults.NotFound("topic") : new OkObjectResult(topic);
         }
         catch (NotSupportedException)
         {
@@ -101,19 +115,20 @@ public class TopicsController : ControllerBase
         }
         catch (Exception ex)
         {
-            return EntityAdministrationResults.Failure(ex, _logger, "topic", name, "topic");
+            return EntityAdministrationResults.Failure(ex, logger, "topic", name, "topic");
         }
     }
 
-    [HttpDelete("{name}")]
-    public async Task<ActionResult> DeleteTopic(string name)
+    /// <summary>
+    /// The delete of a topic, shared by the route and by the delete_topic tool: 204 when deleted; a failure is thrown
+    /// to the caller, which for the route is the error handler of the application.
+    /// </summary>
+    internal static async Task<ActionResult> Remove(IMessagingProvider? provider, string name)
     {
-        var provider = GetProvider();
         if (provider == null)
-            return NoProviderConnected();
-
+            return new BadRequestObjectResult(new { message = "No messaging provider connected. Please connect to a provider first." });
         await provider.DeleteTopicAsync(name);
-        return NoContent();
+        return new NoContentResult();
     }
 
     [HttpPost("{name}/messages")]
@@ -179,12 +194,26 @@ public class TopicsController : ControllerBase
     }
 
     [HttpPost("{topicName}/subscriptions")]
-    public async Task<ActionResult> CreateSubscription(string topicName, [FromBody] CreateSubscriptionRequest request)
-    {
-        var provider = GetProvider();
-        if (provider == null)
-            return NoProviderConnected();
+    public Task<ActionResult> CreateSubscription(string topicName, [FromBody] CreateSubscriptionRequest request) =>
+        AddSubscription(GetProvider(), _logger, topicName, request);
 
+    [HttpPatch("{topicName}/subscriptions/{subscriptionName}")]
+    public async Task<ActionResult<SubscriptionInfo>> UpdateSubscription(string topicName, string subscriptionName, [FromBody] SubscriptionUpdateOptions options) =>
+        await ChangeSubscription(GetProvider(), _logger, topicName, subscriptionName, options, HttpContext.RequestAborted);
+
+    [HttpDelete("{topicName}/subscriptions/{subscriptionName}")]
+    public Task<ActionResult> DeleteSubscription(string topicName, string subscriptionName) =>
+        RemoveSubscription(GetProvider(), topicName, subscriptionName);
+
+    /// <summary>
+    /// The create of a subscription, shared by the route and by the create_subscription tool: 400 when no provider is
+    /// connected or the name is blank, 201 with no body when created, and the answers of
+    /// <see cref="EntityAdministrationResults.Failure"/> otherwise, 404 naming the topic.
+    /// </summary>
+    internal static async Task<ActionResult> AddSubscription(IMessagingProvider? provider, ILogger logger, string topicName, CreateSubscriptionRequest request)
+    {
+        if (provider == null)
+            return new BadRequestObjectResult(new { message = "No messaging provider connected. Please connect to a provider first." });
         if (string.IsNullOrWhiteSpace(request.Name))
             return EntityAdministrationResults.NameRequired();
 
@@ -197,26 +226,28 @@ public class TopicsController : ControllerBase
                 await provider.CreateSubscriptionAsync(topicName, subscriptionName);
             else
                 await provider.CreateSubscriptionAsync(topicName, subscriptionName, options);
-            return CreatedAtAction(nameof(GetSubscription), new { topicName, subscriptionName }, null);
+            return new CreatedAtActionResult(nameof(GetSubscription), null, new { topicName, subscriptionName }, null);
         }
         catch (Exception ex)
         {
-            return EntityAdministrationResults.Failure(ex, _logger, "subscription", $"{topicName}/{subscriptionName}", "topic");
+            return EntityAdministrationResults.Failure(ex, logger, "subscription", $"{topicName}/{subscriptionName}", "topic");
         }
     }
 
-    [HttpPatch("{topicName}/subscriptions/{subscriptionName}")]
-    public async Task<ActionResult<SubscriptionInfo>> UpdateSubscription(string topicName, string subscriptionName, [FromBody] SubscriptionUpdateOptions options)
+    /// <summary>
+    /// The edit of a subscription, shared by the route and by the update_subscription tool: the subscription as read
+    /// after the edit, 404 when it is gone, 400 when the provider cannot update, and the answers of
+    /// <see cref="EntityAdministrationResults.Failure"/> otherwise.
+    /// </summary>
+    internal static async Task<ActionResult> ChangeSubscription(IMessagingProvider? provider, ILogger logger, string topicName, string subscriptionName, SubscriptionUpdateOptions options, CancellationToken cancellationToken)
     {
-        var provider = GetProvider();
         if (provider == null)
-            return NoProviderConnected();
-
+            return new BadRequestObjectResult(new { message = "No messaging provider connected. Please connect to a provider first." });
         try
         {
-            await provider.UpdateSubscriptionAsync(topicName, subscriptionName, options, HttpContext.RequestAborted);
+            await provider.UpdateSubscriptionAsync(topicName, subscriptionName, options, cancellationToken);
             var subscription = await provider.GetSubscriptionAsync(topicName, subscriptionName);
-            return subscription == null ? EntityAdministrationResults.NotFound("subscription") : Ok(subscription);
+            return subscription == null ? EntityAdministrationResults.NotFound("subscription") : new OkObjectResult(subscription);
         }
         catch (NotSupportedException)
         {
@@ -224,19 +255,20 @@ public class TopicsController : ControllerBase
         }
         catch (Exception ex)
         {
-            return EntityAdministrationResults.Failure(ex, _logger, "subscription", $"{topicName}/{subscriptionName}", "subscription");
+            return EntityAdministrationResults.Failure(ex, logger, "subscription", $"{topicName}/{subscriptionName}", "subscription");
         }
     }
 
-    [HttpDelete("{topicName}/subscriptions/{subscriptionName}")]
-    public async Task<ActionResult> DeleteSubscription(string topicName, string subscriptionName)
+    /// <summary>
+    /// The delete of a subscription, shared by the route and by the delete_subscription tool: 204 when deleted; a
+    /// failure is thrown to the caller, which for the route is the error handler of the application.
+    /// </summary>
+    internal static async Task<ActionResult> RemoveSubscription(IMessagingProvider? provider, string topicName, string subscriptionName)
     {
-        var provider = GetProvider();
         if (provider == null)
-            return NoProviderConnected();
-
+            return new BadRequestObjectResult(new { message = "No messaging provider connected. Please connect to a provider first." });
         await provider.DeleteSubscriptionAsync(topicName, subscriptionName);
-        return NoContent();
+        return new NoContentResult();
     }
 
     [HttpGet("{topicName}/subscriptions/{subscriptionName}/rules")]
@@ -261,40 +293,33 @@ public class TopicsController : ControllerBase
     }
 
     [HttpPost("{topicName}/subscriptions/{subscriptionName}/rules")]
-    public async Task<ActionResult<SubscriptionRuleInfo>> CreateRule(string topicName, string subscriptionName, [FromBody] SubscriptionRuleRequest request)
-    {
-        var provider = GetProvider();
-        if (provider == null)
-            return NoProviderConnected();
-
-        try
-        {
-            var rule = await provider.CreateRuleAsync(topicName, subscriptionName, request.ToRule(), HttpContext.RequestAborted);
-            return CreatedAtAction(nameof(GetRules), new { topicName, subscriptionName }, rule);
-        }
-        catch (NotSupportedException)
-        {
-            return EntityAdministrationResults.RulesNotSupported();
-        }
-        catch (Exception ex)
-        {
-            return EntityAdministrationResults.Failure(ex, _logger, "rule", $"{topicName}/{subscriptionName}/{request.Name}", "subscription");
-        }
-    }
+    public async Task<ActionResult<SubscriptionRuleInfo>> CreateRule(string topicName, string subscriptionName, [FromBody] SubscriptionRuleRequest request) =>
+        await AddRule(GetProvider(), _logger, topicName, subscriptionName, request, HttpContext.RequestAborted);
 
     [HttpPut("{topicName}/subscriptions/{subscriptionName}/rules/{ruleName}")]
-    public async Task<ActionResult<SubscriptionRuleInfo>> UpdateRule(string topicName, string subscriptionName, string ruleName, [FromBody] SubscriptionRuleRequest request)
+    public async Task<ActionResult<SubscriptionRuleInfo>> UpdateRule(string topicName, string subscriptionName, string ruleName, [FromBody] SubscriptionRuleRequest request) =>
+        await ChangeRule(GetProvider(), _logger, topicName, subscriptionName, ruleName, request, HttpContext.RequestAborted);
+
+    [HttpDelete("{topicName}/subscriptions/{subscriptionName}/rules/{ruleName}")]
+    public Task<ActionResult> DeleteRule(string topicName, string subscriptionName, string ruleName) =>
+        RemoveRule(GetProvider(), _logger, topicName, subscriptionName, ruleName, HttpContext.RequestAborted);
+
+    /// <summary>The answer when a rule body names another rule than the one it replaces.</summary>
+    internal const string RuleRenamed = "name must be absent or equal to the rule name in the path; a rule cannot be renamed.";
+
+    /// <summary>
+    /// The add of a rule to a subscription, shared by the route and by the create_rule tool: 201 with the rule as the
+    /// provider answered it, 400 when the provider has no rules, and the answers of
+    /// <see cref="EntityAdministrationResults.Failure"/> otherwise, 404 naming the subscription.
+    /// </summary>
+    internal static async Task<ActionResult> AddRule(IMessagingProvider? provider, ILogger logger, string topicName, string subscriptionName, SubscriptionRuleRequest request, CancellationToken cancellationToken)
     {
-        var provider = GetProvider();
         if (provider == null)
-            return NoProviderConnected();
-
-        if (request.Name != null && request.Name != ruleName)
-            return BadRequest(new { message = "name must be absent or equal to the rule name in the path; a rule cannot be renamed." });
-
+            return new BadRequestObjectResult(new { message = "No messaging provider connected. Please connect to a provider first." });
         try
         {
-            return Ok(await provider.UpdateRuleAsync(topicName, subscriptionName, ruleName, request.ToRule(), HttpContext.RequestAborted));
+            var rule = await provider.CreateRuleAsync(topicName, subscriptionName, request.ToRule(), cancellationToken);
+            return new CreatedAtActionResult(nameof(GetRules), null, new { topicName, subscriptionName }, rule);
         }
         catch (NotSupportedException)
         {
@@ -302,21 +327,25 @@ public class TopicsController : ControllerBase
         }
         catch (Exception ex)
         {
-            return EntityAdministrationResults.Failure(ex, _logger, "rule", $"{topicName}/{subscriptionName}/{ruleName}", "rule");
+            return EntityAdministrationResults.Failure(ex, logger, "rule", $"{topicName}/{subscriptionName}/{request.Name}", "subscription");
         }
     }
 
-    [HttpDelete("{topicName}/subscriptions/{subscriptionName}/rules/{ruleName}")]
-    public async Task<ActionResult> DeleteRule(string topicName, string subscriptionName, string ruleName)
+    /// <summary>
+    /// The replace of a rule, shared by the route and by the update_rule tool: 400 when the body renames the rule or
+    /// the provider has no rules, the rule as the provider answered it, and the answers of
+    /// <see cref="EntityAdministrationResults.Failure"/> otherwise.
+    /// </summary>
+    internal static async Task<ActionResult> ChangeRule(IMessagingProvider? provider, ILogger logger, string topicName, string subscriptionName, string ruleName, SubscriptionRuleRequest request, CancellationToken cancellationToken)
     {
-        var provider = GetProvider();
         if (provider == null)
-            return NoProviderConnected();
+            return new BadRequestObjectResult(new { message = "No messaging provider connected. Please connect to a provider first." });
+        if (request.Name != null && request.Name != ruleName)
+            return new BadRequestObjectResult(new { message = RuleRenamed });
 
         try
         {
-            await provider.DeleteRuleAsync(topicName, subscriptionName, ruleName, HttpContext.RequestAborted);
-            return NoContent();
+            return new OkObjectResult(await provider.UpdateRuleAsync(topicName, subscriptionName, ruleName, request.ToRule(), cancellationToken));
         }
         catch (NotSupportedException)
         {
@@ -324,7 +353,30 @@ public class TopicsController : ControllerBase
         }
         catch (Exception ex)
         {
-            return EntityAdministrationResults.Failure(ex, _logger, "rule", $"{topicName}/{subscriptionName}/{ruleName}", "rule");
+            return EntityAdministrationResults.Failure(ex, logger, "rule", $"{topicName}/{subscriptionName}/{ruleName}", "rule");
+        }
+    }
+
+    /// <summary>
+    /// The delete of a rule, shared by the route and by the delete_rule tool: 204 when deleted, 400 when the provider
+    /// has no rules, and the answers of <see cref="EntityAdministrationResults.Failure"/> otherwise.
+    /// </summary>
+    internal static async Task<ActionResult> RemoveRule(IMessagingProvider? provider, ILogger logger, string topicName, string subscriptionName, string ruleName, CancellationToken cancellationToken)
+    {
+        if (provider == null)
+            return new BadRequestObjectResult(new { message = "No messaging provider connected. Please connect to a provider first." });
+        try
+        {
+            await provider.DeleteRuleAsync(topicName, subscriptionName, ruleName, cancellationToken);
+            return new NoContentResult();
+        }
+        catch (NotSupportedException)
+        {
+            return EntityAdministrationResults.RulesNotSupported();
+        }
+        catch (Exception ex)
+        {
+            return EntityAdministrationResults.Failure(ex, logger, "rule", $"{topicName}/{subscriptionName}/{ruleName}", "rule");
         }
     }
 

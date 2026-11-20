@@ -24,7 +24,7 @@ const CHOICES = [
   { level: 'read', title: 'Read', who: 'Every connection listed', what: 'List the connections offered, queues, topics, subscriptions and rules; read the counts; peek the active, dead-letter, scheduled and deferred messages.', asks: 'Never asks you.' },
   { level: 'readAndSend', title: 'Send', who: 'From "Read and send" up', what: 'Send one message or many to a queue or a topic, now or scheduled.', asks: 'Asks you before each send, except on a local test broker.' },
   { level: 'all', title: 'Move and remove', who: '"Read, send and remove" only', what: 'Dead-letter, resubmit, move, delete, purge and cancel scheduled messages.', asks: 'Asks you every time, a local test broker included; a delete or a purge asks for the name typed.' },
-  { level: 'all', title: 'Entities', who: '"Read, send and remove" only', what: 'Create, change and delete a queue, a topic, a subscription or a rule.', asks: 'Asks you every time.' },
+  { level: 'all', title: 'Entities', who: '"Read, send and remove" only', what: 'Create, change and delete a queue, a topic, a subscription or a rule.', asks: 'Asks you every time; a delete asks for the name typed.' },
 ];
 
 /** A stored connection as the group names it: its name, where it is, and whether its environment is production. */
@@ -184,12 +184,17 @@ export class SettingsMcpComponent {
     });
   }
 
-  /** Changes the level of an offered connection; raising it to "all" is sent only after the user confirms it. */
+  /**
+   * Changes the level of an offered connection; raising it to "all" is sent only after the user confirms it,
+   * and the confirmation names the entities too once the API supports them.
+   */
   setLevel(id: string, name: string, level: string, current?: string): void {
     if (level === 'all' && current !== 'all') {
+      const entities = !!this.state()?.supports?.entities;
       const data: ConfirmDialogData = {
-        title: 'Let an assistant move and remove messages?',
-        message: `${name}: an assistant will be able to dead-letter, resubmit, move, delete, purge and cancel messages there. Each time it asks you first, and a delete or a purge asks for the name typed.`,
+        title: entities ? 'Let an assistant move, remove and administer?' : 'Let an assistant move and remove messages?',
+        message: `${name}: an assistant will be able to dead-letter, resubmit, move, delete, purge and cancel messages there${entities
+          ? ', and to create, change and delete queues, topics, subscriptions and rules' : ''}. Each time it asks you first, and a delete or a purge asks for the name typed.`,
         confirmText: 'Allow it',
         cancelText: 'Cancel',
         confirmColor: 'primary',

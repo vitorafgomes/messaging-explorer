@@ -113,6 +113,7 @@ public sealed class McpRemoveTools(McpToolCalls calls, ILogger<McpRemoveTools> l
             McpToolCalls.RequireReason(call, reason);
             var source = await PrepareAsync(call, entity, subscription, subQueue, sequenceNumbers, numbered: true, bulk: true, MessageSubQueue.Active, MessageSubQueue.DeadLetter, MessageSubQueue.TransferDeadLetter);
             await LookupAsync(call, source);
+            McpToolCalls.RequireExactNames(call, target);
             var provider = source.Active.Provider;
             if (await provider.GetQueueAsync(target) is null
                 && (!provider.Capabilities.SupportsTopics || await provider.GetTopicAsync(target, cancellationToken) is null))
@@ -230,6 +231,7 @@ public sealed class McpRemoveTools(McpToolCalls calls, ILogger<McpRemoveTools> l
 
         if (!McpSettingsStore.Covers(active.Level, McpSettingsStore.AllLevel))
             call.Refuse(LevelRefused, "Refused: not offered for moving or removing");
+        McpToolCalls.RequireExactNames(call, entity, subscription);
         MessageSubQueue? queue = null;
         if (subQueue is not null)
         {

@@ -1,3 +1,6 @@
+## [2026-11-20] feature | The MCP server creates, changes and deletes queues, topics, subscriptions and rules, after the user allows it in the app
+Twelve tools through the routes' own bodies, always asked, a typed name before a delete, refused by capability and by the name before anybody is asked. [[pages/services/api/mcp-administering-entities]]
+
 ## [2026-11-20] feature | The MCP server moves and removes messages, after the user allows it in the app
 The level all, six tools through the routes' own bodies, always asked, a typed name before a delete or a purge. [[pages/services/api/mcp-moving-and-removing]]
 

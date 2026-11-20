@@ -183,6 +183,19 @@ public sealed class McpToolCalls(
             call.Refuse(ReasonRequired, "Refused: no reason");
     }
 
+    /// <summary>What a tool answers to a name the user would read differently from what the broker would be given.</summary>
+    public const string NameNotExact = "A name cannot begin or end with a space, hold a control character or be longer than 260 characters.";
+
+    /// <summary>
+    /// Refuses the call when a name given is not exactly the text a request shows the user and asks them to type, so
+    /// the entity the user allows is the entity the broker is given.
+    /// </summary>
+    public static void RequireExactNames(ToolCall call, params string?[] names)
+    {
+        if (names.Any(name => name is not null && Clean(name, 260) != name))
+            call.Refuse(NameNotExact, "Refused: name not exact");
+    }
+
     /// <summary>The reason an assistant gave, without control characters and cut at <see cref="MaxReasonLength"/>, or "It gave no reason".</summary>
     public static string Reason(string? reason) => Clean(reason, MaxReasonLength) is { Length: > 0 } kept ? kept : "It gave no reason";
 

@@ -1,9 +1,9 @@
 ---
 title: "Web App: The window that asks the user about a request of an assistant"
-version: "1.0"
+version: "1.1"
 date: 2026-11-20
 updated: 2026-11-20
-changes: "v1.0: split out of the MCP server group page; phase three, the kinds that move or remove messages, danger and the word typed"
+changes: "v1.1: phase 3b, the entity kinds createEntity, updateEntity and deleteEntity. v1.0: split out of the MCP server group page; phase three, the kinds that move or remove messages, danger and the word typed"
 page_type: service
 status: active
 description: "Read when a change touches McpRequestDialogComponent, the polling of the requests in App, the kinds a request may have, danger, or the word typed before a request can be allowed."
@@ -33,7 +33,7 @@ One topic of [[pages/services/web-app|Web App]]; the map lists the others. The g
 - As the artboard draws `mcp.ask`: the title with the MCP mark, the facts as a description list, the note in the warning container, Deny and the allow button with the API's `allowLabel`, and "The assistant waits for your answer. With no answer in 2 minutes it is told the request was denied." Every text from the API is bound as text, never as markup.
 - Only Deny and the allow button answer, each through `POST mcp/requests/{id}/answer`; the dialog is opened with `disableClose` and focus on Deny (`web-app/src/app/features/settings/mcp-request-dialog.component.ts#config`), so Escape and a click outside do nothing. A request is answered once: a second click while the first answer is in flight sends nothing (`web-app/src/app/features/settings/mcp-request-dialog.component.ts#answer`). A failed answer is said in the dialog, which stays open.
 - When the request leaves the list, or the answer gets a 404, the dialog closes by itself with the snack bar "The request is no longer waiting." A request already shown is never opened again.
-- The kinds this version can allow are read, send, connect, deadLetter, resubmit, move, delete, purge and cancelScheduled. Any other kind shows Deny only and "This version of the app cannot allow this kind of request."
+- The kinds this version can allow are read, send, connect, deadLetter, resubmit, move, delete, purge, cancelScheduled, and from phase 3b createEntity, updateEntity and deleteEntity (`web-app/src/app/features/settings/mcp-request-dialog.component.ts#KNOWN_KINDS`). A deleteEntity request arrives with `danger` and `typed`, and the dialog treats it like any other request that carries them. Any other kind shows Deny only and "This version of the app cannot allow this kind of request."
 - After an allowed `connect` the app reads the status once a second without publishing it (`ConnectionService.peekStatus`) until it names another connection or 15 seconds pass, then publishes it once (`web-app/src/app/app.ts#followConnect`); tested by `web-app/src/app/app.spec.ts#a denied connect and an allowed request of another kind read no status`.
 
 **Phase three (2026-11-20, moving and removing).** As the artboard draws the state askedToDelete:
@@ -52,3 +52,4 @@ One topic of [[pages/services/web-app|Web App]]; the map lists the others. The g
 
 - `web-app/src/app/features/settings/mcp-request-dialog.component.spec.ts#a double click on the allow button sends one answer: a request is answered once` and `web-app/src/app/features/settings/mcp-request-dialog.component.spec.ts#text from the API is shown as text: markup in the title, a fact or the note is never rendered`; the polling, `web-app/src/app/app.spec.ts#the polling stops when the app is destroyed`.
 - Phase three: `web-app/src/app/features/settings/mcp-request-dialog.component.spec.ts#the allow button disabled and aria-disabled until the word is typed exactly`, `web-app/src/app/features/settings/mcp-request-dialog.component.spec.ts#a click on the disabled allow button, Enter in the field, Enter on Deny, Escape and the backdrop never answer allow`, `web-app/src/app/features/settings/mcp-request-dialog.component.spec.ts#answers allow true with the typed value, once`, `web-app/src/app/features/settings/mcp-request-dialog.component.spec.ts#a wrong word answered 400 shows the API`, `web-app/src/app/features/settings/mcp-request-dialog.component.spec.ts#danger draws the note in the error container and the allow button in the error colour`, `web-app/src/app/features/settings/mcp-request-dialog.component.spec.ts#the word is shown nowhere in the dialog`, `web-app/src/app/features/settings/mcp-request-dialog.component.spec.ts#can be allowed: Deny, then the allow button`; the older API, `web-app/src/app/features/settings/mcp-request-dialog.component.spec.ts#an older API without danger and typed`.
+- Phase 3b: `web-app/src/app/features/settings/mcp-request-dialog.component.spec.ts#phase 3b: the entity kind` and `web-app/src/app/features/settings/mcp-request-dialog.component.spec.ts#phase 3b: a deleteEntity request with danger and a typed word keeps the allow button disabled until the name is typed exactly`.

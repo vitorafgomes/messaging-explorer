@@ -48,7 +48,8 @@ public class McpSettingsRouteTests
         Assert.Matches(@"^http://127\.0\.0\.1:\d+/mcp$", state.GetProperty("url").GetString());
         Assert.Equal(["read", "readAndSend", "all"], state.GetProperty("levels").EnumerateArray().Select(l => l.GetString()));
         var supports = state.GetProperty("supports");
-        Assert.Equal((true, false, true), (supports.GetProperty("logs").GetBoolean(), supports.GetProperty("appSettings").GetBoolean(), supports.GetProperty("confirmation").GetBoolean()));
+        Assert.Equal((true, false, true, true), (supports.GetProperty("logs").GetBoolean(), supports.GetProperty("appSettings").GetBoolean(), supports.GetProperty("confirmation").GetBoolean(),
+            supports.GetProperty("entities").GetBoolean()));
     }
 
     [Fact]

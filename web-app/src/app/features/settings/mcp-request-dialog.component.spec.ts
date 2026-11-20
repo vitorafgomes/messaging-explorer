@@ -248,6 +248,24 @@ describe('McpRequestDialogComponent: the window that asks the user, as Settings.
       });
     }
 
+    for (const kind of ['createEntity', 'updateEntity', 'deleteEntity']) {
+      it(`phase 3b: the entity kind ${kind} can be allowed: Deny, then the allow button with the API's label`, async () => {
+        await open({ ...SEND, kind, allowLabel: `Allow the ${kind}` });
+
+        expect(Array.from(dialog()?.querySelectorAll('mat-dialog-actions button') ?? []).map(words), `an assistant can be allowed to ${kind}: the kind is one this version allows`).toStrictEqual(['Deny', `Allow the ${kind}`]);
+        expect(dialog()?.querySelector('.unknown') ?? null, `no sentence saying ${kind} cannot be allowed`).toBeNull();
+      });
+    }
+
+    it('phase 3b: a deleteEntity request with danger and a typed word keeps the allow button disabled until the name is typed exactly', async () => {
+      await open({ ...DELETE, id: 'r-entity', kind: 'deleteEntity', title: 'Claude Code asks to delete the queue orders', allowLabel: 'Delete the queue', typed: { label: 'Type the queue name to allow it', word: 'orders' } });
+
+      expect(words(dialog()?.querySelector('mat-form-field mat-label')), 'the label the API wrote').toBe('Type the queue name to allow it');
+      expect(button('Delete the queue')!.disabled, 'a delete of an entity asks for the name typed before it can be allowed').toBe(true);
+      await type('orders');
+      expect(button('Delete the queue')!.disabled, 'the name typed exactly enables the allow button').toBe(false);
+    });
+
     it('askedToDelete: the typed field with the API\'s label, empty, and the allow button disabled and aria-disabled until the word is typed exactly', async () => {
       await open(DELETE);
 

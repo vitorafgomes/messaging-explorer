@@ -123,7 +123,7 @@ public class McpController(
             current.TokenHash is not null,
             current.TokenCreatedAt,
             McpSettingsStore.Levels,
-            new McpSupports(Logs: true, AppSettings: false, Confirmation: true),
+            new McpSupports(Logs: true, AppSettings: false, Confirmation: true, Entities: true),
             current.LogsAllowed,
             offered);
     }
@@ -145,7 +145,7 @@ public sealed record McpAnswerRequest(bool Allow, string? Typed = null);
 public sealed record McpTokenCreated(string Token, McpState State);
 
 /// <summary>What this version of the MCP server can do.</summary>
-public sealed record McpSupports(bool Logs, bool AppSettings, bool Confirmation);
+public sealed record McpSupports(bool Logs, bool AppSettings, bool Confirmation, bool Entities);
 
 /// <summary>
 /// A connection offered to assistants: its level, whether it is production, whether it can be marked as never asked

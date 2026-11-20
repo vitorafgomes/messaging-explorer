@@ -613,7 +613,7 @@ describe('SettingsMcpComponent: the MCP server group of Settings, as Settings.dc
     const READ_BLOCK = 'Read Every connection listed List the connections offered, queues, topics, subscriptions and rules; read the counts; peek the active, dead-letter, scheduled and deferred messages. Never asks you.';
     const SEND_BLOCK = 'Send From "Read and send" up Send one message or many to a queue or a topic, now or scheduled. Asks you before each send, except on a local test broker.';
     const MOVE_BLOCK = 'Move and remove "Read, send and remove" only Dead-letter, resubmit, move, delete, purge and cancel scheduled messages. Asks you every time, a local test broker included; a delete or a purge asks for the name typed.';
-    const ENTITIES_BLOCK = 'Entities "Read, send and remove" only Create, change and delete a queue, a topic, a subscription or a rule. Asks you every time.';
+    const ENTITIES_BLOCK = 'Entities "Read, send and remove" only Create, change and delete a queue, a topic, a subscription or a rule. Asks you every time; a delete asks for the name typed.';
 
     it('without "all" listed, neither "Read, send and remove" nor "Move and remove" is drawn', async () => {
       const { el, row } = await render({ ...ALL, levels: ['read', 'readAndSend'], connections: [{ connectionId: 'c-dev', level: 'read' }] });
@@ -622,13 +622,30 @@ describe('SettingsMcpComponent: the MCP server group of Settings, as Settings.dc
     });
 
     it('picking "Read, send and remove" opens the confirmation first, and Cancel sends nothing', async () => {
-      const { el, refresh } = await render({ ...ALL, connections: [{ connectionId: 'c-dev', level: 'readAndSend' }] });
+      const { el, refresh } = await render({ ...ALL, supports: { logs: true, appSettings: false, confirmation: true, entities: false }, connections: [{ connectionId: 'c-dev', level: 'readAndSend' }] });
       levelButton(el, 'contoso-dev', 'Read, send and remove').click();
       await settle(refresh);
 
       expect(words(confirm()?.querySelector('h2')), 'the title of the confirmation').toBe('Let an assistant move and remove messages?');
       expect(words(confirm()?.querySelector('mat-dialog-content p')), 'the message names the connection and what it allows')
         .toBe('contoso-dev: an assistant will be able to dead-letter, resubmit, move, delete, purge and cancel messages there. Each time it asks you first, and a delete or a purge asks for the name typed.');
+      expect(Array.from(confirm()?.querySelectorAll('mat-dialog-actions button') ?? []).map(words), 'Cancel and Allow it').toStrictEqual(['Cancel', 'Allow it']);
+      expect(api.put, 'the level "all" is not sent before the user confirms').not.toHaveBeenCalled();
+
+      confirmButton('Cancel').click();
+      await settle(refresh);
+      expect(api.put, 'Cancel changes nothing').not.toHaveBeenCalled();
+      expect(levelButton(el, 'contoso-dev', 'Read and send').getAttribute('aria-pressed'), 'the row keeps its level').toBe('true');
+    });
+
+    it('phase 3b: with supports.entities, the confirmation of "all" says it also lets an assistant create, change and delete entities, and Cancel sends nothing', async () => {
+      const { el, refresh } = await render({ ...ALL, supports: { logs: true, appSettings: false, confirmation: true, entities: true }, connections: [{ connectionId: 'c-dev', level: 'readAndSend' }] });
+      levelButton(el, 'contoso-dev', 'Read, send and remove').click();
+      await settle(refresh);
+
+      expect(words(confirm()?.querySelector('h2')), 'the title says "all" administers too').toBe('Let an assistant move, remove and administer?');
+      expect(words(confirm()?.querySelector('mat-dialog-content p')), 'the confirmation says what "all" really allows, entities included')
+        .toBe('contoso-dev: an assistant will be able to dead-letter, resubmit, move, delete, purge and cancel messages there, and to create, change and delete queues, topics, subscriptions and rules. Each time it asks you first, and a delete or a purge asks for the name typed.');
       expect(Array.from(confirm()?.querySelectorAll('mat-dialog-actions button') ?? []).map(words), 'Cancel and Allow it').toStrictEqual(['Cancel', 'Allow it']);
       expect(api.put, 'the level "all" is not sent before the user confirms').not.toHaveBeenCalled();
 
