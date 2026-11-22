@@ -41,7 +41,7 @@ All through `ApiService`, by `web-app/src/app/features/settings/mcp-settings.ser
 - The theme goes through `ThemeService.setMode`; Developer mode through `DevSettingsService.toggle`, the path of Ctrl+Shift+D, only when it is not already as asked; the channel through `AppUpdateService.setChannel`. A value already set changes nothing and answers applied.
 - The channel needs the desktop shell, read as Settings reads it before it offers the channel (`AppUpdateService.status` other than `unavailable`); without it the answer is `desktopOnly`. A channel the shell refused, or left as it was, is `failed`.
 - A change made shows "<assistant> set <Theme|Developer mode|Update channel> to <value>" with Close for 4 seconds; the name is text, never markup.
-- An answer the API refuses, a 404 included, is let go: the request is not applied again.
+- An answer the API did not take is sent again on the next list, while the API still lists the request, and the setting is not applied a second time; a 404 means the request no longer waits and ends it (`web-app/src/app/features/settings/mcp-app-settings.service.spec.ts#an answer the API did not take is sent again while the request is still listed, and the setting is not applied a second time`).
 
 ## Sharp edges
 

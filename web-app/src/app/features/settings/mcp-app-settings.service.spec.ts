@@ -216,6 +216,40 @@ describe('McpAppSettingsService: the app applies a change of its settings an ass
     expect(dev.toggle, 'the request after it is still applied').toHaveBeenCalledTimes(1);
   });
 
+  it('an answer the API did not take is sent again while the request is still listed, and the setting is not applied a second time', async () => {
+    setUp();
+    const list = [request('t', 'theme', 'dark')];
+    const url = `${BASE}/mcp/app-requests/t/answer`;
+
+    const first = service.apply(list);
+    const failed = await vi.waitFor(() => http.expectOne(url));
+    failed.flush({ message: 'busy' }, { status: 503, statusText: 'Service Unavailable' });
+    await first;
+
+    const second = service.apply(list);
+    const again = await vi.waitFor(() => http.expectOne(url), { timeout: 1000 });
+    expect(again.request.body, 'the same outcome is answered again, with the settings as they are').toStrictEqual(failed.request.body);
+    again.flush(null, { status: 204, statusText: 'No Content' });
+    await second;
+
+    await service.apply(list);
+    http.expectNone(url);
+    expect(theme.setMode.mock.calls, 'the theme was set once, however many times its answer was sent').toStrictEqual([['dark']]);
+    expect(snackBar.open, 'and said once').toHaveBeenCalledTimes(1);
+  });
+
+  it('an answer the API refused as no longer waiting is not sent again', async () => {
+    setUp();
+    const list = [request('t', 'theme', 'dark')];
+
+    const first = service.apply(list);
+    (await vi.waitFor(() => http.expectOne(`${BASE}/mcp/app-requests/t/answer`))).flush({ message: 'gone' }, { status: 404, statusText: 'Not Found' });
+    await first;
+
+    await service.apply(list);
+    http.expectNone(`${BASE}/mcp/app-requests/t/answer`);
+  });
+
   it('the assistant name is shown in the snack bar as text, never as markup', async () => {
     setUp({ realSnackBar: true });
     await apply([request('t', 'theme', 'dark', '<img src=x onerror=alert(1)>')]);

@@ -31,22 +31,31 @@ export class McpAppSettingsService {
   private readonly snackBar = inject(MatSnackBar);
   /** The requests already applied and still listed by the API, which a later list never applies again. */
   private readonly handled = new Set<string>();
+  /** What was done for a request whose answer the API has not taken yet; it is answered again while the API still lists it. */
+  private readonly unanswered = new Map<string, Omit<McpAppAnswer, 'settings'>>();
 
   /**
-   * Applies and answers each request not handled yet; an answer the API refuses, a 404 included, is let go. Before each
+   * Applies each request once and answers it. An answer the API did not take is sent again while the request is still
+   * listed, without applying the setting again; a 404 means the request no longer waits and ends it. Before each
    * request it reads the state of the MCP server: while the server is off or the user does not allow these changes,
    * nothing is changed and nothing is answered.
    */
   async apply(list: McpAppRequest[]): Promise<void> {
-    for (const id of this.handled) if (!list.some(r => r.id === id)) this.handled.delete(id);
+    for (const id of this.handled) {
+      if (!list.some(r => r.id === id)) { this.handled.delete(id); this.unanswered.delete(id); }
+    }
     for (const request of list) {
       const state = this.mcp.state();
       if (!state?.enabled || !state.appSettingsAllowed) return;
-      if (this.handled.has(request.id)) continue;
-      this.handled.add(request.id);
-      const outcome = await this.change(request);
-      const answer: McpAppAnswer = { ...outcome, settings: this.settings() };
-      await lastValueFrom(this.mcp.answerAppRequest(request.id, answer), { defaultValue: undefined }).catch(() => undefined);
+      if (!this.handled.has(request.id)) {
+        this.handled.add(request.id);
+        this.unanswered.set(request.id, await this.change(request));
+      }
+      const outcome = this.unanswered.get(request.id);
+      if (!outcome) continue;
+      const taken = await lastValueFrom(this.mcp.answerAppRequest(request.id, { ...outcome, settings: this.settings() }), { defaultValue: undefined })
+        .then(() => true, (error: { status?: number }) => error?.status === 404);
+      if (taken) this.unanswered.delete(request.id);
     }
   }
 

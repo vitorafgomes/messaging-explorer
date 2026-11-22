@@ -16,6 +16,11 @@ reliability: high
 
 What changed when in the project [[pages/services/web-app|Web App]] describes, newest first.
 
+
+## 2026-11-22
+
+- From the review of pull request 106: an answer to a request for a setting of the app that the API did not take is sent again while the API still lists the request, without applying the setting a second time; a 404 ends it (`web-app/src/app/features/settings/mcp-app-settings.service.ts#apply`). Before, a failed answer was dropped and the assistant was told the app did not answer.
+
 ## 2026-11-20
 
 - In the light theme a toolbar link that needs a connection was close to unreadable while there was none: its text measured 1.5 to 1 against the bar. A disabled link takes its colour from the bar's own text colour (`web-app/src/app/app.scss`), measured in both themes by `web-app/e2e/settings.e2e.ts#a link that needs a connection can still be read while there is none, in the light and in the dark theme`.
