@@ -40,6 +40,7 @@ Each entry carries its date. This page is a tracker: `version` changes only when
 
 ## P2 - correctness and lifecycle
 
+- **A read of one queue or one subscription cannot be cancelled (2026-11-22).** `src/ServiceBusExplorer.Core/Abstractions/IMessagingProvider.cs#GetQueueAsync` and `#GetSubscriptionAsync` take no `CancellationToken`, unlike `#GetTopicAsync`, so the read that follows an edit goes on after the caller is gone (`src/ServiceBusExplorer.Api/Controllers/TopicsController.cs#ChangeSubscription`, and the lookups the MCP tools make before asking). Raised by the review of pull request 106; the line is as it was before that change. Fixing it changes the provider interface and both providers.
 - **2026-11-14 - The single-message actions fail on a session-enabled entity.** The dead-letter, defer and delete of one message scan with a non-session receiver, so on an entity that requires sessions the call fails; the actions are not hidden there. [[pages/services/core/azure-single-message-actions]]
 - **2026-11-14 - A message whose body is an AMQP value or sequence cannot be peeked.** `ServiceBusReceivedMessage.Body` throws for it, and the read takes the body even for its size. [[pages/services/core/message-bodies]]
 - **2026-11-12 - The delete-all decision compares the selection with the count the messages dialog received when it opened**, and an open messages dialog survives a change of connection from the Electron menu. [[pages/services/web-app]]
