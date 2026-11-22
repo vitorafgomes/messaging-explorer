@@ -10,6 +10,7 @@
   --mat-icon-button-icon-color: var(--bar-fg);
   --mat-icon-button-state-layer-color: var(--bar-fg);
   --mat-button-text-label-text-color: var(--bar-fg);
+  --mat-button-text-disabled-label-text-color: color-mix(in srgb, var(--bar-fg) 70%, transparent);
   --mat-button-outlined-label-text-color: var(--bar-fg);
   --mat-button-outlined-outline-color: var(--bar-separator);
   --mat-button-filled-container-color: var(--bar-fg);
@@ -208,4 +209,25 @@
   color: var(--mat-sys-on-error-container);
   font: var(--mat-sys-label-medium);
   font-weight: 700;
+}
+
+.mcp-link {
+  position: relative;
+  color: var(--bar-fg);
+
+  .mcp-dot {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 11px;
+    height: 11px;
+    box-sizing: border-box;
+    border: 2px solid var(--bar-bg);
+    border-radius: 999px;
+    background: var(--app-success-container);
+  }
+}
+
+:host-context(.dark-theme) .mcp-link .mcp-dot {
+  background: var(--app-success);
 }

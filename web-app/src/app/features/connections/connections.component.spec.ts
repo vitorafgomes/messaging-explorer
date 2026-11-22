@@ -31,13 +31,24 @@ const client: ConnectionGroup = { id: 'g1', name: 'Contoso', type: 'client', cre
 const production: ConnectionGroup = { id: 'g2', name: 'Production', type: 'environment', parentId: 'g1', createdAt: new Date() };
 
 describe('ConnectionsComponent', () => {
-  let connectionServiceMock: { getConnections: ReturnType<typeof vi.fn> };
+  let connectionServiceMock: {
+    getConnections: ReturnType<typeof vi.fn>;
+    connectionStatus$: BehaviorSubject<any>;
+    currentConnectionId: string | null;
+    isConnected: boolean;
+    currentNamespace?: string;
+  };
   let groupService: ConnectionGroupService;
   const dialogMock = { open: vi.fn() };
   const snackBarMock = { open: vi.fn() };
 
   beforeEach(() => {
-    connectionServiceMock = { getConnections: vi.fn().mockReturnValue(later([])) };
+    connectionServiceMock = {
+      getConnections: vi.fn().mockReturnValue(later([])),
+      connectionStatus$: new BehaviorSubject<any>({ connected: false }),
+      currentConnectionId: null,
+      isConnected: false
+    };
 
     TestBed.configureTestingModule({
       imports: [ConnectionsComponent],
@@ -162,7 +173,8 @@ describe('ConnectionsComponent', () => {
 
   it('an environment is hidden and shown by its row, a hidden one that holds the active connection says Connected, and what was left hidden is kept for the next visit', async () => {
     localStorage.removeItem('connections-collapsed');
-    connectionServiceMock.getConnections.mockReturnValue(later([connection({ id: 'c1', name: 'prod-bus', clientId: 'g1', environmentId: 'g2', isConnected: true })]));
+    connectionServiceMock.getConnections.mockReturnValue(later([connection({ id: 'c1', name: 'prod-bus', clientId: 'g1', environmentId: 'g2' })]));
+    connectionServiceMock.currentConnectionId = 'c1';
     vi.mocked(groupService.getGroups).mockReturnValue(later([client, production]));
     const { fixture, element } = await render();
     const row = element.querySelector('button.environment-row') as HTMLButtonElement;
@@ -258,7 +270,8 @@ describe('ConnectionsComponent', () => {
   });
 
   it('offers Open entities instead of Connect on the active connection', async () => {
-    connectionServiceMock.getConnections.mockReturnValue(later([connection({ isConnected: true })]));
+    connectionServiceMock.getConnections.mockReturnValue(later([connection({})]));
+    connectionServiceMock.currentConnectionId = 'c1';
     const { element, buttons } = await render();
 
     const row = element.querySelector('li.connection-card');
@@ -268,6 +281,57 @@ describe('ConnectionsComponent', () => {
     expect(open?.getAttribute('href')).toBe('/entities');
     expect(row?.querySelector('.connected-chip')?.textContent?.replace('check_circle', '').trim()).toBe('Connected');
     expect(buttons('Connect').filter(b => row?.contains(b))).toHaveLength(0);
+  });
+
+  describe('marks the connection the API names as active, whatever the order of the answers', () => {
+    const connectedTo = (id: string) => {
+      connectionServiceMock.currentConnectionId = id;
+      connectionServiceMock.isConnected = true;
+      connectionServiceMock.currentNamespace = 'localhost:5672';
+    };
+    const marked = (element: HTMLElement) => Array.from(element.querySelectorAll('li.connection-card'))
+      .filter(row => row.querySelector('.connected-chip')?.textContent?.replace('check_circle', '').trim() === 'Connected')
+      .map(row => row.querySelector('h3')?.textContent?.trim());
+
+    it('the card of the connection the API names as active shows Connected after the list is loaded again', async () => {
+      connectedTo('c1');
+      connectionServiceMock.connectionStatus$.next({ connected: true, namespace: 'localhost:5672', connectionId: 'c1' });
+      connectionServiceMock.getConnections.mockImplementation(() => later([connection({ isConnected: false })]));
+      const { fixture, element } = await render();
+      expect(marked(element), 'the list the API answers carries no mark; the active connection is marked from the status').toEqual(['orders-rabbitmq']);
+
+      fixture.componentInstance.loadData();
+      await settle();
+      fixture.detectChanges();
+
+      expect(marked(element), 'the card of the active connection shows Connected after the list is loaded again').toEqual(['orders-rabbitmq']);
+      const row = element.querySelector('li.connection-card');
+      expect(row?.querySelector('a')?.textContent?.trim(), 'the active connection offers Open entities').toBe('Open entities');
+      expect(row?.querySelector('[aria-label="Connect to orders-rabbitmq"]'), 'the active connection offers no Connect').toBeNull();
+    });
+
+    it('a status that arrives after the list marks the connection it names', async () => {
+      connectionServiceMock.getConnections.mockReturnValue(later([connection({ isConnected: false })]));
+      const { fixture, element } = await render();
+      expect(marked(element), 'nothing is active before the status arrives').toEqual([]);
+
+      connectedTo('c1');
+      connectionServiceMock.connectionStatus$.next({ connected: true, namespace: 'localhost:5672', connectionId: 'c1' });
+      fixture.detectChanges();
+
+      expect(marked(element), 'the mark does not depend on which answer arrives first, the list or the status').toEqual(['orders-rabbitmq']);
+    });
+
+    it('of two stored connections to the same target, only the one the API names is marked', async () => {
+      connectedTo('c2');
+      connectionServiceMock.connectionStatus$.next({ connected: true, namespace: 'localhost:5672', connectionId: 'c2' });
+      connectionServiceMock.getConnections.mockReturnValue(later([
+        connection({ id: 'c1', name: 'orders-rabbitmq' }), connection({ id: 'c2', name: 'orders-rabbitmq-admin' })
+      ]));
+      const { element } = await render();
+
+      expect(marked(element), 'two connections to the same target: only the one whose id the API named is marked').toEqual(['orders-rabbitmq-admin']);
+    });
   });
 
   it('a connection row shows its name with the broker and how it signs in, its target, when it was last used and its actions; the environment is its group, not a column', async () => {

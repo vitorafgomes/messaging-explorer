@@ -2,7 +2,7 @@
 title: "Electron Shell history"
 version: "1.2"
 date: 2026-11-13
-updated: 2026-11-16
+updated: 2026-11-20
 changes: "2026-11-16: the versions of a channel. v1.1: dated entries above the version notes"
 page_type: reference
 status: active
@@ -16,7 +16,18 @@ reliability: high
 
 What changed when in the project [[pages/services/electron-shell|Electron Shell]] describes, newest first.
 
+
+## 2026-11-20
+
+- When the page of the main window is gone the shell forgets the runs it was told about, so a later quit does not ask about a run that died with the page (`web-app/electron/main.js#app.on('render-process-gone'`).
+
+- Quitting asks first while an automatic resubmit runs: the page tells the shell how many run on the new `set-active-runs` channel, and `before-quit` shows a native box with Keep running and Quit and stop; the quit of an update is never asked about ([[pages/services/electron-shell/ipc-and-tray]], `web-app/electron/shell-helpers.js#quitDecision`).
+
+- The AppImage is published as `Messaging-Explorer-x86_64.AppImage`, with no version in its name, because the updater renamed a file whose name held one and a launcher pointing at it stopped working (`web-app/package.json#appImage`). The public texts said an update downloads on its own and that the deb updates itself; neither has been true since 2026-11-19 and both are corrected in `README.md` and `docs/index.html`.
+
 ## 2026-11-19
+
+- A download refused because no update is on offer, while a check runs or after one found none, says so, apart from the refusal of a version that differs from the one agreed to (`web-app/electron/shell-helpers.js#downloadAgreedUpdate`).
 
 - **Electron 42.** The shell moved from Electron 41 to 42.11 for its security fixes, which the 41 line does not receive: one high advisory and seven lower. None of the breaking changes of 42 touches this shell: it shows no notification, renders nothing off screen, never clears storage quotas and makes no named image. `sharp`, which only draws the icons at build time, went to 0.35, and the `uuid` under `exceljs` is overridden to 11.1.1. Checked by starting the packaged Linux build on its own data folder and ports: the API listened, the window read the empty lists with the key, and the quit stopped the API.
 

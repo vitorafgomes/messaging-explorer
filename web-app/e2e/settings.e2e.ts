@@ -1,4 +1,4 @@
-import { expect, open, shoot, test } from './fixtures';
+import { expect, open, setDark, shoot, test } from './fixtures';
 
 const SAMPLE_VERSION = '2.4.2';
 
@@ -57,5 +57,39 @@ test.describe('Settings', () => {
     await shoot(page, 'settings-clear-all-data');
     await dialog.getByRole('button', { name: 'Cancel' }).click();
     await expect(dialog).toBeHidden();
+  });
+});
+
+test.describe('The toolbar', () => {
+  /** The contrast ratio of the link's text on the toolbar, as the browser paints the two colours. */
+  const contrast = (page: import('@playwright/test').Page, name: string) => page.evaluate((label) => {
+    const link = [...document.querySelectorAll('mat-toolbar a.nav-link')].find(a => a.textContent?.trim() === label) as HTMLElement;
+    const text = link.querySelector('.mdc-button__label') as HTMLElement ?? link;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    const context = canvas.getContext('2d', { willReadFrequently: true })!;
+    const painted = (...colours: string[]) => {
+      context.clearRect(0, 0, 1, 1);
+      for (const colour of colours) { context.fillStyle = colour; context.fillRect(0, 0, 1, 1); }
+      const [r, g, b] = [...context.getImageData(0, 0, 1, 1).data].map(v => v / 255).map(v => v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const bar = getComputedStyle(document.querySelector('mat-toolbar')!).backgroundColor;
+    const [back, front] = [painted(bar), painted(bar, getComputedStyle(text).color)];
+    return { disabled: link.getAttribute('aria-disabled') === 'true' || link.hasAttribute('disabled'), ratio: (Math.max(back, front) + 0.05) / (Math.min(back, front) + 0.05) };
+  }, name);
+
+  test('a link that needs a connection can still be read while there is none, in the light and in the dark theme', async ({ page }) => {
+    await page.request.post(`http://localhost:${process.env['E2E_API_PORT']}/api/connections/disconnect`, { headers: { 'X-Api-Key': process.env['E2E_API_SECRET'] ?? '' } });
+    await open(page, 'connections');
+    await expect(page.locator('mat-toolbar .broker-name')).toHaveText('Disconnected');
+    for (const theme of ['light', 'dark'] as const) {
+      await setDark(page, theme === 'dark');
+      for (const name of ['Entities', 'Monitoring']) {
+        const link = await contrast(page, name);
+        expect(link.disabled, `${name} is disabled while no broker is connected`).toBe(true);
+        expect(link.ratio, `${name}, disabled, on the toolbar of the ${theme} theme: a contrast of at least 3 to 1 so the word can be read`).toBeGreaterThanOrEqual(3);
+      }
+    }
   });
 });

@@ -86,7 +86,8 @@ describe('ContinuousResubmitDialogComponent', () => {
     fixture.detectChanges();
 
     expect((fixture.nativeElement as HTMLElement).querySelector('.topic-resubmit-note[role="note"]')?.textContent?.replace(/\s+/g, ' ').trim())
-      .toBe('Resubmit publishes to the topic sales. Every subscription of sales receives these messages again, not only eu.');
+      .toBe('Resubmit publishes to the topic sales. Every subscription of sales receives these messages again, not only eu, and a filter on eu may keep them from coming back to it.');
+    expect((fixture.nativeElement as HTMLElement).textContent, 'no second note repeats that the resubmit goes to the topic').not.toContain('will be sent to the topic');
   });
 
   describe('continuous resubmit never re-sends a message that failed or may be duplicated, and stops on a failure', () => {

@@ -16,6 +16,7 @@ reliability: high
 
 Initiatives, the backlog, audits and the follow-ups tracker.
 
+- [[pages/roadmap/after-2-5-0|After 2.5.0: the order of work]] - What is built after the 2.5.0 release on one branch, in order: the MCP server first, then what the last round left open, safety, the errors a user sees, features, performance and the release.
 - [[pages/roadmap/product-backlog|Product backlog]] - The features the owner asked for that are not built yet, checked against the code.
 - [[pages/roadmap/azure-service-bus-administration|Azure Service Bus: administer the entity]] - What exists and what to build, per layer, for twelve capabilities: edit entities, rules, status, definitions export, counts, sessions, scheduled and deferred messages, transfer dead-letter, batch send.
 - [[pages/roadmap/azure-event-hubs-and-event-grid|Azure Event Hubs and Azure Event Grid]] - The next version: the three Microsoft products as one family, sign-in and discovery, what to build for each, the decision the provider abstraction needs, and what can be tested in containers.

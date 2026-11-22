@@ -16,6 +16,10 @@ reliability: high
 
 What changed when in the project [[pages/services/core|Core]] describes, newest first.
 
+## 2026-11-20
+
+- From an outside review of the MCP server: a message a delete, resubmit or move could not remove is reported with a fixed sentence chosen by the kind of failure, "the broker did not answer in time.", "the broker refused it as not authorised.", "the lock on the message was lost." or "the broker did not confirm the removal." (`src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs#RemovalFailure`), and RabbitMQ's bulk move and delete name no reply text of the broker; the possible-duplicate flag, the sequence numbers and the counts are as before.
+
 ## 2026-11-19
 
 - From the final review of the whole change: an Azure resubmit or move that a refusal as not authorised or a timeout stops midway now answers its per-message report, the messages already sent as possible duplicates and the rest as not reached, where it used to answer an error with no report (`src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs#ResubmitCoreAsync`, `src/ServiceBusExplorer.Core/Providers/Azure/AzureServiceBusProvider.cs#MoveCoreAsync`, `src/ServiceBusExplorer.Core.Tests/Providers/Azure/AzureServiceBusProviderBatchTests.cs#A_resubmit_or_move_whose_send_is_refused_as_not_authorised_or_times_out_midway_reports_what_it_sent_as_possible_duplicates`); the single resubmit reports the original it could not remove for those two failures too. This closes the follow-up the review of the retry policy had opened.

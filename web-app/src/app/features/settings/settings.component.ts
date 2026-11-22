@@ -15,6 +15,7 @@ import { ConnectionService, DevSettingsService, ThemeService } from '../../core/
 import { BugReportService } from '../../shared/bug-report.service';
 import { AppUpdateService, RELEASES_URL, REPOSITORY_URL, UpdateChannel, UpdateVersion } from './app-update.service';
 import { ClearAllDataDialogComponent, ClearAllDataResult } from './clear-all-data-dialog.component';
+import { SettingsMcpComponent } from './settings-mcp.component';
 
 const BLOCKER_REASONS = {
   'macos-unsigned': { platform: 'macOS', reason: 'the build is not signed, and macOS installs an update only into a signed app.' },
@@ -22,7 +23,7 @@ const BLOCKER_REASONS = {
   'linux-package': { platform: 'Linux, installed package', reason: 'only the AppImage replaces itself; a package such as the .deb is updated by installing the new one.' },
 } as const;
 
-/** The settings of the app: appearance, updates, data, developer mode and tools, and About. */
+/** The settings of the app: appearance, updates, data, the MCP server, developer mode and tools, and About. */
 @Component({
   selector: 'app-settings',
   standalone: true,
@@ -37,6 +38,7 @@ const BLOCKER_REASONS = {
     MatProgressSpinnerModule,
     MatFormFieldModule,
     MatSelectModule,
+    SettingsMcpComponent,
   ],
   templateUrl: './settings.component.html',
   styleUrl: './settings.component.scss',
@@ -145,11 +147,7 @@ export class SettingsComponent {
   }
 
   retry(): void {
-    if (this.updates.failedDuring() === 'download' && this.agreedToUpdate()) {
-      this.downloadUpdate();
-    } else {
-      void this.updates.check();
-    }
+    void this.updates.check();
   }
 
   openBugReport(type: 'bug' | 'feature'): void {

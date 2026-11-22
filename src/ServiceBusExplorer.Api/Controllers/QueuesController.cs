@@ -56,11 +56,24 @@ public class QueuesController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<ActionResult> CreateQueue([FromBody] CreateQueueRequest request)
+    public Task<ActionResult> CreateQueue([FromBody] CreateQueueRequest request) => Add(GetProvider(), _logger, request);
+
+    [HttpPatch("{name}")]
+    public async Task<ActionResult<IQueueEntity>> UpdateQueue(string name, [FromBody] QueueUpdateOptions options) =>
+        await Change(GetProvider(), _logger, name, options, HttpContext.RequestAborted);
+
+    [HttpDelete("{name}")]
+    public Task<ActionResult> DeleteQueue(string name) => Remove(GetProvider(), name);
+
+    /// <summary>
+    /// The create of a queue, shared by the route and by the create_queue tool: 400 when no provider is connected or
+    /// the name is blank, 201 with no body when created, and the answers of
+    /// <see cref="EntityAdministrationResults.Failure"/> otherwise.
+    /// </summary>
+    internal static async Task<ActionResult> Add(IMessagingProvider? provider, ILogger logger, CreateQueueRequest request)
     {
-        var provider = GetProvider();
         if (provider == null)
-            return NoProviderConnected();
+            return new BadRequestObjectResult(new { message = "No messaging provider connected. Please connect to a provider first." });
 
         if (string.IsNullOrWhiteSpace(request.Name))
             return EntityAdministrationResults.NameRequired();
@@ -74,26 +87,29 @@ public class QueuesController : ControllerBase
                 await provider.CreateQueueAsync(name);
             else
                 await provider.CreateQueueAsync(name, options);
-            return CreatedAtAction(nameof(GetQueue), new { name }, null);
+            return new CreatedAtActionResult(nameof(GetQueue), null, new { name }, null);
         }
         catch (Exception ex)
         {
-            return EntityAdministrationResults.Failure(ex, _logger, "queue", name, "queue");
+            return EntityAdministrationResults.Failure(ex, logger, "queue", name, "queue");
         }
     }
 
-    [HttpPatch("{name}")]
-    public async Task<ActionResult<IQueueEntity>> UpdateQueue(string name, [FromBody] QueueUpdateOptions options)
+    /// <summary>
+    /// The edit of a queue, shared by the route and by the update_queue tool: the queue as read after the edit, 404
+    /// when it is gone, 400 when the provider cannot update, and the answers of
+    /// <see cref="EntityAdministrationResults.Failure"/> otherwise.
+    /// </summary>
+    internal static async Task<ActionResult> Change(IMessagingProvider? provider, ILogger logger, string name, QueueUpdateOptions options, CancellationToken cancellationToken)
     {
-        var provider = GetProvider();
         if (provider == null)
-            return NoProviderConnected();
+            return new BadRequestObjectResult(new { message = "No messaging provider connected. Please connect to a provider first." });
 
         try
         {
-            await provider.UpdateQueueAsync(name, options, HttpContext.RequestAborted);
+            await provider.UpdateQueueAsync(name, options, cancellationToken);
             var queue = await provider.GetQueueAsync(name);
-            return queue == null ? EntityAdministrationResults.NotFound("queue") : Ok(queue);
+            return queue == null ? EntityAdministrationResults.NotFound("queue") : new OkObjectResult(queue);
         }
         catch (NotSupportedException)
         {
@@ -101,19 +117,21 @@ public class QueuesController : ControllerBase
         }
         catch (Exception ex)
         {
-            return EntityAdministrationResults.Failure(ex, _logger, "queue", name, "queue");
+            return EntityAdministrationResults.Failure(ex, logger, "queue", name, "queue");
         }
     }
 
-    [HttpDelete("{name}")]
-    public async Task<ActionResult> DeleteQueue(string name)
+    /// <summary>
+    /// The delete of a queue, shared by the route and by the delete_queue tool: 204 when deleted; a failure is thrown
+    /// to the caller, which for the route is the error handler of the application.
+    /// </summary>
+    internal static async Task<ActionResult> Remove(IMessagingProvider? provider, string name)
     {
-        var provider = GetProvider();
         if (provider == null)
-            return NoProviderConnected();
+            return new BadRequestObjectResult(new { message = "No messaging provider connected. Please connect to a provider first." });
 
         await provider.DeleteQueueAsync(name);
-        return NoContent();
+        return new NoContentResult();
     }
 
     [HttpPost("{name}/messages/search")]
@@ -273,29 +291,28 @@ public class QueuesController : ControllerBase
 
     [HttpPost("{name}/messages/cancel-scheduled")]
     public Task<ActionResult> CancelScheduledMessages(string name, [FromBody] CancelScheduledRequest request) =>
-        CancelScheduled(this, _logger, name, request, HttpContext.RequestAborted);
+        CancelScheduled(GetProvider(), _logger, name, request, HttpContext.RequestAborted);
 
     /// <summary>
     /// The cancel of scheduled messages of a queue and of a topic: 400 when the provider declares no scheduled messages
     /// or refuses the sequence numbers, 409 for a disabled entity, the constant 500 for any other failure, and the
     /// result per sequence number otherwise.
     /// </summary>
-    internal static async Task<ActionResult> CancelScheduled(ControllerBase controller, ILogger logger, string name, CancelScheduledRequest request, CancellationToken cancellationToken)
+    internal static async Task<ActionResult> CancelScheduled(IMessagingProvider? provider, ILogger logger, string name, CancelScheduledRequest request, CancellationToken cancellationToken)
     {
-        var provider = GetProvider();
         if (provider == null)
-            return controller.BadRequest(new { message = "No messaging provider connected. Please connect to a provider first." });
+            return new BadRequestObjectResult(new { message = "No messaging provider connected. Please connect to a provider first." });
         if (!provider.Capabilities.SupportsScheduledMessages)
             return EntityAdministrationResults.ScheduledMessagesNotSupported();
 
         try
         {
             var result = await provider.CancelScheduledMessagesAsync(name, request.SequenceNumbers, cancellationToken);
-            return controller.Ok(result);
+            return new OkObjectResult(result);
         }
         catch (InvalidEntityConfigurationException ex)
         {
-            return controller.BadRequest(new { message = ex.Message });
+            return new BadRequestObjectResult(new { message = ex.Message });
         }
         catch (EntityDisabledException)
         {
@@ -358,12 +375,19 @@ public class QueuesController : ControllerBase
 
     [HttpPost("{name}/messages/deadletter-batch")]
     public Task<ActionResult> DeadLetterMessages(string name, [FromBody] DeferredBatchRequest request) =>
-        ActiveBatch(this, _logger, name, request, c => c.SupportsManualDeadLetter ? null : EntityAdministrationResults.ManualDeadLetterNotSupported(),
-            p => p.DeadLetterMessagesAsync(name, request.SequenceNumbers, reason: request.Reason, description: request.Description, cancellationToken: HttpContext.RequestAborted));
+        DeadLetterBatch(GetProvider(), _logger, name, null, request, HttpContext.RequestAborted);
+
+    /// <summary>
+    /// The dead-letter of active messages of a queue, or of a subscription when <paramref name="subscription"/> is given,
+    /// shared by the routes and by the dead_letter_messages tool, through <see cref="ActiveBatch"/>.
+    /// </summary>
+    internal static Task<ActionResult> DeadLetterBatch(IMessagingProvider? provider, ILogger logger, string name, string? subscription, DeferredBatchRequest request, CancellationToken cancellationToken) =>
+        ActiveBatch(provider, logger, PathOf(name, subscription), request, c => c.SupportsManualDeadLetter ? null : EntityAdministrationResults.ManualDeadLetterNotSupported(),
+            p => p.DeadLetterMessagesAsync(name, request.SequenceNumbers, subscription, request.Reason, request.Description, cancellationToken));
 
     [HttpPost("{name}/messages/defer-batch")]
     public Task<ActionResult> DeferMessages(string name, [FromBody] DeferredBatchRequest request) =>
-        ActiveBatch(this, _logger, name, request, c => c.SupportsDeferral ? null : EntityAdministrationResults.DeferralNotSupported(),
+        ActiveBatch(GetProvider(), _logger, name, request, c => c.SupportsDeferral ? null : EntityAdministrationResults.DeferralNotSupported(),
             p => p.DeferMessagesAsync(name, request.SequenceNumbers, cancellationToken: HttpContext.RequestAborted));
 
     /// <summary>
@@ -373,19 +397,18 @@ public class QueuesController : ControllerBase
     /// called; 409 for a disabled entity, the constant 500 for anything else, and the result per sequence number,
     /// refusals included, otherwise.
     /// </summary>
-    internal static async Task<ActionResult> ActiveBatch(ControllerBase controller, ILogger logger, string entityPath, DeferredBatchRequest request, Func<IProviderCapabilities, ActionResult?> notSupported, Func<IMessagingProvider, Task<BatchOperationResult>> operation)
+    internal static async Task<ActionResult> ActiveBatch(IMessagingProvider? provider, ILogger logger, string entityPath, DeferredBatchRequest request, Func<IProviderCapabilities, ActionResult?> notSupported, Func<IMessagingProvider, Task<BatchOperationResult>> operation)
     {
-        var provider = GetProvider();
         if (provider == null)
-            return controller.BadRequest(new { message = "No messaging provider connected. Please connect to a provider first." });
+            return new BadRequestObjectResult(new { message = "No messaging provider connected. Please connect to a provider first." });
         if (notSupported(provider.Capabilities) is { } refused)
             return refused;
         if (request.SequenceNumbers is not { Length: >= 1 and <= DeferredBatchRequest.MaxSequenceNumbers })
-            return controller.BadRequest(new { message = $"sequenceNumbers must hold 1 to {DeferredBatchRequest.MaxSequenceNumbers} sequence numbers." });
+            return new BadRequestObjectResult(new { message = $"sequenceNumbers must hold 1 to {DeferredBatchRequest.MaxSequenceNumbers} sequence numbers." });
 
         try
         {
-            return controller.Ok(await operation(provider));
+            return new OkObjectResult(await operation(provider));
         }
         catch (EntityDisabledException)
         {
@@ -428,23 +451,54 @@ public class QueuesController : ControllerBase
 
     [HttpPost("{name}/deadletter/resubmit-batch")]
     public Task<ActionResult> ResubmitDeadLetterMessages(string name, [FromBody] ResubmitBatchRequest request) =>
-        ResubmitBatch(name, request, MessageSubQueue.DeadLetter);
+        ResubmitBatch(GetProvider(), _logger, name, null, request, MessageSubQueue.DeadLetter, HttpContext.RequestAborted);
 
     [HttpPost("{name}/transferdeadletter/resubmit-batch")]
     public Task<ActionResult> ResubmitTransferDeadLetterMessages(string name, [FromBody] ResubmitBatchRequest request) =>
-        ResubmitBatch(name, request, MessageSubQueue.TransferDeadLetter);
+        ResubmitBatch(GetProvider(), _logger, name, null, request, MessageSubQueue.TransferDeadLetter, HttpContext.RequestAborted);
 
-    private async Task<ActionResult> ResubmitBatch(string name, ResubmitBatchRequest request, MessageSubQueue subQueue)
+    [HttpDelete("{name}/messages")]
+    public Task<ActionResult> PurgeMessages(string name) => Purge(GetProvider(), _logger, name, null, MessageSubQueue.Active, HttpContext.RequestAborted);
+
+    [HttpDelete("{name}/deadletter")]
+    public Task<ActionResult> PurgeDeadLetterMessages(string name) => Purge(GetProvider(), _logger, name, null, MessageSubQueue.DeadLetter, HttpContext.RequestAborted);
+
+    [HttpPost("{name}/messages/delete-batch")]
+    public Task<ActionResult> DeleteMessages(string name, [FromBody] DeleteBatchRequest request) =>
+        DeleteBatch(GetProvider(), _logger, name, null, request, MessageSubQueue.Active, HttpContext.RequestAborted);
+
+    [HttpPost("{name}/deadletter/delete-batch")]
+    public Task<ActionResult> DeleteDeadLetterMessages(string name, [FromBody] DeleteBatchRequest request) =>
+        DeleteBatch(GetProvider(), _logger, name, null, request, MessageSubQueue.DeadLetter, HttpContext.RequestAborted);
+
+    [HttpPost("{name}/transferdeadletter/delete-batch")]
+    public Task<ActionResult> DeleteTransferDeadLetterMessages(string name, [FromBody] DeleteBatchRequest request) =>
+        DeleteBatch(GetProvider(), _logger, name, null, request, MessageSubQueue.TransferDeadLetter, HttpContext.RequestAborted);
+
+    [HttpPost("{name}/messages/move-batch")]
+    public Task<ActionResult> MoveMessages(string name, [FromBody] MoveBatchRequest request) =>
+        MoveBatch(GetProvider(), _logger, name, null, request, MessageSubQueue.Active, HttpContext.RequestAborted);
+
+    [HttpPost("{name}/deadletter/move-batch")]
+    public Task<ActionResult> MoveDeadLetterMessages(string name, [FromBody] MoveBatchRequest request) =>
+        MoveBatch(GetProvider(), _logger, name, null, request, MessageSubQueue.DeadLetter, HttpContext.RequestAborted);
+
+    /// <summary>
+    /// The resubmit of dead-letter or transfer dead-letter messages of a queue, or of a subscription when
+    /// <paramref name="subscription"/> is given, shared by the routes and by the resubmit_messages tool: 400 when no
+    /// provider is connected or it declares no transfer dead-letter queue, 409 for a disabled entity, the constant 500
+    /// or the 502 of a refusal as not authorised for any other failure, and the result per sequence number otherwise.
+    /// </summary>
+    internal static async Task<ActionResult> ResubmitBatch(IMessagingProvider? provider, ILogger logger, string name, string? subscription, ResubmitBatchRequest request, MessageSubQueue subQueue, CancellationToken cancellationToken)
     {
-        var provider = GetProvider();
         if (provider == null)
-            return NoProviderConnected();
+            return new BadRequestObjectResult(new { message = "No messaging provider connected. Please connect to a provider first." });
         if (EntityAdministrationResults.SubQueueNotSupported(provider, subQueue) is { } notSupported) return notSupported;
 
         try
         {
-            var result = await provider.ResubmitDeadLetterMessagesAsync(name, request.SequenceNumbers, subQueue, newMessageIdOnDuplicateDetection: request.NewMessageIdOnDuplicateDetection, cancellationToken: HttpContext.RequestAborted);
-            return Ok(result);
+            var result = await provider.ResubmitDeadLetterMessagesAsync(name, request.SequenceNumbers, subQueue, subscription, request.NewMessageIdOnDuplicateDetection, cancellationToken: cancellationToken);
+            return new OkObjectResult(result);
         }
         catch (EntityDisabledException)
         {
@@ -452,27 +506,26 @@ public class QueuesController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Resubmit batch {SubQueue} failed for queue {QueueName}", subQueue, name);
+            logger.LogError(ex, "Resubmit {SubQueue} batch failed for {EntityPath}", subQueue, PathOf(name, subscription));
             return EntityAdministrationResults.Unhandled(ex);
         }
     }
 
-    [HttpDelete("{name}/messages")]
-    public Task<ActionResult> PurgeMessages(string name) => Purge(name, MessageSubQueue.Active);
-
-    [HttpDelete("{name}/deadletter")]
-    public Task<ActionResult> PurgeDeadLetterMessages(string name) => Purge(name, MessageSubQueue.DeadLetter);
-
-    private async Task<ActionResult> Purge(string name, MessageSubQueue subQueue)
+    /// <summary>
+    /// The purge of the active or the dead-letter messages of a queue, or of a subscription when
+    /// <paramref name="subscription"/> is given, shared by the routes and by the purge_messages tool: 400 when no
+    /// provider is connected or it refuses the entity, 409 for a disabled entity, the constant 500 or the 502 of a
+    /// refusal as not authorised for any other failure, and { success } otherwise.
+    /// </summary>
+    internal static async Task<ActionResult> Purge(IMessagingProvider? provider, ILogger logger, string name, string? subscription, MessageSubQueue subQueue, CancellationToken cancellationToken)
     {
-        var provider = GetProvider();
         if (provider == null)
-            return NoProviderConnected();
+            return new BadRequestObjectResult(new { message = "No messaging provider connected. Please connect to a provider first." });
 
         try
         {
-            await provider.PurgeMessagesAsync(name, subQueue, cancellationToken: HttpContext.RequestAborted);
-            return Ok(new { success = true });
+            await provider.PurgeMessagesAsync(name, subQueue, subscription, cancellationToken: cancellationToken);
+            return new OkObjectResult(new { success = true });
         }
         catch (EntityDisabledException)
         {
@@ -480,40 +533,34 @@ public class QueuesController : ControllerBase
         }
         catch (InvalidEntityConfigurationException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return new BadRequestObjectResult(new { message = ex.Message });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Purge {SubQueue} messages failed for queue {QueueName}", subQueue, name);
+            logger.LogError(ex, "Purge {SubQueue} messages failed for {EntityPath}", subQueue, PathOf(name, subscription));
             return EntityAdministrationResults.Unhandled(ex);
         }
     }
 
-    [HttpPost("{name}/messages/delete-batch")]
-    public Task<ActionResult> DeleteMessages(string name, [FromBody] DeleteBatchRequest request) =>
-        DeleteBatch(name, request, MessageSubQueue.Active);
-
-    [HttpPost("{name}/deadletter/delete-batch")]
-    public Task<ActionResult> DeleteDeadLetterMessages(string name, [FromBody] DeleteBatchRequest request) =>
-        DeleteBatch(name, request, MessageSubQueue.DeadLetter);
-
-    [HttpPost("{name}/transferdeadletter/delete-batch")]
-    public Task<ActionResult> DeleteTransferDeadLetterMessages(string name, [FromBody] DeleteBatchRequest request) =>
-        DeleteBatch(name, request, MessageSubQueue.TransferDeadLetter);
-
-    private async Task<ActionResult> DeleteBatch(string name, DeleteBatchRequest request, MessageSubQueue subQueue)
+    /// <summary>
+    /// The delete of chosen messages of a queue, or of a subscription when <paramref name="subscription"/> is given,
+    /// from one of its sub-queues, shared by the routes and by the delete_messages tool: 400 when no provider is
+    /// connected, it declares no transfer dead-letter queue, all is asked of that queue or the provider refuses the
+    /// numbers, 409 for a disabled entity, the constant 500 or the 502 of a refusal as not authorised for any other
+    /// failure, and the result per sequence number otherwise.
+    /// </summary>
+    internal static async Task<ActionResult> DeleteBatch(IMessagingProvider? provider, ILogger logger, string name, string? subscription, DeleteBatchRequest request, MessageSubQueue subQueue, CancellationToken cancellationToken)
     {
-        var provider = GetProvider();
         if (provider == null)
-            return NoProviderConnected();
+            return new BadRequestObjectResult(new { message = "No messaging provider connected. Please connect to a provider first." });
         if (EntityAdministrationResults.SubQueueNotSupported(provider, subQueue) is { } notSupported) return notSupported;
         if (request.All && subQueue == MessageSubQueue.TransferDeadLetter)
             return EntityAdministrationResults.DeleteAllOfTransferDeadLetter();
 
         try
         {
-            var result = await provider.DeleteMessagesAsync(name, request.SequenceNumbers, subQueue, all: request.All, cancellationToken: HttpContext.RequestAborted);
-            return Ok(result);
+            var result = await provider.DeleteMessagesAsync(name, request.SequenceNumbers, subQueue, subscription, all: request.All, cancellationToken: cancellationToken);
+            return new OkObjectResult(result);
         }
         catch (EntityDisabledException)
         {
@@ -521,33 +568,31 @@ public class QueuesController : ControllerBase
         }
         catch (InvalidEntityConfigurationException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return new BadRequestObjectResult(new { message = ex.Message });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Delete {SubQueue} messages batch failed for queue {QueueName}", subQueue, name);
+            logger.LogError(ex, "Delete {SubQueue} messages batch failed for {EntityPath}", subQueue, PathOf(name, subscription));
             return EntityAdministrationResults.Unhandled(ex);
         }
     }
 
-    [HttpPost("{name}/messages/move-batch")]
-    public Task<ActionResult> MoveMessages(string name, [FromBody] MoveBatchRequest request) =>
-        MoveBatch(name, request, MessageSubQueue.Active);
-
-    [HttpPost("{name}/deadletter/move-batch")]
-    public Task<ActionResult> MoveDeadLetterMessages(string name, [FromBody] MoveBatchRequest request) =>
-        MoveBatch(name, request, MessageSubQueue.DeadLetter);
-
-    private async Task<ActionResult> MoveBatch(string name, MoveBatchRequest request, MessageSubQueue subQueue)
+    /// <summary>
+    /// The move of chosen messages of a queue, or of a subscription when <paramref name="subscription"/> is given, to a
+    /// queue, shared by the routes and by the move_messages tool: 400 when no provider is connected or it declares no
+    /// transfer dead-letter queue, 409 for a disabled entity, the constant 500 or the 502 of a refusal as not
+    /// authorised for any other failure, and the result per sequence number otherwise.
+    /// </summary>
+    internal static async Task<ActionResult> MoveBatch(IMessagingProvider? provider, ILogger logger, string name, string? subscription, MoveBatchRequest request, MessageSubQueue subQueue, CancellationToken cancellationToken)
     {
-        var provider = GetProvider();
         if (provider == null)
-            return NoProviderConnected();
+            return new BadRequestObjectResult(new { message = "No messaging provider connected. Please connect to a provider first." });
+        if (EntityAdministrationResults.SubQueueNotSupported(provider, subQueue) is { } notSupported) return notSupported;
 
         try
         {
-            var result = await provider.MoveMessagesAsync(name, request.TargetQueueName, request.SequenceNumbers, subQueue, newMessageIdOnDuplicateDetection: request.NewMessageIdOnDuplicateDetection, cancellationToken: HttpContext.RequestAborted);
-            return Ok(result);
+            var result = await provider.MoveMessagesAsync(name, request.TargetQueueName, request.SequenceNumbers, subQueue, subscription, request.NewMessageIdOnDuplicateDetection, cancellationToken: cancellationToken);
+            return new OkObjectResult(result);
         }
         catch (EntityDisabledException)
         {
@@ -555,8 +600,10 @@ public class QueuesController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Move {SubQueue} messages failed from queue {QueueName} to {TargetQueueName}", subQueue, name, request.TargetQueueName);
+            logger.LogError(ex, "Move {SubQueue} messages failed from {EntityPath} to {TargetQueueName}", subQueue, PathOf(name, subscription), request.TargetQueueName);
             return EntityAdministrationResults.Unhandled(ex);
         }
     }
+
+    private static string PathOf(string name, string? subscription) => subscription is null ? name : $"{name}/{subscription}";
 }

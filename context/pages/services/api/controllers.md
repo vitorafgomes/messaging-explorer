@@ -52,7 +52,7 @@ Consequences:
 - With no connection, every provider-backed action returns 400 `{message:"No messaging provider connected..."}` (`src/ServiceBusExplorer.Api/Controllers/QueuesController.cs#NoProviderConnected`), the same text duplicated in each of the three controllers.
 - The lock covers only the field. `SetCurrentProviderAsync` swaps under the lock, then disconnects and disposes the old provider outside it (`.../ConnectionsController.cs:59-80`). An action that already read the old reference at its start (for example `src/ServiceBusExplorer.Api/Controllers/QueuesController.cs#GetQueues`) keeps using it with no lease, so a concurrent `connect`, `disconnect` or `clear-all` can dispose the provider under a running call. No test covers it.
 - `Connect` creates and connects the new provider before the swap (`.../ConnectionsController.cs:240-243`); if creation throws, the previous provider stays active and the caller gets 500.
-- `GetStatus` falls back to the legacy `IServiceBusService` when no provider is set (`.../ConnectionsController.cs:326-332`).
+- `GetStatus` answers the target, the provider and, since 2026-11-19, `connectionId`: the id of the stored connection that is active, kept beside the provider slot and cleared by a disconnect, by clearing the data and by the deletion of that connection (`src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs#GetStatus`, `src/ServiceBusExplorer.Api.Tests/ConnectionLastUsedTests.cs#The_status_names_the_stored_connection_that_is_active_and_names_none_after_a_disconnect`). With no provider set it falls back to the legacy `IServiceBusService` and names none.
 
 ### Entity names in the path
 

@@ -180,7 +180,7 @@ const SCAN_NOTICE = 'The broker cannot lock one message by its number, so the ap
             @if (data.entityType === 'subscription') {
               <p class="filter-warning" role="note">
                 <mat-icon fontIcon="info" aria-hidden="true"></mat-icon>
-                <span>Resubmitted messages will be sent to the topic and will pass through all subscription filters. If this subscription has filters configured, the message may not return to it.</span>
+                <span><strong>Resubmit publishes to the topic {{ data.topicName }}.</strong> Every subscription of {{ data.topicName }} receives these messages again, not only {{ data.entityName }}, and a filter on {{ data.entityName }} may keep them from coming back to it.</span>
               </p>
             }
             @if (targetDetectsDuplicates()) {
@@ -316,12 +316,6 @@ const SCAN_NOTICE = 'The broker cannot lock one message by its number, so the ap
 
       @if (selectedTabIndex === 1) {
         <div class="tab-pane-content">
-          @if (data.entityType === 'subscription') {
-            <p class="filter-warning" role="note">
-              <mat-icon fontIcon="info" aria-hidden="true"></mat-icon>
-              <span>Resubmitted messages will be sent to the topic and will pass through all subscription filters. If this subscription has filters configured, the message may not return to it.</span>
-            </p>
-          }
           @if (targetDetectsDuplicates()) {
             <div class="new-message-id">
               <mat-checkbox [checked]="newMessageId()" (change)="newMessageId.set($event.checked)">{{ newMessageIdOption.label }}</mat-checkbox>
@@ -450,12 +444,6 @@ const SCAN_NOTICE = 'The broker cannot lock one message by its number, so the ap
             Messages this {{ data.entityType }} could not forward to another entity.
             They can be resubmitted to the {{ data.entityType === 'queue' ? 'queue' : 'topic' }} or deleted.
           </p>
-          @if (data.entityType === 'subscription') {
-            <p class="filter-warning" role="note">
-              <mat-icon fontIcon="info" aria-hidden="true"></mat-icon>
-              <span>Resubmitted messages will be sent to the topic and will pass through all subscription filters. If this subscription has filters configured, the message may not return to it.</span>
-            </p>
-          }
           @if (targetDetectsDuplicates()) {
             <div class="new-message-id">
               <mat-checkbox [checked]="newMessageId()" (change)="newMessageId.set($event.checked)">{{ newMessageIdOption.label }}</mat-checkbox>
@@ -731,7 +719,7 @@ const SCAN_NOTICE = 'The broker cannot lock one message by its number, so the ap
     @if (data.entityType === 'subscription' && subQueue !== 'active' && bulkOperations()) {
       <p class="topic-resubmit-note" role="note">
         <mat-icon fontIcon="warning" aria-hidden="true" />
-        <span><strong>Resubmit publishes to the topic {{ data.topicName }}.</strong> Every subscription of {{ data.topicName }} receives these messages again, not only {{ data.entityName }}.</span>
+        <span><strong>Resubmit publishes to the topic {{ data.topicName }}.</strong> Every subscription of {{ data.topicName }} receives these messages again, not only {{ data.entityName }}, and a filter on {{ data.entityName }} may keep them from coming back to it.</span>
       </p>
     }
 

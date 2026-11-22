@@ -91,15 +91,16 @@ input::placeholder{color:currentColor;opacity:.72}
           <span style="min-width: 0; overflow-wrap: anywhere"><strong style="font-weight: 600; color: {{t.onSurface}}">{{ent.name}}</strong> {{ent.where}}</span>
         </p>
 
+        <sc-if value="{{isSub}}" hint-placeholder-val="{{false}}">
+          <p style="display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 10px 14px; border-radius: 8px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}">
+            <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
+            <span><strong style="font-weight: 600">Resubmit publishes to the topic order-events.</strong> Every subscription of order-events receives these messages again, not only email, and a filter on email may keep them from coming back to it.</span>
+          </p>
+        </sc-if>
+
         <sc-if value="{{isConfig}}" hint-placeholder-val="{{true}}">
           <div style="display: flex; flex-direction: column; gap: 16px">
             <p style="margin: 0; color: {{t.onSurfaceVariant}}">This will continuously resubmit dead letter messages in batches until the queue is empty or you stop the process.</p>
-            <sc-if value="{{isSub}}" hint-placeholder-val="{{false}}">
-              <p style="display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 10px 14px; border-radius: 8px; background: {{t.warnContainer}}; color: {{t.onWarnContainer}}">
-                <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex: none; margin-top: 1px"><path d="M12 4l9 16H3zM12 10v4M12 17h.01"></path></svg>
-                <span>Messages will be sent to the topic and will pass through all subscription filters. If this subscription has filters configured, messages may not return to it.</span>
-              </p>
-            </sc-if>
             <label style="display: flex; flex-direction: column; gap: 4px; min-width: 0; max-width: 240px">
               <span style="font-size: 12px; line-height: 16px; font-weight: 500; color: {{batchLabelFg}}">Batch Size</span>
               <input type="text" inputmode="numeric" value="{{batch}}" onChange="{{onBatch}}" aria-invalid="{{batchInvalid}}" autocomplete="off" style="height: 40px; box-sizing: border-box; padding: 0 12px; border: {{batchBorder}}; border-radius: 8px; background: {{t.surface}}; color: {{t.onSurface}}; font: inherit; font-variant-numeric: tabular-nums">

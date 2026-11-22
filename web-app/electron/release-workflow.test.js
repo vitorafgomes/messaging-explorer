@@ -32,7 +32,7 @@ const DEBUG_FILES = ['builder-debug.yml', 'builder-effective-config.yaml'];
 
 const BUILDS = {
   Linux: (version, channel) => [
-    `Messaging-Explorer-${version}-x86_64.AppImage`,
+    'Messaging-Explorer-x86_64.AppImage',
     `Messaging-Explorer-${version}-amd64.deb`,
     `${channel}-linux.yml`
   ],
@@ -139,4 +139,12 @@ test('a beta is published as a prerelease, so stable updaters keep reading the l
   const publish = job('publish');
   assert.match(publish, /if \[ "\$PRERELEASE" = true \]; then flags\+=\(--prerelease\); fi/, 'a dispatched beta is created as a prerelease');
   assert.match(publish, /if \[\[ "\$TAG" == \*-\* \]\]; then flags\+=\(--prerelease\); fi/, 'a pushed beta tag is created as a prerelease');
+});
+
+test('the AppImage is published under a name without the version, so an update replaces the file the user starts', () => {
+  const build = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8')).build;
+  const name = build.appImage?.artifactName ?? build.artifactName;
+  assert.ok(!name.includes('${version}'),
+    `the updater renames an AppImage whose file name holds a version, which breaks a launcher that points to it; the name is ${name}`);
+  assert.equal(name, 'Messaging-Explorer-${arch}.${ext}');
 });

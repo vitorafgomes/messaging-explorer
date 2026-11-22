@@ -53,6 +53,20 @@ describe('ConnectionService knows which stored connection is active', () => {
     expect(service.currentConnectionId, 'another target: the stored connection is no longer known').toBeNull();
   });
 
+  it('takes the active stored connection from the status the API answers, after a reload with no connect of its own', () => {
+    get.mockReturnValueOnce(of({ connected: true, namespace: 'localhost:5672', connectionId: 'c-2' }));
+    service.refreshStatus();
+    expect(service.currentConnectionId, 'the service takes the active id from the status').toBe('c-2');
+
+    get.mockReturnValueOnce(of({ connected: true, namespace: 'localhost:5672', connectionId: 'c-3' }));
+    service.refreshStatus();
+    expect(service.currentConnectionId, 'the id the API names wins over the one the service knew').toBe('c-3');
+
+    get.mockReturnValueOnce(of({ connected: false, connectionId: 'c-3' }));
+    service.refreshStatus();
+    expect(service.currentConnectionId, 'not connected: no stored connection is active').toBeNull();
+  });
+
   it('a saved connection is announced, so its environment can be read again', async () => {
     const announced = vi.fn();
     service.saved$.subscribe(announced);

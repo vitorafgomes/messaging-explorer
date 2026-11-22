@@ -170,6 +170,9 @@ export interface ConnectionStatus {
 
   /** The provider type of the current connection (if any) */
   providerType?: ProviderType;
+
+  /** The id of the stored connection that is active, when the API knows it */
+  connectionId?: string;
 }
 
 /** One item of an import file, as the import preview of the API answers it. It carries no secret. */

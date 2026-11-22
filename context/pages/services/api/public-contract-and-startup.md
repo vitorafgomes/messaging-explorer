@@ -27,7 +27,7 @@ One topic of [[pages/services/api|Api]]; the map lists the others.
 
 - **HTTP routes:** `api/{controller}` for `connections`, `connectiongroups`, `queues`, `topics`, `metrics`, `monitoring`, and `api/namespace` for the entity definitions (`src/ServiceBusExplorer.Api/Controllers/NamespaceController.cs#NamespaceController`, `src/ServiceBusExplorer.Api/Controllers/NamespaceController.cs#Export`) (`[Route("api/[controller]")]`, for example `src/ServiceBusExplorer.Api/Controllers/QueuesController.cs#[Route("api/[controller]")]`); the session routes sit under `api/queues/{name}/sessions` and `api/topics/{topic}/subscriptions/{subscription}/sessions` with absolute templates (`src/ServiceBusExplorer.Api/Controllers/SessionsController.cs#QueueBase`), plus unauthenticated `GET /health` (`src/ServiceBusExplorer.Api/Program.cs#FileWorkspaceManager`) and, in Development only, the OpenAPI document (`src/ServiceBusExplorer.Api/Program.cs#FileWorkspaceManager`).
 - **HTTP routes:** `api/{controller}` for `connections`, `connectiongroups`, `queues`, `topics`, `metrics`, `monitoring` (`snapshot`, `history`, `counts`) (`[Route("api/[controller]")]`, for example `src/ServiceBusExplorer.Api/Controllers/QueuesController.cs#[Route("api/[controller]")]`); the session routes sit under `api/queues/{name}/sessions` and `api/topics/{topic}/subscriptions/{subscription}/sessions` with absolute templates (`src/ServiceBusExplorer.Api/Controllers/SessionsController.cs#QueueBase`), plus unauthenticated `GET /health` (`src/ServiceBusExplorer.Api/Program.cs#FileWorkspaceManager`) and, in Development only, the OpenAPI document (`src/ServiceBusExplorer.Api/Program.cs#FileWorkspaceManager`).
-- **Auth:** every request except `OPTIONS` and `/health*` needs header `X-Api-Key` equal to `API_SECRET` ([[pages/invariants/local-authenticated-api]]).
+- **Auth:** every request except `OPTIONS`, `/health*` and `/mcp` needs header `X-Api-Key` equal to `API_SECRET` ([[pages/invariants/local-authenticated-api]]). `/mcp` answers 404 until the user turns the MCP server on, then only to its own bearer token ([[pages/services/api/mcp-server]]).
 - **JSON:** camelCase, enums as strings in both directions (`src/ServiceBusExplorer.Api/Program.cs#options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;`, `:59`). The import/export files on disk stay PascalCase (`src/ServiceBusExplorer.Api/Controllers/ConnectionsController.cs#ExportFullConfiguration`).
 - **Events:** none published or consumed. **Direct callers:** the Angular app in Electron (`X-Api-Key` set at `web-app/electron/main.js#headers: { 'X-Api-Key': API_SECRET }`).
 
@@ -52,7 +52,7 @@ flowchart LR
     E --> H[HostFiltering]
     H --> C[CORS AllowAngular]
     C --> K{X-Api-Key middleware}
-    K -- "OPTIONS or /health" --> N[next]
+    K -- "OPTIONS or /health; /mcp through its own gate" --> N[next]
     K -- "FixedTimeEquals fails" --> U[401 Unauthorized]
     K -- ok --> N
     N --> CT[Controller action]

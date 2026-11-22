@@ -140,7 +140,7 @@ export class AppUpdateService {
     }
     this.channel.set(channel);
     this.versions.set(null);
-    await Promise.all([this.check(), this.loadVersions()]);
+    void Promise.all([this.check(), this.loadVersions()]).catch(() => undefined);
   }
 
   /**

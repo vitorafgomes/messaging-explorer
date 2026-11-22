@@ -36,8 +36,8 @@ adds one and never widens one.
 
 **The API is local and authenticated.** It listens on loopback only, filters the Host header,
 restricts CORS to the configured front end, and refuses every request without the per-launch
-`X-Api-Key`, compared in fixed time. `/health` is the one exemption. The Angular app reaches it
-only through `ApiService`.
+`X-Api-Key`, compared in fixed time. `/health` is exempt; `/mcp` answers only to its own
+token. The Angular app reaches it only through `ApiService`.
 
 **Secrets are masked and never logged.** A connection string, a password, a client secret and the
 API secret leave the backend only as the mask, except on an export the user asked for with

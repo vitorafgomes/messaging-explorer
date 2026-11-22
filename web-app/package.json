@@ -152,6 +152,9 @@
       "category": "Development",
       "maintainer": "Vitor Gomes <vitorafgomes@users.noreply.github.com>"
     },
+    "appImage": {
+      "artifactName": "Messaging-Explorer-${arch}.${ext}"
+    },
     "publish": {
       "provider": "github",
       "owner": "vitorafgomes",
