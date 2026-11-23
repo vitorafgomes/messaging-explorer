@@ -148,6 +148,9 @@ export const STATUS_MARKERS: Partial<Record<string, { icon: string; text: string
         </div>
       } @else {
         <div class="entity-tree">
+          @if (readingSubscriptions()) {
+            <p class="hidden-note" role="status" data-testid="reading-subscriptions">Reading the {{ terms().subscription }}s of the {{ terms().topic }}s...</p>
+          }
           @if (hiddenCount() > 0) {
             <p class="hidden-note" aria-live="polite">{{ hiddenCount() }} of {{ entityCount() }} entities hidden by the filter</p>
           }
@@ -178,6 +181,8 @@ export const STATUS_MARKERS: Partial<Record<string, { icon: string; text: string
 })
 export class EntitiesTreeComponent implements OnInit, OnDestroy {
   private treeDataBuilder = inject(TreeDataBuilderService);
+  /** Whether the tree shown is still waiting for the subscriptions of its topics. */
+  readonly readingSubscriptions = () => this.treeDataBuilder.readingSubscriptions?.() === true;
   private selectionService = inject(EntitySelectionService);
   private connectionService = inject(ConnectionService);
   private readonly resubmitRuns = inject(ResubmitRunService);
@@ -339,10 +344,11 @@ export class EntitiesTreeComponent implements OnInit, OnDestroy {
         takeUntil(this.destroy$))
       .subscribe({
         next: (data) => {
-          this.logger.log('[EntitiesTree] Tree data received:', data);
+          this.loading.set(false);
           this.treeData.set(data);
           this.counts.clear();
           this.subscriptionsFailed.set(new Set());
+          if (this.readingSubscriptions()) return;
           for (const topic of data.find(c => c.id === 'category-topics')?.children ?? []) {
             if (this.opened().has(topic.id) && !topic.children?.length) this.loadSubscriptions(topic);
           }

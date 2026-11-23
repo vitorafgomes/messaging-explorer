@@ -37,8 +37,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   listUpdateVersions: () => ipcRenderer.invoke('list-update-versions'),
   installUpdateVersion: (version, agreed) => ipcRenderer.invoke('install-update-version', { version, agreed }),
 
-  // Why this package cannot update itself, or null
+  // Why this package cannot update itself, or null; and its kind: 'deb', 'appimage' or null
   getSelfUpdateBlocker: () => ipcRenderer.invoke('get-self-update-blocker'),
+  getPackageType: () => ipcRenderer.invoke('get-package-type'),
 
   // The data file of the app, and showing it in the file manager; neither takes an argument
   getDataFile: () => ipcRenderer.invoke('get-data-file'),

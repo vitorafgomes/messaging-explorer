@@ -45,6 +45,14 @@ describe('AppUpdateService', () => {
     expect(updates.blocker()).toBeNull();
   });
 
+  it('reads the kind of package from the shell as deb or appimage, and anything else as unknown', async () => {
+    for (const [answer, expected] of [['deb', 'deb'], ['appimage', 'appimage'], ['rpm', null], [null, null], [{ kind: 'deb' }, null]] as const) {
+      TestBed.resetTestingModule();
+      const { updates } = await start({ getPackageType: async () => answer });
+      expect(updates.packageType(), `the shell answered ${JSON.stringify(answer)}`).toBe(expected);
+    }
+  });
+
   it('a check that finds a newer version is available with that version', async () => {
     const fake = fakeShell();
     fake.shell.checkForUpdates = vi.fn(async () => {

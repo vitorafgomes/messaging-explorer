@@ -2,7 +2,7 @@
 title: "Electron Shell history"
 version: "1.2"
 date: 2026-11-13
-updated: 2026-11-20
+updated: 2026-11-23
 changes: "2026-11-16: the versions of a channel. v1.1: dated entries above the version notes"
 page_type: reference
 status: active
@@ -16,6 +16,14 @@ reliability: high
 
 What changed when in the project [[pages/services/electron-shell|Electron Shell]] describes, newest first.
 
+
+## 2026-11-23
+
+- An update asked to install that leaves the app on its old version is told at the next start, once: the shell records the version before it restarts and compares it when the window shows (`web-app/electron/shell-helpers.js#failedInstallNotice`). The updater can fail to install a deb without any event and relaunch the old version.
+
+- The API inside every package is self-contained, so the app needs no .NET on the user's machine. The portable build of 2.5.1 on a Windows machine without .NET said "The local API did not start: it exited with code 2147516547", the host's 0x80008083, because the API was published framework-dependent. Each `electron:build:<os>` now publishes it with `--self-contained true` for its runtime identifiers into `publish-<os>-<arch>`, which `extraResources` picks with `${os}` and `${arch}` (`web-app/package.json#build:api:linux`); that exit code and 0x80008096 now say the runtime is missing and what to do (`web-app/electron/shell-helpers.js#describeApiExit`). Run on Linux x64: the API answered `/health` in a container with no .NET, and the AppImage was 205 MB, from 157 MB for an earlier local build. Not run on Windows or macOS.
+
+- The deb updates itself again. On a real install it was told it could not, while electron-updater 6.8.11 loads `DebUpdater` for it. The shell reads `resources/package-type` once (`web-app/electron/shell-helpers.js#readPackageType`); `selfUpdateBlocker` blocks no deb, and still blocks an rpm, a pacman package or one of unknown type, which were never tried. A deb never installs on quit, because its install asks for the administrator password (`web-app/electron/shell-helpers.js#function configureAutoUpdate(`); the version picker passes the package type too. The new read-only channel `get-package-type` answers `deb`, `appimage` or null ([[pages/services/electron-shell/ipc-and-tray]]). Nobody has run a real update of an installed deb ([[pages/services/electron-shell/known-gaps]]).
 
 ## 2026-11-20
 

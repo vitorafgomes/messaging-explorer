@@ -42,6 +42,24 @@ function acceptActiveRuns(sender, win, count, last) {
   return Number.isInteger(count) && count >= 0 && count <= 1000 ? count : last;
 }
 
+/**
+ * What to tell the user at start when an update was asked to install and the app came back on another version:
+ * the updater can fail to install without any event, and the app must not open as if nothing happened. Null when
+ * nothing was asked, when the record names no version, or when that version is the one running.
+ */
+function failedInstallNotice({ pending, installedVersion }) {
+  const version = pending && typeof pending === 'object' ? pending.version : undefined;
+  if (typeof version !== 'string' || version === '' || version === installedVersion) return null;
+  return {
+    type: 'warning',
+    title: 'Messaging Explorer',
+    message: `The update to ${version} was not installed.`,
+    detail: `You are still on ${installedVersion}. Open Settings to install it again, or download it from the release page.`,
+    buttons: ['OK'],
+    noLink: true
+  };
+}
+
 /** The question asked before a quit that would stop the given number of running resubmits. */
 function quitQuestion(activeRuns) {
   return {
@@ -197,13 +215,31 @@ function mainWindowOptions({ preload, icon, prefersDark }) {
  * Why this package cannot replace itself with an update, or null when it can: 'macos-unsigned'
  * (the macOS build is not signed and the macOS updater installs only into a signed app),
  * 'windows-portable' (the portable launcher sets PORTABLE_EXECUTABLE_FILE; there is no installed
- * copy to replace), 'linux-package' (anything but the AppImage, which sets APPIMAGE).
+ * copy to replace), 'linux-package' (anything but the AppImage, which sets APPIMAGE, and the deb, whose updater
+ * installs the new deb and asks for the administrator password; an rpm, a pacman package or an unknown one was never
+ * tried).
  */
-function selfUpdateBlocker(platform, env) {
+function selfUpdateBlocker(platform, env, packageType) {
   if (platform === 'darwin') return 'macos-unsigned';
   if (platform === 'win32') return env.PORTABLE_EXECUTABLE_FILE ? 'windows-portable' : null;
-  if (platform === 'linux') return env.APPIMAGE ? null : 'linux-package';
+  if (platform === 'linux') return env.APPIMAGE || packageType === 'deb' ? null : 'linux-package';
   return null;
+}
+
+/** The type electron-builder wrote in resources/package-type, trimmed, or null when the file is absent, unreadable or empty. */
+function readPackageType(read) {
+  try {
+    return String(read()).trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/** The kind of package the page may be told: 'deb', 'appimage' or null for anything else. */
+function packageKind(platform, env, packageType) {
+  if (platform !== 'linux') return null;
+  if (env.APPIMAGE) return 'appimage';
+  return packageType === 'deb' ? 'deb' : null;
 }
 
 const RELEASES_API_URL = 'https://api.github.com/repos/vitorafgomes/messaging-explorer/releases?per_page=100';
@@ -323,14 +359,14 @@ function backupDataFile(filePath, installedVersion, { exists, copy }) {
  * The address is built here from the fixed repository. The updater reads that release alone and may go back to an
  * older version for this one download; whatever happens it is put back as it was. Never throws.
  */
-async function installUpdateVersion({ updater, version, agreed, listed, installedVersion, channel, platform, env, backup }) {
+async function installUpdateVersion({ updater, version, agreed, listed, installedVersion, channel, platform, env, packageType, backup }) {
   const refuse = message => ({ status: 'error', message });
   if (typeof version !== 'string' || !VERSION.test(version)) return refuse('That is not a version of this app.');
   const picked = Array.isArray(listed) ? listed.find(entry => entry?.version === version) : undefined;
   if (!picked) return refuse(`Version ${version} is not in the list that was read. Read the versions again.`);
   if (agreed !== true) return refuse('Nothing is installed without your agreement.');
   if (version === installedVersion) return refuse(`Version ${version} is the one you have.`);
-  if (selfUpdateBlocker(platform, env) !== null) return refuse('This package cannot replace itself. Download the version from the release page.');
+  if (selfUpdateBlocker(platform, env, packageType) !== null) return refuse('This package cannot replace itself. Download the version from the release page.');
   if (picked.installable !== true) return refuse(`The release of version ${version} holds no package this app can install here. Download it from the release page.`);
   const notInstalled = reason => refuse(`Version ${version} was not installed: ${reason}`);
   if (isOlderVersion(version, installedVersion)) {
@@ -352,17 +388,18 @@ async function installUpdateVersion({ updater, version, agreed, listed, installe
   } finally {
     updater.setFeedURL(RELEASE_FEED);
     applyUpdateChannel(updater, channel);
-    configureAutoUpdate(updater, platform, env);
+    configureAutoUpdate(updater, platform, env, packageType);
   }
 }
 
 /**
  * An update never downloads on its own: a check only announces it. What the user agreed to download installs on quit
- * only where this package can replace itself.
+ * only where this package can replace itself without asking: a deb asks for the administrator password, so it
+ * installs only on Restart to Update, never when the user only quits.
  */
-function configureAutoUpdate(updater, platform, env) {
+function configureAutoUpdate(updater, platform, env, packageType) {
   updater.autoDownload = false;
-  updater.autoInstallOnAppQuit = selfUpdateBlocker(platform, env) === null;
+  updater.autoInstallOnAppQuit = selfUpdateBlocker(platform, env, packageType) === null && packageKind(platform, env, packageType) !== 'deb';
 }
 
 /**
@@ -446,7 +483,22 @@ function captureConsole(target, shellLog) {
   }
 }
 
+/** .NET host status codes: 0x80008083, the host library was not found; 0x80008096, the framework was not found. */
+const RUNTIME_MISSING_EXIT_CODES = [0x80008083, 0x80008096];
+
+/** Why the API process ended, as the end of the sentence "The local API did not start: ...". */
+function describeApiExit(exit) {
+  if (exit.error) return `it could not be launched (${exit.error})`;
+  if (RUNTIME_MISSING_EXIT_CODES.includes(exit.code)) {
+    return 'the .NET runtime it needs was not found. Reinstall Messaging Explorer; if it still fails, install the ASP.NET Core Runtime 10 from https://dotnet.microsoft.com/download/dotnet/10.0';
+  }
+  if (exit.code !== null) return `it exited with code ${exit.code}`;
+  return `it was stopped by signal ${exit.signal}`;
+}
+
 module.exports = {
+  failedInstallNotice,
+  describeApiExit,
   downloadAgreedUpdate,
   followFoundVersion,
   createShellLog,
@@ -471,6 +523,8 @@ module.exports = {
   mainWindowOptions,
   shellShortcut,
   selfUpdateBlocker,
+  readPackageType,
+  packageKind,
   updateVersions,
   readUpdateVersions,
   RELEASES_API_URL

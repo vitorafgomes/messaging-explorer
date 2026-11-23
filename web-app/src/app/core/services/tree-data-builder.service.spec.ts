@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { TreeDataBuilderService } from './tree-data-builder.service';
 import { QueueService } from './queue.service';
 import { TopicService } from './topic.service';
@@ -176,5 +176,67 @@ describe('TreeDataBuilderService labels a RabbitMQ queue by how it is used', () 
       { name: 'idle', queueType: 'classic', consumerCount: 0 },
       { name: 'azure-queue' }
     ])).toStrictEqual([['events.stream', 'Stream'], ['tasks', 'Work queue, 3 consumers'], ['single', undefined], ['idle', undefined], ['azure-queue', undefined]]);
+  });
+});
+
+describe('TreeDataBuilderService shows the queues and topics before the subscriptions are read', () => {
+  function builderWith(topics: number, subscriptions: (topic: string) => Subject<unknown[]>) {
+    const names = Array.from({ length: topics }, (_, i) => `topic-${String(i).padStart(3, '0')}`);
+    const getSubscriptions = vi.fn((topic: string) => subscriptions(topic));
+    const updated = vi.fn();
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: QueueService, useValue: { getQueues: () => of([{ name: 'orders' }]) } },
+        { provide: TopicService, useValue: { getTopics: () => of(names.map(name => ({ name, subscriptionCount: 1 }))), getSubscriptions } },
+        { provide: LoggerService, useValue: { log: () => undefined, error: () => undefined } },
+        { provide: DeadLetterNotificationService, useValue: { updateFromSubscriptions: updated } }
+      ]
+    });
+    return { builder: TestBed.inject(TreeDataBuilderService), getSubscriptions, updated };
+  }
+  const topicsOf = (tree: any[]) => tree.find(c => c.id === 'category-topics')?.children ?? [];
+
+  it('the tree is given at once with the queues and the topics, and again with the subscriptions when they are read', () => {
+    const pending = new Map<string, Subject<unknown[]>>();
+    const { builder, updated } = builderWith(2, topic => { const s = new Subject<unknown[]>(); pending.set(topic, s); return s; });
+    const trees: any[][] = [];
+    let done = false;
+    const readingWhenGiven: boolean[] = [];
+    builder.buildTree().subscribe({ next: tree => { trees.push(tree); readingWhenGiven.push(builder.readingSubscriptions()); }, complete: () => done = true });
+
+    expect(trees.length, 'a first tree arrives while the subscriptions are still being read').toBe(1);
+    expect(topicsOf(trees[0]).map((t: any) => [t.name, t.children?.length ?? 0])).toStrictEqual([['topic-000', 0], ['topic-001', 0]]);
+    expect(builder.readingSubscriptions(), 'the builder says it is still reading').toBe(true);
+    expect(builder.wholeCounts(), 'a tree without its subscriptions is not counted as whole').toBeNull();
+    expect(updated, 'the dead-letter alerts are not rebuilt from a tree without subscriptions').not.toHaveBeenCalled();
+
+    for (const [topic, subject] of pending) { subject.next([{ name: `sub-of-${topic}` }]); subject.complete(); }
+
+    expect(trees.length, 'then the whole tree').toBe(2);
+    expect(readingWhenGiven, 'the whole tree is given as no longer being read').toStrictEqual([true, false]);
+    expect(topicsOf(trees[1]).map((t: any) => t.children.map((c: any) => c.name))).toStrictEqual([['sub-of-topic-000'], ['sub-of-topic-001']]);
+    expect(done).toBe(true);
+    expect(builder.readingSubscriptions()).toBe(false);
+    expect(builder.wholeCounts()).toStrictEqual({ queues: 1, topics: 2, subscriptions: 2 });
+    expect(updated).toHaveBeenCalledTimes(1);
+  });
+
+  it('at most 6 topics are asked for their subscriptions at the same time, however many there are', () => {
+    const pending: Subject<unknown[]>[] = [];
+    const { builder, getSubscriptions } = builderWith(40, () => { const s = new Subject<unknown[]>(); pending.push(s); return s; });
+    builder.buildTree().subscribe();
+
+    expect(getSubscriptions, '40 topics do not start 40 requests').toHaveBeenCalledTimes(6);
+    pending[0].next([]); pending[0].complete();
+    expect(getSubscriptions, 'one that answered lets the next one start').toHaveBeenCalledTimes(7);
+  });
+
+  it('a connection with no topic that has subscriptions gives one tree and reads nothing more', () => {
+    const { builder, getSubscriptions } = builderWith(0, () => new Subject<unknown[]>());
+    const trees: any[][] = [];
+    builder.buildTree().subscribe(tree => trees.push(tree));
+    expect(trees.length).toBe(1);
+    expect(getSubscriptions).not.toHaveBeenCalled();
+    expect(builder.readingSubscriptions()).toBe(false);
   });
 });

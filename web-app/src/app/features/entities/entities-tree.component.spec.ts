@@ -260,6 +260,48 @@ describe('EntitiesTreeComponent: the tree on Material', () => {
   }];
   const text = (fixture: { nativeElement: HTMLElement }) => (fixture.nativeElement.textContent ?? '').replace(/\s+/g, ' ');
 
+  it('the queues and topics show as soon as the tree is given, while the subscriptions are still being read, and a line says so', () => {
+    const build = new Subject<TreeNode[]>();
+    const reading = signal(true);
+    const fixture = render(() => build);
+    (TestBed.inject(TreeDataBuilderService) as unknown as { readingSubscriptions: typeof reading }).readingSubscriptions = reading;
+    expect(text(fixture), 'nothing was given yet').toContain('Loading entities...');
+
+    build.next([{ ...topics[0], children: [{ ...topics[0].children![0], children: [] }] }]);
+    fixture.detectChanges();
+
+    expect(text(fixture), 'the first tree replaces the spinner although the build has not ended').not.toContain('Loading entities...');
+    expect(text(fixture)).toContain('events');
+    const line = fixture.nativeElement.querySelector('[data-testid="reading-subscriptions"]') as HTMLElement | null;
+    expect(line, 'the line is on the screen').not.toBeNull();
+    expect(text({ nativeElement: line! }),
+      'a line says the subscriptions are still being read').toBe('Reading the subscriptions of the topics...');
+
+    reading.set(false);
+    build.next(topics);
+    build.complete();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="reading-subscriptions"]'), 'the line goes when they are read').toBeNull();
+  });
+
+  it('an opened topic is not asked again for its subscriptions while the tree is still reading them', () => {
+    const build = new Subject<TreeNode[]>();
+    const reading = signal(true);
+    const fixture = render(() => build);
+    const builder = TestBed.inject(TreeDataBuilderService) as unknown as { readingSubscriptions: typeof reading; loadSubscriptions: ReturnType<typeof vi.fn> };
+    builder.readingSubscriptions = reading;
+    builder.loadSubscriptions = vi.fn(() => NEVER);
+    (fixture.componentInstance as unknown as { opened: { set(v: Set<string>): void } }).opened.set(new Set(['topic-events']));
+
+    build.next([{ ...topics[0], children: [{ ...topics[0].children![0], children: [] }] }]);
+
+    expect(builder.loadSubscriptions, 'the tree is already reading them, at most 6 at a time').not.toHaveBeenCalled();
+
+    reading.set(false);
+    build.next([{ ...topics[0], children: [{ ...topics[0].children![0], children: [] }] }]);
+    expect(builder.loadSubscriptions, 'a whole tree that left the opened topic empty asks for it').toHaveBeenCalledTimes(1);
+  });
+
   it('a failed load offers Retry, which asks for the entities again and shows them', () => {
     let fail = true;
     const fixture = render(() => (fail ? throwError(() => new Error('503 Service Unavailable')) : of(topics)));

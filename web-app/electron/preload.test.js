@@ -53,6 +53,13 @@ test('getSelfUpdateBlocker reads the get-self-update-blocker channel and sends n
   assert.deepEqual(invoked, ['get-self-update-blocker']);
 });
 
+test('getPackageType reads the get-package-type channel and sends no argument, so the renderer can only read the kind of package', () => {
+  const { exposed, invoked, invokedArgs } = loadPreload();
+  exposed.electronAPI.getPackageType('rpm', { packageType: 'deb' });
+  assert.deepEqual(invoked, ['get-package-type'], 'getPackageType must invoke get-package-type');
+  assert.deepEqual(invokedArgs, [[]], 'getPackageType must send no argument');
+});
+
 test('getDataFile and showDataFile read their channels and send no argument, so the renderer cannot name a path', () => {
   const { exposed, invoked, invokedArgs } = loadPreload();
   exposed.electronAPI.getDataFile('/etc/passwd');
@@ -112,7 +119,7 @@ test('the preload exposes exactly these members, setActiveRuns included', () => 
   const { exposed } = loadPreload();
   assert.deepEqual(Object.keys(exposed.electronAPI).sort(), [
     'checkForUpdates', 'clearShellLogs', 'downloadUpdate', 'getApiPort', 'getApiSecret', 'getAppVersion', 'getDataFile',
-    'getSelfUpdateBlocker', 'getShellLogs', 'getUpdateChannel', 'installUpdate', 'installUpdateVersion', 'isElectron',
+    'getPackageType', 'getSelfUpdateBlocker', 'getShellLogs', 'getUpdateChannel', 'installUpdate', 'installUpdateVersion', 'isElectron',
     'listUpdateVersions', 'onChangeConnection', 'onNavigate', 'onUpdateStatus', 'openDevTools', 'platform', 'saveExportFile',
     'setActiveRuns', 'setUpdateChannel', 'showDataFile'
   ], 'a new member of window.electronAPI must be listed here');
