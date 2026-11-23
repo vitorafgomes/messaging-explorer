@@ -4,7 +4,7 @@ const { spawn } = require('child_process');
 const { autoUpdater } = require('electron-updater');
 const crypto = require('crypto');
 const Store = require('electron-store');
-const { dataFilePath, showDataFile, openDevTools, acceptActiveRuns, quitDecision, isSafeExternalUrl, normalizeUpdateChannel, applyUpdateChannel, waitForHealth, stopProcess, applicationMenuTemplate, mainWindowOptions, shellShortcut, selfUpdateBlocker, readPackageType, packageKind, configureAutoUpdate, readUpdateVersions, installUpdateVersion, backupDataFile, saveExportFile, createShellLog, captureConsole, downloadAgreedUpdate, followFoundVersion } = require('./shell-helpers');
+const { describeApiExit, dataFilePath, showDataFile, openDevTools, acceptActiveRuns, quitDecision, isSafeExternalUrl, normalizeUpdateChannel, applyUpdateChannel, waitForHealth, stopProcess, applicationMenuTemplate, mainWindowOptions, shellShortcut, selfUpdateBlocker, readPackageType, packageKind, configureAutoUpdate, readUpdateVersions, installUpdateVersion, backupDataFile, saveExportFile, createShellLog, captureConsole, downloadAgreedUpdate, followFoundVersion } = require('./shell-helpers');
 
 // Generate a per-session API secret for Electron <-> .NET API authentication
 const API_SECRET = crypto.randomBytes(32).toString('hex');
@@ -754,12 +754,6 @@ function recordApiExit(code, signal) {
   if (apiHealthy && code !== 0 && code !== null && !app.isQuitting) {
     dialog.showErrorBox('Messaging Explorer', `The local API stopped unexpectedly (exit code ${code}). Restart Messaging Explorer to reconnect.`);
   }
-}
-
-function describeApiExit(exit) {
-  if (exit.error) return `it could not be launched (${exit.error})`;
-  if (exit.code !== null) return `it exited with code ${exit.code}`;
-  return `it was stopped by signal ${exit.signal}`;
 }
 
 async function openWindowWhenApiReady(startFailure) {

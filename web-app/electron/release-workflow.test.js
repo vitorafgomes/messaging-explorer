@@ -141,8 +141,63 @@ test('a beta is published as a prerelease, so stable updaters keep reading the l
   assert.match(publish, /if \[\[ "\$TAG" == \*-\* \]\]; then flags\+=\(--prerelease\); fi/, 'a pushed beta tag is created as a prerelease');
 });
 
+const WEB_APP = path.join(__dirname, '..');
+const PACKAGE = JSON.parse(fs.readFileSync(path.join(WEB_APP, 'package.json'), 'utf8'));
+
+// The commands an npm script runs, following every `npm run <name>` it calls, each with its working directory.
+function commands(script, cwd = WEB_APP) {
+  const body = PACKAGE.scripts[script];
+  assert.ok(body, `no "${script}" script in package.json`);
+  const result = [];
+  let dir = cwd;
+  for (const segment of body.split('&&').map((part) => part.trim())) {
+    const cd = segment.match(/^cd\s+(\S+)$/);
+    const run = segment.match(/^npm run (\S+)$/);
+    if (cd) dir = path.resolve(dir, cd[1]);
+    else if (run) result.push(...commands(run[1], dir));
+    else result.push({ dir, command: segment });
+  }
+  return result;
+}
+
+// electron-builder expands ${os} to the platform's buildConfigurationKey (win, mac, linux) and ${arch} to the Arch name.
+const INSTALLERS = {
+  win: { arches: ['x64'], rid: { x64: 'win-x64' } },
+  linux: { arches: ['x64'], rid: { x64: 'linux-x64' } },
+  mac: {
+    arches: [...new Set(PACKAGE.build.mac.target.flatMap((target) => target.arch))],
+    rid: { arm64: 'osx-arm64', x64: 'osx-x64' }
+  }
+};
+
+test('every installer carries the API published self-contained for its own system and architecture, so the user needs no .NET', () => {
+  assert.equal(PACKAGE.build.extraResources.length, 1, 'one extraResources entry carries the API');
+  const resource = PACKAGE.build.extraResources[0];
+  assert.equal(resource.to, 'api', 'the API is copied to resources/api, where main.js#getApiPath looks first');
+  for (const [os, { arches, rid }] of Object.entries(INSTALLERS)) {
+    const publishes = commands(`electron:build:${os}`).filter(({ command }) => /^dotnet publish\b/.test(command));
+    for (const arch of arches) {
+      const runtime = rid[arch];
+      assert.ok(runtime, `${os} ${arch}: no runtime identifier known for this architecture`);
+      const publish = publishes.find(({ command }) => command.split(/\s+/).join(' ').includes(`-r ${runtime}`));
+      assert.ok(publish, `${os} ${arch}: electron:build:${os} never runs dotnet publish -r ${runtime}`);
+      assert.match(publish.command, /--self-contained true(?:\s|$)/,
+        `${os} ${arch}: the ${runtime} publish is not --self-contained true, so the package needs the .NET runtime on the user's machine`);
+      assert.doesNotMatch(publish.command, /SelfContained=false|--no-self-contained/,
+        `${os} ${arch}: the ${runtime} publish turns self-contained off again, so the package needs the .NET runtime on the user's machine`);
+      assert.doesNotMatch(publish.command, /PublishTrimmed|PublishSingleFile/,
+        `${os} ${arch}: the API uses reflection (ASP.NET, the MCP SDK), so it is published neither trimmed nor as one file`);
+      const out = publish.command.match(/(?:^|\s)-o\s+(\S+)/);
+      assert.ok(out, `${os} ${arch}: the ${runtime} publish names no -o folder`);
+      const from = resource.from.replaceAll('${os}', os).replaceAll('${arch}', arch);
+      assert.equal(path.resolve(WEB_APP, from), path.resolve(publish.dir, out[1]),
+        `${os} ${arch}: extraResources.from does not resolve to the folder the ${runtime} publish writes`);
+    }
+  }
+});
+
 test('the AppImage is published under a name without the version, so an update replaces the file the user starts', () => {
-  const build = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8')).build;
+  const build = PACKAGE.build;
   const name = build.appImage?.artifactName ?? build.artifactName;
   assert.ok(!name.includes('${version}'),
     `the updater renames an AppImage whose file name holds a version, which breaks a launcher that points to it; the name is ${name}`);

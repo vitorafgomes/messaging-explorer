@@ -3,7 +3,7 @@ title: "Electron Shell: Known gaps"
 version: "1.0"
 date: 2026-11-13
 updated: 2026-11-23
-changes: "2026-11-23: the deb updates itself; what was not run. v1.0: split out of the Electron Shell service page"
+changes: "2026-11-23: the self-contained API, unproven on Windows and macOS; the deb updates itself; what was not run. v1.0: split out of the Electron Shell service page"
 page_type: service
 status: active
 description: "Read when a change touches a gap of the shell recorded as it was found."
@@ -39,4 +39,4 @@ One topic of [[pages/services/electron-shell|Electron Shell]]; the map lists the
 - The macOS window and menu are tested only as the options and the template the helpers return. Nobody has run the result on a Mac: whether the native title bar draws and drags as expected, whether Cmd+C and Cmd+V work in a text field through the Edit role and Cmd+W closes the window, and whether Cmd+Shift+D reaches the page as `D` or `d` (the page accepts both): `web-app/electron/shell-helpers.js#function applicationMenuTemplate(platform) {`.
 - No code signing for any OS: `.github/workflows/release.yml#macOS: dmg + zip (unsigned)`.
 - The deb updates itself since 2026-11-23, on Restart to Update only (`web-app/electron/shell-helpers.js#function selfUpdateBlocker(`). On electron-updater 6.8.11 a deb whose `resources/package-type` says `deb` loads `DebUpdater`, which downloads the `.deb` named in `latest-linux.yml` and runs `dpkg -i`, else `apt install`, through `pkexec`, `gksudo`, `kdesudo`, `beesu` or bare `sudo` (the `electron-updater` package, `out/DebUpdater.js` and `out/LinuxUpdater.js`). Nobody has run a real update of an installed deb; the owner will. Read in the library and not seen: when `dpkg -i` fails, a cancelled password included, it runs `apt-get install -f -y` and asks for the password again, and if that one is given the app restarts on the old version with no error event; the prompt is a `spawnSync` that holds the main process until it closes; what bare `sudo` does without a terminal. An install error reaches Settings as a download that failed. An rpm, a pacman package or one of unknown type is still told it cannot update itself, never tried.
-- Framework-dependent API in the installer, .NET 10 runtime required on the host (inferred): `web-app/package.json`.
+- The self-contained API (since 2026-11-23) was run only on Linux x64: the Windows and macOS packages are built by the release workflow and nobody has started one on a machine without .NET: `web-app/package.json#build:api:win`, `web-app/package.json#build:api:mac`.

@@ -35,6 +35,8 @@ Get the latest version from the [releases page](https://github.com/vitorafgomes/
 | Linux | `Messaging-Explorer-x86_64.AppImage` | Yes |
 | Linux, Debian and Ubuntu | `Messaging-Explorer-<version>-amd64.deb` | Yes, it asks for the administrator password |
 
+Nothing else needs to be installed: each package carries the .NET runtime its local API uses.
+
 The builds are not code signed, so the system asks before the first start:
 
 - **Windows:** SmartScreen shows "Windows protected your PC". Choose **More info**, then **Run anyway**.

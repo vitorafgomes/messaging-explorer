@@ -918,3 +918,15 @@ test('when the page of the main window is gone, the shell forgets the runs it wa
   assert.match(main, /app\.on\('render-process-gone', \(event, webContents\) => \{\s*if \(mainWindow && webContents === mainWindow\.webContents\) activeRuns = 0;/,
     'a page that crashed runs nothing any more: the count goes back to 0');
 });
+
+test('an API that cannot find the .NET runtime is told as that, with what to do; any other end keeps its own sentence', () => {
+  const { describeApiExit } = require('./shell-helpers');
+  const missingRuntime = 'the .NET runtime it needs was not found. Reinstall Messaging Explorer; if it still fails, install the ASP.NET Core Runtime 10 from https://dotnet.microsoft.com/download/dotnet/10.0';
+  assert.equal(describeApiExit({ code: 2147516547, signal: null }), missingRuntime,
+    'exit code 0x80008083 (the host library was not found) says the runtime is missing and how to fix it');
+  assert.equal(describeApiExit({ code: 2147516566, signal: null }), missingRuntime,
+    'exit code 0x80008096 (the framework was not found) says the runtime is missing and how to fix it');
+  assert.equal(describeApiExit({ code: 1, signal: null }), 'it exited with code 1', 'any other code keeps the plain sentence');
+  assert.equal(describeApiExit({ error: 'spawn EACCES' }), 'it could not be launched (spawn EACCES)', 'a launch error names the error');
+  assert.equal(describeApiExit({ code: null, signal: 'SIGKILL' }), 'it was stopped by signal SIGKILL', 'a signal names the signal');
+});

@@ -465,7 +465,21 @@ function captureConsole(target, shellLog) {
   }
 }
 
+/** .NET host status codes: 0x80008083, the host library was not found; 0x80008096, the framework was not found. */
+const RUNTIME_MISSING_EXIT_CODES = [0x80008083, 0x80008096];
+
+/** Why the API process ended, as the end of the sentence "The local API did not start: ...". */
+function describeApiExit(exit) {
+  if (exit.error) return `it could not be launched (${exit.error})`;
+  if (RUNTIME_MISSING_EXIT_CODES.includes(exit.code)) {
+    return 'the .NET runtime it needs was not found. Reinstall Messaging Explorer; if it still fails, install the ASP.NET Core Runtime 10 from https://dotnet.microsoft.com/download/dotnet/10.0';
+  }
+  if (exit.code !== null) return `it exited with code ${exit.code}`;
+  return `it was stopped by signal ${exit.signal}`;
+}
+
 module.exports = {
+  describeApiExit,
   downloadAgreedUpdate,
   followFoundVersion,
   createShellLog,
