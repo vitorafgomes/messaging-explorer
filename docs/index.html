@@ -113,13 +113,17 @@
               <li>Send a message with its properties, from scratch or from a saved template; import messages from a JSON or CSV file.</li>
               <li>Export messages to JSON, CSV or Excel.</li>
               <li>Light and dark themes.</li>
+              <li>Stable and Beta update channels, and a list of versions to install from.</li>
+              <li>An MCP server, off until you turn it on, so an AI assistant can work through the app.</li>
             </ul>
           </div>
           <div>
             <h3>Azure Service Bus</h3>
             <ul class="list">
               <li>Queues, topics and subscriptions with their configuration, status and rules.</li>
+              <li>Create, edit and delete queues, topics, subscriptions and rules.</li>
               <li>Dead-letter queues: resubmit, move to another queue or delete, one message or many, with progress and cancel.</li>
+              <li>An automatic resubmit of a whole dead-letter queue, with pause, stop and a report.</li>
               <li>Schedule a message for later and set its time to live.</li>
               <li>Sessions on session-enabled subscriptions.</li>
               <li>Sign in with Microsoft, a connection string, a service principal or the Azure CLI session.</li>
@@ -129,6 +133,7 @@
             <h3>RabbitMQ</h3>
             <ul class="list">
               <li>Exchanges, queues and bindings, read through the management plugin.</li>
+              <li>Peek, send, resubmit, move, delete and purge the messages of a queue.</li>
               <li>Recognises the common topologies: work queue, publish and subscribe, routing, topics, RPC, headers.</li>
             </ul>
           </div>
@@ -153,17 +158,26 @@
               Every subscription whose rules match receives the message again, not only the one you resubmitted from.
             </li>
             <li>
-              <strong>RabbitMQ bulk delete, resubmit and move can lose messages when something fails midway.</strong>
-              Use them with care on RabbitMQ until that part is reworked.
+              <strong>On RabbitMQ a bulk delete, resubmit or move names a message by its position in the queue.</strong>
+              If another client removes a message between the moment you read the list and the moment you act, the operation
+              acts on whichever message is at that position. The app refuses a queue that has a consumer; avoid these
+              operations on a queue something else is reading.
             </li>
             <li>
               <strong>Saved connections are stored on your disk in plain text.</strong>
               Secrets are included; the file is in the app's data folder. Exporting connections masks the secrets unless you ask to include them.
             </li>
             <li>
-              <strong>Nothing leaves your machine except the calls to your broker.</strong>
+              <strong>Nothing leaves your machine except the calls to your broker, unless you turn the MCP server on.</strong>
               The app starts a local API that listens on <code>127.0.0.1</code> only and accepts requests only with a key
-              generated at each start. The update check contacts GitHub; nothing else is sent anywhere.
+              generated at each start. The update check contacts GitHub.
+            </li>
+            <li>
+              <strong>What an AI assistant reads through the MCP server leaves your computer.</strong>
+              The server is off until you turn it on in Settings. You choose which connections the assistant sees and at
+              which level; it asks you in the app before a send, a move, a delete or a purge, and a production connection
+              asks before every operation. The names of entities, the counts and the bodies of the messages it reads go to
+              the assistant and to the company that runs it. A connection string, a password or a key is never given to it.
             </li>
           </ul>
         </div>
@@ -274,8 +288,13 @@
             <p>
               The app looks for a new version a few seconds after it starts and every four hours. It only tells you: nothing downloads
               until you agree to the version shown in Settings. On Windows (the installer) and the Linux AppImage the version you
-              agreed to installs the next time you quit, or at once with Restart to Update; on macOS, the portable exe and the deb
-              it links the release to download by hand.
+              agreed to installs the next time you quit, or at once with Restart to Update. The deb installs it only with
+              Restart to Update, and asks for the administrator password of the computer. On macOS and the portable exe it
+              links the release to download by hand.
+            </p>
+            <p>
+              Nothing else needs to be installed: each package carries the .NET runtime its local API uses. Coming from
+              2.5.1 or earlier on the deb? Install 3.0.0 by hand once; from 3.0.0 on the app does it.
             </p>
             <p>
               Every file and every earlier version is on
