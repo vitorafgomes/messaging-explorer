@@ -33,14 +33,14 @@ Get the latest version from the [releases page](https://github.com/vitorafgomes/
 | macOS, Apple silicon | `Messaging-Explorer-<version>-arm64.dmg` | No |
 | macOS, Intel | `Messaging-Explorer-<version>-x64.dmg` | No |
 | Linux | `Messaging-Explorer-x86_64.AppImage` | Yes |
-| Linux, Debian and Ubuntu | `Messaging-Explorer-<version>-amd64.deb` | No |
+| Linux, Debian and Ubuntu | `Messaging-Explorer-<version>-amd64.deb` | Yes, it asks for the administrator password |
 
 The builds are not code signed, so the system asks before the first start:
 
 - **Windows:** SmartScreen shows "Windows protected your PC". Choose **More info**, then **Run anyway**.
 - **macOS:** open the app from Finder with a right click, then **Open**. Because the build is unsigned, macOS cannot install an update by itself: download the new version from the releases page.
 
-The app looks for a new version a few seconds after it starts and every four hours. It only tells you: nothing downloads until you agree to the version shown in Settings. On Windows (the installer) and the Linux AppImage the version you agreed to installs the next time you quit, or at once with Restart to Update; on macOS, the portable exe and the deb it links the release to download by hand.
+The app looks for a new version a few seconds after it starts and every four hours. It only tells you: nothing downloads until you agree to the version shown in Settings. On Windows (the installer) and the Linux AppImage the version you agreed to installs the next time you quit, or at once with Restart to Update. The deb installs it only with Restart to Update, and asks for the administrator password of the computer. On macOS and the portable exe it links the release to download by hand.
 
 ## What it does
 

@@ -2,7 +2,7 @@
 title: "Web App history"
 version: "1.2"
 date: 2026-11-13
-updated: 2026-11-20
+updated: 2026-11-23
 changes: "v1.2: 2026-11-16, a resubmit by position after a cancel or a failed call. v1.1: dated entries above the version notes"
 page_type: reference
 status: active
@@ -16,6 +16,14 @@ reliability: high
 
 What changed when in the project [[pages/services/web-app|Web App]] describes, newest first.
 
+
+## 2026-11-23
+
+- On RabbitMQ the entity panel says the broker's own words, as the tree already did: an exchange is headed "Exchange", its rows are "Bindings", a binding reads "Binding in exchange <name>", the button is "Send to exchange" and the property "Exchange Name"; the empty, loading and failed states, the count of what the connection holds and the purge confirmation use the same words (`web-app/src/app/features/entities/entity-details.component.ts#terms`). It said Topic and Subscriptions, the words of Azure Service Bus. Seen on a screenshot taken for the owner.
+
+- From the review of the deb fix: a failure after the download is told apart from a failed download ("was not installed", and Retry installs again), and the note under the channel no longer says a beta installs on the next quit on a deb.
+
+- On a deb, Settings offers Download, Install and Restart to Update and says "Installing asks for the administrator password of this computer." under the agreement and beside Restart to Update; its ready state says it installs only on Restart to Update, since a deb never installs on quit (`web-app/src/app/features/settings/settings.component.ts#isDeb`). The kind of package comes from the shell's `getPackageType` (`web-app/src/app/features/settings/app-update.service.ts#packageType`). The reason shown to a blocked Linux package no longer names the deb.
 
 ## 2026-11-22
 

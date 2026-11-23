@@ -2,7 +2,7 @@
 title: "Electron Shell history"
 version: "1.2"
 date: 2026-11-13
-updated: 2026-11-20
+updated: 2026-11-23
 changes: "2026-11-16: the versions of a channel. v1.1: dated entries above the version notes"
 page_type: reference
 status: active
@@ -16,6 +16,10 @@ reliability: high
 
 What changed when in the project [[pages/services/electron-shell|Electron Shell]] describes, newest first.
 
+
+## 2026-11-23
+
+- The deb updates itself again. On a real install it was told it could not, while electron-updater 6.8.11 loads `DebUpdater` for it. The shell reads `resources/package-type` once (`web-app/electron/shell-helpers.js#readPackageType`); `selfUpdateBlocker` blocks no deb, and still blocks an rpm, a pacman package or one of unknown type, which were never tried. A deb never installs on quit, because its install asks for the administrator password (`web-app/electron/shell-helpers.js#function configureAutoUpdate(`); the version picker passes the package type too. The new read-only channel `get-package-type` answers `deb`, `appimage` or null ([[pages/services/electron-shell/ipc-and-tray]]). Nobody has run a real update of an installed deb ([[pages/services/electron-shell/known-gaps]]).
 
 ## 2026-11-20
 

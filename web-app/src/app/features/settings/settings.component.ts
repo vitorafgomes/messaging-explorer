@@ -20,7 +20,7 @@ import { SettingsMcpComponent } from './settings-mcp.component';
 const BLOCKER_REASONS = {
   'macos-unsigned': { platform: 'macOS', reason: 'the build is not signed, and macOS installs an update only into a signed app.' },
   'windows-portable': { platform: 'Windows, portable build', reason: 'there is no installed copy to replace; the file you run is the app.' },
-  'linux-package': { platform: 'Linux, installed package', reason: 'only the AppImage replaces itself; a package such as the .deb is updated by installing the new one.' },
+  'linux-package': { platform: 'Linux, installed package', reason: 'only the AppImage and the .deb replace themselves; another package, such as an .rpm, is updated by installing the new one.' },
 } as const;
 
 /** The settings of the app: appearance, updates, data, the MCP server, developer mode and tools, and About. */
@@ -65,6 +65,8 @@ export class SettingsComponent {
   readonly changelogUrl = `${REPOSITORY_URL}/blob/main/CHANGELOG.md`;
   readonly securityReportUrl = `${REPOSITORY_URL}/security/advisories/new`;
   readonly channelName = computed(() => this.updates.channel() === 'beta' ? 'Beta' : 'Stable');
+  /** A deb installs through the package manager, which asks for the administrator password, and never on quit. */
+  readonly isDeb = computed(() => this.updates.packageType() === 'deb');
   readonly blockerReason = computed(() => {
     const blocker = this.updates.blocker();
     return blocker ? BLOCKER_REASONS[blocker] : null;
@@ -147,7 +149,8 @@ export class SettingsComponent {
   }
 
   retry(): void {
-    void this.updates.check();
+    if (this.updates.failedDuring() === 'install') this.updates.install();
+    else void this.updates.check();
   }
 
   openBugReport(type: 'bug' | 'feature'): void {

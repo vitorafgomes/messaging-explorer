@@ -14,7 +14,10 @@ export type UpdateStatus =
 export type UpdateChannel = 'latest' | 'beta';
 export type SelfUpdateBlocker = 'macos-unsigned' | 'windows-portable' | 'linux-package';
 
+export type PackageKind = 'deb' | 'appimage';
+
 const BLOCKERS: SelfUpdateBlocker[] = ['macos-unsigned', 'windows-portable', 'linux-package'];
+const PACKAGE_KINDS: PackageKind[] = ['deb', 'appimage'];
 const SHELL_STATUSES: UpdateStatus[] = ['checking', 'up-to-date', 'available', 'downloading', 'downloaded', 'error'];
 
 /** A release of the chosen channel, as the desktop app read it from the release page. Its notes are text from outside the app. */
@@ -62,8 +65,10 @@ export class AppUpdateService {
   readonly availableVersion = signal('');
   readonly percent = signal(0);
   readonly error = signal('');
-  readonly failedDuring = signal<'check' | 'download'>('check');
+  readonly failedDuring = signal<'check' | 'download' | 'install'>('check');
   readonly blocker = signal<SelfUpdateBlocker | null>(null);
+  /** The kind of package the desktop app runs as: 'deb' asks for the administrator password to install; null when unknown. */
+  readonly packageType = signal<PackageKind | null>(null);
   readonly releaseNotes = signal<string[]>([]);
   readonly lastChecked = signal<Date | null>(null);
   /** The versions of the chosen channel; null until they were read, or where the desktop app cannot list them. */
@@ -87,14 +92,16 @@ export class AppUpdateService {
       this.status.set('idle');
       shell.onUpdateStatus((data: any) => this.ngZone.run(() => this.onShellStatus(data)));
     }
-    const [version, channel, blocker] = await Promise.all([
+    const [version, channel, blocker, packageType] = await Promise.all([
       shell.getAppVersion?.(),
       shell.getUpdateChannel?.(),
       shell.getSelfUpdateBlocker?.(),
+      shell.getPackageType?.(),
     ]);
     this.version.set(typeof version === 'string' ? version : '');
     this.channel.set(channel === 'beta' ? 'beta' : 'latest');
     this.blocker.set(BLOCKERS.includes(blocker) ? blocker : null);
+    this.packageType.set(PACKAGE_KINDS.includes(packageType) ? packageType : null);
   }
 
   async check(): Promise<void> {
@@ -202,13 +209,13 @@ export class AppUpdateService {
     if (data.status === 'checking') this.downloadRequested = false;
     if (data.status === 'downloading') this.downloadRequested = true;
     if (data.status === 'error') {
-      this.fail(this.downloadRequested ? 'download' : 'check', data.message);
+      this.fail(this.status() === 'downloaded' ? 'install' : this.downloadRequested ? 'download' : 'check', data.message);
       return;
     }
     this.status.set(data.status);
   }
 
-  private fail(during: 'check' | 'download', message: unknown): void {
+  private fail(during: 'check' | 'download' | 'install', message: unknown): void {
     if (during === 'check') this.lastChecked.set(new Date());
     this.failedDuring.set(during);
     this.error.set(typeof message === 'string' && message ? message : 'The updater did not say why.');

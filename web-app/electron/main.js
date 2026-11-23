@@ -4,7 +4,7 @@ const { spawn } = require('child_process');
 const { autoUpdater } = require('electron-updater');
 const crypto = require('crypto');
 const Store = require('electron-store');
-const { dataFilePath, showDataFile, openDevTools, acceptActiveRuns, quitDecision, isSafeExternalUrl, normalizeUpdateChannel, applyUpdateChannel, waitForHealth, stopProcess, applicationMenuTemplate, mainWindowOptions, shellShortcut, selfUpdateBlocker, configureAutoUpdate, readUpdateVersions, installUpdateVersion, backupDataFile, saveExportFile, createShellLog, captureConsole, downloadAgreedUpdate, followFoundVersion } = require('./shell-helpers');
+const { dataFilePath, showDataFile, openDevTools, acceptActiveRuns, quitDecision, isSafeExternalUrl, normalizeUpdateChannel, applyUpdateChannel, waitForHealth, stopProcess, applicationMenuTemplate, mainWindowOptions, shellShortcut, selfUpdateBlocker, readPackageType, packageKind, configureAutoUpdate, readUpdateVersions, installUpdateVersion, backupDataFile, saveExportFile, createShellLog, captureConsole, downloadAgreedUpdate, followFoundVersion } = require('./shell-helpers');
 
 // Generate a per-session API secret for Electron <-> .NET API authentication
 const API_SECRET = crypto.randomBytes(32).toString('hex');
@@ -861,7 +861,9 @@ ipcMain.handle('get-api-secret', () => API_SECRET);
 ipcMain.handle('get-api-port', () => apiPort);
 
 // === Auto Updater ===
-configureAutoUpdate(autoUpdater, process.platform, process.env);
+// The type electron-builder wrote beside the app (deb, rpm, pacman), read once; the AppImage and Windows builds have none
+const PACKAGE_TYPE = readPackageType(() => require('fs').readFileSync(path.join(process.resourcesPath || '', 'package-type'), 'utf8'));
+configureAutoUpdate(autoUpdater, process.platform, process.env, PACKAGE_TYPE);
 applyUpdateChannel(autoUpdater, normalizeUpdateChannel(store.get('updateChannel', 'latest')) ?? 'latest');
 
 function sendUpdateStatus(status, data = {}) {
@@ -970,6 +972,7 @@ ipcMain.handle('install-update-version', async (event, request) => {
       channel: normalizeUpdateChannel(store.get('updateChannel', 'latest')) ?? 'latest',
       platform: process.platform,
       env: process.env,
+      packageType: PACKAGE_TYPE,
       backup: () => backupDataFile(dataFile, app.getVersion(), { exists: fs.existsSync, copy: fs.copyFileSync })
     });
     if (result.status === 'ok') {
@@ -1015,7 +1018,10 @@ ipcMain.on('connections-updated', () => {
 });
 
 // IPC: why this package cannot update itself, or null
-ipcMain.handle('get-self-update-blocker', () => selfUpdateBlocker(process.platform, process.env));
+ipcMain.handle('get-self-update-blocker', () => selfUpdateBlocker(process.platform, process.env, PACKAGE_TYPE));
+
+// IPC: 'deb', 'appimage' or null, so the page can say that installing a deb asks for the password; takes no argument
+ipcMain.handle('get-package-type', () => packageKind(process.platform, process.env, PACKAGE_TYPE));
 
 ipcMain.handle('get-data-file', () => dataFilePath(app.getPath('userData')));
 

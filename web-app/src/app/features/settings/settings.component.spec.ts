@@ -280,6 +280,21 @@ describe('SettingsComponent', () => {
         expect(installUpdateVersion.mock.calls).toStrictEqual([['2.4.4', true]]);
       });
 
+      it('on a deb, under the agreement, the version panel says installing asks for the administrator password', async () => {
+        const deb = await open({ getPackageType: vi.fn(async () => 'deb') });
+        const debNote = block(deb.el)!.querySelector('[data-testid="password-note"]');
+        expect(words(debNote), 'a deb installs through dpkg, which asks for the password').toBe('Installing asks for the administrator password of this computer.');
+        expect(block(deb.el)!.querySelector('mat-checkbox')!.compareDocumentPosition(debNote!) & Node.DOCUMENT_POSITION_FOLLOWING, 'the sentence sits under the agreement').toBeTruthy();
+        expect(installButton(deb.el), 'a deb offers Install').toBeDefined();
+      });
+
+      it('on an AppImage the version panel says nothing of a password', async () => {
+        const appImage = await open({ getPackageType: vi.fn(async () => 'appimage') });
+        expect(installButton(appImage.el), 'the AppImage offers Install').toBeDefined();
+        expect(block(appImage.el)!.querySelector('[data-testid="password-note"]'), 'the AppImage replaces itself without a password').toBeNull();
+        expect(words(appImage.el)).not.toContain('administrator password');
+      });
+
       it('under the heading, the picked version is placed against the installed one, in the words of the artboard', async () => {
         const { el, refresh } = await open();
         const relation = () => el.querySelector('[data-testid="version-relation"]') as HTMLElement | null;
@@ -468,6 +483,59 @@ describe('SettingsComponent', () => {
     expect(state()).toContain('Version 2.5.0 is ready to install');
     button('restart_alt Restart to Update')!.click();
     expect(shell.installUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('on a deb, Download and Restart to Update say installing asks for the administrator password, and the ready state does not say it installs on quit', async () => {
+    const { state, push, button, el, shell } = await render({ getPackageType: vi.fn(async () => 'deb') });
+    const note = () => el.querySelector('[data-testid="update-state"] [data-testid="password-note"]');
+
+    await push({ status: 'available', version: '2.5.0' });
+    expect(button('download Download'), 'a deb offers Download').toBeDefined();
+    expect(words(note()), 'beside Download').toBe('Installing asks for the administrator password of this computer.');
+    expect(el.querySelector('[data-testid="update-agreement"]')!.compareDocumentPosition(note()!) & Node.DOCUMENT_POSITION_FOLLOWING, 'the sentence sits under the agreement').toBeTruthy();
+
+    await push({ status: 'downloaded', version: '2.5.0' });
+    expect(state()).toContain('Version 2.5.0 is ready to install');
+    expect(words(note()), 'beside Restart to Update').toBe('Installing asks for the administrator password of this computer.');
+    expect(state(), 'a deb never installs on quit').not.toContain('it installs the next time you quit the app');
+    expect(state()).toContain('It installs only when you press Restart to Update.');
+    button('restart_alt Restart to Update')!.click();
+    expect(shell.installUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('on an AppImage, Download and Restart to Update say nothing of a password, and the ready state still installs on quit', async () => {
+    const { state, push, el } = await render({ getPackageType: vi.fn(async () => 'appimage') });
+    await push({ status: 'available', version: '2.5.0' });
+    expect(el.querySelector('[data-testid="password-note"]')).toBeNull();
+    await push({ status: 'downloaded', version: '2.5.0' });
+    expect(el.querySelector('[data-testid="password-note"]')).toBeNull();
+    expect(state()).toContain('Restart now, or keep working: it installs the next time you quit the app.');
+  });
+
+  it('an install that fails after the download says it was not installed, never that it was not downloaded or that nothing changed, and Retry installs again', async () => {
+    const { state, push, button, shell } = await render({ getPackageType: vi.fn(async () => 'deb'), installUpdate: vi.fn() });
+    await push({ status: 'downloading', version: '2.5.0', percent: 100 });
+    await push({ status: 'downloaded', version: '2.5.0' });
+    await push({ status: 'error', message: 'Command pkexec exited with code 126' });
+
+    expect(state(), 'the heading names the install').toContain('The update to 2.5.0 was not installed');
+    expect(state(), 'the reason the updater gave').toContain('Command pkexec exited with code 126');
+    expect(state(), 'a download that succeeded is not called a failed download').not.toContain('was not downloaded');
+    expect(state(), 'a failed install of a package may have changed it, so the page does not say nothing was installed').not.toContain('nothing was installed');
+    button('refresh Retry')!.click();
+    expect(shell.installUpdate, 'Retry installs the update that is already downloaded').toHaveBeenCalledTimes(1);
+    expect(shell.checkForUpdates, 'and does not check again').not.toHaveBeenCalled();
+  });
+
+  it('on a deb the note under the channel does not say a beta installs on the next quit', async () => {
+    const deb = await render({ getPackageType: vi.fn(async () => 'deb') });
+    expect(deb.el.textContent, 'a deb never installs on quit').not.toContain('installs on the next quit');
+    expect(deb.el.textContent).toContain('a beta already downloaded still installs when you press Restart to Update');
+  });
+
+  it('on an AppImage the note under the channel says a beta already downloaded installs on the next quit', async () => {
+    const { el } = await render({ getPackageType: vi.fn(async () => 'appimage') });
+    expect(el.textContent).toContain('a beta already downloaded still installs on the next quit');
   });
 
   it('a failed download says why, that nothing was installed, retries the download and links the release', async () => {

@@ -129,6 +129,9 @@
                     <mat-checkbox [checked]="agreedToInstall()" (change)="agree(picked.version, $event.checked)" [disabled]="updates.installingVersion() !== ''">
                       I have read what this version has and want to install it
                     </mat-checkbox>
+                    @if (isDeb()) {
+                      <p class="muted" data-testid="password-note">Installing asks for the administrator password of this computer.</p>
+                    }
                     <div class="install-actions">
                       <button mat-flat-button type="button" [disabled]="!agreedToInstall() || updates.installingVersion() !== ''" (click)="installPicked(picked.version)">
                         <mat-icon aria-hidden="true">download</mat-icon>Install {{ picked.version }}
@@ -157,7 +160,7 @@
             <mat-icon>refresh</mat-icon>Check now
           </button>
         </div>
-        <p class="note">Checked 5 seconds after the app starts, then every 4 hours; a new version is only announced: it downloads and installs when you agree. Beta also receives pre-releases; going back to Stable never downgrades, you stay on the beta until a newer stable version is out, and a beta already downloaded still installs on the next quit.</p>
+        <p class="note">Checked 5 seconds after the app starts, then every 4 hours; a new version is only announced: it downloads and installs when you agree. Beta also receives pre-releases; going back to Stable never downgrades, you stay on the beta until a newer stable version is out, and a beta already downloaded still installs {{ isDeb() ? 'when you press Restart to Update' : 'on the next quit' }}.</p>
 
         <div class="state" aria-live="polite" data-testid="update-state">
           @switch (updates.status()) {
@@ -186,7 +189,10 @@
             }
             @case ('error') {
               <section class="panel error-panel" aria-label="Error" role="alert">
-                @if (updates.failedDuring() === 'download') {
+                @if (updates.failedDuring() === 'install') {
+                  <h3><mat-icon aria-hidden="true">warning</mat-icon>The update to {{ updates.availableVersion() }} was not installed</h3>
+                  <p>{{ updates.error() }} It is downloaded: Retry installs it again.</p>
+                } @else if (updates.failedDuring() === 'download') {
                   <h3><mat-icon aria-hidden="true">warning</mat-icon>The update to {{ updates.availableVersion() }} was not downloaded</h3>
                   <p>{{ updates.error() }} You are still on {{ updates.version() }} and nothing was installed.</p>
                 } @else {
@@ -243,6 +249,9 @@
                           I have read what this version has and want to install it
                         </mat-checkbox>
                       }
+                      @if (isDeb()) {
+                        <p class="muted" data-testid="password-note">Installing asks for the administrator password of this computer.</p>
+                      }
                       <div class="actions">
                         <button mat-flat-button type="button" [disabled]="!agreedToUpdate()" (click)="downloadUpdate()"><mat-icon>download</mat-icon>Download</button>
                         <a mat-button [href]="releaseOfVersion()" target="_blank" rel="noopener noreferrer">
@@ -264,10 +273,17 @@
                   @case ('downloaded') {
                     <div class="panel ready-panel">
                       <h3><mat-icon aria-hidden="true">check_circle</mat-icon>Version {{ updates.availableVersion() }} is ready to install</h3>
-                      <p>Restart now, or keep working: it installs the next time you quit the app.</p>
+                      @if (isDeb()) {
+                        <p>It installs only when you press Restart to Update.</p>
+                      } @else {
+                        <p>Restart now, or keep working: it installs the next time you quit the app.</p>
+                      }
                       <div class="actions">
                         <button mat-flat-button type="button" (click)="updates.install()"><mat-icon>restart_alt</mat-icon>Restart to Update</button>
                       </div>
+                      @if (isDeb()) {
+                        <p class="muted" data-testid="password-note">Installing asks for the administrator password of this computer.</p>
+                      }
                     </div>
                   }
                 }

@@ -300,9 +300,30 @@ test('the portable Windows build cannot update itself; the installed one can', (
   assert.equal(selfUpdateBlocker('win32', {}), null);
 });
 
-test('on Linux the AppImage can update itself; the deb package cannot', () => {
-  assert.equal(selfUpdateBlocker('linux', { APPIMAGE: '/home/user/Messaging-Explorer.AppImage' }), null);
-  assert.equal(selfUpdateBlocker('linux', {}), 'linux-package');
+test('on Linux the AppImage and the deb can update themselves; any other package, or one of unknown type, cannot', () => {
+  assert.equal(selfUpdateBlocker('linux', { APPIMAGE: '/home/user/Messaging-Explorer.AppImage' }, null), null, 'the AppImage replaces itself');
+  assert.equal(selfUpdateBlocker('linux', {}, 'deb'), null, 'the deb installs the new deb, so it is not blocked');
+  for (const packageType of ['rpm', 'pacman', 'DEB', ' deb', '', null, undefined]) {
+    assert.equal(selfUpdateBlocker('linux', {}, packageType), 'linux-package', `a package of type ${JSON.stringify(packageType)} was never tried, so it stays blocked`);
+  }
+});
+
+test('the package type is the trimmed text of resources/package-type, and a file absent, unreadable or empty is unknown', () => {
+  const { readPackageType } = require('./shell-helpers');
+  assert.equal(readPackageType(() => 'deb\n'), 'deb', 'the deb build writes deb');
+  assert.equal(readPackageType(() => '  rpm  '), 'rpm', 'another type is read as written, without its blanks');
+  assert.equal(readPackageType(() => { throw Object.assign(new Error('ENOENT: no such file'), { code: 'ENOENT' }); }), null, 'the AppImage and the Windows builds have no file: unknown');
+  assert.equal(readPackageType(() => { throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' }); }), null, 'a file that cannot be read is unknown');
+  assert.equal(readPackageType(() => '  \n'), null, 'an empty file is unknown');
+});
+
+test('the page is told the kind of package only as deb, appimage or nothing', () => {
+  const { packageKind } = require('./shell-helpers');
+  assert.equal(packageKind('linux', {}, 'deb'), 'deb');
+  assert.equal(packageKind('linux', { APPIMAGE: '/home/user/Messaging-Explorer.AppImage' }, null), 'appimage');
+  for (const [platform, env, packageType] of [['linux', {}, 'rpm'], ['linux', {}, null], ['win32', {}, 'deb'], ['darwin', {}, null], ['win32', { APPIMAGE: '/x' }, null]]) {
+    assert.equal(packageKind(platform, env, packageType), null, `${platform} ${JSON.stringify(env)} ${packageType}: neither a deb nor an AppImage`);
+  }
 });
 
 test('the data file is data/workspace.json under the user data folder', () => {
@@ -383,17 +404,19 @@ test('Open developer tools does nothing and does not throw when the window is go
   assert.deepEqual(opened, [], 'no developer tools open when the window is gone');
 });
 
-test('an update never downloads on its own, and what the user agreed to download installs on quit only where the package can replace itself', () => {
+test('an update never downloads on its own, and what the user agreed to download installs on quit only on the Windows installer and the AppImage; a deb, which asks for the administrator password, never on quit', () => {
   const cases = [
-    ['the Windows installer', 'win32', {}, true],
-    ['the AppImage', 'linux', { APPIMAGE: '/home/user/Messaging-Explorer.AppImage' }, true],
-    ['macOS, unsigned', 'darwin', {}, false],
-    ['the Windows portable exe', 'win32', { PORTABLE_EXECUTABLE_FILE: 'C:\\apps\\Messaging Explorer.exe' }, false],
-    ['the deb', 'linux', {}, false]
+    ['the Windows installer', 'win32', {}, null, true],
+    ['the AppImage', 'linux', { APPIMAGE: '/home/user/Messaging-Explorer.AppImage' }, null, true],
+    ['macOS, unsigned', 'darwin', {}, null, false],
+    ['the Windows portable exe', 'win32', { PORTABLE_EXECUTABLE_FILE: 'C:\\apps\\Messaging Explorer.exe' }, null, false],
+    ['the deb: a password prompt must not appear when the user only quits', 'linux', {}, 'deb', false],
+    ['an rpm', 'linux', {}, 'rpm', false],
+    ['a Linux package of unknown type', 'linux', {}, null, false]
   ];
-  for (const [name, platform, env, expected] of cases) {
+  for (const [name, platform, env, packageType, expected] of cases) {
     const updater = { autoDownload: true, autoInstallOnAppQuit: !expected };
-    configureAutoUpdate(updater, platform, env);
+    configureAutoUpdate(updater, platform, env, packageType);
     assert.equal(updater.autoDownload, false, `${name}: autoDownload`);
     assert.equal(updater.autoInstallOnAppQuit, expected, `${name}: autoInstallOnAppQuit`);
   }
@@ -450,7 +473,12 @@ test('main.js never writes the text or the stack of an error to its console, onl
 
 test('main.js configures the updater through configureAutoUpdate, sets autoDownload nowhere else, and downloads only through the agreement', () => {
   const main = require('node:fs').readFileSync(require('node:path').join(__dirname, 'main.js'), 'utf8');
-  assert.match(main, /^configureAutoUpdate\(autoUpdater, process\.platform, process\.env\);$/m);
+  assert.match(main, /^configureAutoUpdate\(autoUpdater, process\.platform, process\.env, PACKAGE_TYPE\);$/m);
+  assert.match(main, /^const PACKAGE_TYPE = readPackageType\(\(\) => require\('fs'\)\.readFileSync\(path\.join\(process\.resourcesPath \|\| '', 'package-type'\), 'utf8'\)\);$/m,
+    'the package type is read once, at start, from resources/package-type');
+  assert.match(main, /^ipcMain\.handle\('get-self-update-blocker', \(\) => selfUpdateBlocker\(process\.platform, process\.env, PACKAGE_TYPE\)\);$/m);
+  assert.match(main, /^ipcMain\.handle\('get-package-type', \(\) => packageKind\(process\.platform, process\.env, PACKAGE_TYPE\)\);$/m,
+    'the package kind is answered from fixed values and takes no argument');
   assert.doesNotMatch(main, /autoUpdater\.(autoDownload|autoInstallOnAppQuit)\s*=/);
   assert.match(main, /ipcMain\.handle\('download-update', \(event, request\) => downloadAgreedUpdate\(\{ agreed: request\?\.agreed, version: request\?\.version, found: foundVersion\(\), updater: autoUpdater \}\)\);/);
   assert.match(main, /^const foundVersion = followFoundVersion\(autoUpdater\);$/m);
@@ -603,6 +631,14 @@ test('installing a picked version points the updater at that release alone, allo
     'after a picked version was downloaded nothing else downloads by itself in this run, and it installs on quit');
 });
 
+test('on a deb a picked version downloads, and afterwards it still installs only on Restart to Update, never on quit', async () => {
+  const request = installRequest({ env: {}, packageType: 'deb' });
+
+  assert.deepEqual(await installUpdateVersion(request), { status: 'ok', version: '2.4.3' }, 'a deb is not refused');
+  assert.equal(request.updater.calls.some(call => call[0] === 'download'), true, 'the version was downloaded');
+  assert.equal(request.updater.autoInstallOnAppQuit, false, 'a deb never installs on quit, so no password prompt appears when the user only quits');
+});
+
 test('a picked version that cannot be read or downloaded says why, installs nothing, and the updater is put back as it was', async () => {
   for (const [failure, message] of [[{ checkFails: true }, 'feed not found'], [{ downloadFails: true }, 'disk full']]) {
     const request = installRequest({ updater: fakeUpdater(failure) });
@@ -672,6 +708,7 @@ test('main.js installs a picked version only through installUpdateVersion, with 
   const handler = main.slice(main.indexOf("ipcMain.handle('install-update-version'"), main.indexOf('// Check for updates shortly after launch'));
   assert.match(handler, /ipcMain\.handle\('install-update-version', async \(event, request\) => \{/);
   assert.match(handler, /version: request\?\.version, agreed: request\?\.agreed, listed: lastListedVersions,/);
+  assert.match(handler, /\n      env: process\.env,\n      packageType: PACKAGE_TYPE,\n/, 'the picked version is refused or allowed with the package type of this run');
   assert.match(handler, /if \(result\.status === 'ok'\) \{\n      pickedVersionDownloaded = true;\n    \}/);
   assert.match(handler, /if \(installingPickedVersion\) return \{ status: 'error', message: 'A version is already being downloaded\.' \};\n  installingPickedVersion = true;\n  try \{/, 'one install at a time');
   assert.match(handler, /\} finally \{\n    installingPickedVersion = false;\n  \}/);
