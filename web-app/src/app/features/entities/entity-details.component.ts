@@ -20,7 +20,7 @@ import { ConfirmDialogComponent, ConfirmDialogData } from '../../shared/confirm-
 import { TransferMonitorComponent } from './transfer-monitor.component';
 import { ContinuousResubmitDialogComponent, ContinuousResubmitDialogData } from '../messages/continuous-resubmit-dialog.component';
 import { ProviderService } from '../../core/services/provider.service';
-import { ProviderCapabilities } from '../../core/models/provider.model';
+import { ProviderCapabilities, getProviderMetadata } from '../../core/models/provider.model';
 import { MAX_TIMESPAN_DAYS, parseDuration } from './duration';
 import { EntityAdminActionsComponent } from './entity-admin-actions.component';
 import { SubscriptionRulesComponent } from './subscription-rules.component';
@@ -91,7 +91,7 @@ type PropertyRow = [label: string, value: string];
           }
           <div class="details-state" role="status">
             <mat-progress-spinner mode="indeterminate" diameter="32" aria-hidden="true" />
-            <p>Loading the {{ state.loadingNode?.type ?? 'entity' }} from {{ connectionTarget }}</p>
+            <p>Loading the {{ word(state.loadingNode?.type ?? 'entity') }} from {{ connectionTarget }}</p>
           </div>
           <div class="placeholder-cards" aria-hidden="true"><div></div><div></div><div></div><div></div></div>
           <div class="placeholder-lines" aria-hidden="true"><div></div><div></div><div></div></div>
@@ -99,7 +99,7 @@ type PropertyRow = [label: string, value: string];
           <div class="details-state">
             <mat-icon class="state-icon" fontIcon="touch_app" aria-hidden="true" />
             <h3>Select an entity</h3>
-            <p>Choose a queue, topic or subscription from the tree to see its counts, its properties and its messages.</p>
+            <p>Choose a queue, {{ terms().topic }} or {{ terms().subscription }} from the tree to see its counts, its properties and its messages.</p>
             <p class="namespace-counts" data-testid="namespace-counts">{{ namespaceCounts() }}</p>
             @if (providerService.capabilities(); as capabilities) {
               @if (capabilities.supportsNamespaceProperties === true) {
@@ -132,7 +132,7 @@ type PropertyRow = [label: string, value: string];
             <section class="error-panel" role="alert">
               <mat-icon fontIcon="error" aria-hidden="true" />
               <div class="error-text">
-                <h3>Could not load the {{ state.selection.type }} {{ state.selection.node.name }}</h3>
+                <h3>Could not load the {{ word(state.selection.type) }} {{ state.selection.node.name }}</h3>
                 <p>{{ state.error }}</p>
                 <p>The details could not be read. Check the entity before acting on it again.</p>
                 <button mat-stroked-button type="button" (click)="refresh()"><mat-icon fontIcon="refresh" />Retry</button>
@@ -144,7 +144,7 @@ type PropertyRow = [label: string, value: string];
           <div class="panel">
             <header class="entity-header">
               <div class="entity-title">
-                <span class="entity-kind">Topic</span>
+                <span class="entity-kind">{{ term('topic') }}</span>
                 <div class="name-row">
                   <h2>{{ topicEntity.name }}</h2>
                   <app-entity-admin-actions part="status" kind="topic" [entity]="topicEntity" />
@@ -173,10 +173,10 @@ type PropertyRow = [label: string, value: string];
               </div>
             </header>
             <mat-tab-group animationDuration="0ms" [preserveContent]="true" mat-stretch-tabs="false" mat-align-tabs="start">
-              <mat-tab [label]="'Subscriptions (' + (topicEntity.subscriptions?.length ?? 0) + ')'">
+              <mat-tab [label]="term('subscription') + 's (' + (topicEntity.subscriptions?.length ?? 0) + ')'">
                 <table mat-table [dataSource]="topicEntity.subscriptions ?? []" class="subscriptions">
                   <ng-container matColumnDef="name">
-                    <th mat-header-cell *matHeaderCellDef>Subscription</th>
+                    <th mat-header-cell *matHeaderCellDef>{{ term('subscription') }}</th>
                     <td mat-cell *matCellDef="let sub"><button type="button" class="link" (click)="openSubscription(topicEntity.name, sub.name)">{{ sub.name }}</button></td>
                   </ng-container>
                   <ng-container matColumnDef="active">
@@ -219,7 +219,7 @@ type PropertyRow = [label: string, value: string];
             <div class="panel">
               <header class="entity-header">
                 <div class="entity-title">
-                  <span class="entity-kind">@if (isQueue) {Queue} @else {Subscription in topic <button type="button" class="link" (click)="openTopic(holder.topicName)">{{ holder.topicName }}</button>}</span>
+                  <span class="entity-kind">@if (isQueue) {Queue} @else {{{ term('subscription') }} in {{ terms().topic }} <button type="button" class="link" (click)="openTopic(holder.topicName)">{{ holder.topicName }}</button>}</span>
                   <div class="name-row">
                     <h2>{{ holder.name || state.selection.node.name }}</h2>
                     <app-entity-admin-actions part="status" [kind]="isQueue ? 'queue' : 'subscription'" [entity]="holder" />
@@ -227,7 +227,7 @@ type PropertyRow = [label: string, value: string];
                 </div>
                 <div class="entity-actions">
                   <button mat-flat-button type="button" (click)="viewMessages()"><mat-icon fontIcon="visibility" />View messages</button>
-                  <button matButton="tonal" type="button" (click)="sendMessage()"><mat-icon fontIcon="send" />{{ isQueue ? 'Send' : 'Send to topic' }}</button>
+                  <button matButton="tonal" type="button" (click)="sendMessage()"><mat-icon fontIcon="send" />{{ isQueue ? 'Send' : 'Send to ' + terms().topic }}</button>
                   <app-entity-admin-actions [kind]="isQueue ? 'queue' : 'subscription'" [entity]="holder" />
                   <button mat-icon-button type="button" [matMenuTriggerFor]="moreMenu" aria-label="More actions" matTooltip="More actions">
                     <mat-icon fontIcon="more_vert" />
@@ -364,7 +364,7 @@ type PropertyRow = [label: string, value: string];
                 </mat-tab-group>
               } @else {
                 @let hasSessions = holder.requiresSession && supports('supportsSessions');
-                <nav mat-tab-nav-bar [tabPanel]="subscriptionPanel" animationDuration="0ms" aria-label="Sections of the subscription" mat-stretch-tabs="false" mat-align-tabs="start">
+                <nav mat-tab-nav-bar [tabPanel]="subscriptionPanel" animationDuration="0ms" [attr.aria-label]="'Sections of the ' + terms().subscription" mat-stretch-tabs="false" mat-align-tabs="start">
                   <button mat-tab-link type="button" [active]="activeSubscriptionTab() === 'description'" (click)="setSubscriptionTab('description')">Properties</button>
                   @if (hasSessions) {
                     <button mat-tab-link type="button" [active]="activeSubscriptionTab() === 'sessions'" (click)="setSubscriptionTab('sessions')">Sessions</button>
@@ -391,7 +391,7 @@ type PropertyRow = [label: string, value: string];
           } @else if (!isQueue) {
             <div class="details-state" role="status">
               <mat-progress-spinner mode="indeterminate" diameter="32" aria-hidden="true" />
-              <p>Loading subscription details...</p>
+              <p>Loading {{ terms().subscription }} details...</p>
             </div>
           }
         }
@@ -417,7 +417,7 @@ export class EntityDetailsComponent {
   namespaceCounts(): string {
     const { queues, topics, subscriptions } = this.treeData.loadedCounts();
     const plural = (n: number, noun: string) => `${n.toLocaleString()} ${noun}${n === 1 ? '' : 's'}`;
-    return `${this.connectionService.currentTarget ?? 'This connection'} holds ${plural(queues, 'queue')} and ${plural(topics, 'topic')} with ${plural(subscriptions, 'subscription')}.`;
+    return `${this.connectionService.currentTarget ?? 'This connection'} holds ${plural(queues, 'queue')} and ${plural(topics, this.terms().topic)} with ${plural(subscriptions, this.terms().subscription)}.`;
   }
 
   /** The columns of a topic's Subscriptions table, as the Main artboard draws them; Rules only where the provider has rules. */
@@ -584,7 +584,23 @@ export class EntityDetailsComponent {
   }
 
   kindLabel(type: string): string {
-    return type.charAt(0).toUpperCase() + type.slice(1);
+    const word = this.word(type);
+    return word.charAt(0).toUpperCase() + word.slice(1);
+  }
+
+  /** The connected broker's word for a kind of entity: a topic and a subscription in its own terms, any other kind as it is. */
+  word(type: string): string {
+    return type === 'topic' || type === 'subscription' ? this.terms()[type] : type;
+  }
+
+  /** The connected broker's words for a topic and a subscription: exchange and binding on RabbitMQ. */
+  terms() {
+    return getProviderMetadata(this.providerService.selectedProvider).terms;
+  }
+
+  /** One of those words with its first letter in upper case, for a heading. */
+  term(kind: 'topic' | 'subscription'): string {
+    return this.kindLabel(kind);
   }
 
   /** The rows in two columns, the first one longer when the count is odd. */
@@ -645,7 +661,7 @@ export class EntityDetailsComponent {
   subscriptionProperties(subscription: SubscriptionInfo): PropertyRow[] {
     const yesNo = (value: boolean | null | undefined) => value == null ? NOT_SET : value ? 'Yes' : 'No';
     return this.rowsShown([
-      ['Topic Name', subscription.topicName || NOT_SET],
+      [`${this.term('topic')} Name`, subscription.topicName || NOT_SET],
       !this.hasNoLock(subscription.lockDuration) && ['Lock Duration', this.formatDuration(subscription.lockDuration)],
       subscription.maxDeliveryCount !== 0 && ['Max Delivery Count', subscription.maxDeliveryCount != null ? String(subscription.maxDeliveryCount) : NOT_SET],
       ['Default Message Time To Live', this.formatDuration(subscription.defaultMessageTimeToLive)],
@@ -812,10 +828,10 @@ export class EntityDetailsComponent {
     if (!this.selection) return;
 
     const name = this.selection.node.name;
-    const kind = this.selection.type === 'subscription' ? 'subscription' : 'queue';
+    const kind = this.selection.type === 'subscription' ? this.terms().subscription : 'queue';
     const entity = this.queue ?? this.subscription;
     const topicName = this.subscription?.topicName ?? (this.selection.node.data as SubscriptionNodeData | undefined)?.topicName;
-    const where = kind === 'subscription' ? `subscription "${name}" of topic "${topicName}"` : `queue "${name}"`;
+    const where = this.selection.type === 'subscription' ? `${kind} "${name}" of ${this.terms().topic} "${topicName}"` : `queue "${name}"`;
     const messageType = type === 'deadletter' ? 'dead-letter' : 'active';
     const liveCount = type === 'deadletter' ? this.liveDeadLetterCount() : this.liveActiveCount();
     const live = liveCount !== null;

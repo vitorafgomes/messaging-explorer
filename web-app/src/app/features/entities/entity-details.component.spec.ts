@@ -1,3 +1,4 @@
+import { ProviderType } from '../../core/models/provider.model';
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -987,7 +988,7 @@ describe('EntityDetailsComponent as Main.dc.html draws the panel', () => {
   let topicService: Record<string, ReturnType<typeof vi.fn>>;
   let snackBar: { open: ReturnType<typeof vi.fn> };
 
-  function render(state: { selection: EntitySelection | null; loading?: boolean; error?: string | null; loadingNode?: TreeNode | null }, capabilities: ProviderCapabilities = ADMIN) {
+  function render(state: { selection: EntitySelection | null; loading?: boolean; error?: string | null; loadingNode?: TreeNode | null }, capabilities: ProviderCapabilities = ADMIN, provider?: ProviderType) {
     closed = false;
     selectionService = {
       state$: of({ loading: false, error: null, ...state }), currentSelection: state.selection, isLoading: false,
@@ -1009,7 +1010,7 @@ describe('EntityDetailsComponent as Main.dc.html draws the panel', () => {
         { provide: TopicService, useValue: topicService },
         { provide: SessionService, useValue: {} },
         { provide: MatSnackBar, useValue: snackBar },
-        { provide: ProviderService, useValue: { capabilities: signal(capabilities) } },
+        { provide: ProviderService, useValue: { capabilities: signal(capabilities), selectedProvider: provider } },
         resubmitRuns
       ]
     });
@@ -1269,6 +1270,48 @@ describe('EntityDetailsComponent as Main.dc.html draws the panel', () => {
     expect(tabs(render({ selection: subscription({ requiresSession: true }) }).nativeElement)).toStrictEqual(['Properties', 'Sessions', 'Rules (0)']);
     TestBed.resetTestingModule();
     expect(tabs(render({ selection: subscription({ rules: undefined }) }).nativeElement), 'rules that were not read have no count').toStrictEqual(['Properties', 'Rules']);
+  });
+
+  it('on RabbitMQ the panel uses the broker\'s own words: an exchange, its bindings, and a binding in an exchange', () => {
+    const exchange = render({ selection: topic() }, ADMIN, ProviderType.RabbitMQ).nativeElement as HTMLElement;
+    expect(text(exchange.querySelector('.entity-kind')), 'an exchange is not called a topic').toBe('Exchange');
+    expect(Array.from(exchange.querySelectorAll('[role="tab"]')).map(text)[0], 'its rows are bindings').toBe('Bindings (2)');
+    expect(text(exchange.querySelector('table.subscriptions th')), 'the column names a binding').toBe('Binding');
+    TestBed.resetTestingModule();
+
+    const binding = render({ selection: subscription() }, ADMIN, ProviderType.RabbitMQ).nativeElement as HTMLElement;
+    expect(text(binding.querySelector('.entity-kind'))).toBe('Binding in exchange events');
+    expect(Array.from(binding.querySelectorAll('button')).map(text).filter(t => t.includes('Send')), 'the send button names the exchange').toStrictEqual(['Send to exchange']);
+    expect(binding.textContent, 'the property names the exchange').toContain('Exchange Name');
+    expect(binding.textContent).not.toContain('Topic Name');
+  });
+
+  it('on RabbitMQ the empty, loading and failed states and the purge confirmation use the broker\'s words too', () => {
+    const empty = render({ selection: null }, ADMIN, ProviderType.RabbitMQ).nativeElement as HTMLElement;
+    expect(empty.textContent, 'the empty state').toContain('Choose a queue, exchange or binding from the tree');
+    expect(text(empty.querySelector('[data-testid="namespace-counts"]'))).toBe('prod.example.net holds 3 queues and 1 exchange with 2 bindings.');
+    TestBed.resetTestingModule();
+
+    const loading = render({ selection: null, loading: true, loadingNode: { id: 't:events', name: 'events', type: 'topic' } as TreeNode }, ADMIN, ProviderType.RabbitMQ).nativeElement as HTMLElement;
+    expect(loading.textContent, 'the loading sentence').toContain('Loading the exchange from prod.example.net');
+    expect(text(loading.querySelector('.entity-kind')), 'and its heading').toBe('Exchange');
+    TestBed.resetTestingModule();
+
+    const failed = render({ selection: subscription(), error: 'The broker did not answer.' }, ADMIN, ProviderType.RabbitMQ).nativeElement as HTMLElement;
+    expect(text(failed.querySelector('[role="alert"]')), 'the failed load').toContain('Could not load the binding billing');
+    TestBed.resetTestingModule();
+
+    const fixture = render({ selection: subscription() }, ADMIN, ProviderType.RabbitMQ);
+    fixture.componentInstance.purgeMessages('active');
+    const data = open.mock.calls.at(-1)![1].data;
+    expect(data.message, 'the purge confirmation').toContain('binding "billing" of exchange "events"');
+    expect(data.typedLabel).toBe('Type the binding name to confirm');
+  });
+
+  it('on Azure Service Bus the words stay topic and subscription', () => {
+    const el = render({ selection: topic() }, ADMIN, ProviderType.AzureServiceBus).nativeElement as HTMLElement;
+    expect(text(el.querySelector('.entity-kind'))).toBe('Topic');
+    expect(Array.from(el.querySelectorAll('[role="tab"]')).map(text)[0]).toBe('Subscriptions (2)');
   });
 
   it('the topic opens on "Subscriptions (2)", then Properties; the table lists each subscription, its counts, a dead-letter warning, and selects it', () => {
