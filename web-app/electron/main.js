@@ -4,7 +4,7 @@ const { spawn } = require('child_process');
 const { autoUpdater } = require('electron-updater');
 const crypto = require('crypto');
 const Store = require('electron-store');
-const { describeApiExit, dataFilePath, showDataFile, openDevTools, acceptActiveRuns, quitDecision, isSafeExternalUrl, normalizeUpdateChannel, applyUpdateChannel, waitForHealth, stopProcess, applicationMenuTemplate, mainWindowOptions, shellShortcut, selfUpdateBlocker, readPackageType, packageKind, configureAutoUpdate, readUpdateVersions, installUpdateVersion, backupDataFile, saveExportFile, createShellLog, captureConsole, downloadAgreedUpdate, followFoundVersion } = require('./shell-helpers');
+const { describeApiExit, failedInstallNotice, dataFilePath, showDataFile, openDevTools, acceptActiveRuns, quitDecision, isSafeExternalUrl, normalizeUpdateChannel, applyUpdateChannel, waitForHealth, stopProcess, applicationMenuTemplate, mainWindowOptions, shellShortcut, selfUpdateBlocker, readPackageType, packageKind, configureAutoUpdate, readUpdateVersions, installUpdateVersion, backupDataFile, saveExportFile, createShellLog, captureConsole, downloadAgreedUpdate, followFoundVersion } = require('./shell-helpers');
 
 // Generate a per-session API secret for Electron <-> .NET API authentication
 const API_SECRET = crypto.randomBytes(32).toString('hex');
@@ -540,6 +540,9 @@ function createWindow() {
       }
       mainWindow.show();
       mainWindow.focus();
+      const notice = failedInstallNotice({ pending: store.get('pendingInstall'), installedVersion: app.getVersion() });
+      store.delete('pendingInstall');
+      if (notice) dialog.showMessageBox(mainWindow, notice);
     }, isDev ? 500 : 1500);
   });
 
@@ -888,7 +891,10 @@ autoUpdater.on('download-progress', (progress) => {
   sendUpdateStatus('downloading', { percent: Math.round(progress.percent) });
 });
 
+let downloadedVersion = null;
+
 autoUpdater.on('update-downloaded', (info) => {
+  downloadedVersion = info.version;
   console.log('[Updater] Update downloaded:', info.version);
   sendUpdateStatus('downloaded', { version: info.version });
 });
@@ -915,6 +921,7 @@ ipcMain.handle('download-update', (event, request) => downloadAgreedUpdate({ agr
 
 // IPC: Install update (restart)
 ipcMain.handle('install-update', () => {
+  if (downloadedVersion) store.set('pendingInstall', { version: downloadedVersion });
   autoUpdater.quitAndInstall(false, true);
 });
 

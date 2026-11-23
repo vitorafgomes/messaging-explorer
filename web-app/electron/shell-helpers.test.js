@@ -930,3 +930,28 @@ test('an API that cannot find the .NET runtime is told as that, with what to do;
   assert.equal(describeApiExit({ error: 'spawn EACCES' }), 'it could not be launched (spawn EACCES)', 'a launch error names the error');
   assert.equal(describeApiExit({ code: null, signal: 'SIGKILL' }), 'it was stopped by signal SIGKILL', 'a signal names the signal');
 });
+
+test('an update asked to install that did not change the version is told at the next start, once; one that did is not', () => {
+  const { failedInstallNotice } = require('./shell-helpers');
+  assert.equal(failedInstallNotice({ pending: undefined, installedVersion: '2.5.1' }), null, 'nothing was asked to install');
+  assert.equal(failedInstallNotice({ pending: { version: '3.0.0' }, installedVersion: '3.0.0' }), null, 'the update installed');
+  assert.deepEqual(failedInstallNotice({ pending: { version: '3.0.0' }, installedVersion: '2.5.1' }), {
+    type: 'warning',
+    title: 'Messaging Explorer',
+    message: 'The update to 3.0.0 was not installed.',
+    detail: 'You are still on 2.5.1. Open Settings to install it again, or download it from the release page.',
+    buttons: ['OK'],
+    noLink: true
+  }, 'the app came back on the old version: the user is told, the app does not open as if nothing happened');
+  for (const pending of [{}, { version: 7 }, { version: '' }, 'x', null]) {
+    assert.equal(failedInstallNotice({ pending, installedVersion: '2.5.1' }), null, `a record that names no version (${JSON.stringify(pending)}) tells nothing`);
+  }
+});
+
+test('main.js records the version before it restarts to install, and reads the record once at the next start', () => {
+  const main = require('node:fs').readFileSync(path.join(__dirname, 'main.js'), 'utf8');
+  assert.match(main, /ipcMain\.handle\('install-update', \(\) => \{\s*if \(downloadedVersion\) store\.set\('pendingInstall', \{ version: downloadedVersion \}\);\s*autoUpdater\.quitAndInstall\(false, true\);/,
+    'the version is recorded before quitAndInstall');
+  assert.match(main, /const notice = failedInstallNotice\(\{ pending: store\.get\('pendingInstall'\), installedVersion: app\.getVersion\(\) \}\);\s*store\.delete\('pendingInstall'\);/,
+    'the record is read and removed in one place, so the notice shows once');
+});

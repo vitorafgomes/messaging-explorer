@@ -42,6 +42,24 @@ function acceptActiveRuns(sender, win, count, last) {
   return Number.isInteger(count) && count >= 0 && count <= 1000 ? count : last;
 }
 
+/**
+ * What to tell the user at start when an update was asked to install and the app came back on another version:
+ * the updater can fail to install without any event, and the app must not open as if nothing happened. Null when
+ * nothing was asked, when the record names no version, or when that version is the one running.
+ */
+function failedInstallNotice({ pending, installedVersion }) {
+  const version = pending && typeof pending === 'object' ? pending.version : undefined;
+  if (typeof version !== 'string' || version === '' || version === installedVersion) return null;
+  return {
+    type: 'warning',
+    title: 'Messaging Explorer',
+    message: `The update to ${version} was not installed.`,
+    detail: `You are still on ${installedVersion}. Open Settings to install it again, or download it from the release page.`,
+    buttons: ['OK'],
+    noLink: true
+  };
+}
+
 /** The question asked before a quit that would stop the given number of running resubmits. */
 function quitQuestion(activeRuns) {
   return {
@@ -479,6 +497,7 @@ function describeApiExit(exit) {
 }
 
 module.exports = {
+  failedInstallNotice,
   describeApiExit,
   downloadAgreedUpdate,
   followFoundVersion,
