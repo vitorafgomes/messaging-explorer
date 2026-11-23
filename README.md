@@ -6,7 +6,7 @@
 
 A free, open-source desktop app to explore and manage message brokers: **Azure Service Bus** and **RabbitMQ**. It runs on Windows, macOS and Linux.
 
-Browse queues, topics, subscriptions and exchanges, read the messages in them, send new ones, and deal with the dead-letter queue: resubmit, move or delete what is stuck there.
+Browse queues, topics, subscriptions and exchanges, read the messages in them, send new ones, and deal with the dead-letter queue: resubmit, move or delete what is stuck there. An AI assistant can do the same through the app, with you deciding what it sees and approving what it changes.
 
 ![A tour of Messaging Explorer: the saved connections, the entities of a RabbitMQ broker, a queue with its counts, its active and dead-letter messages, the send dialog and the monitoring screen](docs/screenshots/tour.gif)
 
@@ -16,6 +16,7 @@ Browse queues, topics, subscriptions and exchanges, read the messages in them, s
 
 - [Download](#download)
 - [What it does](#what-it-does)
+- [Use it from an AI assistant](#use-it-from-an-ai-assistant)
 - [Connect to a broker](#connect-to-a-broker)
 - [Before you point it at production](#before-you-point-it-at-production)
 - [Develop](#develop)
@@ -37,6 +38,8 @@ Get the latest version from the [releases page](https://github.com/vitorafgomes/
 
 Nothing else needs to be installed: each package carries the .NET runtime its local API uses.
 
+**Coming from 2.5.1 or earlier on the deb?** Install 3.0.0 by hand once (`sudo apt install ./Messaging-Explorer-<version>-amd64.deb`). Those versions cannot install a deb by themselves; from 3.0.0 on the app does it.
+
 The builds are not code signed, so the system asks before the first start:
 
 - **Windows:** SmartScreen shows "Windows protected your PC". Choose **More info**, then **Run anyway**.
@@ -54,11 +57,15 @@ The app looks for a new version a few seconds after it starts and every four hou
 - Send a message with its properties, from scratch or from a saved template; import messages from a JSON or CSV file.
 - Export messages to JSON, CSV or Excel.
 - Light and dark themes.
+- Stable and Beta update channels, and a list of versions to install from.
+- A Logs screen, shown in Developer mode.
 
 **Azure Service Bus**
 
 - Queues, topics and subscriptions with their configuration, status and rules.
+- Create, edit and delete queues, topics, subscriptions and rules.
 - Dead-letter queues: resubmit, move to another queue or delete, one message or many, with progress and cancel.
+- An automatic resubmit of a whole dead-letter queue, with pause, stop and a report.
 - Schedule a message for later and set its time to live.
 - Sessions on session-enabled subscriptions.
 - Sign in with Microsoft, a connection string, a service principal or the Azure CLI session.
@@ -66,9 +73,21 @@ The app looks for a new version a few seconds after it starts and every four hou
 **RabbitMQ**
 
 - Exchanges, queues and bindings, read through the management plugin.
+- Peek, send, resubmit, move, delete and purge the messages of a queue.
 - Recognises the common topologies (work queue, publish and subscribe, routing, topics, RPC, headers).
 
 See the [releases](https://github.com/vitorafgomes/messaging-explorer/releases) for what each version added; the [changelog](CHANGELOG.md) covers versions up to 2.4.4.
+
+## Use it from an AI assistant
+
+The app carries an [MCP](https://modelcontextprotocol.io/) server, so an assistant such as Claude Code can list entities, read messages, send them and act on them through the app. It is off until you turn it on in **Settings**, under **MCP server**.
+
+- **You choose what it sees.** Only the connections you offer exist for the assistant, each at its own level: read; read and send; or read, send and remove.
+- **It asks before it changes anything.** A send, a move, a delete or a purge shows a question in the app, and a delete or a purge asks you to type the name. A production connection asks before every operation. Only a local test broker can be set not to ask before a send.
+- **It answers on this computer only,** and only while the app is open, to a token you create in Settings and see once.
+- **What it reads leaves your computer.** The names of entities, the counts and the bodies of the messages it reads go to the assistant and to the company that runs it. A connection string, a password or a key is never given to it.
+
+Settings shows the configuration to paste into the assistant and a list of what it did.
 
 ## Connect to a broker
 
@@ -85,9 +104,9 @@ This tool reads and changes real messages. Know these things first.
 
 - **Moving messages is at-least-once.** Resubmit and move send the message to its destination first and remove it from the source after. If the removal fails, the message exists in both places; the app reports it as a possible duplicate and does not send it again. Consumers should tolerate a duplicate.
 - **Resubmitting from a subscription publishes to its topic.** Every subscription whose rules match receives the message again, not only the one you resubmitted from.
-- **RabbitMQ bulk delete, resubmit and move can lose messages when something fails midway.** Use them with care on RabbitMQ until that part is reworked.
+- **On RabbitMQ a bulk delete, resubmit or move names a message by its position in the queue.** If another client removes a message between the moment you read the list and the moment you act, the operation acts on whichever message is at that position. The app refuses a queue that has a consumer; avoid these operations on a queue something else is reading.
 - **Saved connections are stored on your disk in plain text,** secrets included, in the app's data folder (on Linux `~/.config/messaging-explorer/data`). Exporting connections masks the secrets unless you ask to include them.
-- **Nothing leaves your machine except the calls to your broker.** The app starts a local API that listens on `127.0.0.1` only and accepts requests only with a key generated at each start. The update check contacts GitHub; nothing else is sent anywhere.
+- **Nothing leaves your machine except the calls to your broker, unless you turn the MCP server on.** The app starts a local API that listens on `127.0.0.1` only and accepts requests only with a key generated at each start. The update check contacts GitHub. With the MCP server on, what an assistant reads through it goes to that assistant; see [Use it from an AI assistant](#use-it-from-an-ai-assistant).
 
 Found a security problem? Please report it privately through [GitHub security advisories](https://github.com/vitorafgomes/messaging-explorer/security/advisories/new) instead of a public issue.
 
