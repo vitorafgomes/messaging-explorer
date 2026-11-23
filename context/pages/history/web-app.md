@@ -19,6 +19,8 @@ What changed when in the project [[pages/services/web-app|Web App]] describes, n
 
 ## 2026-11-23
 
+- A connection with many topics showed nothing until the subscriptions of every topic were read, one request per topic, all started at once. The tree is now given as soon as the lists of queues and topics answer and again when the subscriptions are read, at most six topics at a time, with a line that says they are still being read (`web-app/src/app/core/services/tree-data-builder.service.ts#buildTree`, `web-app/src/app/core/services/tree-data-builder.service.spec.ts#at most 6 topics are asked for their subscriptions at the same time, however many there are`). A topic the user opened is not asked again while that read runs (`web-app/src/app/features/entities/entities-tree.component.spec.ts#an opened topic is not asked again for its subscriptions while the tree is still reading them`). Reported by the owner as slow with many topics; not measured on a real namespace.
+
 - On RabbitMQ the entity panel says the broker's own words, as the tree already did: an exchange is headed "Exchange", its rows are "Bindings", a binding reads "Binding in exchange <name>", the button is "Send to exchange" and the property "Exchange Name"; the empty, loading and failed states, the count of what the connection holds and the purge confirmation use the same words (`web-app/src/app/features/entities/entity-details.component.ts#terms`). It said Topic and Subscriptions, the words of Azure Service Bus. Seen on a screenshot taken for the owner.
 
 - From the review of the deb fix: a failure after the download is told apart from a failed download ("was not installed", and Retry installs again), and the note under the channel no longer says a beta installs on the next quit on a deb.

@@ -1,6 +1,6 @@
-import { Injectable, inject } from '@angular/core';
-import { Observable, forkJoin, of } from 'rxjs';
-import { map, catchError, switchMap, tap } from 'rxjs/operators';
+import { Injectable, inject, signal } from '@angular/core';
+import { Observable, concat, forkJoin, from, of } from 'rxjs';
+import { map, catchError, finalize, mergeMap, switchMap, toArray } from 'rxjs/operators';
 import { TreeNode, QueueNodeData, TopicNodeData, SubscriptionNodeData } from '../models';
 import { QueueService } from './queue.service';
 import { TopicService } from './topic.service';
@@ -15,6 +15,9 @@ function queuePattern(queue: QueueInfo): string | undefined {
   return (queue.consumerCount ?? 0) >= 2 ? `Work queue, ${queue.consumerCount} consumers` : undefined;
 }
 
+/** How many topics are asked for their subscriptions at the same time while the tree is built. */
+const SUBSCRIPTION_READS = 6;
+
 @Injectable({
   providedIn: 'root'
 })
@@ -26,6 +29,8 @@ export class TreeDataBuilderService {
   private lastTree: TreeNode[] = [];
   /** Whether the latest build succeeded and read the subscriptions of every topic. */
   private lastBuildWhole = false;
+  /** Whether the latest build has given its queues and topics and is still reading the subscriptions. */
+  readonly readingSubscriptions = signal(false);
 
   /** Queue and topic names of the tree built last. */
   loadedNames(): { queues: string[]; topics: string[] } {
@@ -49,81 +54,57 @@ export class TreeDataBuilderService {
     return this.lastBuildWhole ? this.loadedCounts() : null;
   }
 
+  /**
+   * The tree of the connection. It is given at once with the queues and the topics, as soon as their two lists
+   * answer, and again with the subscriptions under each topic once they are read: a connection with many topics
+   * shows its entities while the subscriptions are still being read. The counts and the dead-letter alerts come
+   * from the whole tree only.
+   */
   buildTree(): Observable<TreeNode[]> {
     this.lastBuildWhole = false;
+    this.readingSubscriptions.set(false);
     let whole = true;
-    this.logger.log('[TreeDataBuilder] Building tree...');
     return forkJoin({
       queues: this.queueService.getQueues(),
       topics: this.topicService.getTopics()
     }).pipe(
       switchMap(({ queues, topics }) => {
-        this.logger.log('[TreeDataBuilder] Got topics:', topics.length, topics.map(t => ({ name: t.name, subscriptionCount: t.subscriptionCount })));
-        return this.loadSubscriptionsForTopics(topics, () => whole = false).pipe(
-          map(topicsWithSubs => {
-            this.logger.log('[TreeDataBuilder] Topics with subs loaded:', topicsWithSubs.map(t => ({ name: t.name, subs: t.subscriptions?.length || 0 })));
-            const allSubscriptions = topicsWithSubs.flatMap(t => t.subscriptions || []);
-            this.notificationService.updateFromSubscriptions(allSubscriptions);
-            this.lastTree = this.createTreeStructure(queues, topicsWithSubs);
-            return this.lastTree;
-          })
+        const withSubscriptions = topics.filter(t => t.subscriptionCount > 0);
+        const finish = (all: TopicInfo[]) => {
+          this.notificationService.updateFromSubscriptions(all.flatMap(t => t.subscriptions || []));
+          this.lastTree = this.createTreeStructure(queues, all);
+          this.lastBuildWhole = whole;
+          this.readingSubscriptions.set(false);
+          return this.lastTree;
+        };
+        if (withSubscriptions.length === 0) return of(finish(topics));
+
+        this.lastTree = this.createTreeStructure(queues, topics);
+        this.readingSubscriptions.set(true);
+        return concat(
+          of(this.lastTree),
+          this.loadSubscriptionsForTopics(topics, withSubscriptions, () => whole = false).pipe(map(finish))
         );
       }),
-      tap(() => this.lastBuildWhole = whole)
+      finalize(() => this.readingSubscriptions.set(false))
     );
   }
 
-  private loadSubscriptionsForTopics(topics: TopicInfo[], missed: () => void): Observable<TopicInfo[]> {
-    this.logger.log('[TreeDataBuilder] loadSubscriptionsForTopics called with', topics.length, 'topics');
-
-    if (topics.length === 0) {
-      this.logger.log('[TreeDataBuilder] No topics to load subscriptions for');
-      return of([]);
-    }
-
-    const topicsWithSubscriptionCount = topics.filter(t => t.subscriptionCount > 0);
-    this.logger.log('[TreeDataBuilder] Topics with subscription count > 0:', topicsWithSubscriptionCount.length);
-    this.logger.log('[TreeDataBuilder] Topic names:', topicsWithSubscriptionCount.map(t => `${t.name} (${t.subscriptionCount})`));
-
-    if (topicsWithSubscriptionCount.length === 0) {
-      this.logger.log('[TreeDataBuilder] No topics with subscriptions, returning original topics');
-      return of(topics);
-    }
-
-    const subscriptionRequests = topicsWithSubscriptionCount.map(topic => {
-      this.logger.log(`[TreeDataBuilder] Creating request for subscriptions of topic: ${topic.name}`);
-      return this.topicService.getSubscriptions(topic.name).pipe(
-        map(subs => {
-          this.logger.log(`[TreeDataBuilder] Received ${subs.length} subscriptions for ${topic.name}:`, subs.map(s => s.name));
-          return { topicName: topic.name, subscriptions: subs };
-        }),
+  /** The topics with the subscriptions read for each, at most SUBSCRIPTION_READS at a time; one that fails is reported through missed and left empty. */
+  private loadSubscriptionsForTopics(topics: TopicInfo[], withSubscriptions: TopicInfo[], missed: () => void): Observable<TopicInfo[]> {
+    return from(withSubscriptions).pipe(
+      mergeMap(topic => this.topicService.getSubscriptions(topic.name).pipe(
         catchError(err => {
           this.logger.error(`[TreeDataBuilder] Error loading subscriptions for ${topic.name}:`, err);
           missed();
-          return of({ topicName: topic.name, subscriptions: [] as SubscriptionInfo[] });
-        })
-      );
-    });
-
-    this.logger.log('[TreeDataBuilder] Executing', subscriptionRequests.length, 'subscription requests...');
-
-    return forkJoin(subscriptionRequests).pipe(
+          return of([] as SubscriptionInfo[]);
+        }),
+        map(subscriptions => [topic.name, subscriptions] as const)
+      ), SUBSCRIPTION_READS),
+      toArray(),
       map(results => {
-        this.logger.log('[TreeDataBuilder] All subscription requests completed, results:', results);
-        const subsMap = new Map<string, SubscriptionInfo[]>();
-        results.forEach(r => {
-          this.logger.log(`[TreeDataBuilder] Mapping ${r.subscriptions.length} subscriptions for ${r.topicName}`);
-          subsMap.set(r.topicName, r.subscriptions);
-        });
-
-        const enrichedTopics = topics.map(topic => ({
-          ...topic,
-          subscriptions: subsMap.get(topic.name) || []
-        }));
-
-        this.logger.log('[TreeDataBuilder] Enriched topics:', enrichedTopics.map(t => ({ name: t.name, subsCount: t.subscriptions?.length || 0 })));
-
-        return enrichedTopics;
+        const read = new Map(results);
+        return topics.map(topic => ({ ...topic, subscriptions: read.get(topic.name) ?? [] }));
       })
     );
   }
